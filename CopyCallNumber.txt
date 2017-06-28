@@ -1,0 +1,501 @@
+'MacroName:CopyCallNumber.2015.01
+'MacroDescription:Gets a call number from an authority or bibliographic record and
+' returns to a bibliographic record to paste it in.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 30 April 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro was developed in a workflow of keeping a bibliographic record
+' open while searching in other records, either authority or bibliographic, for an LC-
+' type call number or classification number to copy into it. Run the macro in the record
+' containing the desired number. Cursor position is irrelevant (although if the cursor is
+' placed in a specific 053, 050, or 090 field, the number in that field will be offered
+' as the default number to paste). The macro copies all such fields from the source
+' record and then cycles through all open bibliographic records, stopping at each one to
+' ask if a copied number should be pasted into it. Disciplines associated with
+' classification numbers in authority records are displayed with their numbers to assist
+' in deciding which one to paste. The number selected is added to the record, with the
+' default tag being that in the originating bibliographic record, or an 050 for an 053
+' from an authority record; but the macro can add the number in either an 050 or an 090
+' field. The chosen number is also copied to the Windows clipboard for, e.g., pasting
+' into ClassWeb for verification.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function FormatNumber( InString$, RecType$ ) As String
+Declare Function NextOrFirst ( CycleIndex% )         As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global CountOfBibs%
+Global DefaultField%
+Global Delimiter$
+Global Found%
+
+Global CallNumberFields() As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Const CANCEL           As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
+Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                        ' a big "X") in a message box; used to report the macro quitting.
+Const CURRENT_WINDOW   As Integer = -1  'The value to get the title of the current window.
+
+Dim CallNumber$
+Dim CopiedFrom$
+Dim CopiedTo$
+Dim CountOfWindows%
+Dim CursorField$
+Dim DoubleQuote$             : DoubleQuote$ = Chr$( 34 )
+Dim FieldData$
+Dim Index%
+Dim Instance%                : Instance%    = 1
+Dim Legend$
+Dim Row%
+Dim SourceField$
+Dim Start%
+Dim Tag$
+Dim TypeOfRecord$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:CopyCallNumber"
+Dim WindowTitle$
+
+Dim FoundField               : FoundField   = FALSE
+
+Dim BibRecWindowIDs()      As Integer
+Dim CallNumbersFormatted() As String
+
+Dim i As Integer, k As Integer, p As Integer
+
+DefaultField% = 0
+Delimiter$    = Chr$( 223 )
+
+' First: Is the cursor in an 050 or 090 field (in a bibliographic record) or an 053 field
+' (in an authority record)? If so, get that field and store it to make that number the
+' default value when a list of numbers is presented
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) Then
+    Tag$ = Left$( FieldData$, 3 )
+    If Tag$ Like "0[05][03]" Then
+        CursorField$ = FieldData$
+        FieldData$   = ""
+    End If
+End If
+
+' Then, make sure the macro is running in a record (as opposed to a list). This test has
+' to come second, even though logically it should come first, because it moves the cursor
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case 3 To 4, 14, 18, 20      'Authority record
+    TypeOfRecord$ = "A"
+  Case 0 To 2, 17, 19          'Bibliographic record
+    TypeOfRecord$ = "B"
+  Case Else
+    MsgBox "This macro only works in an authority or bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' If the source record is bibliographic, begin by getting the control number
+
+If TypeOfRecord$ = "B" Then
+    CS.CopyControlNumber
+    CopiedFrom$ = Clipboard.GetText()
+  Else
+    CopiedFrom$ = ""
+End If
+
+' Get the call number(s) from the record and store them in parallel arrays. One array
+' contains fields ready for pasting into a record. A field from an authority record is
+' tagged 050, but a field from a bibliographic record keeps its tag. The other array
+' contains call numbers for display. For display purposes, tags are dropped, delimiters
+' are changed to dollar signs, and disciplines are shown, for those fields from authority
+' records that include disciplines associated with call numbers. Showing the disciplines
+' aids in choosing the number most appropriate for the work described. If the macro was
+' run with the cursor in a specific field, note the position of that number in the array,
+' so it can be presented as the default element of the array to paste later on
+
+Found% = 0
+Do
+  FoundField = CS.GetField( "0[59][03]", Instance%, FieldData$ )
+  If FoundField = TRUE Then
+      If Mid$( FieldData$, 6 ) <> Delimiter$ & "b " Then
+          Do
+
+' Check for multiple numbers in a single field: Break them up, if found
+
+            p = InStr( FieldData$, Delimiter$ & "a" )
+            If p > 0 Then
+                Tag$         = Left$( FieldData$, 5 )
+                SourceField$ = Trim$( Left$( FieldData$, p - 1 ) )
+                FieldData$   = Tag$ & Trim$( Mid$( FieldData$, p + 2 ) )
+
+' To filter out wacky call numbers like this: 050 14 L48.3776 $a 1958 $a F58 $a 1.1: If
+' the text in the next subfield $a does not start with a letter, consider the whole field
+' to be bogus
+
+                If Mid$( FieldData$, 6, 1 ) Like "#" Then
+                    Exit Do
+                End If
+              Else
+                If TypeOfRecord$ = "A" Then
+                    SourceField$ = "050 4" & FormatNumber( FieldData$, TypeOfRecord$ )
+                  Else
+                    SourceField$ = FieldData$
+                End If
+            End If
+            ReDim Preserve CallNumberFields( Index% )
+            CallNumberFields( Index% )     = SourceField$
+            ReDim Preserve CallNumbersFormatted( Index% )
+            CallNumbersFormatted( Index% ) = FormatNumber( SourceField$, TypeOfRecord$ )
+            Index%                         = Index% + 1
+            Found%                         = Found% + 1
+          Loop Until p = 0
+      End If
+      If FieldData$ = CursorField$ Then
+          DefaultField% = Index% - 1
+      End If
+      Instance% = Instance% + 1
+  End If
+Loop Until FoundField = FALSE
+
+' If the target record contains no call number, stop the macro!
+
+If Found% = 0 Then
+    If TypeOfRecord$ = "A" Then
+        MsgBox "This record contains no 053 field to copy!", CRITICAL_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "This record contains no 050 or 090 field to copy!", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+  ElseIf Found% = 1 Then
+    CallNumber$ = CallNumbersFormatted( 0 )
+End If
+
+' Get back to the bibliographic record by making a count of all the open ones. Omit the
+' bibliographic record from which the call number was copied; determine this by comparing
+' the control numbers of the bibliographic records
+
+i = 0
+CountOfWindows% = CS.WindowCount
+CountOfBibs%    = 0
+Do Until i = CountOfWindows%
+  CS.SetTopWindow( i )
+  TypeOfWindow% = CS.ItemType
+  Select Case TypeOfWindow%
+    Case 0 To 2, 17, 19
+      If TypeOfRecord$ = "B" Then
+          Clipboard.Clear
+          CS.CopyControlNumber
+          CopiedTo$ = Clipboard.GetText()
+      End If
+      If TypeOfRecord$ = "A" Or CopiedTo$ <> CopiedFrom$ Then
+          ReDim Preserve BibRecWindowIDs( CountOfBibs% )
+          BibRecWindowIDs( CountOfBibs% ) = i
+          CountOfBibs% = CountOfBibs% + 1
+      End If
+  End Select
+  i = i + 1
+Loop
+
+' If no bibliographic record at all is open, exit the macro. Also exit the macro if a
+' call number was copied from a bibliographic record, but there is no other bibliographic
+' record open to copy into
+
+If CountOfBibs% = 0 Then
+    CS.SetTopWindow( CountOfWindows% )
+    MsgBox "No bibliographic record was found to paste the call number into!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Display the record(s) for consideration. First, capture the window title, and the OCLC
+' control number, if any, to display in the dialog box that asks if the record displayed
+' is the correct one into which to paste the copied call number. This information is
+' especially useful when the windows are tiled, as it's hard then to tell which record
+' has the focus, or when working with two records for the same title
+
+Recycle:
+
+For k = 0 To CountOfBibs% - 1              'Since "CountOfBibs%" is a 1-based count
+  CS.SetTopWindow( BibRecWindowIDs( k ) )
+  TypeOfWindow% = CS.ItemType
+  If CS.GetWindowTitle ( CURRENT_WINDOW, WindowTitle$ ) = TRUE Then
+      Clipboard.Clear
+      CS.CopyControlNumber
+      CopiedTo$ = Clipboard.GetText()
+      If CopiedTo$ = "NEW" Then
+          CopiedTo$ = DoubleQuote$ & "NEW" & DoubleQuote$
+        Else
+          CopiedTo$ = "#" & CopiedTo$
+      End If
+
+' Remove the words "Pinned" or "Workform" from the window title
+
+      i = InStr( WindowTitle$, "(Pinned)" )
+      If i > 0 Then
+          WindowTitle$ = Trim$( Mid$( WindowTitle$, 9 ) )
+      End If
+      i = InStr( WindowTitle$, "Workform:" )
+      If i > 0 Then
+          WindowTitle$ = Trim$( Mid$( WindowTitle$, 1, i + 7 ) )
+        Else
+          Select Case TypeOfWindow%
+            Case 0  'Online bibliographic record (WorldCat)
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 17 ) )
+            Case 1  'Online bibliographic save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 33 ) )
+            Case 2  'Online bibliographic constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 37 ) )
+            Case 3  'Online authority record (LC authority file)
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 27 ) )
+            Case 4  'Online authority save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 29 ) )
+            Case 14 'Online authority constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 33 ) )
+            Case 17 'Local bibliographic save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 51 ) )
+            Case 18 'Local authority save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 50 ) )
+            Case 19 'Local bibliographic constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 60 ) )
+            Case 20 'Local authority constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 58 ) )
+          End Select
+      End If
+
+' Shorten the title somewhat if it's too long
+
+      If Len( WindowTitle$ ) > 80 Then
+          WindowTitle$ = Left$( WindowTitle$, 80 ) & "..."
+      End If
+
+' Fix the ampersand problem
+
+      Start% = 1
+      Do
+        p = InStr( Start%, WindowTitle$, "&" )
+        If p <> 0 Then
+            WindowTitle$ = Left$( WindowTitle$, p ) & "&" & Mid$( WindowTitle$, p + 1 )
+            Start% = p + 2
+        End If
+      Loop Until p = 0
+
+' Adjust the confirmation phrase and dialog box title to reflect counts of call numbers
+' and records
+
+      If Found% = 1 Then
+          Legend$ = "Paste call number into this record (" & CopiedTo$ & ", " & WindowTitle$ & ")?"
+        Else
+          Legend$ = "Paste a call number into this record (" & CopiedTo$ & ", " & WindowTitle$ & ")?"
+      End If
+
+      Begin Dialog Dialog1Definition 232, 128, WaltsMacros$, .Dialog1ControlFunction
+        ButtonGroup .ChoiceNum
+         PushButton     34, 64,  72, 20, "&OK"
+         PushButton    126, 64,  72, 20, "&Cancel"
+         PushButton     78, 94,  76, 20, NextOrFirst( k ),       .Next
+         CancelButton  1, 1, 1, 1
+        Text            24, 30, 184, 32, Legend$
+        ListBox         16, 13, 144, 12, CallNumbersFormatted(), .Single
+        DropListBox     16, 12, 144, 48, CallNumbersFormatted(), .List
+        OptionGroup .ChoiceTag
+         OptionButton  164, 12,  24, 12, "0&50",                 .OptionButton1
+         OptionButton  192, 12,  24, 12, "0&90",                 .OptionButton2
+      End Dialog
+
+      Dim Dialog1 as Dialog1Definition
+      On Error Resume Next
+      Dialog Dialog1
+      If Err = CANCEL Then Exit Sub
+
+      Select Case Dialog1.ChoiceNum
+        Case 0
+          CallNumber$ = CallNumberFields( Dialog1.List )
+
+' Strip the explanatory term from the classification number for pasting
+
+          For i = 1 To Len( CallNumber$ )
+            If Mid$( CallNumber$, i, 1 ) = "-" Then
+                CallNumber$ = Left$( CallNumber$, i - 1 )
+                Exit For
+            End If
+          Next i
+
+' Paste the call number into the record with the appropriate tag
+
+          If Dialog1.ChoiceTag = 0 Then
+              CallNumber$ = "050 4" & Mid$( CallNumber$, 6 )
+            Else
+              CallNumber$ = "090  " & Mid$( CallNumber$, 6 )
+          End If
+          If CS.AddField( 9, CallNumber$ ) = FALSE Then
+              MsgBox "Sorry, could not add a call number.", CRITICAL_MESSAGE, WaltsMacros$
+            Else
+
+' Copy the selected call number to the Clipboard
+
+              CallNumber$ = Mid$( CallNumber$, 6 )
+              Clipboard.Clear
+              Clipboard.SetText CallNumber$
+          End If
+          Exit Sub
+        Case 2
+          If k = CountOfBibs% - 1 Then
+              GoTo Recycle:
+          End If
+        Case 1, 3
+          Exit Sub
+      End Select
+  End If
+Next k
+
+End Sub
+
+'****************************************************************************************
+
+Function FormatNumber( InString$, RecType$ )
+
+' If the macro is run in a bibliographic record, this function changes the delimiter sign
+' of a copied call number to a dollar sign for display purposes. If the macro is run in
+' an authority record, the macro a) keeps only the beginning of a range of numbers, and
+' b) attaches an explanatory term found with a classification (when there are several
+' such numbers given) to that number, again for display purposes.
+
+Dim ClassNumber$
+Dim ExplanatoryTerm$
+Dim Remainder$
+Dim Separator$
+Dim Start%
+Dim TempString$
+
+Dim p As Integer, q As Integer
+
+TempString$ = Mid$( InString$, 6 )
+
+If RecType$ = "B" Then
+    Do
+      p = InStr( TempString$, Delimiter$ )
+      If p <> 0 Then
+          TempString$ = Left$( TempString$, p - 1 ) & "$" & Mid$( TempString$, p + 1 )
+      End If
+    Loop Until p = 0
+    ClassNumber$ = TempString$
+  Else
+    Start% = 1
+    p = InStr( Start%, TempString$, Delimiter$ )
+    If p <> 0 Then
+        ClassNumber$ = Trim$( Left$( TempString$, p - 2 ) )
+        Remainder$   = Trim$( Mid$ ( TempString$, p ) )
+        q = InStr( Remainder$, Delimiter$ & "c" )
+        If q <> 0 Then
+            ExplanatoryTerm$ = Trim$( Mid$( Remainder$, q + 3 ) )
+            Separator$ = " - "
+            p = InStr( ExplanatoryTerm$, Delimiter$ )
+            If p <> 0 Then
+                ExplanatoryTerm$ = Trim$( Left$( ExplanatoryTerm$, p - 1 ) )
+            End If
+        End If
+      Else
+        ClassNumber$ = Trim$( TempString$ )
+    End If
+End If
+
+FormatNumber = ClassNumber$ & Separator$ & ExplanatoryTerm$
+
+End Function
+
+'****************************************************************************************
+
+Function NextOrFirst( CycleIndex% ) As String
+
+' This function sets the text of the button to navigate through the list of bibliographic
+' records
+
+If CycleIndex% < CountOfBibs% - 1 Then
+    NextOrFirst = "&No, next bib."
+  Else
+    NextOrFirst = "&No, first bib. again"
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' This function controls when the drop list box is visible; it is shown only if there are
+' two or more call numbers available for pasting. If such is the case, this function then
+' sets the default value in the list, which is the number in the field in which the
+' cursor was placed to run the macro. (If the cursor was not placed in a specific field,
+' the list simply reflects the order in which the numbers appear in the record.) If
+' several bibliographic records are open, this function makes visible the button to cycle
+' through all those bibliographic records; otherwise the button is hidden. It also allows
+' for changing the tag of the pasted number. Finally, it makes the pixel-square
+' "CancelButton" in the dialog box invisible, so the box can be closed with the [ESC] key
+' or the X-close box in the corner while still retaining the hotkey enabled custom cancel
+' button
+
+Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const INITIALIZE     As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE      As Integer = 0   'The value to make a dialog box control invisible.
+Const VISIBLE        As Integer = 1   'The value to make a dialog box control visible.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible "Cancel",    INVISIBLE
+    If Found% = 1 Then
+        DlgVisible "List",      INVISIBLE
+        DlgVisible "Single",    VISIBLE
+      Else
+        DlgVisible "List",      VISIBLE
+        DlgValue   "List",      DefaultField%
+        DlgVisible "Single",    INVISIBLE
+        DlgFocus   "List"
+    End If
+    If CountOfBibs% = 1 Then
+        DlgVisible "Next",      INVISIBLE
+      Else
+        DlgVisible "Next",      VISIBLE
+    End If
+    If Left$( CallNumberFields( 0 ), 3 ) = "050" Then
+        DlgValue   "ChoiceTag", 0
+      Else
+        DlgValue   "ChoiceTag", 1
+    End If
+
+  Case CONTROL_CHANGE
+
+    If Id$ = "List" Then
+        If Left$( CallNumberFields( DlgValue( "List" ) ), 3 ) = "050" Then
+            DlgValue   "ChoiceTag", 0
+          Else
+            DlgValue   "ChoiceTag", 1
+        End If
+    End If
+End Select
+
+End Function
+'50121024
+'
+'Macro name: CopyCallNumber
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
+'Saved: 6/28/2017 11:27:34 AM using "MacroBookInspector" macro by Walter F. Nickeson.
