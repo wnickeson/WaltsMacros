@@ -1,0 +1,342 @@
+'MacroName:CopyToVoyager.2015.01
+'MacroDescription:Fixes the delimiter and some other character issues when copying text
+' from a Connexion record to Voyager.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 18 April 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro corrects the delimiter when pasting text from a Connexion
+' record into a Voyager record. To copy text from Connexion, click in a field to copy the
+' whole field (the tag and indicators will be discarded), or simply select a portion of
+' the field to copy. Toggle to the Voyager window, and paste the text into a field in the
+' standard manner.
+'
+' Unfortunately, this solution for fixing the delimiter problem means that special
+' characters and diacritics not found in the Latin-1 Windows character set (including the
+' musical sharp and flat signs, and modified letters in non-Western European languages)
+' will not copy properly. For these characters, normal use of the Windows clipboard may
+' be a more efficient choice, even if delimiters then need to be fixed.
+'****************************************************************************************
+
+Option Explicit
+
+Global Warning
+
+Declare Function Convert1252( InputString$ ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim Col%
+Dim Copied$
+Dim CurrentField$
+Dim Delimiter$               : Delimiter$   = Chr$( 135 )
+Dim Row%
+Dim SelectedText$
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:CopyToVoyager"
+
+Dim Selection                : Selection    = FALSE
+
+Dim i As Integer
+
+Warning = FALSE
+
+' Check for selected text. If no text has been selected, copy the whole field in which
+' the cursor is placed.
+
+Selection = CS.GetSelectedText( SelectedText$ )
+
+Col% = CS.CursorColumn
+Row% = CS.CursorRow
+
+If Selection = TRUE Then
+    If Col% < 6 Then
+        Selection = FALSE
+    End If
+End If
+
+If Selection = TRUE Then
+    Copied$ = Trim$( SelectedText$ )
+  Else
+    If CS.GetFieldLine( Row%, CurrentField$ ) Then Copied$ = CurrentField$
+    Copied$ = Mid$( Copied$, 6 )
+End If
+
+' Convert delimiters (and certain other characters) so they paste properly.
+
+Copied$ = Convert1252( Copied$ )
+If Warning = TRUE Then
+    MsgBox "Some diacritics or special characters will not copy properly!", WARNING_MESSAGE, WaltsMacros$
+End If
+
+' Put the converted string on the clipboard for pasting.
+
+Copied$ = Trim$( Copied$ )
+Clipboard.Clear
+Clipboard.SetText( Copied$ )
+
+End Sub
+'****************************************************************************************
+Function Convert1252( InputString$ ) As String
+
+' This function converts the MARC21 string to Windows-1252 for pasting into Voyager.
+
+Dim Character$               : Character$ = " "
+Dim CharNext%
+Dim CharRead%
+Dim TempString$              : TempString$ = ""
+Dim i As Integer
+
+InputString$ = InputString$ & Character$
+
+For i = 1 To Len( InputString$ ) - 1
+  CharRead% = Asc( Mid$( InputString$, i, 1 ) )
+  CharNext% = Asc( Mid$( InputString$, i + 1, 1 ) )
+  Select Case CharRead%
+    Case 32 To 64
+      Character$ = Chr$( CharRead% )
+
+' Modified letters are turned into precomposed characters, when possible. The "Warning"
+' variable becomes true if an OCLC letter/modifier combination has no Windows-1252
+' precomposed equivalent.
+
+    Case 32 To 64, 66, 68, 70 To 72, 74 To 77, 80 To 82, 84, 86 To 88, 91 To 96
+      Character$ = Chr$( CharRead% )
+    Case 98, 100, 102 To 104, 106 To 109, 112 To 114, 116, 118 To 120, 123 To 128
+      Character$ = Chr$( CharRead% )
+    Case 65, 97   'A, a
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 127 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 128 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 129 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 130 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 234  'ring
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224, 229 To 231, 233, 235 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 67, 99   'C, c
+      Select Case CharNext%
+        Case 240  'cedilla
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224 To 239, 241 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 69, 101  'E, e
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 73, 105  'I, i
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 78, 110  'N, n
+      Select Case CharNext%
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 224 To 227, 229 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 79, 111  'O, o
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 229 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 83, 115  'S, s
+      Select Case CharNext%
+        Case 233  'caron (hacek)
+          If CharRead% = 83 Then  'uppercase S
+              Character$ = Chr$( 138 )
+            Else                  'lowercase s
+              Character$ = Chr$( 154 )
+          End If
+          i = i + 1
+        Case 224 To 232, 234 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 85, 117  'U, u
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 89, 121  'Y, y
+      Select Case CharNext%
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 232  'diaeresis
+          If CharRead% = 121 Then
+              Character$ = Chr$( 255 )
+            Else
+              Character$ = Chr$( 159 )
+          End If
+          i = i + 1
+        Case 224 To 225, 227 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+    Case 90, 122  'Z, z
+      Select Case CharNext%
+        Case 233  'caron (hacek)
+          If CharRead% = 90 Then   'uppercase Z
+              Character$ = Chr$( 142 )
+            Else                   'lowercase z
+              Character$ = Chr$( 158 )
+          End If
+          i = i + 1
+        Case 224 To 232, 234 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+          Warning = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+' Other characters simply have different encodings. If no matching character is
+' available, display the warning.
+
+    Case 158   'Degree sign
+      Character$ = Chr$( 176 )
+    Case 160   'Euro
+      Character$ = Chr$( 128 )
+    Case 162   'Crossed O
+      Character$ = Chr$( 216 )
+    Case 163   'Eth
+      Character$ = Chr$( 208 )
+    Case 164   'Thorn
+      Character$ = Chr$( 222 )
+    Case 165   'AE Ligature
+      Character$ = Chr$( 198 )
+    Case 166   'OE Ligature
+      Character$ = Chr$( 140 )
+    Case 169   'Musical flat: does not copy
+      Character$ = "[FLAT]"
+      Warning = TRUE
+    Case 170   'registered
+      Character$ = Chr$( 174 )
+    Case 171   'Plus-minus
+      Character$ = Chr$( 177 )
+    Case 178   'crossed o
+      Character$ = Chr$( 248 )
+    Case 179   'eth
+      Character$ = Chr$( 240 )
+    Case 180   'thorn
+      Character$ = Chr$( 254 )
+    Case 181   'ae ligature
+      Character$ = Chr$( 230 )
+    Case 182   'oe ligature
+      Character$ = Chr$( 156 )
+    Case 185   'Pound
+      Character$ = Chr$( 163 )
+    Case 202   'Copyright
+      Character$ = Chr$( 169 )
+    Case 203   'Sound recording copyright: does not copy
+      Character$ = "p"
+      Warning = TRUE
+    Case 204   'Musical sharp: does not copy
+      Character$ = "[SHARP]"
+      Warning = TRUE
+    Case 223   'Delimiter
+      If Character$ = " " And Mid$( InputString$, i + 1, 2 ) Like "[a-z0-9] " Then
+          Character$ = Chr$( 135 )
+        Else
+          Character$ = Chr$( 223 )
+      End If
+    Case Else
+      Character$ = Chr$( CharRead% )
+  End Select
+
+  TempString$ = TempString$ & Character$
+
+Next i
+
+Convert1252 = TempString$
+
+End Function
+'36413449
+'
+'Macro name: CopyToVoyager
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
+'Saved: 6/28/2017 11:27:44 AM using "MacroBookInspector" macro by Walter F. Nickeson.

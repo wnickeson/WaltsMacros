@@ -1,0 +1,216 @@
+'MacroName:DeleteAllSuchPlus.2014.01
+'MacroDescription:Deletes all fields sharing characteristics of the field in which the
+' cursor is placed. Those characteristics are the tag, subject thesaurus or term source,
+' or subfield $5.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 1 July 2014.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro to delete all fields in a record that are like the field in
+' which the cursor is placed. The three criteria for deleting are explained below.
+'
+' CAUTION: Whatever is deleted is done with NO WARNING or confirmation message!
+'
+' The macro deletes fields that have these characteristics:
+'
+'  + All fields with the same tag as the selected field, with exceptions noted below. The
+'    cursor does not need to be in a specific occurrence of the field; it may be placed
+'    in the first, last, fifth, or fifteenth 029 field, for example, and will still
+'    delete them all.
+'
+'  + All fields that contain the same subfield $5 as the selected field, regardless of
+'    the tag. For example, an LC record may contain these fields:
+'      500     LC copy formerly owned by Bruce Rogers. $5 DLC
+'      700 1   Rogers, Bruce, $d 1870-1957, $e former owner. $5 DLC
+'      710 2   Pforzheimer Bruce Rogers Collection (Library of Congress) $5 DLC
+'    The macro run with the cursor placed in any of these fields will delete all three
+'    fields at once. Any other field that contains a subfield $5 with a different
+'    institution code will be ignored.
+'
+'  + All subject headings with the same source of the selected heading or term,
+'    regardless of the tag. The macro's action is based on the value of the second
+'    indicator. For example, if the cursor is placed in a 650 #4 field, the macro deletes
+'    all subject headings with second indicator 4--not just 650, but also 600, etc. All
+'    other subject headings remain untouched. If the second indicator is 7, the macro
+'    deletes only those headings with a matching source code in subfield $2. Thus, for
+'    example, it will delete from a record all "fast" headings but not "bisach" headings:
+'    While both headings have second indicator 7, the terms for the source of the code in
+'    subfield $2 are different.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim CandidateFieldData$
+Dim CandidateFieldTag$
+Dim CandidateTermSource$
+Dim Col%
+Dim Delimiter$               : Delimiter$     = Chr$( 223 )
+Dim Institution$
+Dim LineCount%               : LineCount%     = 1
+Dim Row%
+Dim SecondIndicator$
+Dim SelectedFieldData$
+Dim SelectedFieldTag$
+Dim SelectedFieldTagVal%
+Dim SelectedTermSource$
+
+Dim FoundField               : FoundField     = TRUE
+Dim Success                  : Success        = TRUE
+
+Dim p As Integer, q As Integer
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+If Col% > 0 Then             '0 = Fixed field
+    If CS.GetFieldLine( Row%, SelectedFieldData$ ) = TRUE Then
+
+' First check for the presence of subfield $5.
+
+        p = InStr( SelectedFieldData$, Delimiter$ & "5" )
+        If p <> 0 Then
+            q = InStr( p + 3, SelectedFieldData$, Delimiter$ )
+            If q <> 0 Then
+                Institution$ = Mid$( SelectedFieldData$, p, q - p - 1 )
+              Else
+                Institution$ = Mid$( SelectedFieldData$, p )
+            End If
+
+' If a subfield $5 is found in the selected field, start at the first field of the record
+' and go through the record, line by line, deleting every field that contains that same
+' subfield $5. Since deleting a field makes the record one line shorter, decrement the
+' line count before the loop increments it. That means the next time through the loop,
+' although the line number will be the same, it will identify what was the next field on
+' this go through.
+
+            Do
+              FoundField = CS.GetFieldLine( LineCount%, SelectedFieldData$ )
+              If InStr( SelectedFieldData$, Institution$ ) Then
+                  Success    = CS.DeleteFieldLine( LineCount% )
+                  LineCount% = LineCount% - 1
+              End If
+              LineCount% = LineCount% + 1
+            Loop Until FoundField = FALSE
+            Exit Sub
+        End If
+
+' Otherwise, begin by detecting the tag, because subject headings are treated differently
+' than other tags.
+
+        SelectedFieldTag$    = Left$( SelectedFieldData$, 3 )
+        SelectedFieldTagVal% = Val( SelectedFieldTag$ )
+
+' If the selected field is not a subject heading, delete all such fields with the same
+' tag, by repeatedly calling "DeleteField" until no more matching fields are found.
+
+        If SelectedFieldTagVal% < 600 Or SelectedFieldTagVal% > 699 Then
+            Do
+              Success = CS.DeleteField( SelectedFieldTag$, 1 )
+            Loop Until Success = FALSE
+          Else
+            Select Case SelectedFieldTag$
+
+' A few of the subject fields can be deleted in the same way.
+
+              Case "653", "654", "658", "662"
+                Do
+                  Success = CS.DeleteField( SelectedFieldTag$, 1 )
+                Loop Until Success = FALSE
+
+' But any other subject heading is to be deleted according to the source of the heading
+' or term, rather than strictly by tag. These other headings identify their thesauri by
+' means of the second indicator. If its value is 7, the code for the thesaurus is to be
+' found in subfield $2.
+
+              Case Else
+                SecondIndicator$ = Mid$( SelectedFieldData$, 5, 1 )
+                If SecondIndicator$ = "7" Then
+                    p = InStr( SelectedFieldData$, Delimiter$ & "2" )
+                    If p <> 0 Then
+                        q = InStr( p + 1, SelectedFieldData$, Delimiter$ )
+                        If q = 0 Then
+                            SelectedTermSource$ = Trim$( Mid$( SelectedFieldData$, p + 3 ) )
+                          Else
+                            SelectedTermSource$ = Trim$( Mid$( SelectedFieldData$, p + 3, q - ( p + 3 ) ) )
+                        End If
+                    End If
+                End If
+
+' Although we want to delete only subject headings, to get to them we have to go through
+' the record line by line, starting from the first line, because we don't know which line
+' contains the first 6XX tag. Once the subject block is found, exclude those fields whose
+' second indicator doesn't tell the source of the heading.
+
+                Do
+                  FoundField = CS.GetFieldLine( LineCount%, CandidateFieldData$ )
+                  If FoundField Then
+                      CandidateFieldTag$ = Left$( CandidateFieldData$, 3 )
+                      If Val( CandidateFieldTag$ ) > 599 And Val( CandidateFieldTag$ ) < 700 Then
+                          Select Case CandidateFieldTag$
+                            Case "653", "654", "658", "662"
+                            Case Else
+                              If Mid$( CandidateFieldData$, 5, 1 ) = SecondIndicator$ Then
+
+' As was done with the selected field, check the second indicator of the candidate field;
+' if it is 7, determine the source of the term or heading, so only headings with a
+' matching thesaurus are deleted. A record may have, for example, terms coded bisacsh,
+' sears, fast, and others. The macro will delete only the ones exactly matching the
+' source of the target field. The tag is not relevant.
+
+                                  If SecondIndicator$ = "7" Then
+                                      p = InStr( CandidateFieldData$, Delimiter$ & "2" )
+                                      If p <> 0 Then
+                                          q = InStr( p + 1, CandidateFieldData$, Delimiter$ )
+                                          If q = 0 Then
+                                              CandidateTermSource$ = Trim$( Mid$( CandidateFieldData$, p + 3 ) )
+                                            Else
+                                              CandidateTermSource$ = Trim$( Mid$( CandidateFieldData$, p + 3, q - ( p + 3 ) ) )
+                                          End If
+                                      End If
+                                      If SelectedTermSource$ = CandidateTermSource$ Then
+                                          Success = CS.DeleteFieldLine( LineCount% )
+                                      End If
+                                    Else
+                                      Success = CS.DeleteFieldLine( LineCount% )
+                                  End If
+                              End If
+                          End Select
+
+' As above, decrement the line count before the loop increments it.
+
+                          If Success Then
+                              LineCount% = LineCount% - 1
+                              Success    = FALSE
+                          End If
+                      End If
+                      LineCount% = LineCount% + 1
+                  End If
+                Loop Until FoundField = FALSE
+            End Select
+        End If
+    End If
+End If
+
+End Sub
+'23811747
+'
+'Macro name: DeleteAllSuchPlus
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
+'Saved: 6/28/2017 11:27:53 AM using "MacroBookInspector" macro by Walter F. Nickeson.

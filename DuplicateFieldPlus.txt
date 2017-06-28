@@ -1,0 +1,314 @@
+'MacroName:DuplicateFieldPlus.2017.03
+'MacroDescription:Copies a field and pastes it in a new field directly below the
+' original, automatically making some useful changes.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 28 April 2017.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: With the cursor in the field to be copied, run the macro. It copies the
+' entire field to a new field directly following the original, automatically making some
+' useful changes. These are the changes it makes:
+'
+'    original tag    copied tag
+'             050    090
+'             090    050 #4
+'        1XX, 7XX    6XX     (minus relator codes)
+'             245    246 3  (minus subfield $c)
+'        440, 490    830     (the 4XX is changed to 490 1#)
+'             6XX    7XX     (names and titles; subject subdivisions are removed)
+'   800, 810, 811    490 #1  (minus all preceding subfield $t)
+'             830    490 #1
+'
+' For series (440 or 490 0#), the macro changes the tag and indicator to 490 1# as it
+' adds the 830.
+'
+' For a subject heading with a century chronological subdivision (10th-20th centuries
+' only), the macro increments the century. Thus:
+'
+'    Motion pictures $z United States $x History $y 20th century.
+'
+'  becomes
+'
+'    Motion pictures $z United States $x History $y 21st century.
+'
+' although of course the macro can't verify the validity of the new subdivision.
+'
+' To simply copy the field, making no changes, use my macro DuplicateField.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Century%
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box function when the "Cancel" button is clicked.
+
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim Col%
+Dim Content$
+Dim DELIMITER As String*1    : DELIMITER    = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
+Dim FieldData$
+Dim Filing%
+Dim FirstChar%
+Dim Indicator1$
+Dim Indicator2$
+Dim Remainder$
+Dim Row%
+Dim Series490$
+Dim Start%
+Dim Subfield$
+Dim SubfieldCode$
+Dim Tag$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:DuplicateFieldPlus"
+
+Dim p As Integer, q As Integer
+
+Dim Centuries( 11 ) As String
+Centuries( 0  ) = "10th century"
+Centuries( 1  ) = "11th century"
+Centuries( 2  ) = "12th century"
+Centuries( 3  ) = "13th century"
+Centuries( 4  ) = "14th century"
+Centuries( 5  ) = "15th century"
+Centuries( 6  ) = "16th century"
+Centuries( 7  ) = "17th century"
+Centuries( 8  ) = "18th century"
+Centuries( 9  ) = "19th century"
+Centuries( 10 ) = "20th century"
+Centuries( 11 ) = "21st century"
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 5 To 13, 15 To 16, 21 To 25, 36
+    MsgBox "Sorry, this macro only works in bibliographic or authority records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+If Col% > 0 Then             '0 = Fixed field
+    If CS.GetFieldLineUnicode( Row%, FieldData$ ) = FALSE Then
+        MsgBox "Sorry, this macro can't proceed!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    MsgBox "This macro can only duplicate a variable field!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Smart duplicating: Convert certain tags. Get the tag and the indicators.
+
+Tag$        = Left$( FieldData$, 3 )
+Indicator1$ = Mid$ ( FieldData$, 4, 1 )
+Indicator2$ = Mid$ ( FieldData$, 5, 1 )
+Content$    = Mid$ ( FieldData$, 6 )
+
+Select Case Tag$
+
+' Switch a copied call number field from LC to local, or vice versa.
+
+  Case "050"
+    FieldData$ = "090  " & Content$
+  Case "090"
+    FieldData$ = "050 4" & Content$
+
+' Copy a 245 as a 246.
+
+  Case "245"
+    p = InStr( FieldData$, DELIMITER & "c" )
+    If p <> 0 Then
+        FieldData$ = RTrim$( Left$( FieldData$, p - 3 ) )
+    End If
+    Filing%    = Val( Mid$( FieldData$, 5, 1 ) )
+    FieldData$ = "2463" & Chr$( 252 ) & Mid$( FieldData$, 6 + Filing% )
+    FirstChar% = Asc( Mid$( FieldData$, 6, 1 ) )
+    If FirstChar% > 96 And FirstChar% < 123 Then
+        FirstChar% = FirstChar% - 32
+        FieldData$ = Left$( FieldData$, 5 ) & Chr$( FirstChar% ) & Mid$( FieldData$, 7 )
+    End If
+    If Right$( FieldData$, 1 ) = "." Then
+        FieldData$ = Mid$( FieldData$, 1, Len( FieldData$ ) - 1 )
+        p = InStr( FieldData$, DELIMITER & "c" )
+        If p <> 0 Then
+            FieldData$ = RTrim$( Left$( FieldData$, p - 5 ) )
+        End If
+    End If
+
+' Copy a 1XX or 7XX as a 6XX. Remove relator codes.
+
+  Case "100", "110", "111", "130", "700", "710", "711", "730"
+    Start% = 1
+    Do
+      p = InStr( Start%, Content$, DELIMITER )
+      If p <> 0 Then
+          SubfieldCode$ = Mid$( Content$, p + 1, 1 )
+          If InStr( "e4", SubfieldCode$ ) Then
+              Content$ = Left$( Content$, p - 2 )
+              If Right$( Content$, 1 ) = "," Then
+                  Content$ = Left$( Content$, Len( Content$ ) - 1 )
+              End If
+              Exit Do
+            Else
+              Start% = p + 1
+          End If
+        Else
+          Start% = p + 1
+      End If
+    Loop Until p = 0
+    FieldData$ = "6" & Right$( Tag$, 2 ) & Indicator1$ & "0" & Content$
+
+' Copy a 4XX as an 8XX.
+
+  Case "440"
+    FieldData$ = "830 " & Indicator2$ & Content$
+    Series490$ = "4901 " & Content$
+
+  Case "490"
+    FieldData$ = "830 0" & Content$
+    Series490$ = "4901 " & Content$
+
+' Copy a 6XX name or title as a 7XX. Remove subject subdivisions.
+
+  Case "600", "610", "611", "630"
+    Start% = 1
+    Do
+      p = InStr( Start%, Content$, DELIMITER )
+      If p <> 0 Then
+          SubfieldCode$ = Mid$( Content$, p + 1, 1 )
+          If InStr( "vxyz", SubfieldCode$ ) Then
+              Content$ = Left$( Content$, p - 2 )
+              Exit Do
+            Else
+              Start% = p + 1
+          End If
+        Else
+          Start% = p + 1
+      End If
+    Loop Until p = 0
+    FieldData$ = "7" & Right$( Tag$, 2 ) & Indicator1$ & " " & Content$
+
+' Copy a 6XX with a century chronological subdivision, but increment the century--except,
+' don't increment "21st" to "22nd"!
+
+  Case "650", "651"
+    Start% = 1
+    Do
+      p = InStr( Start%, Content$, DELIMITER )
+      If p <> 0 Then
+          SubfieldCode$ = Mid$( Content$, p + 1, 1 )
+          If SubfieldCode$ = "y" And Mid$( Content$, p + 7, 8 ) = " century" Then
+              q = InStr$( p + 1, Content$, DELIMITER )
+              If q = 0 Then
+                  Subfield$ = Trim$( Mid$( Content$, p + 2 ) )
+              If Right$( Subfield$, 1 ) <> "y" Then
+                  Subfield$  = Left$( Subfield$, Len( Subfield ) - 1 )
+                  Remainder$ = "."
+              End If
+                Else
+                  Subfield$ = Trim$( Mid$( Content$, p + 2, q - p - 2 ) )
+                  Remainder$ = Trim$( Mid$( Content$, q ) )
+              End If
+              Century% = Val( Subfield$ )
+              If Century% > 9 and Century% < 22 Then
+
+                  Begin Dialog Dialog1Definition 194, 56, WaltsMacros$, .Dialog1ControlFunction
+                    ButtonGroup                                  .Choice
+                     PushButton     10, 32, 52, 14, "&Change"
+                     PushButton     70, 32, 52, 14, "&Don't change"
+                    CancelButton   132, 32, 52, 14
+                    Text            18, 10, 88,  8, "Change " & DOUBLE_QUOTE & Subfield$ & DOUBLE_QUOTE & " to:"
+                    DropListBox    108,  8, 64, 96, Centuries(), .DropListBox1
+                  End Dialog
+
+                  Dim Dialog1 as Dialog1Definition
+                  On Error Resume Next
+                  Dialog Dialog1
+                  If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+              End If
+
+              Select Case Dialog1.Choice
+                Case 0
+                  FieldData$ = Tag$ & Indicator1$ & Indicator2$ & Left$( Content$, p + 2 ) & Centuries( Dialog1.DropListBox1 )
+              If Remainder$ <> "." Then Remainder$ = " " & Remainder$
+              FieldData$ = FieldData$ & Remainder$
+                Case 1
+                  FieldData$ = Tag$ & Indicator1$ & Indicator2$ & Content$
+              End Select
+              Exit Do
+            Else
+              Start% = p + 1
+          End If
+      End If
+    Loop Until p = 0
+
+' Copy a field 800, 810, 811, or 830 as a 490.
+
+  Case "800", "810", "811"
+    p = InStr( Content$, DELIMITER & "t" )
+    If p = 0 Then
+        MsgBox "This series field lacks a title!", CRITICAL_MESSAGE, WaltsMacros$
+      Else
+        FieldData$ = "4901 " & Mid$( Content$, p + 3 )
+    End If
+
+  Case "830"
+    FieldData$ = "4901 " & Content$
+
+End Select
+
+If Series490$ <> "" Then
+    If CS.SetFieldLine( Row%, Series490$ ) Then
+    End If
+End If
+
+If CS.AddFieldLine( Row% + 1, FieldData$ ) = FALSE Then
+    MsgBox "Sorry, this macro can't proceed!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const INITIALIZE As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+
+If Action% = INITIALIZE Then
+    If Century% < 21 Then
+        DlgValue "DropListBox1", Century% - 9
+      Else
+        DlgValue "DropListBox1", Century% - 11
+    End If
+End If
+
+End Function
+'33612436
+'
+'Macro name: DuplicateFieldPlus
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
+'Saved: 6/28/2017 11:28:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,3139 @@
+'MacroName:GetAuthority.2016.03
+'MacroDescription:Gets the authorized heading (the 1XX field) from an authority record,
+' returns to the bibliographic record, and pastes in the heading at the user's choice of
+' tag, or a subdivision at an appropriate place in a subject heading. Also copies other
+' information from the authority record for addition to the bibliographic record in the
+' same operation.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' The code for "Get back to the bibliographic record" portion of this macro was developed
+' from a contribution by Harvey Hahn on the OCLC-CAT e-mail List in a posting of 1 Oct
+' 2004. My development of his code and the resulting performance of this macro are my
+' responsibility alone.
+'
+' Last updated: 30 September 2016.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' This macro and my "BrowseAuthority" macro work together to efficiently add authorized
+' headings to a bibliographic record. Use "BrowseAuthority" to search the Authority File,
+' and use "GetAuthority" to paste a heading into the record in the right place. Both
+' macros reduce keystrokes and mouse movements and simplify the mechanical processes of
+' adding headings.
+'
+' How it works: Run this macro while viewing an authority record (cursor position is
+' irrelevant). The macro copies the authorized heading (the 1XX field) and toggles back
+' to the bibliographic record to present options for automatic pasting. If the cursor is
+' already in a heading field (as it might be if the authority record was found by using
+' my "BrowseAuthority" macro in that field), the options include replacing the heading
+' or adding it as a new field with a different tag. Other information from the authority
+' record (see below) can be added in the same operation. If more than one bibliographic
+' record is open, the macro will cycle through them, starting with the one most recently
+' opened, for you to choose the record into which the macro will paste the copied data.
+'
+' If the copied heading is not a subject subdivision, the macro will add it to a
+' bibliographic record as a new field with the appropriate tag--1XX, 6XX, 7XX, or 8XX, as
+' a name, title, or subject, while obeying the strictures of the coding in the authority
+' record. It can replace all or part of the 6XX field in which the cursor is placed,
+' provided that field is an LC subject heading (non-LC subject headings are not touched).
+' A simple subject heading may be added as a genre term in a 655 field. A name/title
+' heading can be added as a 100/240 pair, or as a name/title added entry or subject
+' heading. When such a heading is added as a 7XX field, the macro makes the second
+' indicator a fill character, as a reminder that this indicator needs to be checked--the
+' macro can't tell if the heading is an analytic entry or not. A geographic name which
+' also appears as a subdivision in a 781 field can be copied as a heading or as a
+' subdivision. The subdivision form in the 781 field also serves as a basis for
+' constructing a 752 field, which can be added along with the heading or on its own.
+'
+' If the copied heading is a subject subdivision (including a geographic name as a
+' subdivision in a 781 field), it can be inserted into an existing 6XX field after any of
+' the subdivisions, with the option of deleting the subfields that follow.  However, if a
+' geographic subdivision is to be inserted before another geographic subdivision, the
+' macro warns if the authority record does not allow the subdivision to be subdivided
+' geographically.
+'
+' The macro's comparison of the authority and bibliographic heading is strict;
+' normalization is not applied, so any discrepancy at all, whether in punctuation,
+' capitalization, diacritical marks, or subfield coding, makes the macro consider the
+' two headings to be different.
+'
+' When replacing an existing heading, subfields $e, $i, $u, $3, $4, and $5, and titles,
+' are by default retained with the new heading (but they can be omitted); subfields $w
+' and $0 are discarded.
+'
+' If an 8XX field is added and the macro thinks it has found the corresponding 490 0
+' field, it changes the tag to 490 1. However, since the series statement and series
+' tracing may be rather different in form, this guess at a correspondence should not be
+' regarded as reliable, and must be verified by inspection.
+'
+' The macro can add other information from the authority record at the same time that it
+' adds the heading, whether or not the retrieved heading matches that in the
+' bibliographic record:
+'
+'  + Any classification number in an 053 field or a call number in an 050 field. These
+'    are added, if desired, in 050 #4. If the 053 field contains a range of numbers, only
+'    the number for the beginning of the range is copied; a plus sign displays to warn
+'    that the call number inserted may not be specific enough. (To retrieve only
+'    classification numbers from an authority record, use my macro "CopyCallNumber,"
+'    which can also copy call numbers from bibliographic records.)
+'
+'  + A geographic area code (GAC) in an 043 field.
+'
+'  + A series numbering example in a 642 field. The macro includes a fill character when
+'    it copies this information, to remind you to correct the data before proceeding.
+'
+'  + An ISSN in an 022 field. This is added as the last subfield in an 8XX field.
+'
+'  + A 752 field, either as the only information copied from the authority record, or as
+'    an addition to a copied heading or subdivision. Because it is a simple derivation
+'    from the 781 field, this addition should always be checked for completeness and
+'    accuracy.
+'****************************************************************************************
+
+Option Explicit
+
+Type RecordStructure
+  CopiedHeading          As String
+  CopiedHeadingD         As String  'D = Display, meaning fixed up for showing in the dialog boxes.
+  DirectIndirect         As String*1
+  GAC                    As String
+  GeographicSubdivision  As String
+  GeographicSubdivisionD As String
+  HeadingType            As String*2
+  HierarchicalHeading    As String
+  HierarchicalHeadingD   As String
+  Indicators             As String*2
+  ISSN                   As String
+  NamePortion            As String
+  NameUse                As String*1
+  New752                 As String
+  New752D                As String
+  SeriesUse              As String*1
+  SubjectUse             As String*1
+  Thesaurus              As String
+  TitlePortion           As String
+End Type
+
+Declare Sub AnalyzeCallNumber
+Declare Sub AnalyzeSubjects     ( x% )
+Declare Sub SetAdditionsBooleans( InString$ )
+
+Declare Function AddSubfields     ( InString$ )              As String
+Declare Function CleanBibHeading  ( InString$ )              As String
+Declare Function CompareSeries    ( InString$ )              As Integer
+Declare Function FixString        ( InString$ )              As String
+Declare Function MakeDisplayString( x%, InString$ )          As String
+Declare Function Transform781     ( InString$ )              As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+Declare Function Dialog2ControlFunction( Id$, Action%, SValue& )
+Declare Function Dialog3ControlFunction( Id$, Action%, SValue& )
+Declare Function Dialog4ControlFunction( Id$, Action%, SValue& )
+
+Global CS As Object
+
+Global Const ADD                   As String  = "ADD"
+Global Const CHECKED               As Integer = 1    'The value of a checkbox when it is checked.
+Global Const CONTROL_CHANGE        As Integer = 2    'The value of the dialog box function parameter "Action%" when a control changes.
+Global Const DISABLED              As Integer = 0    'The value to make a dialog box control disabled.
+Global Const ENABLED               As Integer = 1    'The value to make a dialog box control enabled.
+Global Const GENRE_HEADING         As String  = "55" 'The last two digits of a tag for a genre/form term.
+Global Const INITIALIZE            As Integer = 1    'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Global Const INVISIBLE             As Integer = 0    'The value to make a dialog box control invisible.
+Global Const REPLACE               As String  = "REP"
+Global Const SUBDIVISION           As String  = "80" 'A value to flag a string as a subdivision.
+Global Const TAG_GROUP_ADDED_ENTRY As String  = "7"  'The first digit of an added entry tag.
+Global Const TAG_GROUP_MAIN_ENTRY  As String  = "1"  'The first digit of a main entry (oldspeak) tag.
+Global Const TAG_GROUP_SERIES      As String  = "8"  'The first digit of a series added entry tag.
+Global Const TAG_GROUP_SUBJECT     As String  = "6"  'The first digit of a subject heading tag.
+Global Const UNCHECKED             As Integer = 0    'The value of a checkbox when it is not checked.
+Global Const VISIBLE               As Integer = 1    'The value to make a dialog box control visible.
+
+Global AddOrReplace As String*3
+Global AllAdditions%
+Global AuthorityAdditions%
+Global AuthorityData As RecordStructure
+Global CallNumberCount%
+Global CallNumberSelection As Variant
+Global CheckBox1Subfield$
+Global CheckBox2Subfield$
+Global CheckBox3Subfield$
+Global CheckBox4Subfield$
+Global ClassificationNumber$
+Global Count6XX%
+Global CountOf642s%
+Global CurrentFieldBegins%
+Global CurrentFieldEnds%
+Global CurrentRow%
+Global DELIMITER As String*1
+Global FieldToAdd As String*3
+Global InitialSubfields$
+Global NoteIdenticalHeadings$
+Global NoteTrace490$
+Global PushButtonsVisible%
+Global SeriesExampleSelection As Variant
+Global SubfCount1Subj%
+Global SubjectDisplayLines%
+Global SubjectFieldsListBoxIndex%
+Global TerminalSubfields$
+
+Global Add043
+Global Add752
+Global AddInitialSubfields
+Global AddISSN
+Global AddNewField
+Global AddTerminalSubfields
+Global AuthorTitle
+Global CheckAll
+Global IdenticalHeadings
+Global ReplacePartOfHeading
+Global SubjectOnly
+
+Global AdditionsArray   ( 3 ) As String
+Global ClassNumbersDisplay()  As String
+Global ClassNumbersRaw    ()  As String
+Global SeriesNumbering    ()  As String
+Global SubjectFieldsD     ()  As String
+Global SubjectFieldsLines ()  As Integer
+Global SubjectFieldsSplits()  As Integer
+
+'****************************************************************************************
+
+Sub Main
+
+Set CS = CreateObject("Connex.Client")
+
+Const APPROPRIATE                 As String  = "a"   'The value indicating a heading is appropriate for use.
+Const CRITICAL_MESSAGE            As Integer = 16    'The value to display a "Critical message" (which includes the red button with
+                                                     ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_1             As Integer = 1     'The value returned by the dialog box when the first button is clicked.
+Const DIALOG_BUTTON_2             As Integer = 2     'The value returned by the dialog box when the second button is clicked.
+Const DIALOG_BUTTON_CANCEL        As Integer = 0     'The value returned by the dialog function when the "Cancel" button is clicked.
+Const DIALOG_BUTTON_OK            As Integer = -1    'The value returned by the dialog box when the "OK" button is clicked.
+Const DISPLAY_FF_AT_TOP           As Integer = 1     'The value to display the fixed field at the top of a record.
+Const FIX_AMPERSAND               As Integer = 0     'The value to make the "MakeDisplayString" function fix the ampersand issue only.
+Const GENRE_HEADING               As String  = "55"  'The last two digits of a tag for a genre/form term.
+Const GEOGRAPHIC_NAME             As String  = "51"  'The last two digits of a tag for a geographic term.
+Const INFORMATION_MESSAGE         As Integer = 64    'The value to display the "Information message" icon in a message box.
+Const LCSH_INDICATOR              As String  = "0"   'The value indicating the subject heading conforms to forms established by LC.
+Const MSGBOX_RETURN_CANCEL        As Integer = 2     'The value returned by a message box when the "Cancel" button is clicked.
+Const MSGBOX_RETURN_OK            As Integer = 1     'The value returned by a message box when the "OK" button is clicked.
+Const MSGBOX_SETBUTTONS_OK_CANCEL As Integer = 1     'The value to set two buttons, "OK" and "Cancel," in a message box.
+Const NOT_APPROPRIATE             As String  = "b"   'The value indicating a heading is not appropriate for use.
+Const SERIES_LIKE_PHRASE          As String  = "c"   'The value of 008/12 to indicate a title is properly a "series-like phrase."
+Const SUBJECT_HEADING             As String  = "6[01345][018]"   'The digits of bibliographic tags for subject headings.
+Const TOPICAL_TERM                As String  = "50"  'The last two digits of a tag for a topical subject heading.
+Const UNDEFINED_INDICATOR         As String  = " "   'The value of an undefined indicator (i.e., a blank).
+Const VARTYPE_INTEGER             As Integer = 2     'The value indicating a variant variable is an integer.
+Const WARNING_MESSAGE             As Integer = 48    'The value to display the "Warning message" icon in a message box.
+Const WARNING_QUERY               As Integer = 32    'The value to display the "Warning query" icon in a message box.
+
+Dim ActionPrompt$
+Dim AuthTag As String*3
+Dim Bib043$
+Dim BibRecordLine%
+Dim BibTag As String*3
+Dim CompleteSubjHeading$
+Dim CopiedCaption$
+Dim CopiedHeadingD$
+Dim CountOf05Xs%
+Dim CountOfBibs%
+Dim CountOfWindows%
+Dim CurrentField$
+Dim CurrentHeading$
+Dim DelimiterPosition%
+Dim DialogHeading$
+Dim FFData$
+Dim FieldData$
+Dim FILLCHAR As String*1     : FILLCHAR            = Chr$( 252 )
+Dim HeadingToAdd$
+Dim HierarchicalPlaceName$
+Dim JurisdictionIndicator$
+Dim ListBoxSelection%
+Dim MsgBoxMessage$
+Dim OCLC$
+Dim Ordinal$
+Dim PosFF%
+Dim PushButton1Text$
+Dim PushButton2Text$
+Dim PushButton3Text$
+Dim PushButton4Text$
+Dim QUOTE As String*1        : QUOTE               = Chr$( 034 )
+Dim RecordCount$
+Dim Row%
+Dim SecondIndicator As String*1
+Dim SeriesNumberingExample$
+Dim SeriesSubfieldV$
+Dim Start%
+Dim State240$                : State240$           = "No240"
+Dim SubjectHeading$
+Dim SubjectRemainder$
+Dim SubjectSelection$
+Dim TagValue%
+Dim Temp240$
+Dim TempString$
+Dim Title240$
+Dim Traced490$
+Dim TypeOfWindow%
+Dim UnestablishedHeading$
+Dim WaltsMacros$             : WaltsMacros$        = "[Walt's macros] Essentials:GetAuthority"
+Dim Which490%
+
+Dim Add050
+Dim AddOnly752               : AddOnly752          = FALSE
+Dim ChangedFFView            : ChangedFFView       = FALSE
+Dim ClassificationRange      : ClassificationRange = FALSE
+Dim DeleteField              : DeleteField         = FALSE
+Dim FieldAdded               : FieldAdded          = TRUE
+Dim FieldDeleted
+Dim FoundField
+Dim Insert240                : Insert240           = FALSE
+
+Dim BibRecs() As Integer
+
+Dim i As Integer, p As Integer, q As Integer
+
+DELIMITER             = Chr$( 223 )
+SubjectDisplayLines%  = 1
+
+Add043                = FALSE
+Add050                = FALSE
+Add752                = FALSE
+AddNewField           = FALSE
+AddInitialSubfields   = FALSE
+AddISSN               = FALSE
+AddTerminalSubfields  = FALSE
+CheckAll              = FALSE
+IdenticalHeadings     = FALSE
+ReplacePartOfHeading  = FALSE
+SubjectOnly           = FALSE
+
+'****************************************************************************************
+' PART ONE: GET DATA FROM AUTHORITY RECORD.
+'****************************************************************************************
+
+' First, make sure an authority record is displayed.
+
+TypeOfWindow% = CS.ItemType
+
+Select Case TypeOfWindow%
+  Case 3 To 4, 14, 18, 20
+  Case Else
+    MsgBox "This macro only works in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then, check that the heading is actually established, that is, it does not contain an
+' explanatory 260 field (a "Complex See Reference"). If it does, there is no authorized
+' heading to copy, so the macro quits.
+
+If CS.GetField( "260", 1, UnestablishedHeading$ ) Then
+    MsgBox "This is not a heading established for use!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If the 1XX field is established, populate the "AuthorityData" record variable with data
+' from the authority record.
+
+If CS.GetField( "1..", 1, FieldData$ ) Then
+    AuthTag                     = Left$( FieldData$, 3 )
+    AuthorityData.HeadingType    = Mid$( FieldData$, 2, 2 )
+    AuthorityData.Indicators     = Mid$( FieldData$, 4, 2 )
+    AuthorityData.CopiedHeading  = Mid$( FieldData$, 6 )
+
+' If the established heading is a genre term, grab the "thesaurus convention" from
+' subfield $f in the 040 field, if possible, in order to correctly code the field when
+' adding to the bibliographic record.
+
+    If AuthTag = "155" Then
+        If CS.GetField( "040", 1, FieldData$ ) Then
+            p = InStr( FieldData$, DELIMITER & "f" )
+            If p <> 0 Then
+                q = InStr( p + 2, FieldData$, DELIMITER )
+                If q = 0 Then
+                    AuthorityData.Thesaurus = Trim$( Mid$( FieldData$, p + 2 ) )
+                  Else
+                    AuthorityData.Thesaurus = Trim$( Mid$( FieldData$, p + 2, q - p - 2 ) )
+                End If
+            End If
+        End If
+
+' For any other type of heading, look for subject subdivisions. Their presence marks the
+' heading for treatment as a subject, which means it won't be offered for addition as a
+' genre heading, as other subject headings are.
+
+      Else
+        For i = 1 To 4
+          If InStr( AuthorityData.CopiedHeading, DELIMITER & Mid$( "vxyz", i, 1 ) ) Then
+              SubjectOnly = TRUE
+              Exit For
+          End If
+        Next i
+    End If
+
+' Look for a title in the copied heading, and if found, copy the name and title portions
+' of the heading to their own fields in the record variable.
+
+    p = InStr( AuthorityData.CopiedHeading, DELIMITER & "t" )
+    If p <> 0 Then
+        AuthorityData.NamePortion  = Trim$( Left$( AuthorityData.CopiedHeading, p - 1 ) )
+        AuthorityData.TitlePortion = Trim$( Mid$( AuthorityData.CopiedHeading, p + 2 ) )
+        AuthorTitle                = TRUE
+      Else
+        AuthorityData.NamePortion  = AuthorityData.CopiedHeading
+        AuthorTitle                = FALSE
+    End If
+
+' Use the "FixString" function to format the copied heading for nice display.
+
+    AuthorityData.CopiedHeadingD = FixString( AuthorityData.CopiedHeading )
+    CopiedHeadingD$              = MakeDisplayString( FIX_AMPERSAND, AuthorityData.CopiedHeadingD )
+
+    TagValue% = Val( AuthTag )
+
+' Flag headings that are subject subdivisions.
+
+    If TagValue% > 179 And TagValue% < 186 Then
+        AuthorityData.HeadingType = SUBDIVISION
+        SubjectOnly               = FALSE
+
+' At this time the macro doesn't do anything with the 162 field.
+
+      ElseIf TagValue% = 162 Then
+        MsgBox "Sorry, this macro doesn't do anything with a Medium of Performance Term (tag 162)", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+' Copy the GAC, if present.
+
+    If CS.GetField( "043", 1, FieldData$ ) Then
+        AuthorityData.GAC = Mid$( FieldData$, 6 )
+    End If
+
+' If a 781 field is present, copy its data. Prettify it with the "FixString" function.
+' Then show a dialog box in order to determine whether to copy the heading as a plain
+' name or as a subdivision string derived from the 781 field. This dialog box also
+' presents the option of deriving a 752 field from the 781 field to add to the
+' bibliographic record, either by itself or in addition to the heading.
+
+    If CS.GetField( "781", 1, FieldData$ ) Then
+        TempString$                          = Mid$( FieldData$, 6 )
+        AuthorityData.GeographicSubdivision  = TempString$
+        AuthorityData.GeographicSubdivisionD = FixString( TempString$ )
+        TempString$                          = Transform781( FieldData$ )
+        AuthorityData.HierarchicalHeading    = TempString$
+        AuthorityData.HierarchicalHeadingD   = FixString( TempString$ )
+
+        Begin Dialog Dialog1Definition  292, 150, WaltsMacros$, .Dialog1ControlFunction
+          OkButton       164, 128,  52,  14
+          CancelButton   228, 128,  52,  14
+          TextBox         24,  36, 256,  12,                                                 .TextBox1
+          TextBox         24,  70, 256,  12,                                                 .TextBox2
+          TextBox         24, 104, 256,  12,                                                 .TextBox3
+          Text            12,   8,  60,   8, "Copy which data?"
+          OptionGroup .OptionButtonGroup
+           OptionButton   12,  22,  88,  12, "&Main heading",                                .OptionButton1
+           OptionButton   12,  56,  88,  12, "&Geographic subdivision",                      .OptionButton2
+           OptionButton  144,  90,  80,  12, "Add &ONLY this field",                         .OptionButton3
+          CheckBox        12,  90, 128,  12, "&Hierarchical place name as 752 field",        .CheckBox
+          Text            24, 118,  88,  16, "Please verify subfield coding after pasting!", .SubfieldCode
+        End Dialog
+
+        Dim Dialog1 as Dialog1Definition
+        On Error Resume Next
+
+        If Dialog( Dialog1 ) = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+        Select Case Dialog1.OptionButtonGroup
+
+          Case 0
+            AuthorityData.GeographicSubdivision  = ""
+            AuthorityData.GeographicSubdivisionD = ""
+
+          Case 1
+            AuthorityData.CopiedHeading  = AuthorityData.GeographicSubdivision
+            AuthorityData.CopiedHeadingD = FixString( AuthorityData.CopiedHeading )
+            AuthorityData.HeadingType    = SUBDIVISION
+
+          Case 2
+            AddOnly752 = TRUE
+
+        End Select
+
+        If Dialog1.CheckBox = CHECKED Then
+            Add752                = TRUE
+            AuthorityData.New752  = "752  " & AuthorityData.HierarchicalHeading
+            TempString$           = MakeDisplayString( 24, AuthorityData.HierarchicalHeading )
+            AuthorityData.New752D = FixString$( TempString$ )
+        End If
+
+' If the copied heading is a geographic subdivision, don't bother looking for additional
+' information; go right to the process of returning to the bibliographic record.
+
+        If AuthorityData.HeadingType = SUBDIVISION Then
+            GoTo StartCycle:
+        End If
+
+    End If
+End If
+
+' Get some fixed field values. This may mean altering and then restoring how the fixed
+' field displays. The fixed field values determine how the heading may be added to the
+' bibliographic record.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+
+' The value in "Name use" (008/14) determines if the heading can be used in a 1XX or 7XX
+' field; a geographic entity that cannot be used as a name, according to this code, will
+' be pasted in as a subject.
+
+If CS.GetFixedField( "Name use", FFData$ ) Then
+    AuthorityData.NameUse = FFData$
+  Else
+    AuthorityData.NameUse = "x"
+End If
+
+' The value in "Ser use" (008/16, "Heading use--series added entry") determines whether
+' or not a title or name/title heading may be added as a series field.
+
+If CS.GetFixedField( "Ser use", FFData$ ) Then
+    AuthorityData.SeriesUse = FFData$
+  Else
+    AuthorityData.SeriesUse = "x"
+End If
+
+' The value "c" in "Series" (008/12, "Type of series code") indicates the heading is a
+' series-like phrase. The macro can only add this heading as a quoted note (or replace
+' the heading if it appears in the bibliographic record as a 490).
+
+If CS.GetFixedField( "Series", FFData$ ) Then
+    If FFData$ = SERIES_LIKE_PHRASE Then
+        AuthorityData.SeriesUse = SERIES_LIKE_PHRASE
+    End If
+End If
+
+' The value in "Subject use" (008/15) determines whether a heading can be used as a
+' subject. Not all headings tagged 151 can be used as subjects, nor call such headings
+' be used as name headings, either.
+
+If CS.GetFixedField( "Subj use", FFData$ ) Then
+    AuthorityData.SubjectUse = FFData$
+  Else
+    AuthorityData.SubjectUse = "x"
+End If
+
+' The value in "Geo subd" (008/06) determines whether a subject subdivision can be
+' followed by a geographic subdivision. If it can't, the macro will complain if ordered
+' to insert a copied geographic subdivision before the bibliographic record's existing
+' geographic subdivision.
+
+If CS.GetFixedField( "Geo subd", FFData$ ) Then
+    AuthorityData.DirectIndirect = FFData$
+  Else
+    AuthorityData.DirectIndirect = "x"
+End If
+
+' Flag those subjects that are not topical, but also can not be used as name headings.
+
+If ( AuthorityData.HeadingType <> TOPICAL_TERM And AuthorityData.HeadingType <> GENRE_HEADING ) And _
+     AuthorityData.SubjectUse = APPROPRIATE And AuthorityData.NameUse = NOT_APPROPRIATE Then
+    SubjectOnly = TRUE
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' LC classification/call number: Get all the 050 or 053 fields in the authority record.
+' Extract the call number in subfields $a-$b from 050 fields, and the classification
+' number in subfield $a from 053 fields, and store the numbers in an array for
+' presentation in a list box. In a parallel array, store the call number with the
+' delimiter changed to a dollar sign, for nicer display in the list box. If the
+' classification number is a range, extract only the beginning of the range, and add a
+' plus sign to serve as a warning to not take it as a precise number, but rather an
+' approximation of the appropriate number. If there is only one number on the record,
+' extract it from the array and put it in the variable "ClassificationNumber$".
+
+Do
+  FoundField = CS.GetField( "05[03]", CountOf05Xs% + 1, FieldData$ )
+  If FoundField Then
+      AuthTag    = Left$( FieldData$, 3 )
+      TempString$ = Mid$( FieldData$, 6 )
+      Start%      = 1
+      Do
+        DelimiterPosition% = InStr( Start%, TempString$, DELIMITER )
+        If DelimiterPosition% <> 0 Then
+            If AuthTag = "053" Then
+                If Mid$( TempString$, DelimiterPosition% + 1, 1 ) = "b" Then ClassificationRange = TRUE
+                TempString$ = Left$( TempString$, DelimiterPosition% - 1 )
+                Exit Do
+              Else
+                If Mid$( TempString$, DelimiterPosition% + 1, 1 ) <> "b" Then
+                    TempString$ = Left$( TempString$, DelimiterPosition% - 1 )
+                  Else
+                    Start%      = DelimiterPosition% + 1
+                End If
+            End If
+        End If
+      Loop Until DelimiterPosition% = 0
+      ReDim Preserve ClassNumbersRaw    ( CountOf05Xs% )
+      ReDim Preserve ClassNumbersDisplay( CountOf05Xs% )
+      ClassNumbersRaw( CountOf05Xs% )     = Trim$( TempString$ )
+      If ClassificationRange Then
+          TempString$ = Trim$( TempString$ ) & " +"
+      End If
+      ClassNumbersDisplay( CountOf05Xs% ) = FixString$( TempString$ )
+      CountOf05Xs%                        = CountOf05Xs% + 1
+  End If
+Loop Until FoundField = FALSE
+
+CallNumberCount% = CountOf05Xs%
+
+If CallNumberCount% > 0 Then
+    AdditionsArray( AllAdditions% ) = "&050:"
+    AllAdditions%                   = AllAdditions% + 1
+    AuthorityAdditions%             = AuthorityAdditions% + 1
+    ClassificationNumber$           = ClassNumbersDisplay( 0 )
+End If
+
+' Series numbering example: Get all the 642 fields in the authority record. Extract the
+' numbering examples and store them in an array for presentation in a list box for
+' addition to the bibliographic record.
+
+If SeriesNumberingExample$ = "" Then
+    CountOf642s% = 0
+    Do
+      FoundField = CS.GetField( "642", CountOf642s% + 1, FieldData$ )
+      If FoundField Then
+          SeriesNumberingExample$  = Mid$( FieldData$, 6 )
+          DelimiterPosition% = InStr( SeriesNumberingExample$, DELIMITER )
+          If DelimiterPosition% <> 0 Then
+              TempString$ = Trim$( Mid$( SeriesNumberingExample$, 1, DelimiterPosition% - 1 ) )
+            Else
+              TempString$ = Trim$( SeriesNumberingExample$ )
+          End If
+          ReDim Preserve SeriesNumbering( CountOf642s% )
+          SeriesNumbering( CountOf642s% ) = TempString$
+          CountOf642s%                    = CountOf642s% + 1
+      End If
+    Loop Until FoundField = FALSE
+End If
+
+If CountOf642s% > 0 Then
+    AdditionsArray( AllAdditions% ) = "6&42:"
+    AllAdditions%                   = AllAdditions% + 1
+    AuthorityAdditions%             = AuthorityAdditions% + 1
+End If
+
+' Get an ISSN, if present.
+
+If CS.GetField( "022", 1, FieldData$ ) Then
+    AuthorityData.ISSN              = Trim$( Mid$( FieldData$, 6 ) )
+    AdditionsArray( AllAdditions% ) = "&ISSN:"
+    AllAdditions%                   = AllAdditions% + 1
+    AuthorityAdditions%             = AuthorityAdditions% + 1
+
+End If
+
+'****************************************************************************************
+' PART TWO: FIND BIBLIOGRAPHIC RECORD.
+'****************************************************************************************
+
+StartCycle:
+
+' Now that the heading and other information has been extracted from the authority
+' record, get back to the bibliographic record. Cycle through all the open windows, in
+' reverse order of their opening, to find those for bibliographic records, and store
+' their identification numbers in an array.
+
+CountOfWindows% = CS.WindowCount
+CountOfBibs%    = 0
+For i = CountOfWindows% - 1 To 0 Step -1
+  CS.SetTopWindow( i )
+  TypeOfWindow% = CS.ItemType
+  Select Case TypeOfWindow%
+    Case 0, 1, 2, 17, 19
+      ReDim Preserve BibRecs( CountOfBibs% )
+      BibRecs( CountOfBibs% ) = i
+      CountOfBibs%            = CountOfBibs% + 1
+  End Select
+Next i
+
+' If no bibliographic record is available, exit the macro.
+
+If CountOfBibs% = 0 Then
+    CS.SetTopWindow( CountOfWindows% )
+    MsgBox "The heading was copied, but no bibliographic record was found to return to!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+WindowCycle:
+
+' If more than one bibliographic record is open, display them all, one at a time, until
+' the appropriate one is found. Include the option to close a record if it is not the
+' appropriate one. If no record is chosen from the batch, the dialog keeps repeating. If
+' only one bibliographic record is open, the paste process starts right away.
+
+For i = 0 To CountOfBibs% - 1
+
+  CS.SetTopWindow( BibRecs( i ) )
+
+  PosFF% = CS.FixedFieldPosition
+  If PosFF% <> DISPLAY_FF_AT_TOP Then CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+  If CS.GetFixedField( "OCLC", FFData$ ) Then
+      OCLC$ = FFData$
+  End If
+  If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+  RecordCount$ = "Record " & Trim$( Str$( i + 1 ) ) & " of " & Trim$( Str$( CountOfBibs% ) )
+
+  If CountOfBibs% > 1 Then
+
+      Begin Dialog Dialog2Definition  220, 70, WaltsMacros$, .Dialog2ControlFunction
+        OkButton       12,  22,  60,  16
+        CancelButton  148,  22,  60,  16
+        PushButton     80,  22,  60,  16, "&Next record"
+        Text           12,   8, 144,   8, "Paste field into record #" & OCLC$ & "?"
+        CheckBox       88,  42,  44,  12, "Also close", .CheckBox
+        Text           99,  52,  44,   8, "this record."
+        Text          158,   8,  52,   8, RecordCount$
+      End Dialog
+
+      Dim Dialog2 As Dialog2Definition
+      On Error Resume Next
+
+      Select Case Dialog( Dialog2 )
+
+        Case DIALOG_BUTTON_OK
+          Exit For
+
+        Case DIALOG_BUTTON_CANCEL
+          Exit Sub
+
+        Case DIALOG_BUTTON_1
+          If Dialog2.CheckBox = 1 Then
+              CS.CloseRecord( FALSE )
+              GoTo StartCycle:
+          End If
+          If i = CountOfBibs% - 1 Then
+              GoTo WindowCycle:
+          End If
+
+      End Select
+
+  End If
+
+Next i
+
+'****************************************************************************************
+' PART THREE: EXPLORE BIBLIOGRAPHIC RECORD.
+'****************************************************************************************
+
+' After a bibliographic record has been chosen, the normally proceeds by getting the
+' cursor position (if the cursor is in a heading already, then the possibilities of
+' replacing that heading, in whole or in part, need to be evaluated), call numbers, and
+' the contents of the subject headings block. But there are some actions the macro can do
+' without that information, including adding a 752 or an 8XX field. To begin, find out is
+' if there is an 752 field present. If none exists, or if one is found but doesn't match
+' what was constructed from the authority record, that constructed 752 can be added
+' immediately, if that is the only data to be added to the record.
+
+If AuthorityData.New752 <> "" Then
+    If CS.GetField( "752", 1, FieldData$ ) Then
+        HierarchicalPlaceName$ = FieldData$
+        If Right$( HierarchicalPlaceName$, 1 ) <> "." Then
+            HierarchicalPlaceName$ = HierarchicalPlaceName$ & "."
+        End If
+    End If
+    If HierarchicalPlaceName$ = "752  " & AuthorityData.HierarchicalHeading Then
+        If AddOnly752 Then
+            MsgBox "This record already contains this 752 field!", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+      Else
+        If AddOnly752 Then
+            If CS.AddField( 1, AuthorityData.New752 ) = FALSE Then
+                MsgBox "Sorry, could not add 752 field.", CRITICAL_MESSAGE, WaltsMacros$
+            End If
+            Exit Sub
+          Else
+            AdditionsArray( AllAdditions% ) = "7&52:"
+            AllAdditions%                   = AllAdditions% + 1
+            AuthorityAdditions%             = AuthorityAdditions% + 1
+        End If
+    End If
+End If
+
+' Continue by looking for an 043 field. If one is found, and it contains a GAC that
+' matches what was copied from the authority record, the latter won't be added.
+
+If AuthorityData.GAC <> "" Then
+    If CS.GetField( "043", 1, FieldData$ ) Then
+        Bib043$ = FieldData$
+        If InStr( Bib043$, AuthorityData.GAC ) = 0 Then
+            AdditionsArray( AllAdditions% ) = "0&43:"
+            AllAdditions%                   = AllAdditions% + 1
+            AuthorityAdditions%             = AuthorityAdditions% + 1
+        End If
+      Else
+        AdditionsArray( AllAdditions% ) = "0&43:"
+        AllAdditions%                   = AllAdditions% + 1
+        AuthorityAdditions%             = AuthorityAdditions% + 1
+    End If
+End If
+
+' Determine the call number situation, so as to know what to offer for pasting from the
+' authority record.
+
+Call AnalyzeCallNumber
+
+' If the copied heading is a series, look for a corresponding 490 field. If its first
+' indicator is "0", it will be changed to "1" when the 8XX field is added later.
+
+If AuthorityData.SeriesUse = APPROPRIATE THEN
+    Do
+      FoundField = CS.GetField( "490", i, FieldData$ )
+      If FoundField Then
+          If Mid$( FieldData$, 4, 1 ) = "0" Then
+              If CompareSeries ( Mid$( FieldData$, 6 ) ) Then
+                  Mid$( FieldData$, 4, 1 ) = "1"
+                  Traced490$ = FieldData$
+                  Which490%  = i
+                  Select Case Which490%
+                    Case 1
+                      Ordinal$ = "first"
+                    Case 2
+                      Ordinal$ = "second"
+                    Case 3
+                      Ordinal$ = "third"
+                    Case 4
+                      Ordinal$ = "fourth"
+                  End Select
+                  NoteTrace490$ = "The second indicator in the " & Ordinal$ & " 490 field will be changed to " & QUOTE & "1" & QUOTE & "."
+                  GoTo NewField:
+              End If
+              Exit Do
+          End If
+      End If
+      i = i + 1
+    Loop Until FoundField = FALSE
+End If
+
+' Now determine where the cursor is located in the bibliographic record, as the contents
+' of that row determines what pasting options the macro will offer. If the cursor is in
+' the fixed field, its column position is zero, which of course means it is not in any
+' row. In that case, the copied heading will be add as a whole new heading (except for
+' subject subdivisions).
+
+If CS.CursorColumn = 0 Then
+    If AuthorityData.HeadingType = SUBDIVISION Then
+        CurrentRow% = 1
+      Else
+        AddNewField = TRUE
+        GoTo NewField:
+    End If
+  Else
+    CurrentRow% = CS.CursorRow
+End If
+
+If CS.GetFieldLine( CurrentRow%, CurrentField$ ) Then
+    BibTag = Left$( CurrentField$, 3 )
+
+' If the cursor is in a heading field, as would be the case if that's where an authority
+' search was launched with my macro "BrowseAuthority," the macro may present options to
+' replace that field. Start with the 240 field. If the cursor is in this field, assume
+' the previous field is a 1XX field and get its contents. Compare the 240 field with the
+' title portion (if any) of the copied heading and the 1XX field with the name portion.
+' If both fields in the bibliographic record match the copied heading, it can't be added
+' as a 1XX/240, but rather as a 6XX or 7XX. If either field doesn't match the
+' corresponding portion of the copied heading, it can be replaced by data copied from the
+' authority record. In any case, consider the current row to be the 1XX field.
+
+    If BibTag = "240" Then
+        Temp240$    = CurrentField$
+        CurrentRow% = CurrentRow% - 1
+        If CS.GetFieldLine( CurrentRow%, FieldData$ ) Then
+            BibTag = Left$( FieldData$, 3 )
+            If BibTag Like "1[01][01]" Then
+                CurrentField$ = FieldData$
+            End If
+        End If
+      ElseIf BibTag Like "1[01][01]" Then
+        If CS.GetField( "240", 1, FieldData$ ) Then
+            Temp240$ = FieldData$
+        End If
+    End If
+    If Temp240$ <> "" Then
+        If Mid$( Temp240$, 6 ) = AuthorityData.TitlePortion Then
+            State240$ = "MatchAuthority"
+          Else
+            State240$ = "NoMatchAuthority"
+        End If
+    End If
+
+' If the heading field in which the cursor is placed is other than 240, call that the
+' current heading.
+
+    If Left$( BibTag, 1 ) Like "[1678]" Then
+        CurrentHeading$ = CurrentField$
+
+' A 720 field will match any name heading type, so if the cursor is located in that
+' field, the presumption is that the copied heading will always replace it. Identify
+' additions to the heading (only relators, in subfields $e and $4, are defined for this
+' field), then proceed directly to the dialog box to offer the copied heading as
+' replacement.
+
+        If BibTag = "720" Then
+            CurrentHeading$ = CleanBibHeading( CurrentHeading$ )
+            AddOrReplace    = REPLACE
+            GoTo NewField:
+        End If
+
+' Compare the heading types, as determined by the last two digits of the tag. If the
+' copied heading is of the same type as the current heading, the macro assumes that a
+' replacement of the heading, in whole or in part, is intended. The exception is if the
+' copied string is strictly a subject but the current heading is a main or added entry.
+' In that case, the copied heading should not replace the existing heading; the
+' appropriate option is to add it as a new heading.
+
+        If Mid$( CurrentHeading$, 2, 2 ) = AuthorityData.HeadingType Then
+
+' First, deal with the case of a copied subject heading, and the cursor is in a non-
+' subject heading field: If there are no additions from the authority record, add the
+' copied heading immediately as a subject. If there are additions to consider, present
+' the dialog box to add the subject heading with a call number or GAC.
+
+            If SubjectOnly Then
+                If ( Left$( BibTag, 1 ) <> TAG_GROUP_SUBJECT ) Or ( Left$( BibTag, 1 ) = TAG_GROUP_SUBJECT And Mid$( CurrentHeading$, 5, 1 ) <> LCSH_INDICATOR ) Then
+                    If AllAdditions% = 0 Then
+                        HeadingToAdd$ = TAG_GROUP_SUBJECT & AuthorityData.HeadingType & Left$( AuthorityData.Indicators, 1 ) & LCSH_INDICATOR & AuthorityData.CopiedHeading
+                        GoTo AddHeading:
+                      Else
+                        GoTo NewField:
+                    End If
+                End If
+            End If
+
+' Next, consider if the headings are of the same type: Are they identical? Test for this
+' after removing from the bibliographic record's heading all additions to the heading and
+' terminal punctuation. A copied heading that exactly matches the bibliographic record's
+' heading won't be offered for pasting in unless there are additions. If the copied
+' heading comes with additional information, such as a classification number or GAC, it
+' will be presented with the option of using a different tag; e.g., if the cursor is in
+' a 100 field, the macro will offer to add a matching heading as a 600 or 700, with the
+' additions. Because of the complication of the 1XX/240 combination, a 1XX heading will
+' be compared to the name portion of the copied heading, whereas any other heading will
+' be compared to the whole copied heading.
+
+            CurrentHeading$ = CleanBibHeading( CurrentHeading$ )
+
+            If Left$( BibTag, 1 ) = TAG_GROUP_MAIN_ENTRY Then
+                TempString$ = AuthorityData.NamePortion
+              Else
+                TempString$ = AuthorityData.CopiedHeading
+            End If
+            If TempString$       = Mid( CurrentHeading$, 6 ) Or _
+               TempString$ & "." = Mid( CurrentHeading$, 6 ) Or _
+               TempString$       = Mid( CurrentHeading$, 6 ) & "." Then
+                IdenticalHeadings = TRUE
+                If Temp240$ <> "" Then
+                    If State240$ = "NoMatchAuthority" Then
+                        IdenticalHeadings = FALSE
+                    End If
+                End If
+
+
+' In the case of identical headings, there are four options. The first option arises when
+' the heading is a name and title. If the bibliographic 1XX field matches the name
+' portion of the authorized heading, but there is no 240 field, simply add the title
+' portion as a 240 field without further ado. An existing 240 field that does not match
+' the title portion of the copied heading is a candidate for replacement. If the copied
+' field is a series heading, rather than another type of name/title field, add it as a
+' field rather than a 1XX/240.
+
+                If Left$( BibTag, 1 ) = TAG_GROUP_MAIN_ENTRY Then
+                    If AuthorTitle Then
+                        If AuthorityData.SeriesUse <> "a" Then
+                            Insert240 = TRUE
+                            Title240$ = "24010" & AuthorityData.TitlePortion
+                            Select Case State240$
+
+                              Case "No240"
+                                GoTo Additions:
+
+                              Case Else
+                                AddOrReplace = REPLACE
+                                BibTag       = "240"
+                                GoTo NewField:
+
+                            End Select
+                          Else
+                            IdenticalHeadings = FALSE
+                            GoTo NewField:
+                        End If
+                    End If
+                  Else
+                    If AuthorTitle = FALSE Then
+                        If TerminalSubfields$ <> "" Then
+                            If Mid$( TerminalSubfields$, 2, 1 ) = "t" Then
+                                MsgBox "The copied heading is the same as the name portion of this heading on the record!", CRITICAL_MESSAGE, WaltsMacros$
+                                Exit Sub
+                            End If
+                        End If
+                    End If
+               End If
+
+' The second option is for the case of a subject heading. If the two subject headings
+' match but are from different thesauri, offer to add the LC heading, copied from the
+' authority record, as a new field.
+
+                If Left$( BibTag, 1 ) = TAG_GROUP_SUBJECT Then
+                    SecondIndicator = Mid( CurrentHeading$, 5, 1 )
+                    If BibTag = "655" And AuthorityData.HeadingType = GENRE_HEADING Then
+                        If SecondIndicator = "0" Then
+                            AddOrReplace      = REPLACE
+                            IdenticalHeadings = FALSE
+                            GoTo NewField:
+                          Else
+                            If InStr( CurrentField$, "2 " & AuthorityData.Thesaurus ) = FALSE Then
+                                IdenticalHeadings = FALSE
+                                GoTo NewField:
+                            End If
+                        End If
+                      Else
+                        If SecondIndicator <> "0" Then
+                            IdenticalHeadings = FALSE
+                            GoTo NewField:
+                        End If
+                    End If
+                End If
+
+' The third option is to add only additions from the authority record, such as a
+' classification number.
+
+                If AuthorityAdditions% > 0 Then
+                    GoTo NewField:
+
+' The fourth option is just to quit as there is nothing to do. (There is no point in
+' replacing an existing field with an identical field.)
+
+                  Else
+                    MsgBox "The copied heading is the same as this heading on the record!", CRITICAL_MESSAGE, WaltsMacros$
+                    Exit Sub
+                End If
+            End If
+
+' If the heading is a subject, the option is to replace a part or all of it with the
+' copied heading, starting with the first subfield. For all other headings, the option is
+' to replace the whole string--unless the cursor is in a field with a non-LC subject
+' heading; then the copied heading is added directly, leaving the existing heading in
+' place.
+
+            If Left$( CurrentHeading$, 3 ) Like SUBJECT_HEADING Then
+                If Mid$( CurrentHeading$, 5, 1 ) = "0" Then
+                    ReplacePartOfHeading = TRUE
+                  Else
+                    GoTo NewField:
+                End If
+              Else
+                AddOrReplace = REPLACE
+            End If
+
+' But if the headings are of different types, then that from the authority record is
+' simply added.
+
+          Else
+            AddOrReplace = ADD
+        End If
+      Else
+
+' A series-like phrase can be added without any further processing. The question is
+' whether to replace the current field (if the phrase was searched from a 490) or add
+' the phrase as a 500 quoted note.
+
+        If AuthorityData.SeriesUse = SERIES_LIKE_PHRASE Then
+            If BibTag = "490" Or BibTag = "500" And InStr( CurrentField$, AuthorityData.CopiedHeading ) Then
+                MsgBoxMessage$ = "Replace the " & BibTag & " field with a 500 field containing the series-like phrase: " & QUOTE & AuthorityData.CopiedHeadingD & QUOTE & "?"
+                If MsgBox( MsgBoxMessage$, WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
+                    Exit Sub
+                  Else
+                    HeadingToAdd$ = "500  " & QUOTE & AuthorityData.CopiedHeading & "." & QUOTE
+                    DeleteField   = TRUE
+                    GoTo AddHeading:
+                End If
+              Else
+                MsgBoxMessage$ = "The copied heading is a series-like phrase and will be added to the record as a quoted note."
+                If MsgBox( MsgBoxMessage$, WARNING_MESSAGE + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_OK Then
+                    HeadingToAdd$ = "500  " & QUOTE & AuthorityData.CopiedHeading & "." & QUOTE
+                    GoTo AddHeading:
+                  Else
+                    Exit Sub
+                End If
+            End If
+          ElseIf AuthorityData.SeriesUse = APPROPRIATE Then
+            If AllAdditions% = 0 Then
+                If AuthorityData.HeadingType = "30" Then
+                    HeadingToAdd$ = TAG_GROUP_SERIES & AuthorityData.HeadingType & UNDEFINED_INDICATOR & Right$( AuthorityData.Indicators, 1 ) & AuthorityData.CopiedHeading
+                  Else
+                    HeadingToAdd$ = TAG_GROUP_SERIES & AuthorityData.HeadingType & Left$( AuthorityData.Indicators, 1 ) & UNDEFINED_INDICATOR & AuthorityData.CopiedHeading
+                End If
+                GoTo AddHeading:
+            End If
+        End If
+
+' If the current field is not a heading, then there is nothing for the copied heading to
+' replace. Therefore, paste it in as a new field--immediately if there are no additions
+' to the new field, or with an intervening dialog box if there is information to add.
+
+        If AuthorityData.HeadingType <> SUBDIVISION Then
+            AddOrReplace = ADD
+            GoTo NewField:
+        End If
+    End If
+End If
+
+' The next step will be to get the subject headings in the bibliographic record, row by
+' row. If the current field is not a subject, start the process with the current row;
+' otherwise we have to start looking from row 1.
+
+If Val( BibTag ) < 600 Then
+    BibRecordLine% = CurrentRow%
+  Else
+    BibRecordLine% = 1
+End If
+
+Call AnalyzeSubjects( BibRecordLine% )
+
+'****************************************************************************************
+' PART FOUR: PASTE DATA INTO BIBLIOGRAPHIC RECORD (REPLACING OR INSERTING).
+'****************************************************************************************
+
+' If the copied heading is a subject or geographic subdivision, but the bibliographic
+' record contains either no subject headings or only a single subject heading without
+' subdivisions, only two options are available: Either add the subdivision at the end of
+' the one possible heading (actually, replacing the whole field with a modified version),
+' or exit the macro. But if there are additions available, such as a GAC, then the full-
+' blown dialog box must be used.
+
+If AuthorityData.HeadingType = SUBDIVISION And ( SubfCount1Subj% = 0 Or Count6XX% = 0 ) Then
+    If Count6XX% = 0 Then
+        MsgBox "There are no LC subject headings to which to add the subdivision!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        If AllAdditions% = 0 Then
+            If CS.GetFieldLine( SubjectFieldsLines( 0 ), FieldData$ ) Then
+                SubjectSelection$ = FieldData$
+                If Right$( SubjectSelection$, 1 ) = "." Then
+                    SubjectHeading$ = Left$( SubjectSelection$, Len( SubjectSelection$ ) - 1 ) & UNDEFINED_INDICATOR & AuthorityData.CopiedHeading & "."
+                  Else
+                    SubjectHeading$ = SubjectSelection$ & UNDEFINED_INDICATOR & AuthorityData.CopiedHeading & "."
+                End If
+                If CS.SetFieldLine( SubjectFieldsLines( 0 ), SubjectHeading$ ) = FALSE Then
+                    MsgBox "Sorry, could not add subdivision.", CRITICAL_MESSAGE, WaltsMacros$
+                End If
+            End If
+            Exit Sub
+        End If
+    End If
+End If
+
+' The case of the bibliographic record containing more than one subject heading, or
+' containing a single subject heading with more than one subfield.
+
+If AuthorityData.HeadingType = SUBDIVISION Or ReplacePartOfHeading = TRUE Then
+
+    If AuthorityData.HeadingType = SUBDIVISION Then
+        CopiedCaption$ = "Copied subdivision string:"
+        DialogHeading$ = "Select subject string to which to append copied subdivision:"
+      Else
+        CopiedCaption$ = "Copied heading:"
+        DialogHeading$ = "Select subject string to replace with copied heading:"
+        If ReplacePartOfHeading = TRUE Then
+            SubjectFieldsListBoxIndex% = CurrentFieldBegins%
+          Else
+            SubjectFieldsListBoxIndex% = CurrentFieldEnds%
+        End If
+    End If
+
+    Begin Dialog Dialog3Definition  336, 236, WaltsMacros$, .Dialog3ControlFunction
+      PushButton    244, 166,  84,  16, "",                    .Button1
+      PushButton    244, 188,  84,  16, "",                    .Button2
+      CancelButton  244, 210,  84,  16
+      GroupBox        8,   6, 320,  26, CopiedCaption$
+      Text           18,  17, 300,   8, CopiedHeadingD$
+      Text            8,  36, 320,   8, DialogHeading$
+      ListBox         8,  50, 320, 112, SubjectFieldsD(),      .SubjectFieldsListBox
+      CheckBox      192, 166,  52,  12, "&Delete all",         .CheckBoxDeleteSubfields
+      Text          204, 176,  40,  16, "subfields following", .DeleteSubfields2
+      GroupBox        8, 164, 172,  48, "Additions",           .AdditionsBox
+      CheckBox       18, 178,  32,  12, "",                    .CheckBox1
+      CheckBox       18, 194,  32,  12, "",                    .CheckBox2
+      TextBox        48, 178, 106,  12,                        .TextBox1
+      DropListBox    48, 178, 106,  48, ClassNumbersDisplay(), .DropListBox1
+      TextBox        48, 194, 106,  12,                        .TextBox2
+    End Dialog
+
+    Dim Dialog3 As Dialog3Definition
+    On Error Resume Next
+
+    Select Case Dialog( Dialog3 )
+
+      Case DIALOG_BUTTON_CANCEL
+        Exit Sub
+
+      Case DIALOG_BUTTON_1
+        ListBoxSelection% = Dialog3.SubjectFieldsListBox
+
+' If a portion of the subject heading string was selected to copy the subdivision onto,
+' the remainder of the string--stored as the complete heading further along in the
+' array--may need to be appended to that modified string. Whether that happens is
+' determined by the checkbox asking about truncating the subject heading after pasting
+' in the subdivision. If truncation is chosen, the string to which the subdivision is
+' appended is considered to be the complete heading. Otherwise, the subdivision is
+' inserted into the complete heading. This section of the macro looks in succeeding
+' elements of the array for the one that holds the complete string; it will be the last
+' element whose line number matches that of the selection. The element that follows that
+' will either contain a higher line number, or it will be the last element of the array.
+
+        FoundField = CS.GetFieldLine( SubjectFieldsLines( ListBoxSelection% ), FieldData$ )
+        If FoundField = TRUE Then
+            If AuthorityData.HeadingType = SUBDIVISION Then
+                SubjectSelection$ = Left$( FieldData$, SubjectFieldsSplits( ListBoxSelection% ) )
+                If Dialog3.CheckBoxDeleteSubfields = CHECKED Then
+                    CompleteSubjHeading$ = Left$( FieldData$, SubjectFieldsSplits( ListBoxSelection% ) )
+                  Else
+                    CompleteSubjHeading$ = FieldData$
+                End If
+              Else
+                If Dialog3.CheckBoxDeleteSubfields = UNCHECKED Then
+                    HeadingToAdd$ = Left$( FieldData$, 5 ) & AuthorityData.CopiedHeading & Mid$( FieldData$, SubjectFieldsSplits( ListBoxSelection% ) + 1 )
+                  Else
+                    HeadingToAdd$ = Left$( FieldData$, 5 ) & AuthorityData.CopiedHeading
+                End If
+                DeleteField = TRUE
+                GoTo AddHeading:
+            End If
+          Else
+            MsgBox "Sorry, the macro could not retrieve a field for pasting.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+        SubjectRemainder$ = Trim$( Mid$( CompleteSubjHeading$, Len( SubjectSelection$ ) + 1 ) )
+        If SubjectRemainder$ <> "" Then
+
+' If the complete subject heading is more than the selection--"SubjectRemainder$" being the
+' portion of the complete heading that follows the selection--the copied subdivision will
+' be inserted into the field, between the selection and the remainder, rather than
+' appended to it. Check the subfield coding of the beginning of "SubjectRemainder$": A subfield
+' $z will trigger a warning if the inserted subdivision is not coded as allowing
+' geographic subdivision. The options in this case are to add the subdivision despite the
+' warning, to return to the list of subject headings in the dialog box, or to cancel the
+' macro. Otherwise, insert the subdivision. Retain original terminal punctuation.
+
+            If Mid$( SubjectRemainder$, 2, 1 ) = "z" And AuthorityData.DirectIndirect <> "i" Then
+                MsgBoxMessage$ = "The copied subdivision to be added does not allow for geographic subdivision! Continue anyway?"
+                If MsgBox( MsgBoxMessage$, WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
+                    Exit Sub
+                End If
+            End If
+            If Right$( SubjectSelection$, 1 ) = "." Then
+                HeadingToAdd$ = Left$( SubjectSelection$, Len( SubjectSelection$ ) - 1 ) & UNDEFINED_INDICATOR & AuthorityData.CopiedHeading & " " & SubjectRemainder$
+              Else
+                HeadingToAdd$ = SubjectSelection$ & UNDEFINED_INDICATOR & AuthorityData.CopiedHeading & " " & SubjectRemainder$
+            End If
+          Else
+
+' But if the complete subject string matches the selection--if "SubjectRemainder$" is an empty
+' string--simply append the copied subdivision to it (again, retaining original terminal
+' punctuation).
+
+            If Right$( SubjectSelection$, 1 ) = "." Then
+                HeadingToAdd$ = Left$( SubjectSelection$, Len( SubjectSelection$ ) - 1 ) & UNDEFINED_INDICATOR & AuthorityData.CopiedHeading & "."
+              Else
+                HeadingToAdd$ = SubjectSelection$ & UNDEFINED_INDICATOR & AuthorityData.CopiedHeading & "."
+            End If
+        End If
+        If Right$( HeadingToAdd$, 2 ) = ".." Then
+            HeadingToAdd$ = Left$( HeadingToAdd$, Len( HeadingToAdd$ ) - 1 )
+        End If
+        If CS.SetFieldLine( SubjectFieldsLines( ListBoxSelection% ), HeadingToAdd$ ) = FALSE Then
+            MsgBox "Sorry, could not add subdivision.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+        GoTo Additions:
+
+      Case DIALOG_BUTTON_2
+
+        If ReplacePartOfHeading Then
+            If SubjectOnly Then
+                HeadingToAdd$ = TAG_GROUP_SUBJECT & AuthorityData.HeadingType & Left$( AuthorityData.Indicators, 1 ) & LCSH_INDICATOR & AuthorityData.CopiedHeading
+                GoTo AddHeading:
+              Else
+                AddOrReplace = ADD
+                GoTo NewField:
+            End If
+          Else
+            Exit Sub
+        End If
+
+    End Select
+
+  ElseIf AddOrReplace = ADD Then
+    CurrentRow% = 0
+
+End If
+
+'****************************************************************************************
+' PART FIVE: PASTE DATA INTO BIBLIOGRAPHIC RECORD (ADD NEW FIELD)
+'****************************************************************************************
+
+' This last section of the macro deals with adding complete new headings from the
+' authority record, or replacing complete headings on the bibliographic record.
+
+NewField:
+
+If AddOrReplace = REPLACE Then
+
+    If Right$( CurrentHeading$, 1 ) = "." Then
+        CurrentHeading$ = Left$( CurrentHeading$, Len( CurrentHeading$ ) - 1 )
+    End If
+    If Temp240$ <> "" Then
+        If BibTag <> "240" Then
+            ActionPrompt$ = "Replace " & BibTag & "/240 fields?"
+          Else
+            ActionPrompt$ = "Replace " & BibTag & " field?"
+        End If
+      Else
+        ActionPrompt$ = "Replace " & BibTag & " field?"
+    End If
+    PushButtonsVisible% = 2
+    PushButton1Text$     = "&Replace"
+    If Val( AuthorityData.HeadingType ) > 30 Then
+        PushButton2Text$ = "&No, add as new " & TAG_GROUP_SUBJECT & AuthorityData.HeadingType
+      Else
+        PushButton2Text$ = "&No, show more options"
+    End If
+
+  Else
+
+    If IdenticalHeadings Then
+        If Insert240 Then
+            PushButtonsVisible%    = 3
+            PushButton1Text$       = "&240"
+            PushButton2Text$       = "&6" & AuthorityData.HeadingType
+            PushButton3Text$       = "&7" & AuthorityData.HeadingType
+            AuthorTitle            = FALSE
+          ElseIf State240$ = "MatchAuthority" Then
+            PushButtonsVisible%    = 2
+            PushButton1Text$       = "&" & TAG_GROUP_SUBJECT & AuthorityData.HeadingType
+            PushButton2Text$       = "&" & TAG_GROUP_ADDED_ENTRY & AuthorityData.HeadingType
+            IdenticalHeadings      = FALSE
+          Else
+            PushButtonsVisible%    = 1
+            If AllAdditions% = 1 Then
+                PushButton1Text$       = "&Add selected addition"
+              Else
+                PushButton1Text$       = "&Add selected additions"
+            End If
+            NoteIdenticalHeadings$ = "The copied heading is the same as this " & BibTag & " field."
+            ActionPrompt$          = "Add other information to record?"
+            CheckAll               = TRUE
+        End If
+      Else
+
+' If the heading is a subject only, that is, it cannot be added as a genre term or a name
+' or title, put it in the record immediately if it comes with no additions to select.
+
+        If SubjectOnly Then
+            If AllAdditions% > 0 Then
+                PushButtonsVisible%   = 1
+                TempString$           = TAG_GROUP_SUBJECT & AuthorityData.HeadingType
+                PushButton1Text$      = "&" & TempString$
+                ActionPrompt$         = "Add copied heading as field " & TempString$ & "?"
+              Else
+                HeadingToAdd$         = TAG_GROUP_SUBJECT & AuthorityData.HeadingType & Left$( AuthorityData.Indicators, 1 ) & LCSH_INDICATOR & AuthorityData.CopiedHeading
+                GoTo AddHeading:
+            End If
+          Else
+            Select Case AuthorityData.HeadingType
+
+              Case TOPICAL_TERM
+                PushButtonsVisible% = 2
+                PushButton1Text$    = "&" & TAG_GROUP_SUBJECT & AuthorityData.HeadingType
+                PushButton2Text$    = "6&55"
+                ActionPrompt$       = "Add copied heading as ..."
+
+              Case GEOGRAPHIC_NAME
+                If AuthorityData.NameUse = APPROPRIATE Then
+                    If AuthorityData.SubjectUse = APPROPRIATE Then
+                        PushButtonsVisible% = 4
+                        PushButton1Text$    = "&110"
+                        PushButton2Text$    = "&610"
+                        PushButton3Text$    = "6&51"
+                        PushButton4Text$    = "&710"
+                      Else
+                        PushButtonsVisible% = 2
+                        PushButton1Text$    = "&110"
+                        PushButton2Text$    = "&710"
+                    End If
+                  Else
+                    PushButtonsVisible% = 1
+                    TempString$         = TAG_GROUP_SUBJECT & AuthorityData.HeadingType
+                    PushButton1Text$    = "&" & TempString$
+                    ActionPrompt$       = "Add copied heading as ..."
+                End If
+
+              Case GENRE_HEADING
+                HeadingToAdd$ = TAG_GROUP_SUBJECT & AuthorityData.HeadingType & " 7" & AuthorityData.CopiedHeading
+                If Right$( HeadingToAdd$, 1 ) <> ")" Then
+                    HeadingToAdd$ = HeadingToAdd$ & ". "
+                  Else
+                    HeadingToAdd$ = HeadingToAdd$ & " "
+                End If
+                HeadingToAdd$ = HeadingToAdd$ & DELIMITER & "2 " & AuthorityData.Thesaurus
+                GoTo AddHeading:
+
+              Case Else
+                If AuthorityData.SeriesUse = APPROPRIATE Then
+                    PushButtonsVisible% = 1
+                    TempString$         = TAG_GROUP_SERIES & AuthorityData.HeadingType
+                    PushButton1Text$    = "&" & TempString$
+                    ActionPrompt$       = "Add copied heading as ..."
+                  Else
+                    If IdenticalHeadings Then
+                        PushButtonsVisible% = 0
+                        CheckAll            = TRUE
+                      Else
+                        PushButtonsVisible% = 3
+                        If AuthorTitle Then
+                            PushButton1Text$ = "&1" & AuthorityData.HeadingType & "/240"
+                          Else
+                            PushButton1Text$ = "&1" & AuthorityData.HeadingType
+                        End If
+                        PushButton2Text$    = "&6" & AuthorityData.HeadingType
+                        PushButton3Text$    = "&7" & AuthorityData.HeadingType
+                        ActionPrompt$       = "Add copied heading as ..."
+                    End If
+                End If
+            End Select
+        End If
+    End If
+End If
+
+Begin Dialog Dialog4Definition  302, 176, WaltsMacros$, .Dialog4ControlFunction
+  PushButton    180,  32,  96,  20, PushButton1Text$,      .PushButton1
+  PushButton    180,  58,  96,  20, PushButton2Text$,      .PushButton2
+  PushButton    180,  84,  96,  20, PushButton3Text$,      .PushButton3
+  PushButton    180, 110,  96,  20, PushButton4Text$,      .PushButton4
+  CancelButton  228, 150,  64,  16
+  Text           20,  19, 126,  24, CopiedHeadingD$
+  GroupBox       10,   8, 144,  42, "Copied heading:"
+  GroupBox      164,   8, 128, 134, "Action"
+  GroupBox       10,  54, 144,  88, "Additions",           .AdditionsBox
+  Text          174,  19, 112,   8, ActionPrompt$,         .ActionPromptLine
+  CheckBox       18,  66,  32,  12, "",                    .CheckBox1
+  CheckBox       18,  84,  32,  12, "",                    .CheckBox2
+  CheckBox       18, 102,  32,  12, "",                    .CheckBox3
+  CheckBox       18, 120,  32,  12, "",                    .CheckBox4
+  TextBox        50,  66,  96,  12,                        .TextBox1
+  DropListBox    50,  66,  96,  48, ClassNumbersDisplay(), .DropListBox1
+  TextBox        50,  84,  96,  12,                        .TextBox2
+  DropListBox    50,  84,  96,  48, SeriesNumbering(),     .DropListBox2
+  TextBox        50, 102,  96,  12,                        .TextBox3
+  TextBox        50, 120,  96,  12,                        .TextBox4
+  Text          174,  58, 108,  24, "",                    .InformationalNote
+End Dialog
+
+Dim Dialog4 As Dialog4Definition
+
+If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
+    Exit Sub
+  Else
+    Select Case FieldToAdd
+      Case REPLACE
+        If IdenticalHeadings = FALSE Then
+            DeleteField = TRUE
+            If Left$( BibTag, 1 ) = TAG_GROUP_SERIES Then
+                If VarType( SeriesExampleSelection ) = VARTYPE_INTEGER Then
+                    SeriesSubfieldV$ = " ; " & DELIMITER & "v " & SeriesNumbering( SeriesExampleSelection ) & FILLCHAR
+                    HeadingToAdd$     = Left$( CurrentHeading$, 5 ) & AuthorityData.CopiedHeading & SeriesSubfieldV$
+                  Else
+                    HeadingToAdd$     = Left$( CurrentHeading$, 5 ) & AuthorityData.CopiedHeading
+                End If
+                If AddISSN Then
+                    HeadingToAdd$     = HeadingToAdd$ & ". " & DELIMITER & "x " & AuthorityData.ISSN
+                End If
+              ElseIf AuthorityData.HeadingType = GENRE_HEADING Then
+                HeadingToAdd$ = TAG_GROUP_SUBJECT & AuthorityData.HeadingType & " 7" & AuthorityData.CopiedHeading
+                If Right$( HeadingToAdd$, 1 ) <> ")" Then
+                    HeadingToAdd$ = HeadingToAdd$ & ". "
+                  Else
+                    HeadingToAdd$ = HeadingToAdd$ & " "
+                End If
+                HeadingToAdd$ = HeadingToAdd$ & DELIMITER & "2 " & AuthorityData.Thesaurus
+              ElseIf Left$( BibTag, 1 ) = TAG_GROUP_SUBJECT Then
+                HeadingToAdd$ = Left$( CurrentHeading$, 4 ) & LCSH_INDICATOR & AuthorityData.CopiedHeading
+              Else
+                TempString$ = AddSubfields( AuthorityData.CopiedHeading )
+                If BibTag = "720" Then
+                    HeadingToAdd$ = TAG_GROUP_ADDED_ENTRY & AuthorityData.HeadingType & AuthorityData.Indicators & TempString$
+                  Else
+                    HeadingToAdd$ = BibTag & AuthorityData.Indicators & TempString$
+                End If
+            End If
+            If AuthorTitle And AuthorityData.SeriesUse <> APPROPRIATE And Left$( CurrentHeading$, 1 ) = TAG_GROUP_MAIN_ENTRY Then
+                Title240$     = "24010" & AuthorityData.TitlePortion
+                HeadingToAdd$ = Left$( CurrentHeading$, 5 ) & AuthorityData.NamePortion
+                Insert240     = TRUE
+            End If
+            Row% = CurrentRow%
+          Else
+            If BibTag = "240" Then
+                Insert240 = TRUE
+            End If
+            GoTo Additions:
+        End If
+
+      Case ADD
+        If IdenticalHeadings Then GoTo Additions:
+        AddOrReplace         = ADD
+        AddInitialSubfields  = FALSE
+        AddTerminalSubfields = FALSE
+        GoTo NewField:
+
+      Case Else
+
+        If IdenticalHeadings Then GoTo Additions:
+
+' If a geographic heading is added as other than a subject heading, it will be as a
+' jurisdiction, so the first indicator should be "1".
+
+        If Left$( AuthorityData.HeadingType, 1 ) = "5" And Mid$( FieldToAdd, 2, 1 ) <> "5" Then
+            JurisdictionIndicator$ = "1"
+          Else
+            JurisdictionIndicator$ = Left$( AuthorityData.Indicators, 1 )
+        End If
+        Insert240 = FALSE
+
+        Select Case Left$( FieldToAdd, 1 )
+
+          Case TAG_GROUP_MAIN_ENTRY
+            If AuthorTitle Then
+                TempString$ = AuthorityData.NamePortion
+                Title240$   = "24010" & AuthorityData.TitlePortion
+                Insert240   = TRUE
+              Else
+                TempString$ = AuthorityData.CopiedHeading
+            End If
+            HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & Right$( AuthorityData.Indicators, 1 ) & AddSubfields( TempString$ )
+
+          Case TAG_GROUP_SUBJECT
+            TempString$   = AddSubfields( AuthorityData.CopiedHeading )
+            HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & LCSH_INDICATOR & TempString$
+
+          Case TAG_GROUP_ADDED_ENTRY
+            If AuthorityData.HeadingType = "30" Then
+                TempString$   = AddSubfields( AuthorityData.CopiedHeading )
+                HeadingToAdd$ = FieldToAdd & Right$( AuthorityData.Indicators, 1 ) & FILLCHAR & TempString$
+              Else
+                If AuthorTitle Then
+                    TempString$   = AddSubfields( AuthorityData.CopiedHeading )
+                    HeadingToAdd$ = FieldToAdd & Left$( AuthorityData.Indicators, 1 ) & FILLCHAR & TempString$
+                  Else
+                    TempString$   = AddSubfields( AuthorityData.CopiedHeading )
+                    HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & UNDEFINED_INDICATOR & TempString$
+                End If
+            End If
+
+          Case TAG_GROUP_SERIES
+            TempString$   = AddSubfields( AuthorityData.CopiedHeading )
+            HeadingToAdd$ = FieldToAdd & AuthorityData.Indicators & TempString$
+            If VarType( SeriesExampleSelection ) = VARTYPE_INTEGER Then
+                SeriesSubfieldV$ = " ; " & DELIMITER & "v " & SeriesNumbering( SeriesExampleSelection ) & FILLCHAR
+                HeadingToAdd$    = HeadingToAdd$ & SeriesSubfieldV$
+            End If
+            If AddISSN Then
+                HeadingToAdd$    = HeadingToAdd$ & ". " & DELIMITER & "x " & AuthorityData.ISSN
+            End If
+
+        End Select
+
+    End Select
+
+End If
+
+' Now that the heading has been formulated, finish up the macro by adding the field(s).
+' If replacing a field, first delete it, then add it back in with the same line number.
+' If adding a field, add it after the field in which the cursor is placed, if the cursor
+' is in a heading field; otherwise add it in appropriate tag order. Include an error
+' message when an inappropriate action is requested, such as asking for a call number
+' when a subject is to be added as a genre heading.
+
+AddHeading:
+
+If CurrentFieldBegins% = 0 Then
+    Row% = CurrentRow%
+  Else
+    Row% = SubjectFieldsLines( ListBoxSelection% )
+End If
+
+If DeleteField Then
+    FieldDeleted = CS.DeleteFieldLine( Row% )
+    If Insert240 And Temp240 <> "" Then FieldDeleted = CS.DeleteFieldLine( Row% )
+    FieldAdded   = CS.AddFieldLine( Row%, HeadingToAdd$ )
+  Else
+    If AddOrReplace = REPLACE Then
+        FieldAdded = CS.AddFieldLine( Row% + 1, HeadingToAdd$ )
+      Else
+        FieldAdded = CS.AddField( 2, HeadingToAdd$ )
+    End If
+End If
+
+If FieldAdded = FALSE Then
+    MsgBox "Sorry, could not add heading.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+Additions:
+
+If Traced490$ <> "" Then
+    If CS.SetField( Which490%, Traced490$ ) = FALSE Then
+        MsgBox "Sorry, the 490 field was not changed.", WARNING_MESSAGE, WaltsMacros$
+    End If
+End If
+
+If VarType( CallNumberSelection ) = VARTYPE_INTEGER Then
+    ClassificationNumber$ = "050 4" & Trim$( ClassNumbersRaw( CallNumberSelection ) )
+    FieldAdded            = CS.AddField( 2, ClassificationNumber$ )
+    If FieldAdded = FALSE Then MsgBox "Sorry, could not add call number.", WARNING_MESSAGE, WaltsMacros$
+End If
+
+' If the checkbox to add the GAC has been checked but there is no 043 field in the
+' bibliographic record, add a new field; otherwise append the GAC to the existing 043.
+
+If Add043 Then
+    If Bib043$ = "" Then
+        FieldAdded = CS.AddField( 1, "043  " & AuthorityData.GAC )
+      Else
+        Bib043$    = Bib043$ & " " & DELIMITER & "a " & AuthorityData.GAC
+        FieldAdded = CS.SetField( 1, Bib043$ )
+    End If
+End If
+
+If Add752 Then
+    FieldAdded    = CS.AddField( 1, AuthorityData.New752 )
+    If FieldAdded = FALSE Then MsgBox "Sorry, could not add a 752 field.", WARNING_MESSAGE, WaltsMacros$
+End If
+
+If Insert240 Then
+    If BibTag = "240" Then
+        If CS.DeleteField ( "240", 1 ) Then
+        End If
+    End If
+    FieldAdded    = CS.AddField( 1, Title240$ )
+    If FieldAdded Then
+        If IdenticalHeadings Then MsgBox "Field 240 only added.", INFORMATION_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "Sorry, could not add a 240 field.", WARNING_MESSAGE, WaltsMacros$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub AnalyzeCallNumber
+
+' This routine gets the LC type call numbers on the bibliographic record and checks if
+' any of them match any incoming call number from the authority record. Matching call
+' numbers mean fewer options are presented to add or replace a call number: The macro
+' will only offer to paste in a call number from the authority record if it is not
+' already on the bibliographic record.
+
+Dim BibRecordCallNumber$     : BibRecordCallNumber$ = ""
+Dim UBClassRaw%
+
+Dim i As Integer, j As Integer, k As Integer, p As Integer, x As Integer
+
+Dim FoundField               : FoundField = FALSE
+
+If CallNumberCount% > 0 Then
+    i = 1
+    Do
+      FoundField = CS.GetField( "0[59]0", i, BibRecordCallNumber$ )
+
+' For every call number found on the bibliographic record, extract subfield $a for
+' comparison.
+
+      If FoundField Then
+          p = InStr( BibRecordCallNumber$, DELIMITER & "b" )
+          If p = 6 Then
+              BibRecordCallNumber$ = ""
+            ElseIf p = 0 Then
+              BibRecordCallNumber$ = Mid$( BibRecordCallNumber$, 6 )
+            Else
+              BibRecordCallNumber$ = Mid$( BibRecordCallNumber$, 6, p - 7 )
+          End If
+        Else
+          Exit Do
+      End If
+      UBClassRaw% = UBound( ClassNumbersRaw )
+      For j = 0 To UBClassRaw%
+        If BibRecordCallNumber$ = "" Then Exit For
+        If BibRecordCallNumber$ = ClassNumbersRaw( j ) Then
+
+' A call number matching one in the call number array means reducing the total call
+' number count and reconstructing the array with one less element. If no call numbers are
+' left to add to the bibliographic record, then remove the marker for a call number from
+' the additions array.
+
+            If UBClassRaw% = 0 Then
+                CallNumberCount% = 0
+                For k = 0 To 3
+                  If AdditionsArray( k ) = "&050:" Then
+                      AdditionsArray( k ) = ""
+                      AuthorityAdditions% = AuthorityAdditions% - 1
+                      AllAdditions%       = AllAdditions% - 1
+                  End If
+                Next k
+                Exit Do
+              Else
+                CallNumberCount% = CallNumberCount% - 1
+                For k = j + 1 To UBClassRaw%
+                  ClassNumbersRaw    ( k - 1 ) = ClassNumbersRaw    ( k )
+                  ClassNumbersDisplay( k - 1 ) = ClassNumbersDisplay( k )
+                Next k
+                ReDim Preserve ClassNumbersRaw    ( UBClassRaw% - 1 )
+                ReDim Preserve ClassNumbersDisplay( UBClassRaw% - 1 )
+                Exit For
+            End If
+        End If
+      Next j
+    i = i + 1
+    Loop Until FoundField = FALSE
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub AnalyzeSubjects( RecordRow% )
+
+Dim DelimiterPosition%
+Dim FieldData$
+Dim FieldDisplay$
+Dim Start%
+Dim SubfieldCode$
+Dim TempDisplay$
+
+Dim i As Integer
+
+Dim FoundField               : FoundField = FALSE
+
+' This routine gets subject and genre fields (600, 610, 611, 630, 650, 651, and 655) from
+' the bibliographic record with the "GetFieldLine" function and stores information in
+' parallel in three arrays:
+'  + "SubjectFieldsLines" stores the line numbers of the record's subject headings
+'    associated with each element of the other two arrays, so a modified heading can
+'    replace the original with the "SetFieldLine" function;
+'  + "SubjectFieldsD" stores the subdivisions of the headings, modified for suitable
+'    display with substituted characters and diacritics eliminated. Each element of this
+'    array contains one more subfield than the previous element (except that all
+'    subfields of personal and corporate names and name/title fields are kept together);
+'    thus, the array may store a subject field in a number of pieces of increasing
+'    length, from subfield $a alone (or a whole name or name/title) to the complete
+'    string, so that a subdivision can be pasted after any appropriate portion of it, or
+'    an authorized heading can replace any section of it. Separator lines are inserted
+'    between the subject headings to group all the pieces of each heading;
+' +  "SubjectFieldsSplits" stores the position in the field of the last character of each
+'    subdivision of the subject heading, so the macro knows where to add or insert the
+'    string to be pasted.
+' The analysis stops with the first 7XX or higher field encountered, so an initial
+' reformat may be required in order to deal properly with a messy record.
+
+Start%    = 1
+Count6XX% = 0
+
+i = 0
+Do
+  FoundField = CS.GetFieldLine( RecordRow%, FieldData$ )
+  If FoundField = TRUE Then
+      If Left$( FieldData$, 5 ) Like "6[0135][015][ 0-9]0" Then
+          FieldDisplay$ = FieldData$
+          Count6XX%     = Count6XX% + 1
+          If RecordRow% = CurrentRow% Then       'Mark the elements of the array that store all the
+              If Count6XX% = 1 Then              ' parts of the current field
+                  CurrentFieldBegins% = i
+                Else
+                  CurrentFieldBegins% = i + 1
+              End If
+          End If
+          ReDim Preserve SubjectFieldsD     ( i )
+          ReDim Preserve SubjectFieldsSplits( i )
+          ReDim Preserve SubjectFieldsLines ( i )
+          If Count6XX% > 1 Then
+              SubjectFieldsD     ( i ) = "  ------------------------"
+              SubjectFieldsSplits( i ) = 0
+              SubjectFieldsLines ( i ) = RecordRow%
+              i = i + 1
+          End If
+          Do
+            ReDim Preserve SubjectFieldsD     ( i )
+            ReDim Preserve SubjectFieldsLines ( i )
+            ReDim Preserve SubjectFieldsSplits( i )
+            DelimiterPosition% = InStr( Start%, FieldData$, DELIMITER )
+            If DelimiterPosition% <> 0 Then
+                SubfieldCode$ = Mid$( FieldData$, DelimiterPosition% + 1, 1 )
+                Select Case SubfieldCode$
+
+' Break up the subject heading at subject or geographic subdivisions, or at source of
+' term. Keep track of the ends of each subfield on each line; that position tells where
+' to insert the new string when pasting data into a heading.
+
+                  Case "v", "x", "y", "z", "2"
+                    SubjectFieldsSplits( i ) = DelimiterPosition% - 2
+                    SubjectFieldsLines ( i ) = RecordRow%
+                    TempDisplay$             = FixString( Left$( FieldDisplay$, DelimiterPosition% - 1 ) )
+                    SubjectFieldsD     ( i ) = Str$( SubjectDisplayLines% ) & "   " & Left$( TempDisplay$, 3 ) & "  " & Mid$( TempDisplay$, 4, 2 ) & "  " & Mid$( TempDisplay$, 6 )
+                    SubjectDisplayLines%      = SubjectDisplayLines% + 1
+
+                  Case Else
+                    i = i - 1
+
+                End Select
+                Start% = DelimiterPosition% + 1
+              Else
+                SubjectFieldsSplits( i ) = Len( FieldData$ )
+                SubjectFieldsLines ( i ) = RecordRow%
+                TempDisplay$             = FixString( FieldDisplay$ )
+                SubjectFieldsD     ( i ) = Str$( SubjectDisplayLines% ) & "   " & Left$( TempDisplay$, 3 ) & "  " & Mid$( TempDisplay$, 4, 2 ) & "  " & Mid$( TempDisplay$, 6 )
+                SubjectDisplayLines%      = SubjectDisplayLines% + 1
+            End If
+            i = i + 1
+          Loop Until DelimiterPosition% = 0
+        ElseIf Val( Left$( FieldData$, 1 ) ) > 6 Then
+          Exit Do
+      End If
+  End If
+  Start%     = 1
+  RecordRow% = RecordRow% + 1
+  If RecordRow% = CurrentRow% + 1 Then CurrentFieldEnds% = i - 1
+Loop Until FoundField = FALSE
+i = i - 1
+SubfCount1Subj% = i
+If i > 1 Then Count6XX% = 2
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetAdditionsBooleans( InString$ )
+
+' This routine sets the Boolean values for adding various additions to the record. The
+' flag to add a classification number or a series numbering example is in the variant
+' that contains the element of the array that has been selected, so those additions are
+' not included here.
+
+Dim CheckBoxTag$
+
+CheckBoxTag$ = InString
+
+Select Case CheckBoxTag$
+
+  Case"0&43:"
+    Add043               = TRUE
+
+  Case"7&52:"
+    Add752               = TRUE
+
+  Case"&ISSN:"
+    AddISSN              = TRUE
+
+  Case"&<<:"
+    AddInitialSubfields  = TRUE
+
+  Case"&>>:"
+    AddTerminalSubfields = TRUE
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Function AddSubfields( InString$ ) As String
+
+' This function adds initial and terminal subfields to the heading, taking care of some
+' formatting as it does so.
+
+Dim TempString$
+
+Dim FinalInitial             : FinalInitial = FALSE
+
+TempString$ = InString$
+
+If AddInitialSubfields Then
+    TempString$ = InitialSubfields$ & " " & DELIMITER & "a " & TempString$
+End If
+
+If Right$( TempString$, 3 ) Like " [A-Z]." Then
+    FinalInitial = TRUE
+End If
+
+If AddTerminalSubfields Then
+    If Mid$( TerminalSubfields$, 2, 1 ) = "e" Then
+        If Right$( TempString$, 1 ) <> "-" Then
+            TempString$ = TempString$ & ", " & TerminalSubfields$
+          Else
+            TempString$ = TempString$ & " " & TerminalSubfields$
+        End If
+      ElseIf Mid$( TerminalSubfields$, 2, 1 ) Like "[45t]" Then
+        If FinalInitial Then
+            TempString$ = TempString$ & " " & TerminalSubfields$
+          Else
+            If Right$( TempString$, 1 ) = "-" Then
+                TempString$ = TempString$ & " " & TerminalSubfields$
+              Else
+                TempString$ = TempString$ & ". " & TerminalSubfields$
+            End If
+        End If
+    End If
+End If
+
+AddSubfields = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function CleanBibHeading( InString$ ) As String
+
+' This function removes extra subfields from headings so they can be compared. Some of
+' the subfields are retained, in the order in which they appear, for addition back to the
+' record with the heading.
+
+Dim HeadingSubfields$
+Dim SubfieldCode$
+Dim Tag$
+Dim TagInd$
+Dim TempString$
+Dim TestChar$
+
+Dim i As Integer
+
+Dim AddChar                  : AddChar     = FALSE
+Dim MainHeading              : MainHeading = FALSE
+Dim Prefix                   : Prefix      = FALSE
+Dim Suffix                   : Suffix      = FALSE
+
+TempString$ = Mid$( InString$, 6 )
+If Left$( TempString$, 1 ) <> DELIMITER Then
+    TempString$ = DELIMITER & "a " & TempString$
+End If
+Tag$        = Left$( InString$, 3)
+TagInd$     = Left$( InString$, 5 )
+
+i = 1
+Do
+  TestChar$ = Mid$( TempString$, i, 1 )
+  If TestChar$ = DELIMITER Then
+      AddChar       = TRUE
+      Prefix        = FALSE
+      Suffix        = FALSE
+      SubfieldCode$ = Mid$( TempString$, i + 1, 1 )
+      Select Case SubfieldCode$
+
+      Case "a", "0"
+        MainHeading = TRUE
+
+' Subfields $u, $4, and $5 are retained as suffixes.
+
+      Case "u", "4", "5"
+        Suffix      = TRUE
+        MainHeading = FALSE
+
+' Subfield $e is a relator code (and a suffix) in all fields but X11, where it identifies
+' a subordinate unit.
+
+      Case "e"
+        If Right$( Tag$, 2 ) <> "11" Then
+            Suffix      = TRUE
+            MainHeading = FALSE
+        End If
+
+' Subfield $j is a relator code in X11 fields only.
+
+      Case "j"
+        If Right$( Tag$, 2 ) = "11" Then
+            Suffix      = TRUE
+            MainHeading = FALSE
+        End If
+
+' Subfields $i and $3 are kept as prefixes to the main heading.
+
+      Case "i", "3"
+        Prefix      = TRUE
+        MainHeading = FALSE
+
+' Subfields $0, $2, and $w, having to do with the source of the heading, are omitted, as
+' all headings added are LC, identified by indicator (and, for genre headings, a new
+' subfield $2).
+
+      Case "2", "w" 'Omitted subfield $0 so it will be considered part of the heading
+        AddChar     = FALSE
+        MainHeading = FALSE
+
+' Subfield $t and all subsequent subfields are treated as a suffix, but only if the
+' incoming heading does not have a title element. In that case, the title is removed so
+' the name portions can be compared.
+
+      Case "t"
+        If AuthorTitle = FALSE Then
+            Suffix             = TRUE
+            TerminalSubfields$ = Mid$( TempString$, i )
+            Exit Do
+        End If
+
+' Subfield $v is a subject subdivision, and therefore part of the main heading, unless it
+' is a series number, in which case it is omitted.
+
+      Case "v"
+        If Left$( Tag$, 1 ) = TAG_GROUP_SERIES Then
+'            Suffix      = TRUE
+            MainHeading = FALSE
+        End If
+
+' Subfield $x is a subject subdivision, and therefore part of the main heading, unless it
+' is an ISSN, in which case it is kept as a suffix.
+
+      Case "x"
+        If Left$( Tag$, 1 ) <> TAG_GROUP_SUBJECT Then
+            Suffix      = TRUE
+            MainHeading = FALSE
+        End If
+
+    End Select
+  End If
+  If AddChar Then
+      If MainHeading Then
+          HeadingSubfields$  = HeadingSubfields$ & TestChar$
+        ElseIf Prefix Then
+          InitialSubfields$  = InitialSubfields$ & TestChar$
+        ElseIf Suffix Then
+          TerminalSubfields$ = TerminalSubfields$ & TestChar$
+      End If
+  End If
+  i = i + 1
+
+Loop Until i > Len( TempString$ )
+
+If Left$( HeadingSubfields$, 2 ) = DELIMITER & "a" Then
+    HeadingSubfields$ = Trim$( Mid$( HeadingSubfields$, 3 ) )
+End If
+
+If Right$( HeadingSubfields$, 1 ) = "," Then
+    HeadingSubfields$ = Left$( HeadingSubfields$, Len( HeadingSubfields$ ) - 1 )
+End If
+
+If Left$( Tag$, 1 ) = TAG_GROUP_SERIES Then
+    For i = Len( HeadingSubfields$ ) To 1 Step -1
+      TestChar$ = Mid$( HeadingSubfields$, i, 1 )
+      If TestChar$ Like "[! .,;]" Then
+          HeadingSubfields$ = Left$( HeadingSubfields$, i )
+          Exit For
+      End If
+    Next i
+End If
+
+CleanBibHeading = TagInd$ & HeadingSubfields$
+
+If InitialSubfields$ <> "" Then
+    InitialSubfields$                = Trim$( InitialSubfields$ )
+    AdditionsArray( AllAdditions% ) = "&<<:"
+    AllAdditions%                   = AllAdditions% + 1
+End If
+
+If TerminalSubfields$ <> "" Then
+    TerminalSubfields$               = Trim$( TerminalSubfields$ )
+    AdditionsArray( AllAdditions% ) = "&>>:"
+    AllAdditions%                   = AllAdditions% + 1
+End If
+
+
+End Function
+
+'****************************************************************************************
+
+Function CompareSeries( InString$ ) As Integer
+
+' This function tests, in a crude way, if the series heading in an authority record might
+' correspond to the series statement on the bibliographic record. Since the heading for a
+' series might be very different from the series forms actually found on manifestations,
+' this test can't have a high degree of reliability. The function normalizes, in a rather
+' rudimentary way, each of the two strings by simply stripping out all non-alphanumeric
+' characters. The resulting strings are then tested to see if each is in the other. If
+' so, the function returns a true value; otherwise, false.
+
+Dim CharA%
+Dim CharT$
+Dim Cycle%
+Dim SeriesA$
+Dim SeriesB$
+Dim TempString$
+Dim TestString$
+
+Dim i As Integer
+
+TempString$ = ""
+TestString$ = InString$
+
+' The normalization runs over the series statement first, then the heading. In the
+' statement, the presence of a delimiter ends the normalization process, as any subfield
+' other than $a is not part of the series title, which is the only element being
+' compared. Also in the data copied from the bibliographic record, the presence of a
+' slash surrounded by spaces (" / ") likely indicates a statement of responsibility,
+' which will either be lacking or formulated differently in the corresponding heading;
+' therefore cease processing once that's found--again, so as to compare titles only.
+
+For Cycle% = 1 To 2
+  For i = 1 To Len( TestString$ )
+    CharT$ = Mid$( TestString$, i, 1 )
+    CharA% = Asc( CharT$ )
+    Select Case CharA%
+
+      Case 32, 48 To 57, 65 To 90, 97 To 122
+        TempString$ = TempString$ & CharT$
+
+      Case 223
+        If Cycle% = 1 Then Exit For
+
+      Case 47
+        If Cycle% = 1 Then
+            If Mid$( TestString$, i - 1, 1 ) = " " And Mid$( TestString$, i + 1, 1 ) = " " Then Exit For
+        End If
+
+    End Select
+  Next i
+  If Cycle% = 1 Then
+      SeriesA$    = Trim$( TempString$ )
+      TestString$ = AuthorityData.CopiedHeading
+      TempString$ = ""
+    Else
+      SeriesB$    = Trim$( TempString$ )
+  End If
+Next Cycle%
+
+' If either string is contained in the other one, consider the two series strings to
+' match.
+
+If InStr( SeriesA$, SeriesB$ ) Or InStr( SeriesB$, SeriesA$ ) Then
+    CompareSeries = -1
+  Else
+    CompareSeries = 0
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function FixString( InString$ ) As String
+
+' This function manipulates subject heading strings for nice display on the dialog box
+' buttons and in the listbox by stripping diacritics and substituting some special
+' characters.
+
+Dim TempString$
+Dim TestChar%
+
+Dim i As Integer
+
+TempString$ = InString$
+
+i = 1
+Do
+  TestChar% = Asc( Mid$( TempString$, i, 1 ) )
+  Select Case TestChar%
+
+    Case 32 To 160
+
+    Case 223
+      TempString$ = Left$( TempString$, i - 1 ) & "$" & Mid$( TempString$, i + 1 )
+
+    Case 224 To 255
+      TempString$ = Left$( TempString$, i - 1 ) & Mid$( TempString$, i + 1 )
+
+    Case 161
+      TempString$ = Left$( TempString$, i - 1 ) & "L" & Mid$( TempString$, i + 1 )
+
+    Case 177
+      TempString$ = Left$( TempString$, i - 1 ) & "l" & Mid$( TempString$, i + 1 )
+
+    Case 162, 172
+      TempString$ = Left$( TempString$, i - 1 ) & "O" & Mid$( TempString$, i + 1 )
+
+    Case 178, 188
+      TempString$ = Left$( TempString$, i - 1 ) & "o" & Mid$( TempString$, i + 1 )
+
+    Case 163
+      TempString$ = Left$( TempString$, i - 1 ) & "D" & Mid$( TempString$, i + 1 )
+
+    Case 179, 186
+      TempString$ = Left$( TempString$, i - 1 ) & "d" & Mid$( TempString$, i + 1 )
+
+    Case 164
+      TempString$ = Left$( TempString$, i - 1 ) & "TH" & Mid$( TempString$, i + 1 )
+
+    Case 180
+      TempString$ = Left$( TempString$, i - 1 ) & "th" & Mid$( TempString$, i + 1 )
+
+    Case 165
+      TempString$ = Left$( TempString$, i - 1 ) & "AE" & Mid$( TempString$, i + 1 )
+
+    Case 181
+      TempString$ = Left$( TempString$, i - 1 ) & "ae" & Mid$( TempString$, i + 1 )
+
+    Case 166
+      TempString$ = Left$( TempString$, i - 1 ) & "OE" & Mid$( TempString$, i + 1 )
+
+    Case 182
+      TempString$ = Left$( TempString$, i - 1 ) & "oe" & Mid$( TempString$, i + 1 )
+
+    Case 173
+      TempString$ = Left$( TempString$, i - 1 ) & "U" & Mid$( TempString$, i + 1 )
+
+    Case 189
+      TempString$ = Left$( TempString$, i - 1 ) & "u" & Mid$( TempString$, i + 1 )
+
+    Case 184
+      TempString$ = Left$( TempString$, i - 1 ) & "i" & Mid$( TempString$, i + 1 )
+
+    Case 167, 174, 176
+      TempString$ = Left$( TempString$, i - 1 ) & Chr$( 39 ) & Mid$( TempString$, i + 1 )
+
+  End Select
+
+  If TestChar% < 223 Then i = i + 1
+
+Loop Until i > Len( TempString$ )
+
+FixString = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Transform781( InString$ )
+
+' This function takes the 781 field on the authority record and formats it into a 752
+' field for the bibliographic record. It assumes that in a case of two subfields $z, the
+' latter is a "city" and the former is the "country or larger entity":
+'
+'   781 $z England $z London   => 752 $a England $d London.
+'
+' In the case of the United States and Canada, if there is an 043 field to help out, the
+' missing country term is able to be supplied, and the first subfield $z becomes subfield
+' $b, "First-order political jurisdiction":
+'
+'   043 n-cn-on
+'   781 $z Ontario $z Brent    => 752 $a Canada $b Ontario $d Brent.
+'
+' Otherwise, the single subfield $z becomes subfield $a:
+'
+'   781 $z Ukraine             => 752 $a Ukraine.
+'
+' Of course, working only from the 781 field, the macro can't construct a more complex or
+' accurate 752 field.
+
+CONST SECOND_LEVEL As Integer = 8
+
+Dim Country$
+Dim FieldData$
+Dim Start%
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = Mid$( InString$, 6 )
+
+' For the U.S. and Canada, the country name is omitted from the 781 field. If it is found
+' in the appropriate place in an 043 field, supply it in the 752.
+
+If CS.GetField( "043", 1, FieldData$ ) Then
+    If InStr( FieldData$, "us" ) = SECOND_LEVEL Then
+        Country$ = "United States"
+      ElseIf InStr( FieldData$, "cn" ) = SECOND_LEVEL Then
+        Country$ = "Canada"
+    End If
+End If
+
+Start% = 1
+Do
+  p = InStr( Start%, TempString$, DELIMITER )
+  If p = 1 Then
+      If Country$ = "" Then
+          TempString$ = Mid$( TempString$, 4 )
+        Else
+          TempString$ = DELIMITER & "b" & Mid$( TempString$, 3 )
+      End If
+    ElseIf p > 1 Then
+      TempString$ = Left$( TempString$, p ) & "d" & Mid$( TempString$, p + 2 )
+  End If
+  Start% = p + 2
+Loop Until p = 0
+
+If Country$ <> "" Then
+    TempString$ = Country$ & " " & TempString$
+End If
+
+Transform781 = TempString$ & "."
+
+End Function
+
+'****************************************************************************************
+
+Function MakeDisplayString( MaxLength%, InString$ )
+
+' This function cuts off the 752 field string at a space, if possible, for nice display
+' in its limited area in the dialog box (so words are not divided in the middle). For all
+' strings, it also doubles an ampersand for proper display of any heading in the text
+' areas of the dialog boxes.
+
+Dim CharT$
+Dim LengthInString%
+Dim Start%
+Dim TempString$
+
+Dim i As Integer, p As Integer
+
+LengthInString% = Len( InString$ )
+TempString$     = InString$
+
+' A truncate limit of zero actually means: Don't truncate the string! Simply take care of
+' the ampersand. When displaying the copied heading, there is enough room that truncation
+' isn't necessary. Otherwise, the truncate limit means: From this point in the string,
+' look for a breaking point in the string, which consists of a hyphen, space, period, or
+' comma.
+
+If MaxLength% > 0 Then
+    If MaxLength% < LengthInString% Then
+        For i = MaxLength% To LengthInString% Step 1
+          CharT$ = Mid$( TempString$, i, 1 )
+          If CharT$ Like "[- .,]" Then
+              TempString$ = Trim$( Left$( TempString$, i - 1 ) ) & " ... "
+              Exit For
+          End If
+        Next i
+    End If
+    If i = LengthInString% Then
+        TempString$ = Trim$( Left$( TempString$, i ) ) & " ... "
+    End If
+End If
+
+' Double the ampersand to prevent it from acting like a hotkey indicator--that is,
+' appearing as a solitary underline in a string.
+
+Start% = 1
+Do
+  p = InStr( Start%, TempString$, "&" )
+  If p > 1 Then
+      TempString$ = Left$( TempString$, p ) & "&" & Mid$( TempString$, p + 1 )
+      Start%      = p + 2
+  End If
+Loop Until p = 0
+
+MakeDisplayString = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' This function controls what displays in the initial dialog box to copy from the
+' authority record when the heading is a geographic name or subdivision. The options are
+' to copy the heading as is, or as a geographic subdivision derived from the 781 field.
+' This option may require inverting two terms. The 781 field can be copied as a 752
+' field, as subject headings and the 752 field both order subfields from larger
+' jurisdiction to smaller. If this option is chosen, the macro further refines it by
+' offering to copy the data only as a 752. Selecting this option disables the buttons for
+' copying the heading in as a heading or for inserting it as a subdivision string.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgValue        "CheckBox",                UNCHECKED
+    DlgEnable       "OptionButton3",           INVISIBLE
+    DlgVisible      "SubfieldCode",            DISABLED
+    DlgText         "TextBox1",                AuthorityData.CopiedHeadingD
+    DlgText         "TextBox2",                AuthorityData.GeographicSubdivisionD
+    DlgText         "TextBox3",                AuthorityData.HierarchicalHeadingD
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "CheckBox"
+        If DlgValue( "CheckBox" ) = CHECKED Then
+            DlgEnable       "OptionButton3",           ENABLED
+            DlgVisible      "SubfieldCode",            VISIBLE
+          Else
+            DlgEnable       "OptionButton3",           DISABLED
+            DlgValue        "OptionButtonGroup",       0
+            DlgVisible      "SubfieldCode",            INVISIBLE
+        End If
+
+      Case "OptionButton1", "OptionButton2"
+        DlgEnable       "OptionButton3",           DISABLED
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$, Action%, SValue& )
+
+If Action% = INITIALIZE Then
+    DlgValue        "CheckBox",                UNCHECKED
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog3ControlFunction( Id$, Action%, SValue& )
+
+' This function controls the dialog box for inserting or adding subject subdivisions. The
+' dialog box displays each field as a hierarchical arrangement of its subfields. The
+' first line shows the first subfield only; each successive line adds the next subfield,
+' until the last line for that field displays the whole string. If the heading copied is
+' not a subdivision, the option presented is for it to replace one of the lines--that is,
+' it may replace the first subfield, or the first two subfields, on up to replacing the
+' whole field. But if the heading copied is a subdivision, the option presented is for it
+' to be added to one of those lines--that is, it may be appended to the first subfield,
+' or the second subfield, on up to adding it as the last subfield of the subject heading.
+' In the case of appending a subdivision, an additional option is to truncate all the
+' following lines, that is, to make the added subdivision the last piece of the new
+' subject string. The variable "LineNumber$" names the line selected with a sequential
+' number, and the dialog box element "ActionPromptLine" asks whether the action is to replace or
+' add to a line.
+'
+' In this dialog box, the only bits of information from the authority record that can be
+' added are a call number and a GAC.
+
+Const KEEP_DLG_OPEN As Integer = -1  'The value of    the dialog box function to keep a dialog box open.
+
+Dim LineNumber$
+Dim UBSubjectFieldsD%        : UBSubjectFieldsD% = UBound( SubjectFieldsD )
+
+Dim LineSelection%
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgValue        "CheckBox1",               UNCHECKED
+    DlgVisible      "CheckBox1",               INVISIBLE
+    DlgValue        "CheckBox2",               UNCHECKED
+    DlgVisible      "CheckBox2",               INVISIBLE
+    DlgEnable       "CheckBoxDeleteSubfields", DISABLED
+    DlgValue        "CheckBoxDeleteSubfields", UNCHECKED
+    DlgEnable       "DeleteSubfields2",        DISABLED
+    DlgVisible      "DropListBox1",            INVISIBLE
+    DlgVisible      "TextBox1",                INVISIBLE
+    DlgVisible      "TextBox2",                INVISIBLE
+    DlgValue        "SubjectFieldsListBox",    SubjectFieldsListBoxIndex%
+
+    If AllAdditions% = 0 Then
+        DlgVisible      "AdditionsBox",            INVISIBLE
+    End If
+
+    If UBSubjectFieldsD% = 0 Then
+        DlgVisible      "CheckBoxDeleteSubfields", INVISIBLE
+        DlgVisible      "DeleteSubfields2",        INVISIBLE
+      Else
+        If Trim$( Left$( SubjectFieldsD( 1 ), 4 ) ) = "--" Then
+            DlgEnable       "CheckBoxDeleteSubfields", DISABLED
+            DlgEnable       "DeleteSubfields2",        DISABLED
+          Else
+            DlgEnable       "CheckBoxDeleteSubfields", ENABLED
+            DlgEnable       "DeleteSubfields2",        ENABLED
+        End If
+    End If
+
+    If AuthorityData.HeadingType = SUBDIVISION Then
+        DlgText         "Button1",                 "&Append to selection"
+        DlgText         "Button2",                 "Cancel"
+        DlgVisible      "Cancel",                  INVISIBLE
+        DlgVisible      "CheckBoxDeleteSubfields", VISIBLE
+        DlgVisible      "DeleteSubfields2",        VISIBLE
+      Else
+        DlgText         "Button1",                 "&Replace selection"
+        If SubjectOnly Then
+            DlgText         "Button2",                 "&Add as 6" & AuthorityData.HeadingType
+          Else
+            DlgText         "Button2",                 "&Add new field..."
+        End If
+        DlgVisible      "CheckBoxDeleteSubfields", VISIBLE
+        DlgVisible      "DeleteSubfields2",        VISIBLE
+    End If
+
+    If Count6XX% > 1 Then
+        DlgFocus        "SubjectFieldsListBox"
+      Else
+        If AuthorityData.HeadingType = SUBDIVISION Then
+            DlgFocus        "Button1"
+          Else
+            DlgFocus        "Button1"
+        End If
+    End If
+
+    LineSelection% = DlgValue( "SubjectFieldsListBox" )
+    LineNumber$    = Trim$( Left$( SubjectFieldsD( LineSelection% ), 4 ) )
+
+    If AllAdditions% > 0 Then
+        DlgVisible      "AdditionsBox",            VISIBLE
+        DlgText         "CheckBox1",               AdditionsArray( 0 )
+        DlgVisible      "CheckBox1",               VISIBLE
+
+        Select Case AdditionsArray( 0 )
+
+          Case "&050:"
+            If CheckAll Then
+                DlgValue        "CheckBox1",               CHECKED
+              Else
+                DlgValue        "CheckBox1",               UNCHECKED
+            End If
+            If CallNumberCount% = 1 Then
+                DlgText         "TextBox1",                ClassNumbersDisplay( 0 )
+                DlgVisible      "TextBox1",                VISIBLE
+              ElseIf CallNumberCount% > 1 Then
+                DlgValue        "DropListBox1",            0
+                DlgVisible      "DropListBox1",            VISIBLE
+            End If
+
+          Case "0&43:"
+            DlgValue        "CheckBox1",               CHECKED
+            DlgVisible      "TextBox1",                VISIBLE
+            DlgText         "TextBox1",                AuthorityData.GAC
+
+          Case "7&52:"
+            DlgValue        "CheckBox1",               CHECKED
+            DlgVisible      "TextBox1",                VISIBLE
+            DlgText         "TextBox1",                AuthorityData.New752D
+
+        End Select
+      End If
+
+      If AllAdditions% > 1 Then
+        DlgText         "CheckBox2",               AdditionsArray( 1 )
+        DlgVisible      "CheckBox2",               VISIBLE
+
+        Select Case AdditionsArray( 1 )
+
+          Case "0&43:"
+            DlgValue        "CheckBox2",               CHECKED
+            DlgVisible      "TextBox2",                VISIBLE
+            DlgText         "TextBox2",                AuthorityData.GAC
+
+          Case "7&52:"
+            DlgValue        "CheckBox2",               CHECKED
+            DlgVisible      "TextBox2",                VISIBLE
+            DlgText         "TextBox2",                AuthorityData.New752D
+
+        End Select
+    End If
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "DropListBox1"
+        DlgValue        "CheckBox1",               CHECKED
+
+      Case "Button1", "Button2"
+        LineSelection% = DlgValue( "SubjectFieldsListBox" )
+        If Left$( SubjectFieldsD( LineSelection% ), 4 ) = "  --" Then Dialog3ControlFunction = KEEP_DLG_OPEN
+        If DlgValue( "CheckBox1" ) = CHECKED Then
+            If DlgText( "CheckBox1" ) = "&050:" Then
+                If DlgVisible( "TextBox1" ) = VISIBLE Then
+                    CallNumberSelection = 0
+                  Else
+                    CallNumberSelection = DlgValue( "DropListBox1" )
+                End If
+              Else
+                CallNumberSelection = "X"
+                Call SetAdditionsBooleans( DlgText( "CheckBox1" ) )
+            End If
+        End If
+
+        If DlgValue( "CheckBox2" ) = CHECKED Then
+            Call SetAdditionsBooleans( DlgText( "CheckBox2" ) )
+        End If
+
+      Case "SubjectFieldsListBox"
+        LineSelection% = DlgValue( "SubjectFieldsListBox" )
+        LineNumber$    = Trim$( Left$( SubjectFieldsD( LineSelection% ), 4 ) )
+        If LineSelection% < UBound( SubjectFieldsD ) Then
+            If LineNumber$ = "--" Then
+                DlgEnable       "CheckBoxDeleteSubfields", DISABLED
+                DlgEnable       "DeleteSubfields2",        DISABLED
+                DlgEnable       "Button1",                 DISABLED
+              Else
+                DlgEnable       "Button1",                 ENABLED
+                If Left$( SubjectFieldsD( LineSelection% + 1 ), 4 ) = "  --" Then
+                    DlgEnable       "CheckBoxDeleteSubfields", DISABLED
+                    DlgEnable       "DeleteSubfields2",        DISABLED
+                  Else
+                    DlgEnable       "CheckBoxDeleteSubfields", ENABLED
+                    DlgEnable       "DeleteSubfields2",        ENABLED
+                End If
+            End If
+          ElseIf LineSelection% = UBound( SubjectFieldsD ) Then
+            DlgEnable       "Button1",                 ENABLED
+            DlgEnable       "CheckBoxDeleteSubfields", DISABLED
+            DlgEnable       "DeleteSubfields2",        DISABLED
+        End If
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog4ControlFunction( Id$, Action%, SValue& )
+
+' This function controls the dialog box for replacing an entire existing heading or
+' adding a new one. The pushbuttons add the field with the chosen tag. (The hotkey
+' assignment on the buttons enable addition of fields without having to use the mouse.)
+' Checkboxes determine whether to add data from the authority record, in this order:
+'
+'  + A single classification number displays in a simple list box, but two or more such
+'    numbers are presented in a drop-list box. The default state of the checkbox is
+'    unchecked.
+'
+'  + An 043 field. The default state of this checkbox is checked.
+'
+'  + A 752 field generated from the authority record's 781, if present. The default state
+'    of this checkbox is unchecked. (If the intent of finding the authority record was
+'    solely to generate a 752 field, it would have been added already.)
+'
+'  + An example of series numbering, drawn from the 642 field in the authority record.
+'    The default state of this checkbox is checked, on the assumption that adding a
+'    series number in the correct form is of vital importance.
+'
+'  + An ISSN may be added to the end of the series tracing. The default value for this
+'    checkbox is unchecked.
+'
+'  + If a bibliographic record's heading is being replaced, any subfields preceding or
+'    following it can be retained for the new heading. Initial subfields include
+'    materials specified and relationship information; terminal subfields include relator
+'    terms, institution codes, and titles. The default value for these checkboxes is
+'    checked, as likely these additions to the original heading are applicable to the new
+'    heading also.
+
+Dim CheckBoxText$
+Dim ControlsRow1%
+Dim ControlsRow2%
+Dim ControlsRow3%
+Dim ControlsRow4%
+Dim InitialSubfield$
+Dim SelectedTag$
+Dim TempString$
+Dim TerminalSubfield$
+
+Dim i As Integer, p As Integer
+
+If InitialSubfields$ <> "" Then
+    InitialSubfield$  = Mid$( InitialSubfields$, 2, 1 )
+End If
+
+If TerminalSubfields$ <> "" Then
+    TerminalSubfield$ = Mid$( TerminalSubfields$, 2, 1 )
+End If
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If AllAdditions% = 0 Then
+        DlgVisible      "AdditionsBox",            INVISIBLE
+      Else
+        DlgVisible      "AdditionsBox",            VISIBLE
+    End If
+
+    If AddOrReplace = REPLACE Then
+        If AuthorityData.HeadingType = GENRE_HEADING Then
+            DlgText         "PushButton2",             "&Add new 655"
+          Else
+            DlgText         "PushButton2",             "&No, add as new field..."
+        End If
+    End If
+
+' Set the visibility of the pushbuttons for adding a new field.
+
+    Select Case PushButtonsVisible%
+
+      Case 0
+        DlgVisible      "PushButton1",             INVISIBLE
+        DlgVisible      "PushButton2",             INVISIBLE
+        DlgVisible      "PushButton3",             INVISIBLE
+        DlgVisible      "PushButton4",             INVISIBLE
+
+      Case 1
+        DlgVisible      "PushButton2",             INVISIBLE
+        DlgVisible      "PushButton3",             INVISIBLE
+        DlgVisible      "PushButton4",             INVISIBLE
+
+      Case 2
+        DlgVisible      "PushButton3",             INVISIBLE
+        DlgVisible      "PushButton4",             INVISIBLE
+
+      Case 3
+        DlgVisible      "PushButton4",             INVISIBLE
+
+    End Select
+
+' Set the visibility and states of the "Additions" box controls.
+
+    DlgVisible      "CheckBox1",               INVISIBLE
+    DlgVisible      "CheckBox2",               INVISIBLE
+    DlgVisible      "CheckBox3",               INVISIBLE
+    DlgVisible      "CheckBox4",               INVISIBLE
+    DlgVisible      "DropListBox1",            INVISIBLE
+    DlgVisible      "DropListBox2",            INVISIBLE
+    DlgVisible      "InformationalNote",       INVISIBLE
+    DlgVisible      "TextBox1",                INVISIBLE
+    DlgVisible      "TextBox2",                INVISIBLE
+    DlgVisible      "TextBox3",                INVISIBLE
+    DlgVisible      "TextBox4",                INVISIBLE
+
+' For identical headings, the only additions to present are the ones from the authority
+' record; any additional subfields in the bibliographic record simply remain. So
+' eliminate the record for those subfields, if necessary, from the array of additions.
+
+    If IdenticalHeadings Then
+        For i = 0 To 3
+          TempString$ = AdditionsArray( i )
+          If TempString$ = "&<<:" Or TempString$ = "&>>:" Then
+              AdditionsArray( i ) = ""
+              AllAdditions%       = AllAdditions% - 1
+          End If
+        Next i
+    End If
+
+    If AllAdditions% > 0 Then
+        DlgText         "CheckBox1",               AdditionsArray( 0 )
+        DlgVisible      "CheckBox1",               VISIBLE
+
+        Select Case AdditionsArray( 0 )
+
+' The first two checkboxes in the dialog box control the two listboxes, which are used
+' when there are multiple options to add; the multiples are only for the call number or
+' classification number, and the series numbering example. All the other additions appear
+' only singly and so require only a simple text box to display. The call number or
+' classification number, if present, is always the first addition presented, therefore it
+' will never be the option of the second checkbox. The series numbering example will be
+' either the first or the second option.
+
+          Case "&050:"
+            If CheckAll Then
+                DlgValue        "CheckBox1",               CHECKED
+              Else
+                DlgValue        "CheckBox1",               UNCHECKED
+            End If
+            If CallNumberCount% = 1 Then
+                DlgText         "TextBox1",                ClassNumbersDisplay( 0 )
+                DlgVisible      "TextBox1",                VISIBLE
+              ElseIf CallNumberCount% > 1 Then
+                DlgListBoxArray "DropListBox1",            ClassNumbersDisplay()
+                DlgValue        "DropListBox1",            0
+                DlgVisible      "DropListBox1",            VISIBLE
+            End If
+
+          Case "6&42:"
+            DlgValue        "CheckBox1",               CHECKED
+            If CountOf642s% = 1 Then
+                DlgText         "TextBox1",                SeriesNumbering( 0 )
+                DlgVisible      "TextBox1",                VISIBLE
+              ElseIf CountOf642s% > 1 Then
+                DlgListBoxArray "DropListBox1",            SeriesNumbering()
+                DlgValue        "DropListBox1",            0
+                DlgVisible      "DropListBox1",            VISIBLE
+            End If
+
+          Case "0&43:"
+            DlgValue        "CheckBox1",               CHECKED
+            DlgVisible      "TextBox1",                VISIBLE
+            DlgText         "TextBox1",                AuthorityData.GAC
+
+          Case "7&52:"
+            DlgValue        "CheckBox1",               CHECKED
+            DlgVisible      "TextBox1",                VISIBLE
+            DlgText         "TextBox1",                AuthorityData.New752D
+
+          Case "&ISSN:"
+            If CheckAll Then
+                DlgValue        "CheckBox1",               CHECKED
+              Else
+                DlgValue        "CheckBox1",               UNCHECKED
+            End If
+            DlgVisible      "TextBox1",                VISIBLE
+            DlgText         "TextBox1",                AuthorityData.ISSN
+
+' Initial and terminal fields come from the bibliographic record rather than the
+' authority record, and so are tag-specific, and need not apply if the copied heading is
+' going to be added with a different tag from the existing record it may have been
+' matched against.
+
+          Case "&<<:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox1",               UNCHECKED
+              Else
+                DlgValue        "CheckBox1",               CHECKED
+            End If
+            DlgVisible      "TextBox1",                VISIBLE
+            DlgText         "TextBox1",                FixString$( InitialSubfields$ )
+            CheckBox1Subfield$ = InitialSubfield$
+
+          Case "&>>:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox1",               UNCHECKED
+              Else
+                DlgValue        "CheckBox1",               CHECKED
+            End If
+            DlgVisible      "TextBox1",                VISIBLE
+            DlgText         "TextBox1",                FixString$( TerminalSubfields$ )
+            CheckBox1Subfield$ = TerminalSubfield$
+
+        End Select
+      End If
+
+      If AllAdditions% > 1 Then
+        DlgText         "CheckBox2",               AdditionsArray( 1 )
+        DlgVisible      "CheckBox2",               VISIBLE
+
+        Select Case AdditionsArray( 1 )
+
+          Case "6&42:"
+            DlgValue        "CheckBox2",               CHECKED
+            If CountOf642s% = 1 Then
+                DlgText         "TextBox2",                SeriesNumbering( 0 )
+                DlgVisible      "TextBox2",                VISIBLE
+              ElseIf CountOf642s% > 1 Then
+                DlgListBoxArray "DropListBox2",            SeriesNumbering()
+                DlgValue        "DropListBox2",            0
+                DlgVisible      "DropListBox2",            VISIBLE
+            End If
+
+          Case "0&43:"
+            DlgValue        "CheckBox2",               CHECKED
+            DlgVisible      "TextBox2",                VISIBLE
+            DlgText         "TextBox2",                AuthorityData.GAC
+
+          Case "7&52:"
+            DlgValue        "CheckBox2",               CHECKED
+            DlgVisible      "TextBox2",                VISIBLE
+            DlgText         "TextBox2",                AuthorityData.New752D
+
+          Case "&ISSN:"
+            If CheckAll Then
+                DlgValue        "CheckBox2",               CHECKED
+              Else
+                DlgValue        "CheckBox2",               UNCHECKED
+            End If
+            DlgVisible      "TextBox2",                VISIBLE
+            DlgText         "TextBox2",                AuthorityData.ISSN
+
+          Case "&<<:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox2",               UNCHECKED
+              Else
+                DlgValue        "CheckBox2",               CHECKED
+            End If
+            DlgVisible      "TextBox2",                VISIBLE
+            DlgText         "TextBox2",                FixString$( InitialSubfields$ )
+            CheckBox2Subfield$ = InitialSubfield$
+
+          Case "&>>:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox2",               UNCHECKED
+              Else
+                DlgValue        "CheckBox2",               CHECKED
+            End If
+            DlgVisible      "TextBox2",                VISIBLE
+            DlgText         "TextBox2",                FixString$( TerminalSubfields$ )
+            CheckBox2Subfield$ = TerminalSubfield$
+
+        End Select
+    End If
+
+    If AllAdditions% > 2 Then
+        DlgText         "CheckBox3",               AdditionsArray( 2 )
+        DlgVisible      "CheckBox3",               VISIBLE
+        DlgVisible      "TextBox3",                VISIBLE
+
+        Select Case AdditionsArray( 2 )
+
+          Case "0&43:"
+            DlgValue        "CheckBox3",               CHECKED
+            DlgText         "TextBox3",                AuthorityData.GAC
+
+          Case "7&52:"
+            DlgValue        "CheckBox3",               CHECKED
+            DlgText         "TextBox3",                AuthorityData.New752D
+
+          Case "&ISSN:"
+            If CheckAll Then
+                DlgValue        "CheckBox3",               CHECKED
+              Else
+                DlgValue        "CheckBox3",               UNCHECKED
+            End If
+            DlgText         "TextBox3",                AuthorityData.ISSN
+
+          Case "&<<:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox3",               UNCHECKED
+              Else
+                DlgValue        "CheckBox3",               CHECKED
+            End If
+            DlgText         "TextBox3",                FixString$( InitialSubfields$ )
+            CheckBox3Subfield$ = InitialSubfield$
+
+          Case "&>>:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox3",               UNCHECKED
+              Else
+                DlgValue        "CheckBox3",               CHECKED
+            End If
+            DlgText         "TextBox3",                FixString$( TerminalSubfields$ )
+            CheckBox3Subfield$ = TerminalSubfield$
+
+        End Select
+    End If
+
+    If AllAdditions% > 3 Then
+        DlgText         "CheckBox4",               AdditionsArray( 3 )
+        DlgVisible      "CheckBox4",               VISIBLE
+        DlgVisible      "TextBox4",                VISIBLE
+
+        Select Case AdditionsArray( 3 )
+
+          Case "0&43:"
+            DlgValue        "CheckBox4",               CHECKED
+            DlgText         "TextBox4",                AuthorityData.GAC
+
+          Case "75&2:"
+            DlgValue        "CheckBox4",               CHECKED
+            DlgText         "TextBox4",                AuthorityData.New752D
+
+          Case "&ISSN:"
+            If CheckAll Then
+                DlgValue        "CheckBox4",               CHECKED
+              Else
+                DlgValue        "CheckBox4",               UNCHECKED
+            End If
+            DlgText         "TextBox4",                AuthorityData.ISSN
+
+          Case "&<<:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox4",               UNCHECKED
+              Else
+                DlgValue        "CheckBox4",               CHECKED
+            End If
+            DlgText         "TextBox4",                FixString$( InitialSubfields$ )
+            CheckBox4Subfield$ = InitialSubfield$
+
+          Case "&>>:"
+            If AddOrReplace = ADD Then
+                DlgValue        "CheckBox4",               UNCHECKED
+              Else
+                DlgValue        "CheckBox4",               CHECKED
+            End If
+            DlgText         "TextBox4",                FixString$( TerminalSubfields$ )
+            CheckBox4Subfield$ = TerminalSubfield$
+
+        End Select
+
+    End If
+
+    If NoteIdenticalHeadings$ <> "" Then
+        DlgVisible      "InformationalNote",       VISIBLE
+        DlgText         "InformationalNote",       NoteIdenticalHeadings$
+    End If
+
+    If NoteTrace490$ <> "" Then
+        DlgVisible      "InformationalNote",       VISIBLE
+        DlgText         "InformationalNote",       NoteTrace490$
+    End If
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "DropListBox1"
+        DlgValue        "CheckBox1",               CHECKED
+
+      Case "DropListBox2"
+        DlgValue        "CheckBox2",               CHECKED
+
+      Case "PushButton1", "PushButton2", "PushButton3", "PushButton4"
+
+' The pushbutton selected contains the text of the tag of the field to be added.
+
+        Select Case Id$
+
+          Case "PushButton1"
+            SelectedTag$ = DlgText( "PushButton1" )
+
+          Case "PushButton2"
+            SelectedTag$ = DlgText( "PushButton2" )
+
+          Case "PushButton3"
+            SelectedTag$ = DlgText( "PushButton3" )
+
+          Case "PushButton4"
+            SelectedTag$ = DlgText( "PushButton4" )
+
+        End Select
+
+' Remove the ampersand that designates the access key to end up with the three-digit tag.
+' If the pushbutton text is other than a tag, assign a constant as the tag: "REPLACE" to
+' replace the bibliographic record's heading with the copied heading, "ADD" to re-display
+' the dialog box with the appropriate options to add the copied heading as a new field.
+
+        p = InStr( SelectedTag$, "&" )
+        If p = 1 Then
+            SelectedTag$ = Mid$( SelectedTag$, 2, 3 )
+          ElseIf p = 2 Then
+            SelectedTag$ = Left$( SelectedTag$, 1 ) & Mid$( SelectedTag$, 3, 2 )
+        End If
+        If Val( SelectedTag$ ) <> 0 Then
+            FieldToAdd = SelectedTag$
+          Else
+            If SelectedTag$ = "Rep" Then
+                FieldToAdd = REPLACE
+              Else
+                FieldToAdd = ADD
+            End If
+        End If
+
+' Go through the check boxes to see which ones were checked to set the Boolean variables,
+' which will guide insertion of these additions in the bibliographic record. The call
+' number and series numbering example are special cases, as they are the only additions
+' that may have multiple choices. The flag to indicate adding those additions is a
+' variant variable. If the additions are rejected, the variant holds the letter "X";
+' otherwise, it holds the index of the array as an integer. If there is only one choice
+' for these additions, it will have been presented in the textbox, rather than the
+' droplist box, so the visibility of the textbox is a critical piece of information.
+
+        If DlgValue( "CheckBox1" ) = CHECKED Then
+            CheckBoxText$ = DlgText( "CheckBox1" )
+            If CheckBoxText$ = "&050:" Then
+                If CallNumberCount% = 1 Then
+                    CallNumberSelection = 0
+                  Else
+                    CallNumberSelection = DlgValue( "DropListBox1" )
+                End If
+              Else
+                CallNumberSelection = "X"
+                If CheckBoxText$ = "6&42:" Then
+                    If CountOf642s% = 1 Then
+                        SeriesExampleSelection = 0
+                      Else
+                        SeriesExampleSelection = DlgValue( "DropListBox1" )
+                    End If
+                  Else
+                    SeriesExampleSelection = "X"
+                    If CheckBoxText$ = "&<<:" Then
+                        InitialSubfields$  = DlgText( "TextBox1" )
+                      ElseIf CheckBoxText$ = "&>>:" Then
+                        TerminalSubfields$ = DlgText( "TextBox1" )
+                    End If
+                    Call SetAdditionsBooleans( DlgText( "CheckBox1" ) )
+                End If
+            End If
+        End If
+
+        If DlgValue( "CheckBox2" ) = CHECKED Then
+            CheckBoxText$ = DlgText( "CheckBox2" )
+            If CheckBoxText$ = "6&42:" Then
+                If CountOf642s% = 1 Then
+                    SeriesExampleSelection = 0
+                  Else
+                    SeriesExampleSelection = DlgValue( "DropListBox2" )
+                End If
+              Else
+                SeriesExampleSelection = "X"
+                If CheckBoxText$ = "&<<:" Then
+                    InitialSubfields$  = DlgText( "TextBox2" )
+                  ElseIf CheckBoxText$ = "&>>:" Then
+                    TerminalSubfields$ = DlgText( "TextBox2" )
+                End If
+                Call SetAdditionsBooleans( DlgText( "CheckBox2" ) )
+            End If
+        End If
+
+        If DlgValue( "CheckBox3" ) = CHECKED Then
+            CheckBoxText$ = DlgText( "CheckBox3" )
+            If CheckBoxText$ = "&<<:" Then
+                InitialSubfields$  = DlgText( "TextBox3" )
+              ElseIf CheckBoxText$ = "&>>:" Then
+                TerminalSubfields$ = DlgText( "TextBox3" )
+            End If
+            Call SetAdditionsBooleans( DlgText( "CheckBox3" ) )
+        End If
+
+        If DlgValue( "CheckBox4" ) = CHECKED Then
+            CheckBoxText$ = DlgText( "CheckBox4" )
+            If CheckBoxText$ = "&<<:" Then
+                InitialSubfields$  = DlgText( "TextBox4" )
+              ElseIf CheckBoxText$ = "&>>:" Then
+                TerminalSubfields$ = DlgText( "TextBox4" )
+            End If
+            Call SetAdditionsBooleans( DlgText( "CheckBox4" ) )
+        End If
+
+        If Trim$( InitialSubfields$ ) <> "" Then
+            Do
+              p = InStr( InitialSubfields$, "$" )
+              If p = 1 Then
+                  InitialSubfields$ = DELIMITER & Mid$( InitialSubfields$, 2 )
+                ElseIf p > 1 Then
+                  InitialSubfields$ = Left$( InitialSubfields$, p - 1 ) & DELIMITER & Mid$( InitialSubfields$, p + 1 )
+              End If
+            Loop Until p = 0
+        End If
+
+        If Trim$( TerminalSubfields$ ) <> "" Then
+            Do
+              p = InStr( TerminalSubfields$, "$" )
+              If p = 1 Then
+                  TerminalSubfields$ = DELIMITER & Mid$( TerminalSubfields$, 2 )
+                ElseIf p > 1 Then
+                  TerminalSubfields$ = Left$( TerminalSubfields$, p - 1 ) & DELIMITER & Mid$( TerminalSubfields$, p + 1 )
+              End If
+            Loop Until p = 0
+        End If
+
+    End Select
+
+End Select
+
+End Function
+'3161133480
+'
+'Macro name: GetAuthority
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
+'Saved: 6/28/2017 11:28:15 AM using "MacroBookInspector" macro by Walter F. Nickeson.
