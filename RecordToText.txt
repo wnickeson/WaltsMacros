@@ -1,0 +1,617 @@
+'MacroName:RecordToText.2016.26
+'MacroDescription:Copies the displayed record, or a selection of fields in that record,
+' to the Windows Clipboard in the classic layout.
+'
+' This macro was originally written by OCLC for its Passport for Windows software, and
+' was called "SaveScreen." It was converted for the Connexion client by Joel Hahn, Niles
+' Public Library District, with the name "SaveRecordAsFile," to write the displayed
+' record to a text file. This re-write of Joel's version of 4 February 2004 puts the
+' displayed record on the Windows Clipboard as simple text in the classic OCLC record
+' layout.
+'
+' This macro by Joel Hahn was re-written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 9 November 2016.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro with a bibliographic or authority record displayed. The
+' macro converts the record to a formatted text string and puts it on the Clipboard for
+' pasting--into a word processing program, for example, or into an e-mail. The formatting
+' presents the record in the classic OCLC record display, with the fixed field at the
+' top with its mnemonics, and proper spacing, if a monospaced font is used. The first
+' line of the copied text identifies the source of the record--WorldCat, Authority File,
+' save file (including the save file number), or Constant Data.
+'
+' If some contiguous fields have been selected, only those fields are copied. If the
+' first or last field in the selection is not completely selected, the whole field is
+' nonetheless included. If only part of a field is selected, that field only is copied to
+' the Clipboard.
+'
+' Delimiters are converted to dollar signs and fill characters to asterisks. Diacritics
+' are omitted, but special characters are translated, insofar as possible, to their
+' simple ASCII equivalents. Fields containing non-Latin script are omitted. A notice
+' about conversion issues is included in the converted string.
+'
+' Because of the limitations of this version of BASIC, a record longer than about 32K
+' bytes can't be converted and copied.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function AdjustElementLength( InString$, ExpectedLength% ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE  As Integer = 16     'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const CURRENT_WINDOW    As Integer = -1     'The value to get the window title of the current window.
+Const DISPLAY_FF_AT_TOP As Integer = 1      'The value to display the fixed field at the top of a record.
+Const MAX_STRING_LENGTH As Integer = 32000  'The maximum length of the variable field string.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim BeginningRow%            : BeginningRow%      = 1
+Dim CharA%
+Dim CharT$
+Dim CompleteRecord$
+Dim Counter%
+Dim CRLF$                    : CRLF$              = Chr$( 013 ) & Chr$( 010 )
+Dim CurrentRow%
+Dim Difference%
+Dim EndingRow&               : EndingRow&         = 99999
+Dim EndOfField$              : EndOfField$        = Chr$( 013 ) & Chr$( 010 )
+Dim EndOfFieldCount%
+Dim EndOfFieldFound%
+Dim FFPos%
+Dim FieldData$
+Dim FieldLength%
+Dim FixedFieldString$
+Dim LineNumber%
+Dim RecordAsString$
+Dim RecordType$
+Dim SaveNumber%
+Dim SelectedFields$
+Dim Start%
+Dim StringLength%
+Dim VariableFieldString$
+Dim WaltsMacros$             : WaltsMacros$       = "[Walt's macros] Extras2:RecordToText"
+Dim WarningDiacritics$       : WarningDiacritics$ = "---- DIACRITICS HAVE BEEN REMOVED ----"
+Dim WarningLatin$            : WarningLatin$      = "---- FIELDS WITH NON-LATIN SCRIPT HAVE BEEN REMOVED ----"
+Dim WarningSpecChars$        : WarningSpecChars$  = "---- SOME SPECIAL CHARACTERS HAVE BEEN CONVERTED ----"
+Dim WindowTitle$
+Dim WindowType%
+
+Dim AcquireField             : AcquireField       = TRUE
+Dim GetFF
+Dim ModifierChars            : ModifierChars      = FALSE
+Dim NonLatin                 : NonLatin           = FALSE
+Dim SelectedUp               : SelectedUp         = FALSE
+Dim Selection
+Dim SpecialChars             : SpecialChars       = FALSE
+
+Dim p As Integer, q As Integer
+
+' Bibliographic record fixed field mnemonics.
+
+Dim AccM$,       Alph$,       Audn$,       Biog$,       BLvl$,       Comp$,       Conf$
+Dim Cont$,       CrTp$,       Ctrl$,       Ctry$,       Dates1$,     Dates2$,     Desc$
+Dim DtSt$,       ELvl$,       Entered$,    EntW$,       Fest$,       File$,       FMus$
+Dim Form$,       Freq$,       GPub$,       Ills$,       Indx$,       ISSN$,       Lang$
+Dim LitF$,       LTxt$,       MRec$,       OCLC$,       Orig$,       Part$,       Proj$
+Dim RTime$,      RecStat$,    RecType$,    Regl$,       Relf$,       Replaced$,   SL$
+Dim SpFm$,       Srce$,       SrTp$,       Tech$,       TMat$,       TrAr$
+
+' Authority record fixed field mnemonics.
+
+Dim ARN$,        AuthRef$,    AuthStatus$, GeoSubd$,    GovtAgn$,    IsName$,     NameUse$
+Dim RefStatus$,  Roman$,      Rules$,      Series$,     SerNum$,     SerUse$,     Source$
+Dim Subj$,       SubjUse$,    SubTp$,      UpdStatus$
+
+' First, make sure the type of window is correct: The macro converts and copies only
+' bibliographic and authority records
+
+WindowType% = CS.ItemType
+Select Case WindowType%
+
+' List windows are fatal.
+
+  Case -1, 5 To 13, 15 To 16, 21 To 25, 36
+
+    MsgBox "Please display a bibliographic or authority record to save as text!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+  Case Else
+
+' For record windows, deal first with those in which fields have been selected.
+
+    Selection = CS.GetSelectedText( SelectedFields$ )
+    If Selection Then
+        CurrentRow% = CS.CursorRow
+        If CurrentRow% = 1 And CS.CursorColumn < 6 Then
+            MsgBox "No fields have been selected!", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+
+' If the selection has been made by dragging upward, the last characters will be the end-
+' of-field marker (ASCII characters 013 + 010).
+
+        If Right$( SelectedFields$, 2 ) = EndOfField$ Then SelectedUp = TRUE
+
+' The number of end-of-field markers within the selection is the count of how many
+' fields have been included. The macro will also work with a selection made within a
+' field; in that case, it will copy the whole field.
+
+        Start% = 1
+        Do
+          EndOfFieldFound% = InStr( Start%, SelectedFields$, EndOfField$ )
+          If EndOfFieldFound% > 0 Then
+              Start%           = EndOfFieldFound% + 1
+              EndOfFieldCount% = EndOfFieldCount% + 1
+          End If
+        Loop Until EndOfFieldFound% = 0
+
+' In the case of fields selected by dragging up, we must do some calculations to figure
+' out in which row the selection was begun. By counting the number of end-of-field
+' markers in the selection, we can work backwards--toward the bottom of the record--to
+' find the row where the selection was started.
+
+        If SelectedUp = TRUE Then
+            CurrentRow% = CurrentRow% + EndOfFieldCount%
+        End If
+        Difference%   = CurrentRow% - EndOfFieldCount%
+        BeginningRow% = Difference%
+        EndingRow&    = CurrentRow%
+
+' If the whole record is to be copied, get information about the kind of record: Whether
+' authority or bibliographic, constant data for either, and if it resides in a save file,
+' local or online. This information will appear at the head of the copied text.
+
+      Else
+
+        If CS.GetWindowTitle( CURRENT_WINDOW, WindowTitle$ ) Then
+            p = InStr( WindowTitle$, ":" )
+            If p <> 0 Then
+                If InStr( WindowTitle$, "Constant Data" ) = 0 Then
+                    WindowTitle$ = Left$( WindowTitle$, p )
+                    If CS.QueryRecordStatus( "SAVE", SaveNumber% ) Then
+                        If SaveNumber% <> 0 Then
+                            WindowTitle$ = WindowTitle$ & " " & Trim$( Str$( SaveNumber% ) )
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    End If
+
+End Select
+
+' If only a part of the record is to be copied, there is no need to get the fixed field
+' display. Otherwise, when retrieving fixed field values, distinguish between
+' bibliographic and authority records.
+
+If Selection = FALSE Then
+
+' Set the fixed field to display as a variable field.
+
+    FFPos% = CS.FixedFieldPosition
+    If FFPos% <> DISPLAY_FF_AT_TOP Then CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+
+' Get the values of the fixed field elements that are common to both types of record and
+' have the same mnemonic.
+
+    GetFF = CS.GetFixedField( "Type", RecType$ )
+    If RecType$ Like "[!acdefgijkmoprstz]" Then
+        MsgBox "Sorry, this macro can't copy a record with unknown Type.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+    GetFF = CS.GetFixedField( "Entered",  Entered$ )
+    GetFF = CS.GetFixedField( "Rec stat", RecStat$ )
+    GetFF = CS.GetFixedField( "Replaced", Replaced$ )
+
+' Get the rest of the fixed field data, by type of record. Note that the "GetFixedField"
+' command succeeds even if the element isn't in the record. When the command retrieves an
+' empty string, or a string of less than the full allowed length of the element, the
+' string must be padded with spaces to fill its position in the complete record string.
+
+    If RecType$ <> "z" Then
+
+        GetFF = CS.GetFixedField( ",", Dates2$ )        : Dates2$ = AdjustElementLength( Dates2$, 4 )
+        GetFF = CS.GetFixedField( "AccM", AccM$ )       : AccM$   = AdjustElementLength( AccM$, 6 )
+        GetFF = CS.GetFixedField( "Alph", Alph$ )       : Alph$   = AdjustElementLength( Alph$, 1 )
+        GetFF = CS.GetFixedField( "Audn", Audn$ )       : Audn$   = AdjustElementLength( Audn$, 1 )
+        GetFF = CS.GetFixedField( "Biog", Biog$ )       : Biog$   = AdjustElementLength( Biog$, 1 )
+        GetFF = CS.GetFixedField( "BLvl", BLvl$ )       : BLvl$   = AdjustElementLength( BLvl$, 1 )
+        GetFF = CS.GetFixedField( "Comp", Comp$ )       : Comp$   = AdjustElementLength( Comp$, 2 )
+        GetFF = CS.GetFixedField( "Conf", Conf$ )       : Conf$   = AdjustElementLength( Conf$, 1 )
+        GetFF = CS.GetFixedField( "Cont", Cont$ )
+          If BLvl$ = "s" Then
+              Cont$ = AdjustElementLength( Cont$, 3 )
+            Else
+              Cont$ = AdjustElementLength( Cont$, 4 )
+          End If
+        GetFF = CS.GetFixedField( "CrTp", CrTp$ )       : CrTp$    = AdjustElementLength( CrTp$, 1 )
+        GetFF = CS.GetFixedField( "Ctrl", Ctrl$ )       : Ctrl$    = AdjustElementLength( Ctrl$, 1 )
+        GetFF = CS.GetFixedField( "Ctry", Ctry$ )       : Ctry$    = AdjustElementLength( Ctry$, 3 )
+        GetFF = CS.GetFixedField( "Dates", Dates1$ )    : Dates1$  = AdjustElementLength( Dates1$, 4 )
+        GetFF = CS.GetFixedField( "Desc", Desc$ )       : Desc$    = AdjustElementLength( Desc$, 1 )
+        GetFF = CS.GetFixedField( "DtSt", DtSt$ )       : DtSt$    = AdjustElementLength( DtSt$, 1 )
+        GetFF = CS.GetFixedField( "ELvl", ELvl$ )       : ELvl$    = AdjustElementLength( ELvl$, 1 )
+        GetFF = CS.GetFixedField( "EntW", EntW$ )       : EntW$    = AdjustElementLength( EntW$, 1 )
+        GetFF = CS.GetFixedField( "Fest", Fest$ )       : Fest$    = AdjustElementLength( Fest$, 1 )
+        GetFF = CS.GetFixedField( "File", File$ )       : File$    = AdjustElementLength( File$, 1 )
+        GetFF = CS.GetFixedField( "FMus", FMus$ )       : FMus$    = AdjustElementLength( FMus$, 1 )
+        GetFF = CS.GetFixedField( "Form", Form$ )       : Form$    = AdjustElementLength( Form$, 1 )
+        GetFF = CS.GetFixedField( "Freq", Freq$ )       : Freq$    = AdjustElementLength( Freq$, 1 )
+        GetFF = CS.GetFixedField( "GPub", GPub$ )       : GPub$    = AdjustElementLength( GPub$, 1 )
+        GetFF = CS.GetFixedField( "Ills", Ills$ )       : Ills$    = AdjustElementLength( Ills$, 4 )
+        GetFF = CS.GetFixedField( "Indx", Indx$ )       : Indx$    = AdjustElementLength( Indx$, 1 )
+        GetFF = CS.GetFixedField( "Lang", Lang$ )       : Lang$    = AdjustElementLength( Lang$, 3 )
+        GetFF = CS.GetFixedField( "LitF", LitF$ )       : LitF$    = AdjustElementLength( LitF$, 1 )
+        GetFF = CS.GetFixedField( "LTxt", LTxt$ )       : LTxt$    = AdjustElementLength( LTxt$, 2 )
+        GetFF = CS.GetFixedField( "MRec", MRec$ )       : MRec$    = AdjustElementLength( MRec$, 1 )
+        GetFF = CS.GetFixedField( "OCLC", OCLC$ )
+        GetFF = CS.GetFixedField( "Orig", Orig$ )       : Orig$    = AdjustElementLength( Orig$, 1 )
+        GetFF = CS.GetFixedField( "Part", Part$ )       : Part$    = AdjustElementLength( Part$, 1 )
+        GetFF = CS.GetFixedField( "Proj", Proj$ )       : Proj$    = AdjustElementLength( Proj$, 2 )
+        GetFF = CS.GetFixedField( "Regl", Regl$ )       : Regl$    = AdjustElementLength( Regl$, 1 )
+        GetFF = CS.GetFixedField( "Relf", Relf$ )       : Relf$    = AdjustElementLength( Relf$, 4 )
+        GetFF = CS.GetFixedField( "S/L", SL$ )          : SL$      = AdjustElementLength( SL$, 1 )
+        GetFF = CS.GetFixedField( "SpFm", SpFm$ )       : SpFm$    = AdjustElementLength( SpFm$, 2 )
+        GetFF = CS.GetFixedField( "Srce", Srce$ )       : Srce$    = AdjustElementLength( Srce$, 1 )
+        GetFF = CS.GetFixedField( "SrTp", SrTp$ )       : SrTp$    = AdjustElementLength( SrTp$, 1 )
+        GetFF = CS.GetFixedField( "Tech", Tech$ )       : Tech$    = AdjustElementLength( Tech$, 1 )
+        GetFF = CS.GetFixedField( "Time", RTime$ )      : RTime$   = AdjustElementLength( RTime$, 3 )
+        GetFF = CS.GetFixedField( "TMat", TMat$ )       : TMat$    = AdjustElementLength( TMat$, 1 )
+        GetFF = CS.GetFixedField( "TrAr", TrAr$ )       : TrAr$    = AdjustElementLength( TrAr$, 1 )
+
+        FixedFieldString$ = "OCLC: " & OCLC$ & Space( 12 - Len( OCLC$ ) ) & "Rec Stat: " & RecStat$ & "   Entered: " & Entered$ & "   Replaced: " & Replaced$ & CRLF$
+
+' Assemble the fixed field from the appropriate elements, depending upon "Type".
+
+        Select Case RecType$
+
+          Case "a", "t"             'BKS, SER
+
+            If BLvl$ <> "s" Then         'BKS
+                FixedFieldString$ = FixedFieldString$ & "Type: " & RecType$ & "      ELvl: " & ELvl$ & "      Srce: " & Srce$ & "      Audn: " & Audn$ & "      Ctrl: " & Ctrl$ & "      Lang: " & Lang$ & CRLF$
+                FixedFieldString$ = FixedFieldString$ & "BLvl: " & BLvl$ & "      Form: " & Form$ & "      Conf: " & Conf$ & "      Biog: " & Biog$ & "      MRec: " & MRec$ & "      Ctry: " & Ctry$ & CRLF$
+                FixedFieldString$ = FixedFieldString$ & "             Cont: " & Cont$ & "   GPub: " & GPub$ & "      LitF: " & LitF$ & "      Indx: " & Indx$ & CRLF$
+                FixedFieldString$ = FixedFieldString$ & "Desc: " & Desc$ & "      Ills: " & Ills$ & "   Fest: " & Fest$ & "      DtSt: " & DtSt$ & "      Dates: " & Dates1 & ", " & Dates2 & CRLF$
+              Else                       'SER
+                FixedFieldString$ = FixedFieldString$ & "Type: " & RecType$ & "      ELvl: " & ELvl$ & "      Srce: " & Srce$ & "      GPub: " & GPub$ & "      Ctrl: " & Ctrl$ & "      Lang: " & Lang$ & CRLF$
+                FixedFieldString$ = FixedFieldString$ & "BLvl: " & BLvl$ & "      Form: " & Form$ & "      Conf: " & Conf$ & "      Freq: " & Freq$ & "      MRec: " & MRec$ & "      Ctry: " & Ctry$ & CRLF$
+                FixedFieldString$ = FixedFieldString$ & "S/L:  " & SL$ & "      Orig: " & Orig$ & "      EntW: " & EntW$ & "      Regl: " & Regl$ & "      Alph: " & Alph$ & CRLF$
+                FixedFieldString$ = FixedFieldString$ & "Desc: " & Desc$ & "      SrTp: " & SrTp$ & "      Cont: " & Cont$ & "    DtSt: " & DtSt$ & "      Dates: " & Dates1 & ", " & Dates2 & CRLF$
+            End If
+
+          Case "g", "k", "r", "o"        'VIS
+
+            FixedFieldString$ = FixedFieldString$ & "Type: " & RecType$ & "      ELvl: " & ELvl$ & "      Srce: " & Srce$ & "      Audn: " & Audn$ & "      Ctrl: " & Ctrl$ & "      Lang: " & Lang$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "BLvl: " & BLvl$ & "      Form: " & Form$ & "      GPub: " & GPub$ & "      Time: " & RTime$ & "    MRec: " & MRec$ & "      Ctry: " & Ctry$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "Desc: " & Desc$ & "      TMat: " & TMat$ & "      Tech: " & Tech$ & "      DtSt: " & DtSt$ & "      Dates: " & Dates1 & ", " & Dates2 & CRLF$
+
+          Case "p"                       'MIX
+
+            FixedFieldString$ = FixedFieldString$ & "Type: " & RecType$ & "      ELvl: " & ELvl$ & "      Srce: " & Srce$ & "                   Ctrl: " & Ctrl$ & "      Lang: " & Lang$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "BLvl: " & BLvl$ & "      Form: " & Form$ & "                                MRec: " & MRec$ & "      Ctry: " & Ctry$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "Desc: " & Desc$ & "                                DtSt: " & DtSt$ & "      Dates: " & Dates1 & ", " & Dates2 & CRLF$
+
+          Case "e", "f"                  'MAP
+
+            FixedFieldString$ = FixedFieldString$ & "Type: " & RecType$ & "      ELvl: " & ELvl$ & "      Srce: " & Srce$ & "      Relf: " & Relf$ & "   Ctrl: " & Ctrl$ & "      Lang: " & Lang$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "BLvl: " & BLvl$ & "      Form: " & Form$ & "      GPub: " & GPub$ & "      SpFm: " & SpFm$ & "     MRec: " & MRec$ & "      Ctry: " & Ctry$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "CrTp: " & CrTp$ & "      Indx: " & Indx$ & "      Proj: " & Proj$ & "     DtSt: " & DtSt$ & "      Dates: " & Dates1 & ", " & Dates2 & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "Desc: " & Desc$ & CRLF$
+
+          Case "c", "d", "i", "j"   'SCO, REC
+
+            FixedFieldString$ = FixedFieldString$ & "Type: " & RecType$ & "      ELvl: " & ELvl$ & "      Srce: " & Srce$ & "      Audn: " & Audn$ & "      Ctrl: " & Ctrl$ & "      Lang: " & Lang$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "BLvl: " & BLvl$ & "      Form: " & Form$ & "      Comp: " & Comp$ & "     AccM: " & AccM$ & " MRec: " & MRec$ & "      Ctry: " & Ctry$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "             Part: " & Part$ & "      TrAr: " & TrAr$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "Desc: " & Desc$ & "      FMus: " & FMus$ & "      LTxt: " & LTxt$ & "     DtSt: " & DtSt$ & "      Dates: " & Dates1 & ", " & Dates2 & CRLF$
+
+          Case "m"                       'COM
+
+            FixedFieldString$ = FixedFieldString$ & "Type: " & RecType$ & "      ELvl: " & ELvl$ & "      Srce: " & Srce$ & "      Audn: " & Audn$ & "      Ctrl: " & Ctrl$ & "      Lang: " & Lang$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "BLvl: " & BLvl$ & "      Form: " & Form$ & "      GPub: " & GPub$ & "                   MRec: " & MRec$ & "      Ctry: " & Ctry$ & CRLF$
+            FixedFieldString$ = FixedFieldString$ & "Desc: " & Desc$ & "      File: " & File$ & "                   DtSt: " & DtSt$ & "      Dates: " & Dates1 & ", " & Dates2 & CRLF$
+
+        End Select
+
+      Else
+
+        GetFF = CS.GetFixedField( "ARN", ARN$ )
+        GetFF = CS.GetFixedField( "Auth/ref", AuthRef$ )       : AuthRef$    = AdjustElementLength( AuthRef$, 1 )
+        GetFF = CS.GetFixedField( "Auth status", AuthStatus$ ) : AuthStatus$ = AdjustElementLength( AuthStatus$, 1 )
+        GetFF = CS.GetFixedField( "Enc lvl", ELvl$ )           : ELvl$       = AdjustElementLength( ELvl$, 1 )
+        GetFF = CS.GetFixedField( "Geo subd", GeoSubd$ )       : GeoSubd$    = AdjustElementLength( GeoSubd$, 1 )
+        GetFF = CS.GetFixedField( "Govt agn", GovtAgn$ )       : GovtAgn$    = AdjustElementLength( GovtAgn$, 1 )
+        GetFF = CS.GetFixedField( "Mod rec", MRec$ )           : MRec$       = AdjustElementLength( MRec$, 1 )
+        GetFF = CS.GetFixedField( "Name", IsName$ )            : IsName$     = AdjustElementLength( IsName$, 1 )
+        GetFF = CS.GetFixedField( "Name use", NameUse$ )       : NameUse$    = AdjustElementLength( NameUse$, 1 )
+        GetFF = CS.GetFixedField( "Ref status", RefStatus$ )   : RefStatus$  = AdjustElementLength( RefStatus$, 1 )
+        GetFF = CS.GetFixedField( "Roman", Roman$ )            : Roman$      = AdjustElementLength( Roman$, 1 )
+        GetFF = CS.GetFixedField( "Rules", Rules$ )            : Rules$      = AdjustElementLength( Rules$, 1 )
+        GetFF = CS.GetFixedField( "Ser num", SerNum$ )         : SerNum$     = AdjustElementLength( SerNum$, 1 )
+        GetFF = CS.GetFixedField( "Ser use", SerUse$ )         : SerUse$     = AdjustElementLength( SerUse$, 1 )
+        GetFF = CS.GetFixedField( "Series", Series$ )          : Series$     = AdjustElementLength( Series$, 1 )
+        GetFF = CS.GetFixedField( "Source", Source$ )          : Source$     = AdjustElementLength( Source$, 1 )
+        GetFF = CS.GetFixedField( "Subdiv tp", SubTp$ )        : SubTp$      = AdjustElementLength( SubTp$, 1 )
+        GetFF = CS.GetFixedField( "Subj", Subj$ )              : Subj$       = AdjustElementLength( Subj$, 1 )
+        GetFF = CS.GetFixedField( "Subj use", SubjUse$ )       : SubjUse$    = AdjustElementLength( SubjUse$, 1 )
+        GetFF = CS.GetFixedField( "Upd status", UpdStatus$ )   : UpdStatus$  = AdjustElementLength( UpdStatus$, 1 )
+
+' With only one format, assembling the elements of the fixed field for an authority
+' record is a simpler task than for a bibliographic record.
+
+        FixedFieldString$ = "ARN: " & ARN$ & CRLF$
+        FixedFieldString$ = FixedFieldString$ & "Rec stat: " & RecStat$ & "        Entered: " & Entered$ & "        Replaced: " & Replaced$ & CRLF$
+        FixedFieldString$ = FixedFieldString$ & "Type:     " & RecType$ & "        Upd status:  " & UpdStatus$ & "        Enc lvl:   " & ELvl$ & "        Source:   " & Source$ & CRLF$
+        FixedFieldString$ = FixedFieldString$ & "Roman:    " & Roman$ & "        Ref status:  " & RefStatus$ & "        Mod rec:   " & MRec$ & "        Name use: " & NameUse$ & CRLF$
+        FixedFieldString$ = FixedFieldString$ & "Govt agn: " & GovtAgn$ & "        Auth status: " & AuthStatus$ & "        Subj:      " & Subj$ & "        Subj use: " & SubjUse$ & CRLF$
+        FixedFieldString$ = FixedFieldString$ & "Series:   " & Series$ & "        Auth/ref:    " & AuthRef$ & "        Geo subd:  " & GeoSubd$ & "        Ser use:  " & SerUse$ & CRLF$
+        FixedFieldString$ = FixedFieldString$ & "Ser num:  " & SerNum$ & "        Name:        " & IsName$ & "        Subdiv tp: " & SubTp$ & "        Rules:    " & Rules$ & CRLF$
+    End If
+
+' If the fixed field display was changed earlier, change it back.
+
+    CS.FixedFieldPosition = FFPos%
+
+End If
+
+' Get variable field data. If no text has been selected, the first row to start copying
+' is number 1, and the last row is number 99999, which seems like a safe maximum number.
+' Otherwise, the function to convert the data is given the line numbers of the beginning
+' and end of the selection. Omit fields containing non-Latin script (the macro command
+' can't get data from them anyway).
+
+LineNumber% = BeginningRow%
+
+Do Until AcquireField = FALSE
+  AcquireField = CS.GetFieldLine( LineNumber%, FieldData$ )
+  If AcquireField = TRUE Then
+      FieldLength% = Len( FieldData$ )
+      If Left$( FieldData$, 13 ) <> "Data contains" Then
+          If StringLength% + FieldLength% < MAX_STRING_LENGTH Then
+              VariableFieldString$ = VariableFieldString$ & Mid$( FieldData$, 1, 3 ) & " " & Mid$( FieldData$, 4, 2 ) & "  " & Mid$( FieldData$, 6 ) & CRLF$
+            Else
+              MsgBox "Sorry, this record is too large for this macro to copy.", CRITICAL_MESSAGE, WaltsMacros$
+              Exit Sub
+          End If
+        Else
+          NonLatin = TRUE
+      End If
+  End If
+  StringLength% = StringLength% + FieldLength%
+  LineNumber%   = LineNumber% + 1
+  If LineNumber% > EndingRow& Then Exit Do
+Loop
+
+RecordAsString$ = FixedFieldString$ & VariableFieldString$
+
+' Put the cursor back where you found it.
+
+CS.CursorRow = CurrentRow%
+
+' Run through the raw data to eliminate or convert all characters with ASCII values over
+' 126.
+
+For Counter% = 1 to Len( RecordAsString$ )
+  CharT$ = Mid$( RecordAsString$, Counter%, 1 )
+  CharA% = Asc( CharT$ )
+
+  Select Case CharA%
+
+    Case 0 To 126
+      CompleteRecord$ = CompleteRecord$ & CharT$
+
+    Case 161
+      CompleteRecord$ = CompleteRecord$ & "L"
+      SpecialChars = TRUE
+
+    Case 162
+      CompleteRecord$ = CompleteRecord$ & "O"
+      SpecialChars = TRUE
+
+    Case 163
+      CompleteRecord$ = CompleteRecord$ & "D"
+      SpecialChars = TRUE
+
+    Case 164
+      CompleteRecord$ = CompleteRecord$ & "Th"
+      SpecialChars = TRUE
+
+    Case 165
+      CompleteRecord$ = CompleteRecord$ & "Ae"
+      SpecialChars = TRUE
+
+    Case 166
+      CompleteRecord$ = CompleteRecord$ & "Oe"
+      SpecialChars = TRUE
+
+    Case 167
+      CompleteRecord$ = CompleteRecord$ & Chr$( 039 )
+      SpecialChars = TRUE
+
+    Case 168
+      CompleteRecord$ = CompleteRecord$ & "."
+      SpecialChars = TRUE
+
+    Case 169
+      CompleteRecord$ = CompleteRecord$ & "[flat]"
+      SpecialChars = TRUE
+
+    Case 171
+      CompleteRecord$ = CompleteRecord$ & "+-"
+      SpecialChars = TRUE
+
+    Case 172
+      CompleteRecord$ = CompleteRecord$ & "O"
+      SpecialChars = TRUE
+
+    Case 173
+      CompleteRecord$ = CompleteRecord$ & "U"
+      SpecialChars = TRUE
+
+    Case 174
+      CompleteRecord$ = CompleteRecord$ & Chr$( 039 )
+      SpecialChars = TRUE
+
+    Case 176
+      CompleteRecord$ = CompleteRecord$ & Chr$( 039 )
+      SpecialChars = TRUE
+
+    Case 177
+      CompleteRecord$ = CompleteRecord$ & "l"
+      SpecialChars = TRUE
+
+    Case 178
+      CompleteRecord$ = CompleteRecord$ & "o"
+      SpecialChars = TRUE
+
+    Case 179
+      CompleteRecord$ = CompleteRecord$ & "d"
+      SpecialChars = TRUE
+
+    Case 180
+      CompleteRecord$ = CompleteRecord$ & "th"
+      SpecialChars = TRUE
+
+    Case 181
+      CompleteRecord$ = CompleteRecord$ & "ae"
+      SpecialChars = TRUE
+
+    Case 182
+      CompleteRecord$ = CompleteRecord$ & "oe"
+      SpecialChars = TRUE
+
+    Case 183
+      CompleteRecord$ = CompleteRecord$ & Chr$( 034 )
+      SpecialChars = TRUE
+
+    Case 184
+      CompleteRecord$ = CompleteRecord$ & "i"
+      SpecialChars = TRUE
+
+    Case 186
+      CompleteRecord$ = CompleteRecord$ & "d"
+      SpecialChars = TRUE
+
+    Case 188
+      CompleteRecord$ = CompleteRecord$ & "o"
+      SpecialChars = TRUE
+
+    Case 190
+      CompleteRecord$ = CompleteRecord$ & "l"
+      SpecialChars = TRUE
+
+    Case 204
+      CompleteRecord$ = CompleteRecord$ & "#"
+      SpecialChars = TRUE
+
+    Case 223
+      CompleteRecord$ = CompleteRecord$ & "$"
+
+    Case 252
+      CompleteRecord$ = CompleteRecord$ & "*"
+
+    Case 225 To 251, 253 To 255
+      ModifierChars = TRUE
+
+    Case Else
+      CompleteRecord$ = CompleteRecord$
+
+  End Select
+
+Next Counter%
+
+' If non-Latin fields were omitted, or diacritics or special characters removed, add
+' warnings to the record as the first line(s) following the fixed field, or at the head
+' of the block of selected fields.
+
+If Selection = FALSE Then
+    If RecType$ <> "z" Then
+        p = InStr( CompleteRecord$, "      Dates:" )
+      Else
+        p = InStr( CompleteRecord$, "      Rules:" )
+    End If
+    q = InStr( p, CompleteRecord$, CRLF$ )
+End If
+
+If SpecialChars = TRUE Then
+    If Selection Then
+        CompleteRecord$ = WarningSpecChars$ & CRLF$ & CompleteRecord$
+      Else
+        CompleteRecord$ = Left$( CompleteRecord$, q + 1 ) & WarningSpecChars$ & CRLF$ & Mid$( CompleteRecord$, q + 2 )
+    End If
+End If
+
+If ModifierChars = TRUE Then
+    If Selection Then
+        CompleteRecord$ = WarningDiacritics$ & CRLF$ & CompleteRecord$
+      Else
+        CompleteRecord$ = Left$( CompleteRecord$, q + 1 ) & WarningDiacritics$ & CRLF$ & Mid$( CompleteRecord$, q + 2 )
+    End If
+End If
+
+If NonLatin = TRUE Then
+    If Selection Then
+        CompleteRecord$ = WarningLatin$ & CRLF$ & CompleteRecord$
+      Else
+        CompleteRecord$ = Left$( CompleteRecord$, q + 1 ) & WarningLatin$ & CRLF$ & Mid$( CompleteRecord$, q + 2 )
+    End If
+End If
+
+' Finally, add the information about the source of the record to the beginning of the
+' converted string.
+
+If Selection = FALSE Then
+    If WindowTitle$ <> "" Then
+        CompleteRecord$ = WindowTitle$ & CRLF$ & CompleteRecord$
+    End If
+End If
+
+' The last step is to put the converted string on the Clipboard.
+
+Clipboard.Clear
+Clipboard.SetText CompleteRecord$
+
+End Sub
+
+'****************************************************************************************
+
+Function AdjustElementLength( InString$, ExpectedLength% ) As String
+
+' To lay out the record properly, each fixed field element must be represented by a
+' string of appropriate length, including blanks. When the OML command retrieves an empty
+' string, or a string shorter than the maximum, this function adds spaces to make the
+' string the proper length.
+
+Dim ActualLength%
+Dim TempString$
+
+TempString$   = InString$
+ActualLength% = Len( Trim$( TempString$ ) )
+If ActualLength% < ExpectedLength% Then
+    TempString$ = TempString$ & Space$( ExpectedLength% - ActualLength% )
+End If
+
+AdjustElementLength = TempString$
+
+End Function
+'63932350
+'
+'Macro name: RecordToText
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:28 AM using "MacroBookInspector" macro by Walter F. Nickeson.

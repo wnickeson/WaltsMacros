@@ -1,0 +1,345 @@
+'MacroName:Make773.2016.01
+'MacroDescription:Extracts information from a bibliographic record to construct a basic
+' 773 field for an "in" analytic.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 22 April 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro assumes a workflow of working on a bibliographic record for an
+' "in" analytic (a component work of another work) and finding the record for the host
+' item in order to add a 773 field ("Host Item Entry"). Run the macro while the bib
+' record for the host item is on top. The macro extracts relevant information for the 773
+' field and toggles back to the record for the analytic, where it pastes that field in. A
+' shouted message in the new field (ALL CAPS) reminds you to add subfield $g for the
+' location within the host item.
+'
+' The macro attempts to extract a title and imprint, ISSN or ISBN, and control numbers
+' from the bib record for the host item. It uses value "0" for the first indicator, to
+' specify that a display note is to be generated from the field.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                        ' a big "X") in a message box; used to report the macro quitting.
+Const CURRENT_WINDOW   As Integer = -1  'The value to get the title of the current window.
+Const WARNING_MESSAGE  As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim BLvl$
+Dim Controls$
+Dim CountOfWindows%
+Dim Date260$
+Dim Delimiter$               : Delimiter$  = Chr$( 223 )
+Dim DelimiterB$              : DelimiterB$ = Delimiter$ & "b"
+Dim DelimiterC$              : DelimiterC$ = Delimiter$ & "c"
+Dim DelimiterN$              : DelimiterN$ = Delimiter$ & "n"
+Dim DelimiterP$              : DelimiterP$ = Delimiter$ & "p"
+Dim Desc$
+Dim FilingIndicator%
+Dim FirstChar%
+Dim Imprint$
+Dim Indicator$
+Dim ISBN$
+Dim ISSN$
+Dim LCCN$
+Dim Link$
+Dim MainEntry$
+Dim OCLCCN$
+Dim OriginalWindowTitle$
+Dim Place$
+Dim Publisher$
+Dim RecType$
+Dim Setback%                 : Setback%     = 2
+Dim Subfield7$               : Subfield7$   = Delimiter$ & "7 "
+Dim Subfields%               : Subfields%   = 1
+Dim Tag$
+Dim TestWindowTitle$
+Dim Title$
+Dim TitleNumber$
+Dim TitlePart$
+Dim TitleProper$
+Dim TypeOfWindow2%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:Make773"
+
+Dim SelfTest
+
+Dim i As Integer, p As Integer, q As Integer
+
+' Get the title of the current window, to make sure it doesn't get the 773 field pasted
+' into it.
+
+SelfTest = CS.GetWindowTitle( CURRENT_WINDOW, OriginalWindowTitle$ )
+
+' Get values from the fixed field. First, the OCLC control number.
+
+If CS.GetFixedField( "OCLC", OCLCCN$ ) = TRUE Then
+    OCLCCN$ = Delimiter$ & "w (OCoLC)" & OCLCCN$
+  Else
+    MsgBox "Sorry, could not get fixed field value.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If the record is in ISBD, prescribed punctuation introduces some spacing issues in
+' getting data.
+
+If CS.GetFixedField( "Desc", Desc$ ) = TRUE Then
+    If Desc$ = "i" Or Desc$ = "a" Then Setback% = 3
+  Else
+    Setback% = 0
+End If
+
+' The type of record goes in subfield $7 of the 773.
+
+If CS.GetFixedField( "Type", RecType$ ) = FALSE Then
+    MsgBox "Cannot get 773!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Check that the record is for a monograph or serial.
+
+If CS.GetFixedField( "BLvl", BLvl$ ) = TRUE Then
+    If BLvl$ <> "m" And BLvl$ <> "s" Then
+        MsgBox "This macro only works in monograph or serial records!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    MsgBox "Sorry, could not get fixed field value.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Get values from variable fields. First, the control fields. For the LCCN, we want a
+' subfield $a only.
+
+If CS.GetField( "010", 1, LCCN$ ) = TRUE Then
+    LCCN$ = Mid$( LCCN$, 6 )
+    p = InStr( 1, LCCN$, Delimiter$ )
+    If p <> 0 Then LCCN$ = RTrim$( Left$( LCCN$, p - 2 ) )
+    LCCN$ = Delimiter$ & "w (DLC)" & LCCN$
+End If
+
+Controls$ = " " & LCCN$ & " " & OCLCCN$
+
+If CS.GetField( "022", 1, ISSN$ ) = TRUE Then
+    If Asc( Mid$( ISSN$, 6, 1 ) ) > 47 and Asc( Mid$( ISSN$, 6, 1 ) ) < 58 Then
+        ISSN$ = " " & Delimiter$ & "x " & Mid$( ISSN$, 6, 9 )
+      Else
+        ISSN$ = ""
+    End If
+End If
+
+If CS.GetField( "020", 1, ISBN$ ) = TRUE Then
+    If Asc( Mid$( ISBN$, 6, 1 ) ) > 47 and Asc( Mid$( ISBN$, 6, 1 ) ) < 58 Then
+        ISBN$ = " " & Delimiter$ & "z " & Mid$( ISBN$, 6, 10 )
+      Else
+        ISBN$ = ""
+    End If
+End If
+
+If CS.GetField( "1[01][01]", 1, MainEntry$ ) = TRUE Then
+    Tag$ = Left$( MainEntry$, 3 )
+    Indicator$ = Mid$( MainEntry$, 4, 1 )
+    MainEntry$ = Mid$( MainEntry$, 6 )
+    Do
+      p = InStr( MainEntry$, Delimiter$ )
+      If p <> 0 Then MainEntry$ = Left$( MainEntry$, p - 2 ) & Mid$(MainEntry$, p + 2 )
+    Loop Until p = 0
+    MainEntry$ = Delimiter$ & "a " & MainEntry$
+    Select Case Tag$
+      Case "100"
+        Subfield7$ = Subfield7$ & "p"
+      Case "110"
+        Subfield7$ = Subfield7$ & "c"
+      Case "111"
+        Subfield7$ = Subfield7$ & "m"
+    End Select
+    Subfield7$ = Subfield7$ & Indicator$ & RecType$ & BLvl$
+  Else
+    Subfield7$ = Subfield7$ & "nn" & RecType$ & BLvl$
+End If
+
+' Then get the title field from either 130 or 245.
+
+If CS.GetField( "130", 1, Title$ ) = FALSE Then
+    If CS.GetField( "245", 1, Title$ ) = TRUE Then
+        FilingIndicator% = Val( Mid$( Title$, 5, 1 ) )
+        If FilingIndicator% <> 0 Then
+            Title$ = Mid$( Title$, FilingIndicator% + 6 )
+            FirstChar% = Asc( Left$( Title$, 1 ) )
+            If FirstChar% > 97 And FirstChar% < 122 Then Mid( Title$, 1, 1 ) = Chr$( FirstChar% - 32 )
+          Else
+            Title$ = Mid$( Title$, 6 )
+        End If
+      Else
+        MsgBox "Sorry, macro failed", CRITICAL_MESSAGE, WaltsMacros$
+        GoTo Done:
+    End If
+  Else
+    Title$ = Mid$( Title$, 6 )
+End If
+
+' Deconstruct the title field. Find the title proper.
+
+p = InStr( 1, Title$, Delimiter$ )
+If p = 0 Then
+    TitleProper$ = Trim$( Title$ )
+  Else
+    TitleProper$ = Trim$( Left$( Title$, p - Setback% ) )
+    Title$ = Trim$( Mid$( Title$, p ) )
+End If
+
+' Look for numbering in the title
+
+p = InStr( Title$, DelimiterN$ )
+If p <> 0 Then
+    q = Instr( p + 1, Title$, Delimiter$ )
+    If q = 0 Then
+        TitleNumber$ = Trim$( Mid$( Title$, p + 3 ) )
+      Else
+        TitleNumber$ = Trim$( Mid$( Title$, p + 3, ( q - p - 3 ) ) )
+        If p = 1 Then Title$ = Left$( Title$, p - 1 ) & Mid$( Title$, q )
+    End If
+End If
+
+' Look for a part of the title.
+
+p = InStr( Title$, DelimiterP$ )
+If p <> 0 Then
+    q = InStr( p + 1, Title$, Delimiter$ )
+    If q = 0 Then
+        TitlePart$ = Trim$( Mid$( Title$, p + 3 ) )
+      Else
+        TitlePart$ = Trim$( Mid$( Title$, p + 3, ( q - p - 3 ) ) )
+        If p = 1 Then Title$ = Left$( Title$, p - 1 ) & Mid$( Title$, q )
+    End If
+End If
+
+If TitleNumber$ <> "" Then
+    Title$ = TitleProper$ & ". " & TitleNumber$
+    If TitlePart$ <> "" Then Title$ = Title$ & ", " & TitleNumber$
+  Else
+    Title$ = TitleProper$
+    If TitlePart$ <> "" Then Title$ = Title$ & ". " & TitlePart$
+End If
+
+Title$ = Delimiter$ & "t " & Title$
+
+' Deconstruct the 260 field. Find and remove the date, then remove the first subfield,
+' then isolate the first publisher; finally, put it all back together.
+
+If CS.GetFieldUnicode( "260", 1, Imprint$ ) = TRUE Then
+    Imprint$ = Mid$( Imprint$, 6 )
+    p = InStr( Imprint$, DelimiterC$ )
+    If p <> 0 Then
+        q = InStr( p + 1, Imprint$, Delimiter$ )
+        If q = 0 Then
+            Date260$ = Trim$( Mid$( Imprint$, p + 3 ) )
+          Else
+            Date260$ = Trim$( Mid$( Imprint$, p + 3, ( q - p - 3 ) ) )
+        End If
+        If p = 1 Then
+            Imprint$ = ""
+          Else
+            Imprint$ = Trim$( Left$( Imprint$, p - 2 ) )
+        End If
+    End If
+
+    p = InStr( 1, Imprint$, Delimiter$ )
+    If p > 1 Then
+        Place$ = Trim$( Left$( Imprint$, p - Setback% ) )
+        Imprint$ = Trim$( Mid$( Imprint$, p ) )
+        If Asc( Right$( Place$, 1 ) ) < 48 Then
+            If p <> 0 Then
+                Place$ = Left$( Place$, Len( Place$ ) - 1 ) & " : "
+              Else
+                Place$ = Left$( Place$, Len( Place$ ) - 1 ) & ", "
+            End If
+          Else
+            Place$ = Place$ & " : "
+        End If
+      Else
+        Place$ = Trim$( Imprint$ )
+    End If
+
+    p = InStr( 1, Imprint$, DelimiterB$ )
+    If p <> 0 Then
+        q = InStr( p + 1, Imprint$, Delimiter$ )
+        If q = 0 Then
+            Publisher$ = Trim$( Mid$( Imprint$, p + 3 ) )
+          Else
+            Publisher$ = Trim$( Mid$( Imprint$, p + 3, q - p - 5 ) )
+        End If
+        If Asc( Right$( Publisher$, 1 ) ) < 48 Then
+            Publisher$ = Left$( Publisher$, Len( Publisher$ ) - 1 ) & ", "
+          Else
+            Publisher$ = Publisher$ & ", "
+        End If
+    End If
+
+    Imprint$ = Trim$( Place$ & Publisher$ & Date260$ )
+    If Asc( Right$( Imprint$, 1 ) ) < 48 Then
+        Imprint$ = Left$( Imprint$, Len( Imprint$ ) - 1 ) & "."
+      Else
+        Imprint$ = Imprint$ & "."
+    End If
+    Imprint$ = " " & Delimiter$ & "d " & Trim$( Imprint$ )
+End If
+
+' Add everything together to make the field.
+
+Link$ = "7730 " & Subfield7$ & " " & MainEntry$ & " " & Title$ & Imprint$
+Link$ = Link$ & ISSN$ & ISBN$ & " " & Delimiter & "g ENTER LOCATION WITHIN PIECE" & Controls$
+
+' CS.CloseRecord( FALSE )
+
+' Toggle back to the other window with a bib record, and paste the field in.
+
+CountOfWindows% = CS.WindowCount
+i = 0
+Do Until i = CountOfWindows%
+  CS.SetTopWindow( i )
+  SelfTest = CS.GetWindowTitle( CURRENT_WINDOW, TestWindowTitle$ )
+  If TestWindowTitle$ = OriginalWindowTitle$ Then GoTo Increment:
+  TypeOfWindow2% = CS.ItemType
+  Select Case TypeOfWindow2%
+    Case 0, 1, 2, 17, 19
+    If CS.AddField( 1, Link$ ) = FALSE Then
+        MsgBox "Sorry, could not add field.", CRITICAL_MESSAGE, WaltsMacros$
+        GoTo Done:
+      Else
+        If CS.GetFixedField( "BLvl", BLvl$ ) = TRUE Then
+            If Blvl$ <> "a" Then MsgBox "Check 'BLvl' in the fixed field!", WARNING_MESSAGE, WaltsMacros$
+        End If
+        GoTo Done:
+    End If
+  End Select
+Increment:
+  i = i + 1
+Loop
+
+MsgBox "This macro could not find a bibliographic record to paste the 773 into!", CRITICAL_MESSAGE, WaltsMacros$
+
+Done:
+
+End Sub
+'36713349
+'
+'Macro name: Make773
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:15 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -656,4 +656,4 @@ End Sub
 '
 'Macro name: DeriveBookFromAnyFormat
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/29/2017 9:12:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 6/29/2017 9:13:28 AM using "MacroBookInspector" macro by Walter F. Nickeson.

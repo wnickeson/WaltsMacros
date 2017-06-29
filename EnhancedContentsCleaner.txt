@@ -1,0 +1,823 @@
+'MacroName:EnhancedContentsCleaner.2016.01
+'MacroDescription:Allows enhanced contents notes to be unenhanced or improved.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 1 May 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro with the cursor in the field containing the enhanced
+' contents note you wish to process. The macro begins by asking whether you want to clean
+' up the note or unenhance it. Cleaning up the note means removing extraneous numbering,
+' such as for chapters or sections (cf. the LCRI for AACR2 2.7B18), and restoring initial
+' articles of titles that have been incorrectly placed in their own subfield $g.
+' Unenhancing the note means that in addition to removing extraneous numbering, all
+' subfield coding will be removed. After this choice is made, the macro deconstructs the
+' field, separating all the subfields and displaying them, each with its own checkbox, in
+' a dialog box. (To prevent the dialog box from getting too big, only 60 subfields at a
+' time are shown.) The checkboxes are checked or not according to whether the macro
+' determines that the subfields ought to be included in the field. Thus, it will offer,
+' for example, an unchecked checkbox for the subfield "$g ch. 1." After you review the
+' subfields for inclusion and click the button, the checked ones will be assembled into a
+' new contents note and inserted into the record in place of the old one. If you are
+' unenhancing the note, the second indicator will be changed from "0" to "[blank]".
+'
+' The first step in the macro's processing is the restoration of initial articles to
+' titles that have had those articles incorrectly placed in a preceding subfield $g.
+' Thus, its display of the subfields may not match that of the original, unedited field.
+' For example, if the original 505 reads: "$g pt. 5. The $t History of OCLC," the macro
+' will display the two subfields as: "g pt. 5." and "t The History of OCLC." The checkbox
+' for the first subfield will not be checked, as this information should not appear in a
+' contents note.
+'
+' The macro suggests removal of subfields containing the following terms:
+' "acknowledgments," "afterword," "appendix," "conclusion," "epilogue," "foreword,"
+' "illustrations," "list of," "introduction," "overview," "preface," and "prologue."
+' (These types of contents need not be mentioned in the bibliographic record, following
+' the LCRI, but the macro allows them to be retained, if desired.) Watch for statements
+' of responsibility following some of these terms! If a title is rejected, such a
+' statement of responsibility needs to be rejected also, and conversely, if a statement
+' of responsibility indicates the importance of a title, the title should be kept.
+'
+' Instances of subfield $g are suspect if they they begin with "pt." or "ch." or if they
+' contain only numbers.
+'
+' If further cleanup remains to be done after running this macro, my macro "ReformatTOCs"
+' may be of value.
+'
+' This macro works purely by manipulating character strings! Results may be strange!!
+' Check the field when done!!!
+'****************************************************************************************
+
+Option Explicit
+Option Compare Text
+
+Declare Function SubfieldCheck( TestString$ ) As Integer
+
+Declare Function Dialog2ControlFunction( Id$, Action%, Svalue& )
+
+Global SubfieldCount%
+
+Global Subfields() As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const WARNING_MESSAGE      As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim ArticleA$                : ArticleA$     = "A " & Chr$( 223 ) & "t"
+Dim ArticleAn$               : ArticleAn$    = "An " & Chr$( 223 ) & "t"
+Dim ArticleTest1%
+Dim ArticleTest2%
+Dim ArticleTest3%
+Dim ArticleThe$              : ArticleThe$   = "The " & Chr$( 223 ) & "t"
+Dim ButtonMessage$
+Dim ContinueMessage$
+Dim Delimiter$               : Delimiter$    = Chr$( 223 )
+Dim Difference%
+Dim EngTest$
+Dim FieldData$
+Dim Ind1$
+Dim Instruction$
+Dim ModifiedContents$
+Dim PosFF%
+Dim Row%
+Dim Start%                   : Start%        = 2
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:EnhancedContentsCleaner"
+Dim WorkingContents$
+
+Dim Cleanup
+Dim SecondTime               : SecondTime    = FALSE
+
+Dim i As Integer
+
+' First, check that the field is tagged as an enhanced contents note (505 X0).
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
+    If Left$( FieldData$, 3 ) <> "505" Then
+        MsgBox "This is not a contents field. Please place the cursor in an enhanced contents field and try again.", CRITICAL_MESSAGE, WaltsMacros$
+        GoTo Done:
+      Else
+        If Mid$( FieldData$, 5, 1 ) <> "0" Then
+            MsgBox "This is not an enhanced contents note. Please place the cursor in an enhanced contents field and try again.", CRITICAL_MESSAGE, WaltsMacros$
+            GoTo Done:
+        End If
+    End If
+  Else
+    MsgBox "Sorry, the macro did not work.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+' Ask whether to clean up the contents note (remove initial articles of titles from
+' subfield $g and delete certain kinds of numbering) or unenhance it (remove numbering
+' and subfield coding altogether).
+
+Begin Dialog Dialog1Definition 288, 130, "Select action to take on 505"
+  Text            18,   8, 156,  8, "Choose the action to be taken on the contents note ..."
+  ButtonGroup .action
+    PushButton    18,  28,  74, 18, "&Clean up note"
+    PushButton    18,  66,  74, 18, "&Unenhance note"
+    CancelButton 116, 100,  56, 16
+  Text           104,  28, 158, 26, "Clean up subfield coding: Remove unnecessary numbering and fix miscoded initial articles"
+  Text           104,  66, 158, 26, "Unenhance note: Remove all subfield coding, and unnecessary numbering"
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DIALOG_BUTTON_CANCEL Then GoTo Done:
+
+Select Case Dialog1.action
+  Case 0
+    Cleanup = TRUE
+  Case 1
+    Cleanup = FALSE
+  Case 2:
+    GoTo Done:
+End Select
+
+Ind1$            = Mid$( FieldData$, 4, 1 )
+WorkingContents$ = Mid$( FieldData$, 6 )
+
+' If articles that begin titles have incorrectly been separated from their titles in a
+' following subfield $t, move them to that next subfield; this aids in subsequent removal
+' of subfields $g that, after losing such an article, contain only numbers.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> 1 Then CS.FixedFieldPosition = 1
+
+If CS.GetFixedField( "Lang", EngTest$ ) = TRUE Then
+    If EngTest$ = "eng" Then
+        Do
+          ArticleTest1% = InStr( WorkingContents$, ArticleA$ )
+          If ArticleTest1% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest1% - 1 ) & Delimiter$ & "t A " & Mid$( WorkingContents$, ArticleTest1% + 5 )
+        Loop Until ArticleTest1% = 0
+        Do
+          ArticleTest2% = InStr( WorkingContents$, ArticleAn$ )
+          If ArticleTest2% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest2% - 1 ) & Delimiter$ & "t An " & Mid$( WorkingContents$, ArticleTest2% + 6 )
+        Loop Until ArticleTest2% = 0
+        Do
+          ArticleTest3% = InStr( WorkingContents$, ArticleThe$ )
+          If ArticleTest3% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest3% - 1 ) & Delimiter$ & "t The " & Mid$( WorkingContents$, ArticleTest3% + 7 )
+        Loop Until ArticleTest3% = 0
+    End If
+End If
+
+CS.FixedFieldPosition = PosFF%
+
+' Now separate the field into its subfields, inserting each one into the array. Divide
+' the field by finding delimiters, discarding them but keeping the subfield codes. An
+' empty subfield (usually a subfield $g which contained an article that was removed) is
+' ignored.
+
+Do
+  i = InStr( Start%, WorkingContents$, Delimiter$ )
+  SubfieldCount% = SubfieldCount% + 1
+  ReDim Preserve Subfields( SubfieldCount% )
+  If i <> 0 Then
+      Subfields( SubfieldCount% - 1 ) = Mid$( WorkingContents$, Start%, ( i - 1 ) - Start% )
+      If Mid$( Subfields( SubfieldCount% - 1 ), 2 ) = "" or Mid$( Subfields( SubfieldCount% - 1 ), 2 ) = " " Then
+          SubfieldCount% = SubfieldCount% - 1
+      End If
+    Else
+      Subfields( SubfieldCount% - 1) = Mid$( WorkingContents$, Start%, Len( WorkingContents$ ) - Start% + 1 )
+  End If
+  Start% = i + 1
+Loop Until i = 0
+
+Recycle:
+
+' If the number of subfields is less than 60, pad the array with empty strings just to
+' fill it; this makes the unused elements in the array invisible in the dialog box.
+
+If SubfieldCount% < 60 Then
+    For i = SubfieldCount% To 59
+      ReDim Preserve Subfields( i )
+      Subfields( i ) = ""
+    Next
+End If
+
+' At 800 x 600 screen resolution, the dialog box can show only 60 subfields. Because the
+' field may contain more subfields than that, calculate how many subfields are left over,
+' in order to display a warning that the field will need to be processed more than once.
+' In this section of the macro the text of the button in the dialog box is set--whether
+' to continue processing or insert the processed field, each with different wording
+' according to whether the macro is cleaning up a field or completely unenhancing it.
+
+If SubfieldCount% > 60 Then
+    ContinueMessage$ = "IMPORTANT NOTE! There are too many subfields to display. "
+    Difference% = SubfieldCount% - 60
+    If Difference% = 1 Then
+        ContinueMessage$ = ContinueMessage$ & "There is one subfield remaining to process. "
+      Else
+        ContinueMessage$ = ContinueMessage$ & "There are " & CStr( Difference% ) & " subfields remaining to be processed. "
+    End If
+    ContinueMessage$ = ContinueMessage$ & "Click the " & Chr$( 034 ) & "Continue" & Chr$( 034 ) & " button to continue processing the note, or " & Chr$( 034 ) & "Cancel" & Chr$( 034 ) & " to exit the macro and leave the field unchanged."
+    If Cleanup = TRUE Then
+        ButtonMessage$ = "&Continue cleaning up note"
+      Else
+        ButtonMessage$ = "&Continue unenhancing note"
+    End If
+  Else
+    If Cleanup = TRUE Then
+        ButtonMessage$ = "&Insert cleaned up contents note"
+      Else
+        ButtonMessage$ = "&Insert unenhanced contents note"
+    End If
+End If
+
+If Cleanup = TRUE Then
+    Instruction$ = "Check (or uncheck) the boxes to confirm which subfields should appear in the cleaned contents note."
+  Else
+    Instruction$ = "Check (or uncheck) the boxes to confirm which subfields should appear in the unenhanced contents note."
+End If
+
+' The dialog box that presents the parsed field with checkboxes.
+
+Begin Dialog Dialog2Definition 448, 332, WaltsMacros$, .Dialog2ControlFunction
+  Text       54,   6, 340,  8, Instruction$
+  Text       84,  16, 278,  8, "Only as much of each subfield as will fit in this display is shown, but all data is preserved."
+  CheckBox   10,  30,  10, 10, "",             .CheckBox0
+   Text      20,  30, 126,  8, Subfields( 0 )
+  CheckBox  154,  30,  10, 10, "",             .CheckBox1
+   Text     164,  30, 126,  8, Subfields( 1 )
+  CheckBox  298,  30,  10, 10, "",             .CheckBox2
+   Text     308,  30, 126,  8, Subfields( 2 )
+  CheckBox   10,  42,  10, 10, "",             .CheckBox3
+   Text      20,  42, 100,  8, Subfields( 3 )
+  CheckBox  154,  42,  10, 10, "",             .CheckBox4
+   Text     164,  42, 100,  8, Subfields( 4 )
+  CheckBox  298,  42,  10, 10, "",             .CheckBox5
+   Text     308,  42, 100,  8, Subfields( 5 )
+  CheckBox   10,  54,  10, 10, "",             .CheckBox6
+   Text      20,  54, 100,  8, Subfields( 6 )
+  CheckBox  154,  54,  10, 10, "",             .CheckBox7
+   Text     164,  54, 100,  8, Subfields( 7 )
+  CheckBox  298,  54 , 10, 10, "",             .CheckBox8
+   Text     308,  54, 100,  8, Subfields( 8 )
+  CheckBox   10,  66,  10, 10, "",             .CheckBox9
+   Text      20,  66, 100,  8, Subfields( 9 )
+  CheckBox  154,  66,  10, 10, "",             .CheckBox10
+   Text     164,  66, 100,  8, Subfields( 10 )
+  CheckBox  298,  66,  10, 10, "",             .CheckBox11
+   Text     308,  66, 100,  8, Subfields( 11 )
+  CheckBox   10,  78,  10, 10, "",             .CheckBox12
+   Text      20,  78, 100,  8, Subfields( 12 )
+  CheckBox  154,  78,  10, 10, "",             .CheckBox13
+   Text     164,  78, 100,  8, Subfields( 13 )
+  CheckBox  298,  78,  10, 10, "",             .CheckBox14
+   Text     308,  78, 100,  8, Subfields( 14 )
+  CheckBox   10,  90,  10, 10, "",             .CheckBox15
+   Text      20,  90, 100,  8, Subfields( 15 )
+  CheckBox  154,  90,  10, 10, "",             .CheckBox16
+   Text     164,  90, 100,  8, Subfields( 16 )
+  CheckBox  298,  90,  10, 10, "",             .CheckBox17
+   Text     308,  90, 100,  8, Subfields( 17 )
+  CheckBox   10, 102,  10, 10, "",             .CheckBox18
+   Text      20, 102, 100,  8, Subfields( 18 )
+  CheckBox  154, 102,  10, 10, "",             .CheckBox19
+   Text     164, 102, 100,  8, Subfields( 19 )
+  CheckBox  298, 102,  10, 10, "",             .CheckBox20
+   Text     308, 102, 100,  8, Subfields( 20 )
+  CheckBox   10, 114,  10, 10, "",             .CheckBox21
+   Text      20, 114, 100,  8, Subfields( 21 )
+  CheckBox  154, 114,  10, 10, "",             .CheckBox22
+   Text     164, 114, 100,  8, Subfields( 22 )
+  CheckBox  298, 114,  10, 10, "",             .CheckBox23
+   Text     308, 114, 100,  8, Subfields( 23 )
+  CheckBox   10, 126,  10, 10, "",             .CheckBox24
+   Text      20, 126, 100,  8, Subfields( 24 )
+  CheckBox  154, 126,  10, 10, "",             .CheckBox25
+   Text     164, 126, 100,  8, Subfields( 25 )
+  CheckBox  298, 126,  10, 10, "",             .CheckBox26
+   Text     308, 126, 100,  8, Subfields( 26 )
+  CheckBox   10, 138,  10, 10, "",             .CheckBox27
+   Text      20, 138, 100,  8, Subfields( 27 )
+  CheckBox  154, 138,  10, 10, "",             .CheckBox28
+   Text     164, 138, 100,  8, Subfields( 28 )
+  CheckBox  298, 138,  10, 10, "",             .CheckBox29
+   Text     308, 138, 100,  8, Subfields( 29 )
+  CheckBox   10, 150,  10, 10, "",             .CheckBox30
+   Text      20, 150, 100,  8, Subfields( 30 )
+  CheckBox  154, 150,  10, 10, "",             .CheckBox31
+   Text     164, 150, 100,  8, Subfields( 31 )
+  CheckBox  298, 150,  10, 10, "",             .CheckBox32
+   Text     308, 150, 100,  8, Subfields( 32 )
+  CheckBox   10, 162,  10, 10, "",             .CheckBox33
+   Text      20, 162, 100,  8, Subfields( 33 )
+  CheckBox  154, 162,  10, 10, "",             .CheckBox34
+   Text     164, 162, 100,  8, Subfields( 34 )
+  CheckBox  298, 162,  10, 10, "",             .CheckBox35
+   Text     308, 162, 100,  8, Subfields( 35 )
+  CheckBox   10, 174,  10, 10, "",             .CheckBox36
+   Text      20, 174, 100,  8, Subfields( 36 )
+  CheckBox  154, 174,  10, 10, "",             .CheckBox37
+   Text     164, 174, 100,  8, Subfields( 37 )
+  CheckBox  298, 174,  10, 10, "",             .CheckBox38
+   Text     308, 174, 100,  8, Subfields( 38 )
+  CheckBox   10, 186,  10, 10, "",             .CheckBox39
+   Text      20, 186, 100,  8, Subfields( 39 )
+  CheckBox  154, 186,  10, 10, "",             .CheckBox40
+   Text     164, 186, 100,  8, Subfields( 40 )
+  CheckBox  298, 186,  10, 10, "",             .CheckBox41
+   Text     308, 186, 100,  8, Subfields( 41 )
+  CheckBox   10, 198,  10, 10, "",             .CheckBox42
+   Text      20, 198, 100,  8, Subfields( 42 )
+  CheckBox  154, 198,  10, 10, "",             .CheckBox43
+   Text     164, 198, 100,  8, Subfields( 43 )
+  CheckBox  298, 198,  10, 10, "",             .CheckBox44
+   Text     308, 198, 100,  8, Subfields( 44 )
+  CheckBox   10, 210,  10, 10, "",             .CheckBox45
+   Text      20, 210, 100,  8, Subfields( 45 )
+  CheckBox  154, 210,  10, 10, "",             .CheckBox46
+   Text     164, 210, 100,  8, Subfields( 46 )
+  CheckBox  298, 210,  10, 10, "",             .CheckBox47
+   Text     308, 210, 100,  8, Subfields( 47 )
+  CheckBox   10, 222,  10, 10, "",             .CheckBox48
+   Text      20, 222, 100,  8, Subfields( 48 )
+  CheckBox  154, 222,  10, 10, "",             .CheckBox49
+   Text     164, 222, 100,  8, Subfields( 49 )
+  CheckBox  298, 222,  10, 10, "",             .CheckBox50
+   Text     308, 222, 100,  8, Subfields( 50 )
+  CheckBox   10, 234,  10, 10, "",             .CheckBox51
+   Text      20, 234, 100,  8, Subfields( 51 )
+  CheckBox  154, 234,  10, 10, "",             .CheckBox52
+   Text     164, 234, 100,  8, Subfields( 52 )
+  CheckBox  298, 234,  10, 10, "",             .CheckBox53
+   Text     308, 234, 100,  8, Subfields( 53 )
+  CheckBox   10, 246,  10, 10, "",             .CheckBox54
+   Text      20, 246, 100,  8, Subfields( 54 )
+  CheckBox  154, 246,  10, 10, "",             .CheckBox55
+   Text     164, 246, 100,  8, Subfields( 55 )
+  CheckBox  298, 246,  10, 10, "",             .CheckBox56
+   Text     308, 246, 100,  8, Subfields( 56 )
+  CheckBox   10, 258,  10, 10, "",             .CheckBox57
+   Text      20, 258, 100,  8, Subfields( 57 )
+  CheckBox  154, 258,  10, 10, "",             .CheckBox58
+   Text     164, 258, 100,  8, Subfields( 58 )
+  CheckBox  298, 258,  10, 10, "",             .CheckBox59
+   Text     308, 258, 100,  8, Subfields( 59 )
+  Text       24, 274, 400, 16, ContinueMessage$, .FullWarning
+  ButtonGroup .Direction
+    PushButton   88, 300, 112, 18, ButtonMessage$
+    PushButton  245, 300, 112, 18, "Ca&ncel"
+  CancelButton 1, 1, 1, 1
+End Dialog
+
+Dim Dialog2 as Dialog2Definition
+On Error Resume Next
+Dialog Dialog2
+If Err = DIALOG_BUTTON_CANCEL Then GoTo Done:
+
+If Dialog2.Direction = 1 Then GoTo Done:
+
+' Build the new field by concatenating the subfields whose checkboxes are checked in the
+' dialog box, above; the concatentation differs according to whether the subfield coding
+' is retained.
+
+If Cleanup = TRUE Then
+    If SecondTime = FALSE Then ModifiedContents$ = "505" & Ind1$ & "0" & Delimiter$
+    If Dialog2.CheckBox0  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 0 ), 1 )
+    If Dialog2.CheckBox1  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 1 ), 1 )
+    If Dialog2.CheckBox2  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 2 ), 1 )
+    If Dialog2.CheckBox3  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 3 ), 1 )
+    If Dialog2.CheckBox4  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 4 ), 1 )
+    If Dialog2.CheckBox5  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 5 ), 1 )
+    If Dialog2.CheckBox6  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 6 ), 1 )
+    If Dialog2.CheckBox7  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 7 ), 1 )
+    If Dialog2.CheckBox8  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 8 ), 1 )
+    If Dialog2.CheckBox9  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 9 ), 1 )
+    If Dialog2.CheckBox10 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 10 ), 1 )
+    If Dialog2.CheckBox11 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 11 ), 1 )
+    If Dialog2.CheckBox12 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 12 ), 1 )
+    If Dialog2.CheckBox13 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 13 ), 1 )
+    If Dialog2.CheckBox14 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 14 ), 1 )
+    If Dialog2.CheckBox15 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 15 ), 1 )
+    If Dialog2.CheckBox16 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 16 ), 1 )
+    If Dialog2.CheckBox17 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 17 ), 1 )
+    If Dialog2.CheckBox18 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 18 ), 1 )
+    If Dialog2.CheckBox19 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 19 ), 1 )
+    If Dialog2.CheckBox20 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 20 ), 1 )
+    If Dialog2.CheckBox21 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 21 ), 1 )
+    If Dialog2.CheckBox22 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 22 ), 1 )
+    If Dialog2.CheckBox23 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 23 ), 1 )
+    If Dialog2.CheckBox24 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 24 ), 1 )
+    If Dialog2.CheckBox25 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 25 ), 1 )
+    If Dialog2.CheckBox26 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 26 ), 1 )
+    If Dialog2.CheckBox27 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 27 ), 1 )
+    If Dialog2.CheckBox28 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 28 ), 1 )
+    If Dialog2.CheckBox29 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 29 ), 1 )
+    If Dialog2.CheckBox30 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 30 ), 1 )
+    If Dialog2.CheckBox31 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 31 ), 1 )
+    If Dialog2.CheckBox32 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 32 ), 1 )
+    If Dialog2.CheckBox33 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 33 ), 1 )
+    If Dialog2.CheckBox34 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 34 ), 1 )
+    If Dialog2.CheckBox35 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 35 ), 1 )
+    If Dialog2.CheckBox36 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 36 ), 1 )
+    If Dialog2.CheckBox37 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 37 ), 1 )
+    If Dialog2.CheckBox38 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 38 ), 1 )
+    If Dialog2.CheckBox39 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 39 ), 1 )
+    If Dialog2.CheckBox40 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 40 ), 1 )
+    If Dialog2.CheckBox41 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 41 ), 1 )
+    If Dialog2.CheckBox42 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 42 ), 1 )
+    If Dialog2.CheckBox43 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 43 ), 1 )
+    If Dialog2.CheckBox44 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 44 ), 1 )
+    If Dialog2.CheckBox45 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 45 ), 1 )
+    If Dialog2.CheckBox46 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 46 ), 1 )
+    If Dialog2.CheckBox47 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 47 ), 1 )
+    If Dialog2.CheckBox48 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 48 ), 1 )
+    If Dialog2.CheckBox49 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 49 ), 1 )
+    If Dialog2.CheckBox50 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 50 ), 1 )
+    If Dialog2.CheckBox51 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 51 ), 1 )
+    If Dialog2.CheckBox52 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 52 ), 1 )
+    If Dialog2.CheckBox53 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 53 ), 1 )
+    If Dialog2.CheckBox54 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 54 ), 1 )
+    If Dialog2.CheckBox55 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 55 ), 1 )
+    If Dialog2.CheckBox56 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 56 ), 1 )
+    If Dialog2.CheckBox57 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 57 ), 1 )
+    If Dialog2.CheckBox58 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 58 ), 1 )
+    If Dialog2.CheckBox59 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 59 ), 1 )
+  Else
+    If SecondTime = FALSE Then ModifiedContents$ = "505" & Ind1$ & " " & Delimiter$
+    If Dialog2.CheckBox0  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 0 ), 2 )
+    If Dialog2.CheckBox1  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 1 ), 2 )
+    If Dialog2.CheckBox2  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 2 ), 2 )
+    If Dialog2.CheckBox3  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 3 ), 2 )
+    If Dialog2.CheckBox4  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 4 ), 2 )
+    If Dialog2.CheckBox5  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 5 ), 2 )
+    If Dialog2.CheckBox6  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 6 ), 2 )
+    If Dialog2.CheckBox7  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 7 ), 2 )
+    If Dialog2.CheckBox8  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 8 ), 2 )
+    If Dialog2.CheckBox9  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 9 ), 2 )
+    If Dialog2.CheckBox10 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 10 ), 2 )
+    If Dialog2.CheckBox11 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 11 ), 2 )
+    If Dialog2.CheckBox12 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 12 ), 2 )
+    If Dialog2.CheckBox13 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 13 ), 2 )
+    If Dialog2.CheckBox14 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 14 ), 2 )
+    If Dialog2.CheckBox15 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 15 ), 2 )
+    If Dialog2.CheckBox16 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 16 ), 2 )
+    If Dialog2.CheckBox17 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 17 ), 2 )
+    If Dialog2.CheckBox18 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 18 ), 2 )
+    If Dialog2.CheckBox19 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 19 ), 2 )
+    If Dialog2.CheckBox20 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 20 ), 2 )
+    If Dialog2.CheckBox21 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 21 ), 2 )
+    If Dialog2.CheckBox22 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 22 ), 2 )
+    If Dialog2.CheckBox23 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 23 ), 2 )
+    If Dialog2.CheckBox24 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 24 ), 2 )
+    If Dialog2.CheckBox25 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 25 ), 2 )
+    If Dialog2.CheckBox26 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 26 ), 2 )
+    If Dialog2.CheckBox27 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 27 ), 2 )
+    If Dialog2.CheckBox28 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 28 ), 2 )
+    If Dialog2.CheckBox29 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 29 ), 2 )
+    If Dialog2.CheckBox30 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 30 ), 2 )
+    If Dialog2.CheckBox31 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 31 ), 2 )
+    If Dialog2.CheckBox32 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 32 ), 2 )
+    If Dialog2.CheckBox33 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 33 ), 2 )
+    If Dialog2.CheckBox34 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 34 ), 2 )
+    If Dialog2.CheckBox35 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 35 ), 2 )
+    If Dialog2.CheckBox36 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 36 ), 2 )
+    If Dialog2.CheckBox37 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 37 ), 2 )
+    If Dialog2.CheckBox38 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 38 ), 2 )
+    If Dialog2.CheckBox39 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 39 ), 2 )
+    If Dialog2.CheckBox40 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 40 ), 2 )
+    If Dialog2.CheckBox41 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 41 ), 2 )
+    If Dialog2.CheckBox42 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 42 ), 2 )
+    If Dialog2.CheckBox43 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 43 ), 2 )
+    If Dialog2.CheckBox44 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 44 ), 2 )
+    If Dialog2.CheckBox45 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 45 ), 2 )
+    If Dialog2.CheckBox46 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 46 ), 2 )
+    If Dialog2.CheckBox47 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 47 ), 2 )
+    If Dialog2.CheckBox48 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 48 ), 2 )
+    If Dialog2.CheckBox49 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 49 ), 2 )
+    If Dialog2.CheckBox50 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 50 ), 2 )
+    If Dialog2.CheckBox51 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 51 ), 2 )
+    If Dialog2.CheckBox52 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 52 ), 2 )
+    If Dialog2.CheckBox53 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 53 ), 2 )
+    If Dialog2.CheckBox54 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 54 ), 2 )
+    If Dialog2.CheckBox55 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 55 ), 2 )
+    If Dialog2.CheckBox56 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 56 ), 2 )
+    If Dialog2.CheckBox57 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 57 ), 2 )
+    If Dialog2.CheckBox58 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 58 ), 2 )
+    If Dialog2.CheckBox59 = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 59 ), 2 )
+End If
+
+' If there are more than 60 subfields stored in the array, rebuild the array with those
+' remaining subfields and run through the dialog box again.
+
+If SubfieldCount% > 60 Then
+    For i = 60 To SubfieldCount%
+      Subfields( i - 60 ) = Subfields( i )
+    Next i
+    SubfieldCount% = SubfieldCount% - 60
+    SecondTime = TRUE
+    If Right$( ModifiedContents$, 1 ) = Delimiter$ Then ModifiedContents$ = Mid$( ModifiedContents$, 1, Len( ModifiedContents$ ) - 2 )
+    GoTo Recycle:
+End If
+
+' Once the note has been completely processed, clean up any macro artefacts at the
+' beginning and end, and insert it, replacing the previous field.
+
+If Right$( ModifiedContents$, 3 ) = " --" Then
+    ModifiedContents$ = Mid$( ModifiedContents$, 1, Len( ModifiedContents$ ) - 3 ) & "."
+End If
+If Mid$( ModifiedContents$, 6, 2 ) = ( Delimiter$ & " " ) Then
+    ModifiedContents$ = Left$( ModifiedContents$, 5 ) & Mid$( ModifiedContents$, 8 )
+End If
+
+If CS.SetFieldLine( Row%, ModifiedContents$ ) = FALSE Then
+    MsgBox "Sorry, could not replace field.", CRITICAL_MESSAGE, WaltsMacros$
+  Else
+    MsgBox "Be sure to check the accuracy of the replacement field!", WARNING_MESSAGE, WaltsMacros$
+End If
+
+Done:
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$ , Action% , Svalue& )
+
+' This function sets the value of the checkboxes in the dialog box when it opens, based
+' upon the evaluation of the subfield done by the function "SubfieldCheck" above. It
+' hides the checkboxes for empty subfields (e.g., if there are fewer than 60 subfields,
+' or if a subfield has been emptied by a previous operation of this macro).
+
+Const INITIALIZE As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE  As Integer = 0   'The value to make a dialog box control invisible.
+Const VISIBLE    As Integer = 1   'The value to make a dialog box control visible.
+
+If Action% = 1 Then
+    DlgValue "CheckBox0", SubfieldCheck( Subfields( 0 ) )
+    If Subfields( 0 )  = "" Then DlgVisible "CheckBox0",  INVISIBLE
+    DlgValue "CheckBox1", SubfieldCheck( Subfields( 1 ) )
+    If Subfields( 1 )  = "" Then DlgVisible "CheckBox1",  INVISIBLE
+    DlgValue "CheckBox2", SubfieldCheck( Subfields( 2 ) )
+    If Subfields( 2 )  = "" Then DlgVisible "CheckBox2",  INVISIBLE
+    DlgValue "CheckBox3", SubfieldCheck( Subfields( 3 ) )
+    If Subfields( 3 )  = "" Then DlgVisible "CheckBox3",  INVISIBLE
+    DlgValue "CheckBox4", SubfieldCheck( Subfields( 4 ) )
+    If Subfields( 4 )  = "" Then DlgVisible "CheckBox4",  INVISIBLE
+    DlgValue "CheckBox5", SubfieldCheck( Subfields( 5 ) )
+    If Subfields( 5 )  = "" Then DlgVisible "CheckBox5",  INVISIBLE
+    DlgValue "CheckBox6", SubfieldCheck( Subfields( 6 ) )
+    If Subfields( 6 )  = "" Then DlgVisible "CheckBox6",  INVISIBLE
+    DlgValue "CheckBox7", SubfieldCheck( Subfields( 7 ) )
+    If Subfields( 7 )  = "" Then DlgVisible "CheckBox7",  INVISIBLE
+    DlgValue "CheckBox8", SubfieldCheck( Subfields( 8 ) )
+    If Subfields( 8 )  = "" Then DlgVisible "CheckBox8",  INVISIBLE
+    DlgValue "CheckBox9", SubfieldCheck( Subfields( 9 ) )
+    If Subfields( 9 )  = "" Then DlgVisible "CheckBox9",  INVISIBLE
+    DlgValue "CheckBox10", SubfieldCheck( Subfields( 10 ) )
+    If Subfields( 10 ) = "" Then DlgVisible "CheckBox10", INVISIBLE
+    DlgValue "CheckBox11", SubfieldCheck( Subfields( 11 ) )
+    If Subfields( 11 ) = "" Then DlgVisible "CheckBox11", INVISIBLE
+    DlgValue "CheckBox12", SubfieldCheck( Subfields( 12 ) )
+    If Subfields( 12 ) = "" Then DlgVisible "CheckBox12", INVISIBLE
+    DlgValue "CheckBox13", SubfieldCheck( Subfields( 13 ) )
+    If Subfields( 13 ) = "" Then DlgVisible "CheckBox13", INVISIBLE
+    DlgValue "CheckBox14", SubfieldCheck( Subfields( 14 ) )
+    If Subfields( 14 ) = "" Then DlgVisible "CheckBox14", INVISIBLE
+    DlgValue "CheckBox15", SubfieldCheck( Subfields( 15 ) )
+    If Subfields( 15 ) = "" Then DlgVisible "CheckBox15", INVISIBLE
+    DlgValue "CheckBox16", SubfieldCheck( Subfields( 16 ) )
+    If Subfields( 16 ) = "" Then DlgVisible "CheckBox16", INVISIBLE
+    DlgValue "CheckBox17", SubfieldCheck( Subfields( 17 ) )
+    If Subfields( 17 ) = "" Then DlgVisible "CheckBox17", INVISIBLE
+    DlgValue "CheckBox18", SubfieldCheck( Subfields( 18 ) )
+    If Subfields( 18 ) = "" Then DlgVisible "CheckBox18", INVISIBLE
+    DlgValue "CheckBox19", SubfieldCheck( Subfields( 19 ) )
+    If Subfields( 19 ) = "" Then DlgVisible "CheckBox19", INVISIBLE
+    DlgValue "CheckBox20", SubfieldCheck( Subfields( 20 ) )
+    If Subfields( 20 ) = "" Then DlgVisible "CheckBox20", INVISIBLE
+    DlgValue "CheckBox21", SubfieldCheck( Subfields( 21 ) )
+    If Subfields( 21 ) = "" Then DlgVisible "CheckBox21", INVISIBLE
+    DlgValue "CheckBox22", SubfieldCheck( Subfields( 22 ) )
+    If Subfields( 22 ) = "" Then DlgVisible "CheckBox22", INVISIBLE
+    DlgValue "CheckBox23", SubfieldCheck( Subfields( 23 ) )
+    If Subfields( 23 ) = "" Then DlgVisible "CheckBox23", INVISIBLE
+    DlgValue "CheckBox24", SubfieldCheck( Subfields( 24 ) )
+    If Subfields( 24 ) = "" Then DlgVisible "CheckBox24", INVISIBLE
+    DlgValue "CheckBox25", SubfieldCheck( Subfields( 25 ) )
+    If Subfields( 25 ) = "" Then DlgVisible "CheckBox25", INVISIBLE
+    DlgValue "CheckBox26", SubfieldCheck( Subfields( 26 ) )
+    If Subfields( 26 ) = "" Then DlgVisible "CheckBox26", INVISIBLE
+    DlgValue "CheckBox27", SubfieldCheck( Subfields( 27 ) )
+    If Subfields( 27 ) = "" Then DlgVisible "CheckBox27", INVISIBLE
+    DlgValue "CheckBox28", SubfieldCheck( Subfields( 28 ) )
+    If Subfields( 28 ) = "" Then DlgVisible "CheckBox28", INVISIBLE
+    DlgValue "CheckBox29", SubfieldCheck( Subfields( 29 ) )
+    If Subfields( 29 ) = "" Then DlgVisible "CheckBox29", INVISIBLE
+    DlgValue "CheckBox30", SubfieldCheck( Subfields( 30 ) )
+    If Subfields( 30 ) = "" Then DlgVisible "CheckBox30", INVISIBLE
+    DlgValue "CheckBox31", SubfieldCheck( Subfields( 31 ) )
+    If Subfields( 31 ) = "" Then DlgVisible "CheckBox31", INVISIBLE
+    DlgValue "CheckBox32", SubfieldCheck( Subfields( 32 ) )
+    If Subfields( 32 ) = "" Then DlgVisible "CheckBox32", INVISIBLE
+    DlgValue "CheckBox33", SubfieldCheck( Subfields( 33 ) )
+    If Subfields( 33 ) = "" Then DlgVisible "CheckBox33", INVISIBLE
+    DlgValue "CheckBox34", SubfieldCheck( Subfields( 34 ) )
+    If Subfields( 34 ) = "" Then DlgVisible "CheckBox34", INVISIBLE
+    DlgValue "CheckBox35", SubfieldCheck( Subfields( 35 ) )
+    If Subfields( 35 ) = "" Then DlgVisible "CheckBox35", INVISIBLE
+    DlgValue "CheckBox36", SubfieldCheck( Subfields( 36 ) )
+    If Subfields( 36 ) = "" Then DlgVisible "CheckBox36", INVISIBLE
+    DlgValue "CheckBox37", SubfieldCheck( Subfields( 37 ) )
+    If Subfields( 37 ) = "" Then DlgVisible "CheckBox37", INVISIBLE
+    DlgValue "CheckBox38", SubfieldCheck( Subfields( 38 ) )
+    If Subfields( 38 ) = "" Then DlgVisible "CheckBox38", INVISIBLE
+    DlgValue "CheckBox39", SubfieldCheck( Subfields( 39 ) )
+    If Subfields( 39 ) = "" Then DlgVisible "CheckBox39", INVISIBLE
+    DlgValue "CheckBox40", SubfieldCheck( Subfields( 40 ) )
+    If Subfields( 40 ) = "" Then DlgVisible "CheckBox40", INVISIBLE
+    DlgValue "CheckBox41", SubfieldCheck( Subfields( 41 ) )
+    If Subfields( 41 ) = "" Then DlgVisible "CheckBox41", INVISIBLE
+    DlgValue "CheckBox42", SubfieldCheck( Subfields( 42 ) )
+    If Subfields( 42 ) = "" Then DlgVisible "CheckBox42", INVISIBLE
+    DlgValue "CheckBox43", SubfieldCheck( Subfields( 43 ) )
+    If Subfields( 43 ) = "" Then DlgVisible "CheckBox43", INVISIBLE
+    DlgValue "CheckBox44", SubfieldCheck( Subfields( 44 ) )
+    If Subfields( 44 ) = "" Then DlgVisible "CheckBox44", INVISIBLE
+    DlgValue "CheckBox45", SubfieldCheck( Subfields( 45 ) )
+    If Subfields( 45 ) = "" Then DlgVisible "CheckBox45", INVISIBLE
+    DlgValue "CheckBox46", SubfieldCheck( Subfields( 46 ) )
+    If Subfields( 46 ) = "" Then DlgVisible "CheckBox46", INVISIBLE
+    DlgValue "CheckBox47", SubfieldCheck( Subfields( 47 ) )
+    If Subfields( 47 ) = "" Then DlgVisible "CheckBox47", INVISIBLE
+    DlgValue "CheckBox48", SubfieldCheck( Subfields( 48 ) )
+    If Subfields( 48 ) = "" Then DlgVisible "CheckBox48", INVISIBLE
+    DlgValue "CheckBox49", SubfieldCheck( Subfields( 49 ) )
+    If Subfields( 49 ) = "" Then DlgVisible "CheckBox49", INVISIBLE
+    DlgValue "CheckBox50", SubfieldCheck( Subfields( 50 ) )
+    If Subfields( 50 ) = "" Then DlgVisible "CheckBox50", INVISIBLE
+    DlgValue "CheckBox51", SubfieldCheck( Subfields( 51 ) )
+    If Subfields( 51 ) = "" Then DlgVisible "CheckBox51", INVISIBLE
+    DlgValue "CheckBox52", SubfieldCheck( Subfields( 52 ) )
+    If Subfields( 52 ) = "" Then DlgVisible "CheckBox52", INVISIBLE
+    DlgValue "CheckBox53", SubfieldCheck( Subfields( 53 ) )
+    If Subfields( 53 ) = "" Then DlgVisible "CheckBox53", INVISIBLE
+    DlgValue "CheckBox54", SubfieldCheck( Subfields( 54 ) )
+    If Subfields( 54 ) = "" Then DlgVisible "CheckBox54", INVISIBLE
+    DlgValue "CheckBox55", SubfieldCheck( Subfields( 55 ) )
+    If Subfields( 55 ) = "" Then DlgVisible "CheckBox55", INVISIBLE
+    DlgValue "CheckBox56", SubfieldCheck( Subfields( 56 ) )
+    If Subfields( 56 ) = "" Then DlgVisible "CheckBox56", INVISIBLE
+    DlgValue "CheckBox57", SubfieldCheck( Subfields( 57 ) )
+    If Subfields( 57 ) = "" Then DlgVisible "CheckBox57", INVISIBLE
+    DlgValue "CheckBox58", SubfieldCheck( Subfields( 58 ) )
+    If Subfields( 58 ) = "" Then DlgVisible "CheckBox58", INVISIBLE
+    DlgValue "CheckBox59", SubfieldCheck( Subfields( 59 ) )
+    If Subfields( 59 ) = "" Then DlgVisible "CheckBox59", INVISIBLE
+
+' The warning that some subfields won't be changed should only be displayed when it
+' applies.
+
+    If SubfieldCount% < 61 Then
+        DlgVisible "FullWarning", INVISIBLE
+      Else
+        DlgVisible "FullWarning", VISIBLE
+    End If
+    DlgVisible "Cancel", INVISIBLE
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function SubfieldCheck( TestString$ ) As Integer
+
+' This function checks the subfields for various conditions and sets the value of each
+' subfield's checkbox ("0" for not checked, "1" for checked) in the dialog box.
+
+Dim NonDigit%
+
+Dim i As Integer
+
+' For blank subfields, hide the checkbox.
+
+If TestString$ = "" Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+' A subfield $g with only digits may be a chapter or section number that should not be
+' included in a contents note. The presence of other characters may indicate important
+' information (such as duration, for music, which might include a colon, or a
+' chronological period, which might be enclosed in parentheses).
+
+If Left$( TestString$, 1 ) = "g" Then
+    For i = 3 To Len( TestString$ )
+      If Mid$( TestString$, i, 1 ) Like "[!0-9]" Then
+          NonDigit% = NonDigit% + 1
+          Exit For
+      End If
+    Next i
+    If NonDigit% = 0 Then
+        SubfieldCheck = 0
+        Exit Function
+    End If
+End If
+
+' Various terms that, if they appear by themselves (or in a short subfield, arbitrarily
+' set to be 30 characters or fewer), are unlikely to be included in a contents note.
+
+i = InStr( TestString$, "acknowledg" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "afterword" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "appendix" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "conclusion" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "epilogue" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "foreword" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "illustration" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "introduction" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "list of" )
+If i <> 0 And Len( TestString$ ) < 41 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "overview" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "preface" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+i = InStr( TestString$, "prologue" )
+If i <> 0 And Len( TestString$ ) < 31 Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+If Left$( TestString$, 5 ) = "g pt." Or Left$( TestString$, 5 ) = "g ch." Then
+    SubfieldCheck = 0
+    Exit Function
+End If
+
+SubfieldCheck = 1
+
+End Function
+'84547748
+'
+'Macro name: EnhancedContentsCleaner
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:01 AM using "MacroBookInspector" macro by Walter F. Nickeson.

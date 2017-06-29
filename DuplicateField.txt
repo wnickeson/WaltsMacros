@@ -1,0 +1,62 @@
+'MacroName:DuplicateField.2016.01
+'MacroDescription:Copies a field and pastes it in a new blank field directly following.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 22 April 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: With the cursor in the field to be copied, run the macro. It copies the
+' entire field (tag, indicators, and data) and inserts the copy as a new field directly
+' below the original.
+'
+' My macro "DuplicateFieldPlus" also copies individual fields but makes some useful
+' changes as it does so.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                           ' a big "X") in a message box; used to report the macro quitting.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim Col%
+Dim FieldData$
+Dim Row%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:DuplicateField"
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+If Col% > 0 Then             '0 = Fixed field
+    If CS.GetFieldLine ( Row%, FieldData$ ) Then
+        If CS.AddFieldLine ( Row% + 1, FieldData$ ) Then
+            Exit Sub
+        End If
+    End If
+  Else
+    MsgBox "This macro only copies a variable field!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+MsgBox "Sorry, this macro was not able to duplicate the field!", CRITICAL_MESSAGE, WaltsMacros$
+
+End Sub
+'844015
+'
+'Macro name: DuplicateField
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:35:53 AM using "MacroBookInspector" macro by Walter F. Nickeson.

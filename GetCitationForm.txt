@@ -1,0 +1,953 @@
+'MacroName:GetCitationForm.2016.01
+'MacroDescription:Gets certain information from a bibliographic record and puts it into
+' standard citation form for pasting into another bibliographic record as a 510 field.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 25 May 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: With two bibliographic records open--the source record, which describes
+' the resource being cited, and the target record, into which the citation is to be
+' added--run the macro in the source record. (The record must be for printed language
+' material, or Type:a.) The macro extracts the author, title, and edition statements, as
+' appropriate, and formats them into the standard citation form for use in the 510 field.
+' It then toggles back to the target record and puts in the citation.
+'
+' This macro does the following formatting with data from the source record, following
+' standards being developed and posted at http://scfrevision.pbworks.com:
+'
+'  + A personal author's name appears as: Surname, Forename initial(s).
+'  + A corporate author's name is only the top element of any hierarchy (i.e., only
+'    subfield $a is used in the citation). Subordinate bodies are simply ignored, as the
+'    macro can't judge if they need to be included for accurate retrieval. If the
+'    corporate name appears in the title proper, it is omitted, and the citation consists
+'    of the title only.
+'  + The title proper is simply subfield $a from the 245 field. Additional title
+'    information in the field--encoded in subfields $b, $n, and $p--is usually ignored,
+'    except in two cases, in which the macro asks whether to add it to the title proper:
+'    1) The title proper consists of only one word, or 2) The additional title
+'    information includes a part number or title. Such additional title information is
+'    truncated at the first mark of punctuation, on the assumption that the punctuation
+'    marks the end of a distinctive phrase.
+'  + The title proper will include an alternative title, if it appears in subfield $a of
+'    the 245 field, but it will not include parallel titles, if they have been correctly
+'    identified with the ISBD equals sign. The macro of course doesn't know how to omit
+'    any information preceding the title.
+'  + The edition statement is simply subfield $a from the 250 field. However, the macro
+'    ignores an edition statement if that statement begins with the English word "first"
+'    or if it is an abbreviation beginning with the number 1, as "1st" or "1a." Any other
+'    numbered edition statement is copied as is, except that it is truncated at the first
+'    mark of punctuation that is not a period, on the assumption that additional words
+'    are not essential in distinguishing the edition. The edition statement "2nd ed.,
+'    rev." is therefore copied as "2nd ed." However, "2nd, rev. ed." is copied as is,
+'    because truncating the statement after "2nd" is meaningless, and the macro doesn't
+'    know to simply take out the abbreviation "rev.". An edition statement without a
+'    numeral in it is changed to a dated statement--e.g., "Rev. ed." becomes "1998 ed.",
+'    the date being taken from the fixed field. (The English word "edition" is copied as
+'    it appears, whether spelled out or abbreviated, so "Revised edition" becomes "1998
+'    edition").
+'  + A work cataloged as an "in" analytic gets quotation marks around its title and the
+'    word "in" preceding the title of the host work. The English-language abbreviations
+'    "vol.," "no.", and "ser." in subfield $g of the 773 field are expanded. Pagination
+'    within the host item is taken from the 300 field (and may be repeated if it is also
+'    given in the 773 field, depending on formatting of the record), and is preceded by a
+'    colon if the host item is a serial, or a comma if the host item is a monograph. The
+'    type of record for the host manifestation is assumed to be serial unless the 773
+'    field contains information to the contrary.
+'
+' The citation form can be only as good as the bibliographic record from which it is
+' taken, so the macro's output must be checked for correctness. A source record with ISBD
+' punctuation will give the best results. Of course, any citation constructed by computer
+' algorithm bears close inspection!
+'
+' Results for non-English language resources, or described in non-English language
+' records, will likely require more editing.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function NextOrFirst( CycleIndex% )          As String
+Declare Function Normalize( InString$ )              As String
+Declare Function StripEndingPunctuation( InString$ ) As String
+Declare Function Truncate( InString$ )               As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global CountOfBibs%
+Global Parallel
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Const CASE_INSENSITIVE     As Integer = 1   'The value to force a string match test to ignore case.
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const CURRENT_WINDOW       As Integer = -1  'The value to get the title of the current window.
+Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
+Const DISPLAY_AT_TOP       As Integer = 1   'The value to display the fixed field at the top of a record.
+Const WARNING_MESSAGE      As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Dim AdditionSelection$
+Dim AdditionToTitle$
+Dim Answer%
+Dim BibLevel$
+Dim CitationForm$
+Dim CitationName$
+Dim Confirm$
+Dim CopiedFrom$
+Dim CopiedTo$
+Dim CountOfWindows%
+Dim Delimiter$               : Delimiter$   = Chr$( 223 )
+Dim DoubleQuote$             : DoubleQuote$ = Chr$( 034 )
+Dim Edition$
+Dim EditionTheWord$
+Dim Extent$
+Dim FieldData$
+Dim FirstChar%
+Dim HostTitle$
+Dim HostType$                : HostType$    = "s"
+Dim Location$
+Dim MoreTitle$
+Dim NormalizedName$
+Dim NormalizedTitle$
+Dim PosFF%
+Dim RecType$
+Dim Remainder$
+Dim Start%
+Dim Subfield$
+Dim SubfieldCode$
+Dim SubfieldList$
+Dim TabChar$                 : TabChar$     = Chr$( 009 )
+Dim Tag$
+Dim TestChar$
+Dim TitleProper$
+Dim TitleSubfields$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:GetCitationForm"
+Dim WindowTitle$
+
+Dim Numbered                 : Numbered     = FALSE
+
+Dim i As Integer, k As Integer, p As Integer, q As Integer
+
+Parallel = FALSE
+
+' Start with getting some values from the fixed field. The record for the cited work must
+' be language material (Type="a").
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
+
+If CS.GetFixedField( "Type", RecType$ ) Then
+    If RecType$ <> "a" Then
+        MsgBox "Sorry, this macro only works in records for printed language material!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' If the record for the citation source is an "in" analytic, get the host item data from
+' the 773 field. Begin by extracting the host title.
+
+If CS.GetFixedField( "BLvl", BibLevel$ ) Then
+    If BibLevel$ = "a" Then
+        If CS.GetField( "773", 1, FieldData$ ) Then
+            FieldData$ = Mid$( FieldData$, 6 )
+            p = InStr( FieldData$, Delimiter$ & "t" )
+            If p <> 0 Then
+                HostTitle$ = Trim$( Mid$( FieldData$, p + 2 ) )
+                p = InStr( HostTitle$, Delimiter$ )
+                If p <> 0 Then
+                    HostTitle$ = Trim$( Left$( HostTitle$, p - 1 ) )
+                End If
+                HostTitle$ = StripEndingPunctuation( HostTitle$ )
+
+' If the location within the host item is given, in subfield $g, expand the abbreviations
+' "vol.", "no.", "ser.", and "n.s."
+
+                p = InStr( FieldData$, Delimiter$ & "g" )
+                If p <> 0 Then
+                    Location$ = Trim$( Mid$( FieldData$, p + 2 ) )
+                    p = InStr( Location$, Delimiter$ )
+                    If p <> 0 Then
+                        Location$ = Trim$( Left$( Location$, p - 1 ) )
+                    End If
+                    Do
+                      p = InStr( 1, Location$, "vol.", CASE_INSENSITIVE )
+                      If p > 1 Then
+                          Location$ = Left$( Location$, p - 1 ) & "volume" & Mid$( Location$, p + 4 )
+                        ElseIf p = 1 Then
+                          Location$ = "volume" & Mid$( Location$, p + 4 )
+                      End If
+                    Loop Until p = 0
+                    Do
+                      p = InStr( 1, Location$, "no.", CASE_INSENSITIVE )
+                      If p > 1 Then
+                          Location$ = Left$( Location$, p - 1 ) & "number" & Mid$( Location$, p + 3 )
+                        ElseIf p = 1 Then
+                          Location$ = "number" & Mid$( Location$, p + 3 )
+                      End If
+                    Loop Until p = 0
+                    Do
+                      p = InStr( 1, Location$, "ser.", CASE_INSENSITIVE )
+                      If p > 1 Then
+                          Location$ = Left$( Location$, p - 1 ) & "series" & Mid$( Location$, p + 4 )
+                        ElseIf p = 1 Then
+                          Location$ = "series" & Mid$( Location$, p + 4 )
+                      End If
+                    Loop Until p = 0
+                    Do
+                      p = InStr( 1, Location$, "n.s.", CASE_INSENSITIVE )
+                      If p > 1 Then
+                          Location$ = Left$( Location$, p - 1 ) & "new series" & Mid$( Location$, p + 4 )
+                        ElseIf p = 1 Then
+                          Location$ = "new series" & Mid$( Location$, p + 4 )
+                      End If
+                    Loop Until p = 0
+                End If
+
+' Check whether the host item is a serial or monograph, as that affects punctuation in
+' the citation form. This information should appear in position 4 of subfield $7. If
+' there is no subfield $7, or its last position is not coded, check for a subfield $x
+' (for an ISSN) as a marker of seriality. If neither of these tests is available, the
+' last test is for an ISBN is subfield $z. If there is no ISBN then assume that the host
+' item is a serial publication.
+
+                p = InStr( FieldData$, Delimiter$ & "7" )
+                If p <> 0 Then
+                    HostType$ = Mid$( FieldData$, p + 6, 1 )
+                  Else
+                    p = InStr( FieldData$, Delimiter$ & "x" )
+                    If p <> 0 Then
+                        HostType$ = "s"
+                      Else
+                        p = InStr( FieldData$, Delimiter$ & "z" )
+                        If p <> 0 Then
+                            HostType$ = "m"
+                          Else
+                            MsgBox "Type of host record undetermined, will assume serial.", WARNING_MESSAGE, WaltsMacros$
+                        End If
+                    End If
+                End If
+
+' Get the extent from subfield $a of the 300 field. Remove page abbreviations so only
+' digits remain.
+
+                If CS.GetField( "300", 1, FieldData$ ) Then
+                    FieldData$ = Mid$( FieldData$, 6 )
+                    If Left$( FieldData$, 1 ) <> Delimiter$ Then
+                        p = InStr( FieldData$, Delimiter$ )
+                        If p <> 0 Then
+                            FieldData$ = Trim$( Left$( FieldData$, p - 1 ) )
+                        End If
+                        For i = 1 To Len( FieldData$ )
+                          TestChar$ = Mid$( FieldData$, i, 1 )
+                          If TestChar$ Like "[-0-9, ]" Or TestChar$ = "[" Or TestChar$ = "]" Then
+                              Extent$ = Extent$ & TestChar$
+                            Else
+                              If Extent$ <> "" Then
+                                  Exit For
+                              End If
+                          End If
+                        Next i
+                        Extent$ = Trim$( Extent$ )
+
+' If the page location of the cited work appears in both the 300 and 773 fields, attempt
+' to remove it from the citation form. It will work best if the pagination appears at the
+' end of subfield $g in the 773. If the modified pagination from the 300 field is found
+' at the end of the subfield, remove it, and then remove an introductory "p." or "pages".
+' Any other location of the pagination will yield some sort of duplicate information that
+' will require editing.
+
+                        p = InStr( Location$, Extent$ )
+                        If p <> 0 Then
+                            If p = Len( Location$ ) - Len( Extent$ ) + 1 Then
+                                Location$ = Trim$( Left$( Location$, p - 1 ) )
+                                If Right$( Location$, 2 ) = "p." Then
+                                     Location$ = Left$( Location$, Len( Location$ ) - 2 )
+                                   ElseIf Right$( Location$, 5 ) = "pages" Then
+                                     Location$ = Left$( Location$, Len( Location$ ) - 5 )
+                                End If
+                                Location$ = StripEndingPunctuation( Location$ )
+                              Else
+                                Extent$ = ""
+                            End If
+                        End If
+                    End If
+                End If
+              Else
+                MsgBox "There is no title subfield!", CRITICAL_MESSAGE, WaltsMacros$
+                Exit Sub
+            End If
+        End If
+    End If
+End If
+
+CS.FixedFieldPosition = PosFF%
+
+' Then make sure it contains only Latin scripts. Dealing with other scripts is out of the
+' scope of this macro at this time.
+
+If CS.GetField( "066", 1, FieldData$ ) Then
+    MsgBox "Sorry, this macro can't construct a citation from this record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Then begin by getting the name portion of the authorized access point, if it exists.
+' Separate the tag from the field data, because personal name headings are treated
+' differently from corporate name headings.
+
+If CS.GetField( "1[01].", 1, FieldData$ ) Then
+    Tag$       = Left$( FieldData$, 3 )
+    FieldData$ = Mid$( FieldData$, 6 )
+
+' Delete all of the field following the the first delimiter, that is, keep only subfield
+' $a. For personal names, that means omitting any date or qualification; for corporate
+' names, that means omitting subordinate units.
+
+    p = InStr( FieldData$, Delimiter$ )
+    If p <> 0 Then
+        FieldData$ = Trim$( Left$( FieldData$, p - 1 ) )
+    End If
+
+' Strip ending punctuation from the remaining data.
+
+    FieldData$ = StripEndingPunctuation( FieldData$ )
+
+    Select Case Tag$
+
+' For personal names, reduce forenames and middle names to initials. Start by finding the
+' comma that follows a surname.
+
+      Case "100"
+        p = InStr$( FieldData$, "," )
+        If p <> 0 Then
+
+' Change hyphens to spaces to accommodate the next part of the routine, which abbreviates
+' words. Hyphenated names must become separate words. Keep the hyphen but precede it by a
+' space.
+
+            CitationName$ = Left$( FieldData$, p ) & " "
+            FieldData$    = Trim$( Mid$( FieldData$, p + 1 ) )
+            Start%        = 1
+            Do
+              p = InStr( Start%, FieldData$, "-" )
+              If p <> 0 Then
+                  FieldData$ = Left$( FieldData$, p - 1 ) & " " & Mid$( FieldData$, p )
+                  Start%     = p + 2
+              End If
+            Loop Until p = 0
+
+' Then go through the remainder of the name, abbreviating every word to its first letter.
+' A hyphenated name will become a string of hyphenated abbreviations, so this loop
+' reunites the formerly hyphenated parts separated in the previous loop.
+
+            Do
+              p = InStr( FieldData$, " " )
+              If Left$( FieldData$, 1 ) = "-" Then
+                  CitationName$ = CitationName$ & Left$( FieldData$, 2 ) & "."
+                Else
+                  CitationName$ = CitationName$ & Left$( FieldData$, 1 ) & "."
+              End If
+              If p <> 0 Then
+                  FieldData$ = Trim$( Mid$( FieldData$, p + 1 ) )
+              End If
+            Loop Until p = 0
+          Else
+
+' If there is no comma, the form of the name is simply the content of subfield $a.
+
+            CitationName$ = FieldData$
+        End If
+
+' For corporate names, the form is also simply the content of subfield $a with no
+' further massaging required.
+
+      Case "110"
+        CitationName$ = FieldData$
+    End Select
+
+' Terminate the name with a period (full stop).
+
+    If Right$( CitationName$, 1 ) <> "." Then
+        CitationName$ = CitationName$ & "."
+    End If
+End If
+
+' Now get the title of the cited work.
+
+If CS.GetField$( "245", 1, FieldData$ ) = FALSE Then
+    MsgBox "Sorry, this macro can't construct a citation from this record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Remove an initial article and capitalize the first letter of the title.
+
+FieldData$ = Mid$( FieldData$, 6 + Val( Mid$( FieldData$, 5, 1 ) ) )
+
+FirstChar% = Asc( Left$( FieldData$, 1 ) )
+If FirstChar% > 96 And FirstChar% < 123 Then
+    FieldData$ = Chr$( FirstChar% - 32 ) & Mid$( FieldData$, 2 )
+End If
+
+' Separate the title proper (subfield $a) from any other subfields that come after.
+
+p = InStr( FieldData$, Delimiter$ )
+If p <> 0 Then
+    TitleProper$ = Trim$( Left$( FieldData$, p - 1 ) )
+    Remainder$   = Trim$( Mid$( FieldData$, p ) )
+  Else
+    TitleProper$ = Trim$( FieldData$ )
+End If
+
+' Remove any terminal punctuation, whether it's ISBD or otherwise.
+
+TitleProper$ = StripEndingPunctuation( TitleProper$ )
+
+' Determine if there is more title information that can be added if necessary. Check for
+' the presence of subfields $n, $p, and $b in the remainder of the 245 field, and make a
+' list of them, retaining the order found. A subfield $b may introduce a parallel title;
+' in this case, don't include it.
+
+If Remainder$ <> "" Then
+    Start% = 1
+    Do
+      p = InStr( Start%, Remainder$, Delimiter$ )
+      If p <> 0 Then
+          SubfieldCode$ = Mid$( Remainder$, p + 1, 1 )
+          If SubfieldCode$ Like "[np]" Or ( SubfieldCode$ = "b" And Parallel = FALSE ) Then
+              SubfieldList$ = SubfieldList$ & SubfieldCode$
+              q = InStr( p + 2, Remainder$, Delimiter$ )
+              If q <> 0 Then
+                  Subfield$ = Trim$( Mid$( Remainder$, p + 2, q - p - 2 ) )
+                Else
+                  Subfield$ = Trim$( Mid$( Remainder$, p + 2 ) )
+              End If
+              Subfield$       = StripEndingPunctuation( Subfield$ )
+              Subfield$       = Truncate( Subfield$ )
+              TitleSubfields$ = TitleSubfields$ & TabChar$ & Subfield$
+          End If
+          Start% = p + 2
+      End If
+    Loop Until p = 0
+    If Left$( TitleSubfields$, 1 ) = TabChar$ Then
+        TitleSubfields$ = Mid$( TitleSubfields$, 2 )
+    End If
+End If
+
+' Prepare the text of the dialog box that will ask whether to add this additional title
+' information.
+
+If SubfieldList$ <> "" Then
+    Select Case SubfieldList$
+      Case "b"
+        MoreTitle$ = "other title information"
+      Case "n", "nb", "bn"
+        MoreTitle$ = "a part number"
+      Case "p", "pb", "bp"
+        MoreTitle$ = "a part name"
+      Case "np"
+        MoreTitle$ = "a part number and name"
+      Case "pn"
+        MoreTitle$ = "a part name and number"
+      Case Else
+        If InStr( SubfieldList$, "b" ) And InStr( SubfieldList$, "n" ) And InStr( SubfieldList$, "p" ) Then
+            MoreTitle$ = "additional title information"
+        End If
+    End Select
+End If
+
+' For a one-word title, offer to add additional title information to make it more
+' distinctive. The default answer is "No." If the additional title information contains
+' part numbers or names, always offer to add them, with the default answer also being
+' negative.
+
+If MoreTitle$ <> "" Then
+    If InStr( TitleProper$, " " ) = 0 Then
+        AdditionSelection$ = "The title proper consists of only one word. Add " & MoreTitle$
+        AdditionSelection$ = AdditionSelection$ & " to make it more distinctive?"
+      Else
+        AdditionSelection$ = "The title proper includes " & MoreTitle$
+        AdditionSelection$ = AdditionSelection$ & ". Add this information to make it more distinctive?"
+    End If
+    Answer% = MsgBox( AdditionSelection$, 291, WaltsMacros$ )
+
+' If this additional title information is added, assemble it from the subfield list
+' constructed earlier, adding appropriate punctuation between each piece.
+
+    Select Case Answer%
+      Case 6
+        For i = 1 To Len( SubfieldList$ )
+          TestChar$ = Mid$( SubfieldList$, i, 1 )
+          Select Case TestChar$
+            Case "b"
+              AdditionToTitle$ = AdditionToTitle$ & ": " & GetField$( TitleSubfields$, i, TabChar$ )
+            Case "n"
+              AdditionToTitle$ = AdditionToTitle$ & ". " & GetField$( TitleSubfields$, i, TabChar$ )
+            Case "p"
+              AdditionToTitle$ = AdditionToTitle$ & ", " & GetField$( TitleSubfields$, i, TabChar$ )
+          End Select
+        Next i
+        TitleProper$ = TitleProper$ & AdditionToTitle$
+      Case 2
+        Exit Sub
+    End Select
+End If
+
+' If the authorized name of the corporate body appears in the title proper, the main
+' entry element may be omitted from the citation form. To test this, both the name and
+' the title strings must be normalized, so a simple string comparison can be done.
+
+If Tag$ = "110" Then
+    NormalizedName$  = Normalize( CitationName$ )
+    NormalizedTitle$ = Normalize( TitleProper$ )
+    If InStr( NormalizedTitle$, NormalizedName$ ) Then
+        CitationName$ = ""
+    End If
+End If
+
+' Get an edition statement, but only if it is not "First" or "1st" (or similar
+' abbreviations found in other Western languages, like "1." or "1a.").
+
+If CS.GetField( "250", 1, FieldData$ ) Then
+    Edition$ = Mid$( FieldData$, 6 )
+    If Left$( Edition$, 2 ) Like "[1][!0-9]" or Left$( Edition$, 5 ) = "First" Then
+        Edition$ = ""
+      Else
+
+' If this is not the first edition, proceed by eliminating any subfields following
+' subfield $a.
+
+        p = InStr( Edition$, Delimiter$ )
+        If p <> 0 Then
+            Edition$ = Trim$( Left$( Edition$, p - 1 ) )
+        End If
+
+' Keep the form of the word "edition", whether it's spelled out or abbreviated. This test
+' is useless for non-English resources, of course.
+
+        If InStr( 1, Edition$, "ed.", 1 ) Then
+            EditionTheWord$ = "ed."
+          ElseIf InStr( 1, Edition$, "edition", 1 ) Then
+            EditionTheWord$ = "edition"
+          ElseIf InStr( 1, Edition$, "edicion", 1 ) Then
+            EditionTheWord$ = "edicion"
+          Else
+            EditionTheWord$ = "edition"
+        End If
+
+' If a digit is found in the edition statement, keep the statement as found.
+
+        i = 1
+        For i = 1 To Len( Edition$ )
+          TestChar$ = Mid$( Edition$, i, 1 )
+          If TestChar$ Like "[0-9]" Then
+              Numbered = TRUE
+              Exit For
+          End If
+        Next i
+
+' Truncate an edition statement after the first mark of punctuation, assuming that words
+' following are qualifiers such as "rev." or "augm." which are not to be included. This
+' is, of course, a pretty shaky test, and the truncation of some edition statements might
+' turn out to be inappropriate.
+
+        Edition$ = Truncate( Edition$ )
+
+' If the edition statement contains no digits, then construct one using the date from the
+' fixed field.
+
+        If Numbered = FALSE Then
+            If CS.GetFixedField( "Dates", FieldData$ ) Then
+                Edition$ = FieldData$ & " " & EditionTheWord$
+            End If
+        End If
+    End If
+End If
+
+' Remove any terminal punctuation, whether it's ISBD or otherwise. Since this might strip
+' the abbreviation of its period, check if the last word is "ed"; if so, restore the
+' period.
+
+If Edition$ <> "" Then
+    Edition$ = StripEndingPunctuation( Edition$ )
+    If Right$( Edition$, 3 ) = " ed" Then
+        Edition$ = Edition$ & "."
+    End If
+End If
+
+' Put parentheses around the edition statement.
+
+If Edition$ <> "" Then
+    Edition$ = " (" & Edition$ & ")"
+End If
+
+' Then start assembling the pieces into the standard form. If there is a name, add a
+' space after it.
+
+If CitationName$ <> "" Then
+    CitationName$ = CitationName$ & " "
+End If
+
+' Then add the title and any edition statement. Analytics require additional
+' manipulation, like adding quotation marks around the cited title, and for the page
+' location within the host, punctuation depends on whether the host is a serial or
+' monograph.
+
+If BibLevel$ = "a" Then
+    TitleProper$ = DoubleQuote$ & TitleProper$ & "." & DoubleQuote$
+    TitleProper$ = TitleProper$ & " In " & HostTitle$ & ", " & Location$
+    If Extent$ <> "" Then
+        If HostType$ = "s" Then
+            Extent$ = ": " & Extent$
+          Else
+            Extent$ = ", " & Extent$
+        End If
+    End If
+    TitleProper$ = TitleProper$ & Extent$
+End If
+
+CitationForm$ = CitationName$ & TitleProper$ & Edition$
+
+' Finally, make the form end with a comma, and add the tag and indicators.
+
+If Right$( CitationForm$, 1 ) = "." Then
+    CitationForm$ = Left$( CitationForm$, Len( CitationForm$ ) - 1 ) & ", "
+  ElseIf Right$( CitationForm$, 1 ) Like "[0-9A-Za-z?)]" Then
+    CitationForm$ = CitationForm$ & ", "
+End If
+CitationForm$ = "5104 " & CitationForm$ & Delimiter$ & "c"
+
+' With the citation form established in a field ready for pasting into a record, get back
+' to that record, which must be open. Cycle through all the windows. For each
+' bibliographic record except the one from which the citation was extracted, put its
+' window ID into an array. But the first task is to get the control number of the source
+' record so it doesn't become a candidate for pasting in the citation field.
+
+Clipboard.Clear
+CS.CopyControlNumber
+CopiedFrom$ = Clipboard.GetText()
+
+i = 0
+CountOfWindows% = CS.WindowCount
+CountOfBibs%    = 0
+Do Until i = CountOfWindows%
+  CS.SetTopWindow( i )
+  TypeOfWindow% = CS.ItemType
+  Select Case TypeOfWindow%
+    Case 0 To 2, 17, 19            'only bibliographic records
+      CS.CopyControlNumber
+      If TypeOfWindow% = 2 Or TypeOfWindow% = 19 Then
+          CopiedTo$ = "CONSTANT DATA RECORD"
+        Else
+          CopiedTo$ = Clipboard.GetText()
+      End If
+      If CopiedTo$ <> CopiedFrom$ Then
+          ReDim Preserve BibRecWindowIDs( CountOfBibs% )
+          BibRecWindowIDs( CountOfBibs% ) = i
+          CountOfBibs% = CountOfBibs% + 1
+      End If
+  End Select
+  i = i + 1
+Loop
+
+' If no bibliographic record is available for adding the citation, exit the macro. If
+' only one bibliographic record is open, go ahead and paste the citation in without
+' asking.
+
+If CountOfBibs% = 0 Then
+    CS.SetTopWindow( CountOfWindows% )
+    MsgBox "No bibliographic record was found!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  ElseIf CountOfBibs% = 1 Then
+    CS.SetTopWindow( BibRecWindowIDs( 0 ) )
+    GoTo OneOnly:
+End If
+
+' Where there two or more records available, display them for consideration. First,
+' capture the window title, and the OCLC control number, if any, to display in the
+' dialog box that asks if the record displayed is the correct one into which to paste the
+' citation field. This information is especially useful when the windows are tiled, as
+' it's hard then to tell which record has the focus.
+
+Recycle:
+
+For k = 0 To CountOfBibs% - 1              'Since "CountOfBibs%" is a 1-based count
+  CS.SetTopWindow( BibRecWindowIDs( k ) )
+  TypeOfWindow% = CS.ItemType
+  If CS.GetWindowTitle ( CURRENT_WINDOW, WindowTitle$ ) = TRUE Then
+      Clipboard.Clear
+      CS.CopyControlNumber
+      CopiedTo$ = Clipboard.GetText()
+      If CopiedTo$ = "NEW" Then
+          CopiedTo$ = DoubleQuote$ & "NEW" & DoubleQuote$
+        Else
+          CopiedTo$ = "#" & CopiedTo$
+      End If
+
+' Remove the words "Pinned" or "Workform" from the window title.
+
+      p = InStr( WindowTitle$, "(Pinned)" )
+      If p > 0 Then
+          WindowTitle$ = Trim$( Mid$( WindowTitle$, 9 ) )
+      End If
+      p = InStr( WindowTitle$, "Workform:" )
+      If p > 0 Then
+          WindowTitle$ = Trim$( Mid$( WindowTitle$, 1, p + 7 ) )
+        Else
+          Select Case TypeOfWindow%
+            Case 0  'Online bibliographic record (WorldCat)
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 17 ) )
+            Case 1  'Online bibliographic save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 33 ) )
+            Case 2  'Online bibliographic constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 37 ) )
+            Case 3  'Online authority record (LC authority file)
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 27 ) )
+            Case 4  'Online authority save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 29 ) )
+            Case 14 'Online authority constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 33 ) )
+            Case 17 'Local bibliographic save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 51 ) )
+            Case 18 'Local authority save file record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 50 ) )
+            Case 19 'Local bibliographic constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 60 ) )
+            Case 20 'Local authority constant data record
+              WindowTitle$ = Trim$( Mid$( WindowTitle$, 58 ) )
+          End Select
+      End If
+
+' Shorten the title somewhat if it's too long.
+
+      If Len( WindowTitle$ ) > 80 Then
+          WindowTitle$ = Left$( WindowTitle$, 80 ) & "..."
+      End If
+
+' Fix the ampersand problem.
+
+      Start% = 1
+      Do
+        p = InStr( Start%, WindowTitle$, "&" )
+        If p <> 0 Then
+            WindowTitle$ = Left$( WindowTitle$, p ) & "&" & Mid$( WindowTitle$, p + 1 )
+            Start% = p + 2
+        End If
+      Loop Until p = 0
+
+      If CountOfBibs% = 1 Then
+          Confirm$ = "Paste citation field?"
+        Else
+          Confirm$ = "Paste citation field or choose record ..."
+      End If
+
+' Adjust the confirmation phrase and dialog box title to reflect counts of records.
+
+      Begin Dialog Dialog1Definition 232, 116, WaltsMacros$, .Dialog1ControlFunction
+        ButtonGroup .ChoiceNum
+         PushButton     34, 52,  72, 20, "&OK"
+         PushButton    126, 52,  72, 20, "&Cancel"
+         PushButton     78, 82,  76, 20, NextOrFirst( k ), .Next
+         CancelButton  1, 1, 1, 1
+        Text            16, 12, 184, 32, "Paste citation field into this record (" & CopiedTo$ & ", " & WindowTitle$ & ")?"
+      End Dialog
+
+      Dim Dialog1 as Dialog1Definition
+      On Error Resume Next
+      Dialog Dialog1
+      If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+      Select Case Dialog1.ChoiceNum
+        Case 0
+
+OneOnly:
+
+          If CS.AddField( 9, CitationForm$ ) = FALSE Then
+              MsgBox "Sorry, could not add the citation field.", CRITICAL_MESSAGE, WaltsMacros$
+          End If
+          Exit Sub
+        Case 2
+          If k = CountOfBibs% - 1 Then
+              GoTo Recycle:
+          End If
+        Case 1, 3
+          Exit Sub
+      End Select
+  End If
+Next k
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' All this function does is control the visibility of the navigation button. When only
+' one record is available for pasting, the button is invisible; when two or more records
+' are available, it becomes visible to enable navigating to the next candidate.
+
+Const INITIALIZE As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE  As Integer = 0   'The value to make a dialog box control invisible.
+Const VISIBLE    As Integer = 1   'The value to make a dialog box control visible.
+
+If Action% = INITIALIZE Then
+    DlgVisible "Cancel", 0
+    If CountOfBibs% = 1 Then
+        DlgVisible "Next",   INVISIBLE
+      Else
+        DlgVisible "Next",   VISIBLE
+    End If
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function NextOrFirst( CycleIndex% ) As String
+
+' This function sets the text of the button to navigate through the list of bibliographic
+' records.
+
+If CycleIndex% < CountOfBibs% - 1 Then
+    NextOrFirst = "&No, next bib."
+  Else
+    NextOrFirst = "&No, first bib. again"
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Normalize( InString$ ) As String
+
+' In order to determine whether or not a corporate body as a name also appears in the
+' title, both character strings must be normalized, so punctuation, diacritics, and
+' special characters don't get in the way. This function applies the NACO normalization
+' rules to the strings to enable proper comparison.
+
+Dim Char%
+Dim InputString$
+Dim TempString$
+Dim i As Integer
+
+InputString$ = Trim$( InString$ )
+
+For i = 1 To Len( InputString$ )
+  Char% = Asc( Mid$( InputString$, i, 1 ) )
+  Select Case Char%
+    Case 48 To 57, 65 To 90
+      TempString$ = TempString$ & Chr$( Char% )
+    Case 97 To 122
+      TempString$ = TempString$ & Chr$( Char% - 32 )
+    Case 32 To 34, 36 To 37, 40 To 42, 44 To 47, 58 To 64, 92, 94 To 96
+      If Right$( TempString$, 1 ) <> " " Then TempString$ = TempString$ & " "
+    Case 123, 125 To 126, 138 To 141, 154 To 158, 170 To 171, 185, 191, 200 To 203
+      If Right$( TempString$, 1 ) <> " " Then TempString$ = TempString$ & " "
+    Case 35, 38, 43, 169, 204
+      TempString$ = TempString$ & Chr$( Char% )
+    Case 128 To 137
+      TempString$ = TempString$ & Chr$( Char% - 80 )
+    Case 144 To 153
+      TempString$ = TempString$ & Chr$( Char% - 96 )
+    Case 161, 190
+      TempString$ = TempString$ & "L"
+    Case 162, 172
+      TempString$ = TempString$ & "O"
+    Case 163, 186
+      TempString$ = TempString$ & "D"
+    Case 164
+      TempString$ = TempString$ & "TH"
+    Case 165
+      TempString$ = TempString$ & "AE"
+    Case 166
+      TempString$ = TempString$ & "OE"
+    Case 173
+      TempString$ = TempString$ & "U"
+    Case 184
+      TempString$ = TempString$ & "I"
+  End Select
+Next i
+
+Normalize = Trim$( TempString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function StripEndingPunctuation( InString$ ) As String
+
+' This function works backward from the input string removing spaces and punctuation
+' until it comes to an alphanumeric character, whereupon its job is done. The equal sign
+' indicates a parallel title following, and since parallel titles are not included in
+' the citation form, set a flag to indicate that this subfield $b is to be ignored.
+
+Dim TempString$
+Dim TestChar$
+
+Dim i As Integer
+
+TempString$ = InString$
+
+For i = Len( TempString$ ) To 0 Step -1
+  TestChar$ = Mid$( TempString$, i, 1 )
+  If TestChar$ = "=" Then
+      Parallel = TRUE
+  End If
+  If TestChar$ Like "[! :;/=,.]" Then
+      TempString$ = Left$( TempString$, i )
+      Exit For
+  End If
+Next i
+
+StripEndingPunctuation = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Truncate( InString$ ) As String
+
+' This function is sort of the inverse of the preceding function: it shortens a string at
+' the first mark of punctuation, starting from the beginning of the string.
+
+Dim TempString$
+Dim TestChar$
+
+Dim i As Integer, p As Integer
+
+TempString$ = InString$
+
+p = InStr( InString$, " " )
+If p <> 0 Then
+    For i = 1 To Len( TempString$ )
+      TestChar$ = Mid$( TempString$, i, 1 )
+      If TestChar$ Like "[,;:=]" Then
+          If i > p Then
+              TempString$ = Trim$( Left$( TempString$, i - 1 ) )
+              Exit For
+          End If
+      End If
+    Next i
+End If
+
+Truncate = TempString$
+
+End Function
+'97539680
+'
+'Macro name: GetCitationForm
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:08 AM using "MacroBookInspector" macro by Walter F. Nickeson.

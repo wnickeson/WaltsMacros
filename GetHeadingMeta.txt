@@ -1,0 +1,140 @@
+'MacroName:GetHeadingMeta.2016.01
+'MacroDescription:Gets the authorized heading, the LCCN, and the cataloging agency from
+' an authority record, and puts it in formatted form on the Clipboard for pasting.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 19 April 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro gets the authorized heading, LC control number, MARC code for
+' the original cataloging agency, and indication of RDA rules (if present), from an
+' authority record, and puts that information on the Windows Clipboard for pasting in a
+' formatted string, e.g.:
+'
+'   Aristotle. $t De animalium incessu [nr97034878 (UPB)]
+' or:
+'   Pattattanam, Srini [n89113224 (DLC)] (Diacritics removed)
+'
+' Useful for sending headings via e-mail.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                           ' a big "X") in a message box; used to report the macro quitting.
+Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim CatSource$
+Dim Delimiter$               : Delimiter$   = Chr$( 223 )
+Dim Diacritics$
+Dim Heading$
+Dim Institution$
+Dim LCCN$
+Dim TempString$
+Dim TestChar$
+Dim TypeOfWindow1%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:GetHeadingMeta"
+
+Dim GetHeading
+Dim GetInstitution
+Dim GetLCCN
+
+Dim i, p As Integer
+
+' First, make sure an authority record is displayed.
+
+TypeOfWindow1% = CS.ItemType
+Select Case TypeOfWindow1%
+  Case 0 To 2, 5 To 13, 15 To 17, 19, 21 To 36
+    MsgBox "This macro only works in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Get the 1XX field and strip it of tag and indicators. Change delimiters to dollar
+' signs, and remove other special characters and diacritics, as they may not successfully
+' paste or make it through e-mail systems.
+
+If CS.GetField ( "1..", 1, Heading$ ) Then
+    Heading$ = Mid$( Heading$, 6 )
+    For i = 1 To Len( Heading$ )
+      TestChar$ = Mid$( Heading$, i, 1 )
+      Select Case Asc( TestChar$ )
+        Case 223
+          TestChar$   = "$"
+        Case 127 To 255
+          TestChar$   = ""
+          Diacritics$ = " (Diacritics removed)"
+      End Select
+     TempString$ = TempString$ & TestChar$
+    Next i
+    Heading$ = TempString$
+  Else
+    MsgBox "There is no 1XX field in this record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Get subfield $a only of the LC control number and close up a space.
+
+If CS.GetField ( "010", 1, LCCN$ ) Then
+    LCCN$ = Mid$( LCCN$, 6 )
+    p     = InStr( 1, LCCN$, Delimiter$ )
+    If p <> 0 Then
+        LCCN$ = Mid$( LCCN$, 1, p - 2 )
+    End If
+    If Trim$( LCCN$ ) = "" Then
+        MsgBox "There is no control number in this record!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+    Do
+      p = InStr( LCCN$, " " )
+      If p <> 0 Then
+          LCCN$ = Left$( LCCN$, p - 1 ) & Mid$( LCCN$, p + 1 )
+      End If
+    Loop Until p = 0
+End If
+
+' Get the code or name of the creating institution and the description conventions
+' followed (only if "rda").
+
+If CS.GetField( "040", 1, CatSource$ ) Then
+    CatSource$ = Mid$( CatSource$, 6 )
+    p = InStr( 1, CatSource$, Delimiter$ )
+    If p <> 0 Then
+        Institution$ = " (" & Mid$( CatSource$, 1, p - 2 ) & ")"
+    End If
+    If InStr( CatSource$, "e rda" ) Then
+        Institution$ = Institution$ & "--rda"
+    End If
+End If
+
+' Construct a string from these elements and put it on the Clipboard for pasting.
+
+Heading$ = Heading$ & " [" & LCCN$ & Institution$ & "]" & Diacritics$
+
+Clipboard.Clear
+Clipboard.SetText Heading$
+
+MsgBox Heading$, INFORMATION_MESSAGE, WaltsMacros$
+
+End Sub
+'1626491
+'
+'Macro name: GetHeadingMeta
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:12 AM using "MacroBookInspector" macro by Walter F. Nickeson.

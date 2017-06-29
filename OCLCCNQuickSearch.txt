@@ -1,0 +1,117 @@
+'MacroName:OCLCCNQuickSearch.2016.01
+'MacroDescription:Searches WorldCat for the number string on the Windows Clipboard.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 22 April 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Copy a number string onto the Windows Clipboard and run the macro. It
+' performs an OCLC control number search with that copied number.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                           ' a big "X") in a message box; used to report the macro quitting.
+Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim Message$
+Dim RawString$
+Dim Results%
+Dim SearchString$
+Dim TestChar$
+Dim WaltsMacros$             : WaltsMacros$       = "[Walt's macros] Extras2:OCLCCNQuickSearch"
+
+Dim DigitsFound              : DigitsFound        = FALSE
+Dim NonDigitsFollowing       : NonDigitsFollowing = FALSE
+
+Dim i As Integer
+
+If CS.IsOnline = FALSE Then
+    MsgBox "Please log on before searching!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Test the contents of the Clipboard for valid input. First, there must be something on
+' the Clipboard.
+
+RawString$ = Trim$( Clipboard.GetText )
+If RawString$ = "" Then
+    MsgBox "There is no text on the Clipboard to search!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Strip all non-digits from the string. Extra characters can be ignored except if they
+' come between digits, in which case they make the string invalid.
+
+For i = 1 To Len( RawString$ )
+  TestChar$ = Mid$( RawString$, i, 1 )
+  If TestChar$ Like "[0-9]" Then
+      If NonDigitsFollowing = TRUE And DigitsFound = TRUE Then
+          Message$ = "The copied text mixes digits and other characters!" & Chr$( 013 )
+          Message$ = Message$ & "Text on Clipboard: " & RawString$
+          MsgBox Message$, CRITICAL_MESSAGE, WaltsMacros$
+          Exit Sub
+        Else
+          DigitsFound   = TRUE
+          SearchString$ = SearchString$ & TestChar$
+      End If
+    Else
+      If DigitsFound = TRUE Then NonDigitsFollowing = TRUE
+  End If
+Next i
+
+' Strip leading zeroes (just to make sure the string doesn't exceed the maximum length).
+
+For i = 1 To Len( SearchString$ )
+  TestChar$ = Mid$( SearchString$, i, 1 )
+  If TestChar$ = "0" Then
+      SearchString$ = Mid$( SearchString$, 2 )
+      i = i - 1
+    Else
+      Exit For
+  End If
+Next i
+
+' Test the edited string for length.
+
+If Len( SearchString$ ) > 9 Then
+    Message$ = "The number string is too long!" & Chr$( 013 )
+    Message$ = Message$ & "Text on Clipboard: " & RawString$
+    MsgBox Message$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  ElseIf SearchString$ = "" Then
+    Message$ = "There is no number on the Clipboard to search!" & Chr$( 013 )
+    Message$ = Message$ & "Text on Clipboard: " & RawString$
+    MsgBox Message$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If the string passes the input checks, search WorldCat for the record with that control
+' number.
+
+Results% = CS.Search( "WC", "#" & SearchString$ )
+If Results% = 0 Then MsgBox "No record was found for this control number: #" & SearchString$, INFORMATION_MESSAGE, WaltsMacros$
+
+End Sub
+'1395995
+'
+'Macro name: OCLCCNQuickSearch
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:19 AM using "MacroBookInspector" macro by Walter F. Nickeson.

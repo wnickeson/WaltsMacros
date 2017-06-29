@@ -1,0 +1,1562 @@
+'MacroName:ViewExportFiles.2017.02
+'MacroDescription:Shows the records in the defined export files and allows deletion of
+' individual records or of the whole file being viewed.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 24 May 2017.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro (there is no need to log on) to see the records in the
+' export file(s). The macro initially displays the records in the default file, but all
+' files that have been defined as export destinations are available for viewing if they
+' actually contain records. The macro uses a simple list box to show records, each field
+' being an item in the list. Navigate through the records in a file by stepping forward
+' or backward, a record at a time, or, for a file of more than 9 records, jump directly
+' to a specified record. Individual records may be deleted from a file, or the whole file
+' may be deleted at one stroke, if desired. Click on a field to copy subfield $a (or, if
+' there is no subfield $a, the first subfield) to the Windows Clipboard--useful to
+' search the local catalog for the record before importing it. Clicking on the 001 field
+' copies the OCLC control number without the alphabetic prefix, and with any leading
+' zeroes.
+'
+' The macro begins by searching for the default export file defined in the user's Options
+' file, and continues by searching for the paths of all the defined export files in the
+' Connects file. If all this information is found, and if the macro successfully locates
+' the export file(s) (defined files that don't exist, that is, that contain no records,
+' are ignored), it opens it to display its records, one by one. Because of the
+' limitations of OML dialog boxes, little formatting of the data is possible, and many
+' special characters and diacritics cannot display. The fields are separated into
+' separate lines in a list box. The delimiter sign is converted into a dollar sign for
+' Unicode encoding but into a pipe, or broken bar | , for MARC-8 encoding. Undisplayable
+' characters are represented by a pair of brackets [] to suggest an empty box. Otherwise
+' the display is not far removed from the raw MARC record.
+'
+' While all fields of a record can be displayed, not all the contents of long fields can
+' be shown--again, because of OML's limitations. The idea behind this macro is to show
+' enough of a record for it to be recognized.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function MakeDisplayable( InputString$ ) As String
+Declare Function RecordArray    ( RecNo% )       As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                               ' a big "X") in a message box; used to report the macro quitting.
+
+Global CopiedData$
+Global CountOfFiles%
+Global CountOfRecords%
+Global Encoding$
+Global FileSelect%
+Global Problem$
+Global QUOTE As String*1
+Global RecordNumber%
+Global WaltsMacros$
+
+Global ExportDestinations() As String
+Global FileRecords       () As String
+Global RecordFields      () As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const ANSWER_YES           As Integer = 6      'The value returned by a message box when the "No" button is clicked.
+Const COPY_DATA_BUTTON     As Integer = 5      'The value returned by the dialog box when the button to copy information from the displayed
+                                               ' record is clicked.
+Const DELETE_FILE_BUTTON   As Integer = 1      'The value returned by the dialog box when the button to delete the file is clicked.
+Const DELETE_RECORD_BUTTON As Integer = 0      'The value returned by the dialog box when the button to delete the displayed record is clicked.
+Const DIALOG_BUTTON_CANCEL As Integer = 102    'The value returned by the dialog box when the "Cancel" button is clicked.
+Const FILE_NOT_FOUND       As Integer = 53     'Error code in BASIC for the specified file not being found.
+Const INFORMATION_MESSAGE  As Integer = 64     'The value to display the "Information message" icon in a message box.
+Const LENGTH_INPUT_STRING  As Long    = 32000  'The constant for the maximum string size in this macro is based on an OML
+                                               ' memory limit, even though OML can handle a string length of up to 32,767 bytes.
+Const MAX_ATTEMPTS_ENVIRON As Integer = 128    'The maximum number of reads of environment strings to try to get the user profile path.
+Const NORMAL_FILE          As Integer = 0      'Attribute of a normal file.
+Const NORMAL_FILE_ARCHIVE  As Integer = 32     'Attribute of a normal file with archive bit set?
+Const OPEN_FILE_BUTTON     As Integer = 4      'The value returned by the dialog box when the button to open a different export file is clicked.
+Const SECOND_BUTTON        As Integer = 256    'The value to make the second button in a message box the default.
+Const WARNING_MESSAGE      As Integer = 48     'The value to display the "Warning message" icon in a message box.
+Const WARNING_QUERY        As Integer = 32     'The value to display the "Warning query" icon in a message box.
+Const YES_NO               As Integer = 4      'The value to display the "Warning message" icon in a message box with "Yes" and "No" buttons.
+
+Dim AppData$
+Dim Attributes%
+Dim ConnectsINIPath$
+Dim ConnectsLine$
+Dim CountOfFileSegments%
+Dim CurrentDestination$
+Dim DestinationName$
+Dim DestinationPath$
+Dim DestinationsFound%
+Dim EnvironmentString$
+Dim ExportConnections$
+Dim ExportFile$
+Dim FileLength&
+Dim FileNum%
+Dim FileString As String*LENGTH_INPUT_STRING
+Dim ItemKey$
+Dim JumpList$
+Dim MaxLenStrings%
+Dim NonMARCMessage$
+Dim OptionsXmlPath$
+Dim PrevCountOfFileSegments%
+Dim RecordLength&
+Dim RecordOffset&
+Dim RecordString$
+Dim Remainder&
+Dim Stanza$
+Dim Start%
+Dim XX%
+
+Dim ExportFilePaths() As String
+
+Dim i As Integer, p As Integer, q As Integer, y As Integer
+
+QUOTE        = Chr$( 034 )
+WaltsMacros$ = "[Walt's macros] Extras2:ViewExportFiles"
+
+' The name of the default or current export destination is stored in
+' C:\Users\[UserName]\AppData\Roaming\OCLC\Connex\Profiles\MyProfile\Options.xml".
+' Information about all the defined export destinations is stored in
+' "C:\Users\[UserName]\AppData\Roaming\OCLC\Connex\Connects.ini". In order to find those
+' files, first get the user profile path (which includes the username) from the operating
+' system's environment table. Do this by calling the "Environ" function repeatedly,
+' searching the resulting string settings for keywords, until the keyword sought--
+' "APPDATA"--is found. If it hasn't been found after 128 attempts, give up.
+
+i = 1
+Do
+  EnvironmentString$ = Environ( i )
+  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
+      AppData$ = Mid$( EnvironmentString$, 9 )
+      Exit Do
+  End If
+  i = i + 1
+Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
+If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GoTo NoPath:
+
+' The complete path to each file is built by adding the information specified in the
+' Connexion client documentation to the path to the user profile, obtained above.
+
+ConnectsINIPath$ = AppData$ & "\OCLC\Connex\Connects.ini"
+OptionsXmlPath$  = AppData$ & "\OCLC\Connex\Profiles\MyProfile\Options.xml"
+
+On Error GoTo NoPath:
+Attributes% = GetAttr( OptionsXmlPath$ )
+
+' In "Options.xml",  get the name of the current or default export destination by finding
+' the key that contains it. The destination is set in the "Tools > Options... > Export"
+' tab when the "Apply" button is clicked; the destination selected at that time becomes
+' the default. Read the file, a line at a time, by calling "Line Input" repeatedly. The
+' line containing the term "ConnectionName" holds the name of the export destination as
+' the value of that item key. If the destination is not a file, its value is ignored. A
+' value of "(None)" means no export destination has been set.
+
+If Attributes% = NORMAL_FILE Or Attributes% = NORMAL_FILE_ARCHIVE Then
+    FileNum% = FreeFile
+    On Error GoTo OtherFileProblem:
+    Open OptionsXmlPath$ For Input As #FileNum%
+    Do Until Eof( FileNum% )
+      Line Input #FileNum%, ItemKey$
+      p = InStr( ItemKey$, QUOTE & "ConnectionName" & QUOTE )
+      If p <> 0 Then
+          p = InStr( ItemKey$, "value=" )
+          If p <> 0 Then
+              CurrentDestination$ = Mid$( ItemKey$, p + 7 )
+              p = InStr( CurrentDestination$, QUOTE )
+              If p <> 0 Then
+                  CurrentDestination$ = Left$( CurrentDestination$, p - 1 )
+              End If
+              Exit Do
+            Else
+              GoTo NoPath:
+          End If
+      End If
+    Loop
+    Close
+    Reset
+    If p = 0 Then GoTo NoPath:
+End If
+
+' The user may have chosen not to define an export file but rather to be prompted for a
+' file name. In that case, present an input box to receive the complete file name,
+' including its path, and continue by trying to find that file.
+
+If CurrentDestination$ = "(Prompt for filename)" Then
+    CurrentDestination$ = InputBox$( "Please enter the name of the export file, including its path:", WaltsMacros$, , )
+    If CurrentDestination$ = "" Then
+        Exit Sub
+      Else
+        CurrentDestination$ = Trim$( CurrentDestination$ )
+    End If
+End If
+
+' Then find all the defined export destinations in "Connects.ini". This file contains the
+' paths of all the defined destination files. Also read this file in a line at a time,
+' but store the whole file as a single string before processing it.
+
+On Error GoTo NoPath:
+Attributes% = GetAttr( ConnectsINIPath$ )
+If Attributes% = NORMAL_FILE Or Attributes% = NORMAL_FILE_ARCHIVE Then
+    FileNum% = FreeFile
+    On Error GoTo OtherFileProblem:
+    Open ConnectsINIPath$ For Input As #FileNum%
+    Do Until Eof( FileNum% )
+      Line Input #FileNum%, ConnectsLine$
+      ExportConnections$ = ExportConnections$ & ConnectsLine$
+    Loop
+    Close
+    Reset
+End If
+
+' The file "Connects.ini" is composed of stanzas or blocks. All but the first are labeled
+' with the name of an export destination, which appears within brackets. This name is
+' followed a line that defines the export type, and then, for a file, the complete path
+' of the file. This macro is looking only for files as export destinations, so it
+' disregards all other types of destinations. Loop through the file and isolate all the
+' stanzas.
+
+Start% = 1
+Do
+  p = InStr( Start%, ExportConnections$, "[" )
+  If p <> 0 Then
+      q = InStr( p + 1, ExportConnections$, "[" )
+      If q = 0 Then
+          q = Len( ExportConnections$ ) + 1
+      End If
+      Stanza$ = Mid$( ExportConnections$, p, q - p )
+
+' The macro ignores the first stanza, which simply lists all the named destinations, as
+' well as all destinations that are not files (LPT ports, Connections, and OCLC Gateway
+' Exports).
+
+      If Left$( Stanza$, 28 ) <> "[Defined Export Connections]" And _
+         Left$( Stanza$, 28 ) <> "[File:(Prompt for filename)]" Then
+          y                = InStr( Stanza$, "]" )
+          DestinationName$ = Mid$( Stanza$, 2, y - 2 )
+          q                = Len( DestinationName$ ) + 2
+
+' For each stanza that has as "ExportType" a file name, extract that path, and check to
+' see if the file in fact exists. Non-existent files should not appear in the display. As
+' each file is found, store its path and its associated destination name.
+
+          If Mid$( Stanza$, q + 1, 24 ) = "ExportType=FileFilename=" Then
+              DestinationsFound% = DestinationsFound% + 1
+              DestinationPath$   = Mid$( Stanza$, q + 25 )
+              FileNum%           = FreeFile
+              On Error Resume Next
+              Open DestinationPath$ For Input Access Read As #FileNum%
+              If Err = FILE_NOT_FOUND Then GoTo TryNextFile:
+              ReDim Preserve ExportDestinations( CountOfFiles% )
+
+' When an export destination is created, Connexion offers as its name the path, e.g.
+' "File:C:\Users\[UserName]\Desktop\OCLCExport.dat". If this default name is rejected for
+' a different name, offer the path to the file as a qualification to that name, to help
+' in identification.
+
+              If DestinationName$ = "File:" & DestinationPath$ Then
+                  ExportDestinations( CountOfFiles% ) = DestinationName$
+                Else
+                  ExportDestinations( CountOfFiles% ) = DestinationName$ & "  [" & DestinationPath$ & "]"
+              End If
+              If CurrentDestination$ = DestinationName$ Then
+                  FileSelect% = CountOfFiles%
+              End If
+              ReDim Preserve ExportFilePaths( CountOfFiles% )
+              ExportFilePaths( CountOfFiles% ) = DestinationPath$
+
+' The variable "DestinationsFound%" counts the files defined for saving exported records.
+' The variable "CountOfFiles%" counts only those files that exist, i.e. those files that
+' actually contain records.
+
+              CountOfFiles% = CountOfFiles% + 1
+          End If
+      End If
+  End If
+
+TryNextFile:
+
+  Close #FileNum%
+  Start% = p  + 1
+Loop Until p = 0
+
+If CountOfFiles% = 0 Then
+    If DestinationsFound% = 0 Then
+        MsgBox "No export file has been defined!", CRITICAL_MESSAGE, WaltsMacros$
+      ElseIf DestinationsFound% = 1 Then
+        MsgBox "The defined export file does not exist!", CRITICAL_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "None of the defined export files exist!", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+End If
+
+ReShow:
+
+RecordNumber% = 0
+
+ExportFile$ = ExportFilePaths( FileSelect% )
+
+' If the file exists, then check if it actually contains anything. If not, offer to
+' delete it.
+
+FileLength& = FileLen( ExportFile$ )
+If FileLength& = 0 Then
+    NonMARCMessage$ = "is empty!"
+    GoTo MARCProblem:
+End If
+
+' A non-empty file: Start processing (or process again, if the file is being re-
+' displayed, as when a record has been deleted from it).
+
+FileNum% = Freefile
+
+On Error GoTo OtherFileProblem:
+Open ExportFile$ For Binary Access Read As #FileNum%
+
+CountOfFileSegments% = 0
+CountOfRecords%      = 0
+RecordOffset&        = 1&
+
+Do
+
+' Read the file in 32K chunks at a time. Each chunk will begin with a MARC record, the
+' first five characters of which contain the record length. Use that number to remove the
+' first record from the 32K chunk. Store it in the array. Repeat the process with the
+' ever-diminishing chunk until the chunk has been used up or what remains is the
+' beginning of a record, the end of which is in the next chunk. A record longer than 32k
+' must be stored in more than one element of the array. As each record is being stored,
+' do a little error checking, although in the main, asssume the Client has exported the
+' records in MARC format with no mistakes.
+
+  Get #FileNum, RecordOffset&, FileString
+  RecordLength&            = Val( Left$( FileString, 5 ) )
+  If RecordLength& > FileLength& Or RecordLength& < 36 Or Mid$( FileString, RecordLength&, 1 ) <> Chr$( 029 ) Then
+      NonMARCMessage$ = "may not be a MARC file or may be corrupt!"
+      GoTo MARCProblem:
+  End If
+
+  MaxLenStrings%           = Int( RecordLength& / LENGTH_INPUT_STRING )
+  Remainder&               = RecordLength& Mod LENGTH_INPUT_STRING
+  If MaxLenStrings% > 0 Then
+      For i = 0 To MaxLenStrings% - 1
+      Get #FileNum%, RecordOffset&, FileString
+      ReDim Preserve FileRecords( CountOfFileSegments% + MaxLenStrings% - 1 ) As String
+       FileRecords( CountOfFileSegments% + i ) = FileString
+      RecordOffset&        = RecordOffset& + LENGTH_INPUT_STRING
+      Next i
+      CountOfFileSegments% = CountOfFileSegments% + i
+  End If
+  If Remainder& > 0 Then
+      Get #FileNum%, RecordOffset&, FileString
+      ReDim Preserve FileRecords( CountOfFileSegments% )
+       FileRecords( CountOfFileSegments% ) = Left$( FileString, Remainder& )
+      CountOfFileSegments% = CountOfFileSegments% + 1
+      RecordOffset&        = RecordOffset& + Remainder&
+  End If
+  CountOfRecords%          = CountOfRecords% + 1
+  PrevCountOfFileSegments% = CountOfFileSegments%
+Loop Until RecordOffset& > Lof( FileNum )
+
+Close #FileNum%
+Reset
+
+JumpList$ = " " & Chr$( 009 )
+For i = 1 To CountOfRecords%
+  JumpList$ = JumpList$ & Trim$( Str$( i ) ) & Chr$( 009 )
+Next i
+JumpList$ = Left$( JumpList$, Len( JumpList$ ) - 1 )
+
+' Invoke the dialog box, which will display formatted records from the array of records
+' as it runs. If there are 10 or more records in the file, a drop-down list is presented
+' to jump to any record.
+
+Begin Dialog Dialog1Definition  392, 308, WaltsMacros$, .Dialog1ControlFunction
+  CancelButton  314, 240,  64,  16
+  ButtonGroup .Choice
+   PushButton    12, 240,  64,  16, "&Delete record"
+   PushButton    84, 240,  64,  16, "Delete &file"
+   PushButton   122,  24,  70,  14, "<< &Previous record",             .Prev
+   PushButton   200,  24,  70,  14, "&Next record >>",                 .Next
+   PushButton   264, 274,  64,  16, "&Open file",                      .ChangeFile
+   PushButton   190, 240,  80,  16, "",                                .CopyData
+  ListBox        12,  46, 368, 196, RecordFields(),                    .RecordDisplay
+  Text           12,  24,  72,   8, "",                                .RecordCount
+  Text           12,  33,  64,   8, "",                                .Encoding
+  Text          300,  28,  44,   8, "Go to record:",                   .JumpText
+  DropListBox   348,  26,  32,  96, JumpList$,                         .JumpList
+  Text           12,   8, 312,   8, "",                                .FileDisplay
+  DropListBox    64, 276, 192,  64, ExportDestinations(),              .FileList
+  GroupBox       54, 264, 284,  33, "Select a different export file:", .Outline
+  Text          186, 243,  88,   8, "",                                .Instructions
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+' If a MARC error was encountered, offer to delete the file, as it is most likely
+' useless.
+
+If Problem$ <> "" Then
+    GoTo MARCProblem:
+End If
+
+Select Case Dialog1.Choice
+
+' If a record is to be deleted, delete the whole file, then re-create it from the record
+' array. Write the first remaining record to the file and append to it each subsequent
+' one, except for the record chosen for deletion. Redisplay the dialog box after deleting
+' the record (or if the Cancel button has been clicked). If the file contains only a
+' single record, the file will be deleted but not rebuilt. In this case the program flow
+' jumps to the "FileDelete" section, which displays a confirmation message and also
+' terminates the macro after deletion.
+
+  Case DELETE_RECORD_BUTTON
+    If CountOfRecords% > 1 Then
+        If MsgBox( "Delete record " & Trim$( Str$( RecordNumber% + 1 ) ) & " from export file?", WARNING_QUERY + SECOND_BUTTON + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
+            On Error Resume Next
+            Kill ExportFile$
+            Reset
+            FileNum% = Freefile
+            On Error Resume Next
+            Open ExportFile$ For Append Access Write As #FileNum%
+            If Err > 0 And Err <> FILE_NOT_FOUND Then
+                MsgBox "Sorry, the file " & ExportFile$ & " could not be changed.", WARNING_MESSAGE, WaltsMacros$
+                Exit Sub
+            End If
+            For i = 0 To UBound( FileRecords )
+              If i <> RecordNumber% Then
+                  RecordString$ = FileRecords( i )
+                  Print #FileNum%, RecordString$;
+              End If
+            Next i
+            Close
+            Reset
+            Erase FileRecords()
+
+' When redisplaying the file after deleting a record, show the record that preceded it,
+' unless the record deleted was the first one, in which case show the second record
+' (which of course is now the first one in the re-created file).
+
+            If RecordNumber% > 1 Then
+                RecordNumber% = RecordNumber% - 1
+              Else
+                RecordNumber% = 0
+            End If
+        End If
+        GoTo ReShow:
+      Else
+        GoTo FileDelete:
+    End If
+
+  Case DELETE_FILE_BUTTON
+
+' Start the file deletion process (which will also be the action when the file contains
+' only one record anyway) with a request for confirmation. After deletion, check to make
+' sure Windows really zapped it by invoking another "Open for Input" command.
+
+FileDelete:
+
+    If MsgBox( "Delete " & ExportFile$ & "?", WARNING_QUERY + SECOND_BUTTON + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
+        On Error Resume Next
+        Kill ExportFile$
+        Reset
+        FileNum% = Freefile
+        On Error Resume Next
+        Open ExportFile$ For Input Access Read As #FileNum%
+        If Err = FILE_NOT_FOUND Then
+            MsgBox "File deleted!", INFORMATION_MESSAGE, WaltsMacros$
+          Else
+            MsgBox "Sorry, the file " & ExportFile$ & " was not deleted.", WARNING_MESSAGE, WaltsMacros$
+        End If
+      Else
+        MsgBox "The file " & ExportFile$ & " was NOT deleted.", WARNING_MESSAGE, WaltsMacros$
+    End If
+    Close
+    Reset
+    Exit Sub
+
+  Case OPEN_FILE_BUTTON     'To view a different export file.
+    GoTo ReShow:
+
+  Case COPY_DATA_BUTTON
+    MsgBox "The string " & QUOTE & CopiedData$ & QUOTE & " from record " & Trim$( Str$( RecordNumber% + 1 ) ) & " was copied to the Clipboard.", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End Select
+
+' Error conditions.
+
+NoPath:
+
+' The macro could not get the path of the export file.
+
+MsgBox "Sorry, the macro could not figure out where the export destination " & QUOTE & ExportFile$ & QUOTE & " is.", CRITICAL_MESSAGE, WaltsMacros$
+Exit Sub
+
+NoFile:
+
+' The macro could not find the export file despite knowing its path.
+
+MsgBox "The export file, " & QUOTE & ExportFile$ & QUOTE & ", was not found!", CRITICAL_MESSAGE, WaltsMacros$
+Exit Sub
+
+OtherFileProblem:
+
+' File problems of various sorts, which we hope we never encounter!
+
+MsgBox "Error: " & Err & " on line " & Erl & ".", CRITICAL_MESSAGE, WaltsMacros$
+Exit Sub
+
+MARCProblem:
+
+' An empty or corrupt file is pretty worthless--in the latter case, there is probably no
+' easy way to recover the records short of spending time with a hex editor--so offer to
+' delete it.
+
+Close
+NonMARCMessage$ = "This file, " & ExportFile$ & ", " & NonMARCMessage$ & " Delete it?"
+If MsgBox( NonMARCMessage$, WARNING_QUERY + SECOND_BUTTON + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
+    GoTo FileDelete:
+  Else
+    MsgBox "File not deleted!", WARNING_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function MakeDisplayable( InputString$ ) As String
+
+' This function converts some of the characters in the MARC string from the exported
+' record to be readable in the dialog box. The function has two parts, depending on
+' whether the conversion is from Unicode or from MARC-8. To make text easier to read,
+' diacritics that aren't part of the dialog box character set are suppressed. Characters
+' with no good representation in the character set are represented by a pair of empty
+' brackets. The attempt is merely to give some idea of what record was exported.
+
+Const ACUTE_m      As Integer = 226
+Const ACUTE_u      As Integer = 129
+Const CEDILLA_u    As Integer = 167
+Const CIRCUMFLEX_m As Integer = 227
+Const CIRCUMFLEX_u As Integer = 130
+Const DIAERESIS_m  As Integer = 232
+Const DIAERESIS_u  As Integer = 136
+Const GRAVE_m      As Integer = 225
+Const GRAVE_u      As Integer = 128
+Const RINGA_m      As Integer = 234
+Const RINGC_m      As Integer = 240
+Const RING_u       As Integer = 138
+Const TILDE_m      As Integer = 228
+Const TILDE_u      As Integer = 131
+
+Dim Character$
+Dim CharAfter%
+Dim CharNext%
+Dim CharRead%
+Dim TempString$
+Dim WorkString$
+Dim WorkStringLength%
+
+Dim i As Integer
+
+' Add a space to the end of the input string to handle the look-ahead for the final
+' character.
+
+WorkString$       = Left$( InputString$, Len( InputString$ ) - 1 ) & " "
+WorkStringLength% = Len( WorkString$ )
+
+i = 1
+
+If Encoding$ = "[Unicode]" Then
+    Do
+      Character$ = ""
+      CharRead%  = Asc( Mid$( WorkString$, i, 1 ) )
+      CharNext%  = Asc( Mid$( WorkString$, i + 1, 1 ) )
+      If WorkStringLength% - i > 1 Then
+          CharAfter% = Asc( Mid$( WorkString$, i + 2, 1 ) )
+      End If
+          Select Case CharRead%
+
+' Convert the delimiter into the dollar sign, and add a space preceding it and following
+' the subfield code, as is standard in OCLC record display.
+
+        Case 31
+          Character$ = " $" & Chr$( CharNext% ) & " "       : i = i + 1
+        Case 30
+          Character$ = ""
+
+' In Unicode, characters are modified by the characters that follow them. Certain
+' letters, mostly vowels, thus can't be added to the character string when encountered by
+' this section of the macro--the characters that follow them must first be analyzed. If
+' they are modifying characters, something must be found to substitute for the pair for
+' pretty display. But if the following characters are normal ASCII, both of them can be
+' added to the display string as is. Hex value "CC" (decimal 204) is the first octet of
+' most two-octet combining diacritics, and thus is a signal that a modifying character
+' has been found.
+
+            Case 32 To 64, 66, 68, 70 To 72, 74 To 77, 80 To 84, 86 To 88, 90 To 96
+              Character$ = Chr$( CharRead% )
+            Case 98, 100, 102 To 104, 106 To 109, 112 To 116, 118 To 120, 122 To 128
+              Character$ = Chr$( CharRead% )
+            Case 65, 97   'A, a
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case GRAVE_u
+                      Character$ = Chr$( CharRead% + 127 )  : i = i + 2
+                    Case ACUTE_u
+                      Character$ = Chr$( CharRead% + 128 )  : i = i + 2
+                    Case CIRCUMFLEX_u
+                      Character$ = Chr$( CharRead% + 129 )  : i = i + 2
+                    Case TILDE_u
+                      Character$ = Chr$( CharRead% + 130 )  : i = i + 2
+                    Case DIAERESIS_u
+                      Character$ = Chr$( CharRead% + 131 )  : i = i + 2
+                    Case RING_u
+                      Character$ = Chr$( CharRead% + 132 )  : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 67, 99   'C, c
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case CEDILLA_u
+                      Character$ = Chr$( CharRead% + 132 )  : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 69, 101  'E, e
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case GRAVE_u
+                      Character$ = Chr$( CharRead% + 131 )  : i = i + 2
+                    Case ACUTE_u
+                      Character$ = Chr$( CharRead% + 132 )  : i = i + 2
+                    Case CIRCUMFLEX_u
+                      Character$ = Chr$( CharRead% + 133 )  : i = i + 2
+                    Case DIAERESIS_u
+                      Character$ = Chr$( CharRead% + 134 )  : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 73, 105  'I, i
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case GRAVE_u
+                      Character$ = Chr$( CharRead% + 131 )  : i = i + 2
+                    Case ACUTE_u
+                      Character$ = Chr$( CharRead% + 132 )  : i = i + 2
+                    Case CIRCUMFLEX_u
+                      Character$ = Chr$( CharRead% + 133 )  : i = i + 2
+                    Case DIAERESIS_u
+                      Character$ = Chr$( CharRead% + 134 )  : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 78, 110  'N, n
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case TILDE_u
+                      Character$ = Chr$( CharRead% + 131 )  : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 79, 111  'O, o
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case GRAVE_u
+                      Character$ = Chr$( CharRead% + 131 )  : i = i + 2
+                    Case ACUTE_u
+                      Character$ = Chr$( CharRead% + 132 )  : i = i + 2
+                    Case CIRCUMFLEX_u
+                      Character$ = Chr$( CharRead% + 133 )  : i = i + 2
+                    Case TILDE_u
+                      Character$ = Chr$( CharRead% + 134 )  : i = i + 2
+                    Case DIAERESIS_u
+                      Character$ = Chr$( CharRead% + 135 )  : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 85, 117  'U, u
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case GRAVE_u
+                      Character$ = Chr$( CharRead% + 132 )  : i = i + 2
+                    Case ACUTE_u
+                      Character$ = Chr$( CharRead% + 133 )  : i = i + 2
+                    Case CIRCUMFLEX_u
+                      Character$ = Chr$( CharRead% + 134 )  : i = i + 2
+                    Case DIAERESIS_u
+                      Character$ = Chr$( CharRead% + 135 )  : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 89       'Y
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case ACUTE_u
+                      Character$ = Chr$( 221 )              : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 121      'y
+              If CharNext% = 204 Then
+                  Select Case CharAfter%
+                    Case ACUTE_u
+                      Character$ = Chr$( 253 )              : i = i + 2
+                    Case DIAERESIS_u
+                      Character$ = Chr$( 255 )              : i = i + 2
+                    Case Else
+                      Character$ = Chr$( CharRead% )        : i = i + 2
+                  End Select
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+            Case 194
+              Select Case CharNext%
+                Case 161, 163, 167, 169 To 170, 172, 174, 176, 177, 181 To 183, 186, 191
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+                Case 185       'superscript 1
+                  Character$ = "1"                          : i = i + 1
+                Case 178       'superscript 2
+                  Character$ = "2"                          : i = i + 1
+                Case 179       'superscript 3
+                  Character$ = "3"                          : i = i + 1
+              End Select
+            Case 195
+              Select Case CharNext%
+                Case 134, 152, 158, 159, 166, 176, 184, 190
+                  Character$ = Chr$( CharNext% + 64 )       : i = i + 1
+                Case 151       'multiplication sign
+                  Character$ = Chr$( 215 )                  : i = i + 1
+                Case 144       'Eth
+                  Character$ = Chr$( 208 )                  : i = i + 1
+                Case 183       'division sign
+                  Character$ = Chr$( 247 )                  : i = i + 1
+              End Select
+            Case 196
+              Select Case CharNext%
+                Case 144       'D with crossbar
+                  Character$ = Chr$( 208 )                  : i = i + 1
+                Case 145       'd with crossbar
+                  Character$ = "d"                          : i = i + 1
+                Case 166       'H with stroke
+                  Character$ = "H"                          : i = i + 1
+                Case 167       'h with stroke
+                  Character$ = "h"                          : i = i + 1
+                Case 184       'kra
+                  Character$ = "k"                          : i = i + 1
+                Case 191       'L with middle dot
+                  Character$ = "L"                          : i = i + 1
+                Case 177       'Turkish dotless i
+                  Character$ = "i"                          : i = i + 1
+              End Select
+            Case 197
+              Select Case CharNext%
+                Case 128       'l with middle dot
+                  Character$ = "l"                          : i = i + 1
+                Case 129       'L with slash
+                  Character$ = "L"                          : i = i + 1
+                Case 130       'l with slash
+                  Character$ = "l"                          : i = i + 1
+                Case 138       'Eng
+                  Character$ = "Ng"                         : i = i + 1
+                Case 139       'eng
+                  Character$ = "ng"                         : i = i + 1
+                Case 146
+                  Character$ = "Oe"                         : i = i + 1
+                Case 147
+                  Character$ = "oe"                         : i = i + 1
+                Case 166       'T with stroke
+                  Character$ = "T"                          : i = i + 1
+                Case 167       't with stroke
+                  Character$ = "t"                          : i = i + 1
+                Case 191       'Long s
+                  Character$ = "s"                          : i = i + 1
+              End Select
+            Case 198
+              Select Case CharNext%
+                Case 160       'hooked O
+                  Character$ = "O"                          : i = i + 1
+                Case 161       'hooked o
+                  Character$ = "o"                          : i = i + 1
+                Case 175       'hooked U
+                  Character$ = "U"                          : i = i + 1
+                Case 176       'hooked u
+                  Character$ = "u"                          : i = i + 1
+                Case 183       'Ezh
+                  Character$ = "z"                          : i = i + 1
+              End Select
+            Case 199
+              Select Case CharNext%
+                Case 164       'G with stroke
+                  Character$ = "G"                          : i = i + 1
+                Case 165       'g with stroke
+                  Character$ = "g"                          : i = i + 1
+              End Select
+            Case 202
+              Select Case CharNext%
+                Case 146       'ezh
+                  Character$ = "z"                          : i = i + 1
+                Case 185, 187, 188
+                  Character$ = Chr$( 039 )                  : i = i + 1
+                Case 186
+                  Character$ = QUOTE                        : i = i + 1
+              End Select
+            Case 226
+              Select Case CharNext%
+                Case 128       'Quotation marks
+                  If CharAfter% = 156 Or CharAfter% = 157 Then
+                      Character$ = QUOTE                    : i = i + 2
+                  End If
+                Case 129       'superscripts
+                  Select Case CharAfter%
+                    Case 176, 180 To 185
+                      Character$ = Chr$( CharAfter% - 128 ) : i = i + 2
+                    Case 186
+                      Character$ = "+"                      : i = i + 2
+                    Case 187
+                      Character$ = "-"                      : i = i + 2
+                    Case 189
+                      Character$ = "("                      : i = i + 2
+                    Case 190
+                      Character$ = ")"                      : i = i + 2
+                  End Select
+                Case 130       'subscripts and Euro sign
+                  Select Case CharAfter%
+                    Case 128 To 137
+                      Character$ = Chr$( CharAfter% - 80 )  : i = i + 2
+                    Case 138
+                      Character$ = "+"                      : i = i + 2
+                    Case 139
+                      Character$ = "-"                      : i = i + 2
+                    Case 141
+                      Character$ = "("                      : i = i + 2
+                    Case 142
+                      Character$ = ")"                      : i = i + 2
+                    Case 172       'Euro
+                      Character$ = Chr$( 128 )              : i = i + 2
+                  End Select
+                Case 153
+                  If CharAfter% = 175 Then   'music sharp sign
+                      Character$ = "#"                      : i = i + 2
+                    Else
+                      Character$ = "[]"                     : i = i + 2
+                  End If
+                Case 132
+                  If CharAfter% = 147 Then   'script l
+                      Character$ = "l"                      : i = i + 2
+                    Else                     'sound recording copyright
+                      Character$ = "(p)"                    : i = i + 2
+                  End If
+                Case Else
+                  Character$ = "[]"                         : i = i + 2
+              End Select
+            Case 239
+              If CharNext% = 184 Then
+                  If CharAfter% = 160 Or CharAfter% = 161 Then     'the 2 halves of the ligature
+                      Character$ = ""                       : i = i + 2
+                  End If
+              End If
+            Case Else
+              If CharRead% < 128 Then
+                  Character$ = "[]"
+                Else
+                  Character$ = ""
+              End If
+
+          End Select
+      TempString$ = TempString$ & Character$
+      i = i + 1
+    Loop Until i >= WorkStringLength%
+
+  Else
+
+    Do
+      Character$ = ""
+      CharRead%  = Asc( Mid$( WorkString$, i, 1 ) )
+      CharNext%  = Asc( Mid$( WorkString$, i + 1, 1 ) )
+      If WorkStringLength% - i > 1 Then
+          CharAfter% = Asc( Mid$( WorkString$, i + 2, 1 ) )
+      End If
+          Select Case CharRead%
+
+' For MARC-8 encoding, convert the delimiter into the pipe character, adding the usual
+' spacing before and after.
+
+        Case 31
+          Character$ = " " & Chr$( 166 ) & Chr$( CharNext% ) & " " : i = i + 1
+        Case 30
+          Character$ = ""
+
+' In MARC-8, characters are modified by what precedes them. In this case, the modifier
+' character is read first, so what is added to the growing character string depends on
+' what follows. If the current character is a modifying character, then the character
+' that follows is incorporated into the substitution, skipped over, and therefore won't
+' ever come under consideration as the string is parsed.
+
+            Case GRAVE_m
+              Select Case CharNext%
+                Case 65, 97    'A, a
+                  Character$ = Chr$( CharNext% + 127 )      : i = i + 1
+                Case 69, 73, 79, 101, 105, 111    'E, I, O, e, i, o
+                  Character$ = Chr$( CharNext% + 131 )      : i = i + 1
+                Case 85, 117   'U, u
+                  Character$ = Chr$( CharNext% + 132 )      : i = i + 1
+                Case Else
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+              End Select
+            Case ACUTE_m
+              Select Case CharNext%
+                Case 65, 97    'A, a
+                  Character$ = Chr$( CharNext% + 128 )      : i = i + 1
+                Case 69, 73, 79, 89, 101, 105, 111, 121    'E, I, O, Y, e, i, o, y
+                  Character$ = Chr$( CharNext% + 132 )      : i = i + 1
+                Case 85, 117   'U, u
+                  Character$ = Chr$( CharNext% + 133 )      : i = i + 1
+                Case Else
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+              End Select
+            Case CIRCUMFLEX_m
+              Select Case CharNext%
+                Case 65, 97    'A, a
+                  Character$ = Chr$( CharNext% + 129 )      : i = i + 1
+                Case 69, 73, 79, 101, 105, 111    'E, I, O, e, i, o
+                  Character$ = Chr$( CharNext% + 133 )      : i = i + 1
+                Case 85, 117   'U, u
+                  Character$ = Chr$( CharNext% + 134 )      : i = i + 1
+                Case Else
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+              End Select
+            Case TILDE_m
+              Select Case CharNext%
+                Case 65, 97    'A, a
+                  Character$ = Chr$( CharNext% + 130 )      : i = i + 1
+                Case 78, 110   'N, n
+                  Character$ = Chr$( CharNext% + 131 )      : i = i + 1
+                Case 79, 111   'O, o
+                  Character$ = Chr$( CharNext% + 131 )      : i = i + 1
+                Case Else
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+              End Select
+            Case DIAERESIS_m
+              Select Case CharNext%
+                Case 65, 97    'A, a
+                  Character$ = Chr$( CharNext% + 131 )      : i = i + 1
+                Case 69, 73, 101, 105    'E, I, e, i
+                  Character$ = Chr$( CharNext% + 134 )      : i = i + 1
+                Case 79, 85, 111, 117    'O, U, o, u
+                  Character$ = Chr$( CharNext% + 135 )      : i = i + 1
+                Case Else
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+              End Select
+            Case RINGA_m
+              Select Case CharNext%
+                Case 65, 97    'A, a
+                  Character$ = Chr$( CharNext% + 132 )      : i = i + 1
+                Case Else
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+              End Select
+            Case RINGC_m
+              Select Case CharNext%
+                Case 67, 99    'C, c
+                  Character$ = Chr$( CharNext% + 132 )      : i = i + 1
+                Case Else
+                  Character$ = Chr$( CharNext% )            : i = i + 1
+              End Select
+            Case 224, 229 To 231, 233, 235 To 239, 241 To 251  'Other combining characters, for which no equivalents or substitutes exist.
+              Character$ = Chr$( CharNext% )                : i = i + 1
+            Case 27    'Escape for sub- and superscripts and some special characters.
+              Select Case CharNext%
+                Case 98, 112
+                  Select Case CharAfter%
+                    Case 40
+                      Character$ = "("                      : i = i + 2
+                    Case 41
+                      Character$ = ")"                      : i = i + 2
+                    Case 43
+                      Character$ = "+"                      : i = i + 2
+                    Case 44
+                      Character$ = "-"                      : i = i + 2
+                    Case 48 To 57
+                      Character$ = Chr$( CharAfter% )       : i = i + 2
+                  End Select
+                Case 115   'end Escape
+                  i = i + 1
+              End Select
+
+' Now the regular, low ASCII characters can be read, followed by the remaining characters
+' that have displayable equivalents in the dialog box.
+
+            Case 32 To 37, 39 To 128
+              Character$ = Chr$( CharRead% )
+
+' Exception: Unicode characters not in the MARC-8 character set are replaced by a Numeric
+' Character Reference (NCR), indicated by the character sequence &#xXXXX;. If an
+' ampersand is found, check the two characters that immediately follow to determine if
+' what is found is really an NCR. If it is, display it as a pair of empty brackets,
+' unless it's one of the four diacritics in the standard character set that has an NCR,
+' in which case simply omit it. If it's really an ampersand, it must be doubled to avoid
+' appearing as an underline to the next character.
+
+            Case 38    'Ampersand: NCR or "and" equivalent?
+              If CharNext% = 35 And CharAfter% = 120 Then
+                  If Mid$( WorkString$, i, 5 ) = "&#x03" And Mid$( WorkString$, i + 5, 3 ) Like "[023][12F][;]" Then
+                      Character$ = ""
+                    Else
+                      Character$ = "[]"
+                  End If
+                  i = i + 8
+                Else
+                  Character$ = Chr$( CharRead% )
+              End If
+
+' Special characters that have equivalents or substitutes in the dialog box character
+' set.
+
+            Case 161   'Crossed L
+              Character$ = "L"
+            Case 162   'Crossed O
+              Character$ = Chr$( 216 )
+            Case 163   'Eth
+              Character$ = Chr$( 208 )
+            Case 164   'Thorn
+              Character$ = Chr$( 222 )
+            Case 165   'AE Ligature
+              Character$ = Chr$( 198 )
+            Case 166   'OE Ligature
+              Character$ = "Oe"
+            Case 167, 174, 176   'Prime, alif, ayn
+              Character$ = Chr$( 039 )
+            Case 168   'Middle dot
+              Character$ = Chr$( 183 )
+            Case 169   'Musical flat sign
+              Character$ = "[]"
+            Case 170   'registered
+              Character$ = Chr$( 174 )
+            Case 171   'Plus-minus
+              Character$ = Chr$( 177 )
+            Case 172   'O hook
+              Character$ = "O"
+            Case 173   'U hook
+              Character$ = "U"
+            Case 177   'Crossed l
+              Character$ = "l"
+            Case 178   'crossed o
+              Character$ = Chr$( 248 )
+            Case 179   'd with crossbar
+              Character$ = "d"
+            Case 180   'thorn
+              Character$ = Chr$( 254 )
+            Case 181   'ae ligature
+              Character$ = Chr$( 230 )
+            Case 182   'oe ligature
+              Character$ = "oe"
+            Case 183   'Double prime
+              Character$ = QUOTE
+            Case 184   'Turkish i
+              Character$ = "i"
+            Case 185   'Pound
+              Character$ = Chr$( 163 )
+            Case 186   'eth
+              Character$ = Chr$( 240 )
+            Case 188   'o hook
+              Character$ = "o"
+            Case 189   'u hook
+              Character$ = "u"
+            Case 192   'Degree sign
+              Character$ = Chr$( 176 )
+            Case 193   'script l
+              Character$ = "l"
+            Case 194   'Sound recording copyright sign
+              Character$ = "(p)"
+            Case 195   'Copyright
+              Character$ = Chr$( 169 )
+            Case 196   'Music sharp sign
+              Character$ = "#"
+            Case 197   'Inverted question mark
+              Character$ = Chr$( 169 )
+            Case 198   'Inverted exclamation mark
+              Character$ = Chr$( 191 )
+            Case 199   'Esszet
+              Character$ = Chr$( 223 )
+            Case 200   'Euro sign
+              Character$ = Chr$( 128 )
+            Case Else
+              Character$ = Chr$( CharRead% )
+          End Select
+
+      TempString$ = TempString$ & Character$
+      i = i + 1
+    Loop Until i >= WorkStringLength%
+
+End If
+MakeDisplayable = Trim$( TempString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function RecordArray( RecordNumber% )
+
+' Fill the dialog box array with the fields of the selected record. The function returns
+' an empty string if all goes well, but an error message if a MARC error is encountered
+' during processing.
+
+Const BASE_ADDRESS_LENGTH    As Integer = 5    'The five characters indicating the Base address of data.
+Const BASE_ADDRESS_OFFSET    As Integer = 13   '= Leader/12, "Base address of data ... from which the starting character position of
+                                               ' all the other fields in the record is addressed in the Directory."
+Const CHAR_CODING_SCHEME     As Integer = 10   '= Leader/09, "Character coding scheme."
+Const DIRECTORY_ENTRY_LENGTH As Integer = 12   'The length of a directory entry.
+Const DIRECTORY_OFFSET       As Integer = 25   'The position of the first character of the Directory in a MARC record.
+Const FIELD_LENGTH           As Integer = 4    '"Four ASCII numeric characters that specify the length of the variable field."
+Const FIELD_LENGTH_OFFSET    As Integer = 4    'The position of the first character of the field length portion of a Directory entry.
+Const LEADER_LENGTH          As Integer = 24   'The first 24 characters of a MARC record.
+Const TAG_LENGTH             As Integer = 3    'The number of characters in a tag.
+
+Dim BaseAddress&
+Dim Directory$
+Dim FieldData$
+Dim FieldLength%
+Dim FieldOffset%
+Dim Indicator1$
+Dim Indicator2$
+Dim Indicators$
+Dim Leader$
+Dim RecordString$
+Dim Tag$
+Dim TagNumber%
+
+Dim i As Integer
+
+RecordString$ = FileRecords( RecordNumber% )
+
+' Start extracting necessary information to analyze the record. Some more error checking
+' can take place.
+
+Leader$      = Left$( RecordString$, LEADER_LENGTH )
+BaseAddress& = Val( Mid$( Leader$, BASE_ADDRESS_OFFSET, BASE_ADDRESS_LENGTH ) )
+Directory$   = Mid$( RecordString$, DIRECTORY_OFFSET, BaseAddress& - DIRECTORY_OFFSET )
+
+' The length of the directory portion of the record must be a multiple of 12.
+
+If Len( Directory$ ) Mod DIRECTORY_ENTRY_LENGTH <> 0 Then
+    RecordArray = "There is some problem with record " & Trim$( Str$( RecordNumber% ) ) & "!"
+    Exit Function
+End If
+
+' There are only two possible values of the Character coding scheme position (Leader/09),
+' so anything else indicates something is not proper about the record.
+
+Encoding$ = Mid$( Leader$, CHAR_CODING_SCHEME, 1 )
+If Encoding$ = "a" Then
+    Encoding$ = "[Unicode]"
+  ElseIf Encoding$ = " " Then
+    Encoding$ = "[MARC-8]"
+  Else
+    RecordArray = "There is some problem with record " & Trim$( Str$( RecordNumber% ) ) & "!"
+    Exit Function
+End If
+
+ReDim Preserve RecordFields( 0 )
+RecordFields( 0 ) = "LDR      " & Leader$
+
+' Get the tag from the directory, and the corresponding indicators and field data from
+' the record string.
+
+FieldOffset% = BaseAddress& + 1
+i            = 1
+Do While Len( Directory$ ) > 0
+  Tag$         = Left$( Directory$, TAG_LENGTH )
+  FieldLength% = Val( Mid$( Directory$, FIELD_LENGTH_OFFSET, FIELD_LENGTH ) )
+  FieldData$   = Mid$( RecordString$, FieldOffset%, FieldLength% )
+  TagNumber%   = Val( Tag$ )
+
+' Add spacing to the indicators to help things line up in the dialog box.
+
+  If TagNumber% > 9 Then
+      Indicator1$ = Left$( FieldData$, 1 )
+      If Indicator1$ = " " Then
+          Indicator1$ = "  "
+      End If
+      Indicator2$ = Mid$( FieldData$, 2, 1 )
+      If Indicator2$ = " " Then
+          Indicator2$ = "  "
+      End If
+      Indicators$ = Indicator1$ & Indicator2$
+      FieldData$  = Mid$( FieldData$, 3 )
+    Else
+      Indicators$ = "    "
+  End If
+
+' Clean up the data in the field to improve the display as much as possible. Given the
+' limitations of the set of characters the OML dialog box can show, some information is
+' bound to be lost.
+
+  FieldData$ = MakeDisplayable( FieldData$ )
+
+' Then assemble all the pieces to make a line for display in the dialog box.
+
+  ReDim Preserve RecordFields( i )
+   RecordFields( i ) = Tag$ & "  " & Indicators$ & "  " & FieldData$
+
+' Remove the first directory entry to make a new string, and increment the starting
+' position of the next field.
+
+  Directory$   = Mid$( Directory$, DIRECTORY_ENTRY_LENGTH + 1 )
+  FieldOffset% = FieldOffset% + FieldLength%
+  i            = i + 1
+Loop
+
+RecordArray = ""
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' The function that controls the master dialog box.
+
+Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const DISABLED       As Integer = 0   'The value to make a dialog box control disabled.
+Const ENABLED        As Integer = 1   'The value to make a dialog box control enabled.
+Const INITIALIZE     As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE      As Integer = 0   'The value to make a dialog box control invisible.
+Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+Const VISIBLE        As Integer = 1   'The value to make a dialog box control visible.
+
+Dim Delimiter$
+Dim FirstSubfield$
+Dim FirstSubfieldCode$
+Dim SelectedField$
+Dim Selection%
+Dim Start%                   : Start%         = 1
+Dim SubfieldCode$
+Dim SubfieldStart%
+Dim Tag$
+
+Dim SubfieldAFound           : SubfieldAFound = FALSE
+
+Dim p As Integer
+
+Select Case Action%
+
+' When the dialog box first appears, the first record in the array is shown. The
+' navigation buttons are visible only if there is more than one button, and the
+' "Previous" button is always disabled. The drop-down jump list is invisible unless there
+' are more than 9 records. If only one export file has been found, hide the drop-down
+' list of files as well as the button and the group box surrounding them. Always show
+' which file the displayed record is in. The instruction to click a field to copy it
+' hides the button to make the copy.
+
+  Case INITIALIZE
+
+    Problem$ = RecordArray( RecordNumber% )
+    If Problem$ <> "" Then
+        MsgBox Problem$, CRITICAL_MESSAGE, WaltsMacros$
+        Exit Function
+    End If
+    DlgText         "FileDisplay",   ExportDestinations( FileSelect% )
+    If CountOfFiles% = 1 Then
+        DlgVisible      "ChangeFile",    INVISIBLE
+        DlgVisible      "FileList",      INVISIBLE
+        DlgVisible      "Outline",       INVISIBLE
+      Else
+        DlgEnable       "ChangeFile",    DISABLED
+        DlgVisible      "FileList",      VISIBLE
+        DlgVisible      "Outline",       VISIBLE
+    End If
+    DlgValue        "FileList",      FileSelect%
+    DlgListBoxArray "RecordDisplay", RecordFields
+    If CountOfRecords% = 1 Then
+        DlgVisible      "Prev",          INVISIBLE
+        DlgVisible      "Next",          INVISIBLE
+        DlgText         "RecordCount",   "Only record in file."
+      Else
+        DlgVisible      "Prev",          VISIBLE
+        DlgVisible      "Next",          VISIBLE
+        If RecordNumber% = 0 Then
+            DlgEnable       "Prev",          DISABLED
+          Else
+            DlgEnable       "Prev",          ENABLED
+        End If
+        If RecordNumber% = CountOfRecords% - 1 Then
+            DlgEnable       "Next",          DISABLED
+          Else
+            DlgEnable       "Next",          ENABLED
+        End If
+        DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
+    End If
+    If CountOfRecords% < 10 Then
+        DlgVisible      "JumpList",      INVISIBLE
+        DlgVisible      "JumpText",      INVISIBLE
+      Else
+        DlgVisible      "JumpList",      VISIBLE
+        DlgVisible      "JumpText",      VISIBLE
+    End If
+    DlgEnable       "ChangeFile",    DISABLED
+    DlgVisible      "CopyData",      INVISIBLE
+    DlgText         "Encoding",      Encoding$
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' When the navigation buttons are used, the record number is changed, and the next or
+' previous record is parsed for display. The navigation buttons are enabled and disabled
+' according to whether the new record is at the beginning or end of the file. If the
+' "Copy" button was visible because a field was clicked, it is made invisible when a new
+' record is displayed, to be seen again only if a field is clicked.
+
+      Case "Prev"
+        If RecordNumber% > 0 Then
+            RecordNumber% = RecordNumber% - 1
+            Problem$      = RecordArray( RecordNumber% )
+            If Problem$ <> "" Then
+                MsgBox Problem$, CRITICAL_MESSAGE, WaltsMacros$
+                Exit Function
+            End If
+            DlgListBoxArray "RecordDisplay", RecordFields
+            DlgEnable       "Next",          ENABLED
+        End If
+        If RecordNumber% = 0 Then
+            DlgEnable       "Prev",          DISABLED
+          Else
+            DlgEnable       "Prev",          ENABLED
+        End If
+        DlgVisible      "CopyData",      INVISIBLE
+        DlgText         "Encoding",      Encoding$
+        DlgVisible      "Instructions",  VISIBLE
+        DlgText         "Instructions",  "Click on a field to copy it."
+        DlgValue        "JumpList",      0
+        DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Next"
+        If RecordNumber% < CountOfRecords% - 1 Then
+            RecordNumber% = RecordNumber% + 1
+            Problem$      = RecordArray( RecordNumber% )
+            If Problem$ <> "" Then
+                MsgBox Problem$, CRITICAL_MESSAGE, WaltsMacros$
+                Exit Function
+            End If
+            DlgListBoxArray "RecordDisplay", RecordFields
+            DlgEnable       "Prev",          ENABLED
+        End If
+        If RecordNumber% = CountOfRecords% - 1 Then
+            DlgEnable       "Next",          DISABLED
+          Else
+            DlgEnable       "Next",          ENABLED
+        End If
+        DlgVisible      "CopyData",      INVISIBLE
+        DlgText         "Encoding",      Encoding$
+        DlgVisible      "Instructions",  VISIBLE
+        DlgText         "Instructions",  "Click on a field to copy it."
+        DlgValue        "JumpList",      0
+        DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+' If the drop-down list of record numbers is used, the number chosen triggers the
+' analysis of that record in the file. The navigation buttons change to match.
+
+      Case "JumpList"
+        RecordNumber% = DlgValue( "JumpList" ) - 1
+        If RecordNumber% = -1 Then
+            RecordNumber% = 0
+        End If
+        Problem$      = RecordArray( RecordNumber% )
+        If Problem$ <> "" Then
+            MsgBox Problem$, CRITICAL_MESSAGE, WaltsMacros$
+            Exit Function
+        End If
+        DlgListBoxArray "RecordDisplay", RecordFields
+        If RecordNumber% = 0 Then
+            DlgEnable       "Prev",          DISABLED
+          Else
+            DlgEnable       "Prev",          ENABLED
+        End If
+        If RecordNumber% = CountOfRecords% - 1 Then
+            DlgEnable       "Next",          DISABLED
+          Else
+            DlgEnable       "Next",          ENABLED
+        End If
+        DlgText         "Encoding",      Encoding$
+        DlgValue        "JumpList",      0
+        DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+' If a different export file is selected, capture its index in the array of files.
+
+      Case "FileList"
+        FileSelect% = DlgValue( "FileList" )
+        DlgEnable       "ChangeFile",    ENABLED
+
+' When the button to copy data is clicked, set the Clipboard with the string from the
+' selected field. This button is visible only when the list box is clicked.
+
+      Case "CopyData"
+        Clipboard.Clear
+        Clipboard.SetText CopiedData$
+
+' When a field is clicked, if the tag is appropriate (all but the tags that comprise the
+' fixed field), process the field text to find subfield $a or the first subfield.
+
+      Case "RecordDisplay"
+        Selection%     = DlgValue( "RecordDisplay" )
+        SelectedField$ = RecordFields( Selection% )
+        Tag$           = Left$( SelectedField$, 3 )
+
+        Select Case Tag$
+
+' The 001 field has no subfields, so the OCLC control number is simply extracted from the
+' end of the field.
+
+          Case "001"
+            DlgEnable       "CopyData",      ENABLED
+            DlgText         "CopyData",      "Copy 001 field"
+            DlgVisible      "CopyData",      VISIBLE
+            DlgVisible      "Instructions",  INVISIBLE
+            CopiedData$ = Mid$( SelectedField$, 15 )
+
+' The Leader and the other control fields contain no useful text for searching and so are
+' ignored.
+
+          Case "LDR"
+            DlgVisible      "CopyData",      INVISIBLE
+            DlgVisible      "Instructions",  VISIBLE
+            DlgText         "Instructions",  "Can't copy the Leader!"
+
+          Case "003", "005", "006", "007", "008"
+            DlgVisible      "CopyData",      INVISIBLE
+            DlgVisible      "Instructions",  VISIBLE
+            DlgText         "Instructions",  "Can't copy the " & Tag$ & " field!"
+
+' For all other fields, either subfield $a or the first subfield is isolated to put on
+' the Clipboard. Move through the field, stopping at each delimiter to check the subfield
+' code.
+
+          Case Else
+            DlgEnable       "CopyData",      ENABLED
+            If Encoding$ = "[Unicode]" Then
+                Delimiter$ = "$"
+              Else
+                Delimiter$ = "|"
+            End If
+
+' If the first subfield is subfield $a, the following loop quits immediately after
+' removing it from the field; but if the first subfield is something else, the loop
+' continues marching along, checking all subsequent subfields. A subfield $a farther
+' along then takes the place of the first subfield as the string to be copied.
+
+            Do
+              p = InStr( Start%, SelectedField$, Delimiter$ )
+              If p <> 0 Then
+                  SubfieldCode$ = Mid$( SelectedField$, p + 1, 1 )
+                  If SubfieldCode$ = "a" Then
+                      If SubfieldAFound Then
+                          SelectedField$ = Trim$( Mid$( SelectedField$, SubfieldStart%, p - SubfieldStart% ) )
+                          Exit Do
+                        Else
+                          SubfieldAFound = TRUE
+                          SubfieldStart% = p + 2
+                      End If
+                    Else
+                      If SubfieldAFound Then
+                          SelectedField$ = Trim$( Mid$( SelectedField$, SubfieldStart%, p - SubfieldStart% ) )
+                          Exit Do
+                        Else
+                          If SubfieldStart% = 0 Then
+                              FirstSubfieldCode$ = SubfieldCode$
+                              SubfieldStart%     = p + 2
+                            Else
+                              If FirstSubfield$ = "" Then
+                                  FirstSubfield$ = Trim$( Mid$( SelectedField$, SubfieldStart%, p - SubfieldStart% ) )
+                              End If
+                          End If
+                      End If
+                  End If
+                  Start% = p + 1
+                Else
+                  If SubfieldAFound Then
+                      SelectedField$ = Trim$( Mid$( SelectedField$, SubfieldStart% ) )
+                    ElseIf FirstSubfield$ = "" Then
+                      FirstSubfield$ = Trim$( Mid$( SelectedField$, SubfieldStart% ) )
+                  End If
+                  Exit Do
+              End If
+            Loop Until p = 0
+            If SubfieldAFound = FALSE Then
+                CopiedData$   = FirstSubfield$
+                SubfieldCode$ = FirstSubfieldCode$
+              Else
+                CopiedData$   = SelectedField$
+                SubfieldCode$ = "a"
+            End If
+
+' If the subfield string ends with punctuation, eliminate that character.
+
+            If Right$( CopiedData$, 1 ) Like "[-.,?;:!]" Then
+                CopiedData$ = Trim$( Left$( CopiedData$, Len( CopiedData$ ) - 1 ) )
+            End If
+
+' Make the "Copy" button visible with the field and subfield copied as its text, and hide
+' the instructions.
+
+            DlgText         "CopyData",      "Copy " & Tag$ & " subfield $" & SubfieldCode$
+            DlgVisible      "CopyData",      VISIBLE
+            DlgVisible      "Instructions",  INVISIBLE
+
+        End Select
+
+    End Select
+
+    DlgFocus        "Cancel"
+
+End Select
+
+End Function
+'158469376
+'
+'Macro name: ViewExportFiles
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:44 AM using "MacroBookInspector" macro by Walter F. Nickeson.

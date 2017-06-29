@@ -1,0 +1,120 @@
+'MacroName:PasteInverted.2016.01
+'MacroDescription:Inverts a two- or three-word Clipboard selection for pasting into a
+' record, by simply putting the last word first.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 1 May 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro takes text in a record copied to the Windows Clipboard and
+' pastes it in as a name heading in a 1XX field. If the selection is composed of only two
+' or three words, it offers the option of inverting the selection (by putting the last
+' word first) for pasting in as a personal name; if the selection consists of a single
+' word, or of more than three words, no inversion is done. Intended primarily to
+' complement the macro "BrowseAuthority," it covers those situations in which the name
+' selected for browsing by that macro matched no authority record, and the heading must
+' therefore contain that name in the form given. ("BrowseAuthority" puts the selection it
+' uses for browsing on the Clipboard, so when using this macro after "BrowseAuthority,"
+' there is no need for an additional Copy command.) After returning to the bibliographic
+' record from the unsuccessful browse, run this macro to paste the selection into the
+' record as a 1XX field. It assumes a selection of two or three words is a personal name
+' and asks if the selection should be inverted before pasting. The name can of course be
+' pasted in uninverted, if desired.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                        ' a big "X") in a message box; used to report the macro quitting.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim Heading$
+Dim NameCopied$
+Dim NameInverted$
+Dim NameRegular$
+Dim Start%                   : Start%        = 1
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:PasteInverted"
+Dim WordCount%               : WordCount%    = 1
+
+Dim FieldAdded               : FieldAdded    = TRUE
+Dim Invert                   : Invert        = TRUE
+
+Dim p As Integer
+
+' Get the text on the Clipboard.
+
+NameCopied$ = Trim$( Clipboard.GetText( ) )
+If NameCopied$ = "" Then
+    Exit Sub
+  Else
+    NameRegular$ = NameCopied$
+End If
+
+' Count the words in the string by counting spaces. The position of the last space found
+' will be used for inverting a phrase.
+
+Do
+  p = InStr( Start%, NameCopied$, " " )
+  If p > 0 Then
+      Start% = p + 1
+      WordCount% = WordCount% + 1
+  End If
+Loop Until p = 0
+
+NameInverted$ = Trim$( Mid$( NameCopied$, Start% ) ) & ", " & Trim$( Left$( NameCopied$, Start% - 1 ) )
+
+' If the selection is two or three words, check to see if it should be inverted before
+' going onto the Clipboard.
+
+If WordCount% = 1 Or WordCount% > 3 Then
+    Invert = FALSE
+  Else
+    Begin Dialog Dialog1Definition 178, 124, WaltsMacros$
+      Text  28, 12, 124, 14, "Paste Clipboard selection into record in ..."
+      ButtonGroup .choice
+        PushButton  44, 32, 90, 16, "&Inverted form (100 field)"
+        PushButton  44, 60, 90, 16, "&Direct order (110 field)"
+        PushButton  44, 88, 90, 16, "&Quit, don't paste"
+    End Dialog
+    Dim Dialog1 As Dialog1Definition
+    Dialog Dialog1
+    Select Case Dialog1.choice
+      Case 0
+        Invert = TRUE
+      Case 1
+        Invert = FALSE
+      Case 2
+        Exit Sub
+    End Select
+End If
+
+If Invert = FALSE Then
+    Heading$ = "1102 " & NameRegular$
+  Else
+    Heading$ = "1001 " & NameInverted$
+End If
+
+FieldAdded = CS.AddField( 1, Heading$ )
+If FieldAdded = FALSE Then MsgBox "Sorry, could not add heading.", CRITICAL_MESSAGE, WaltsMacros$
+
+End Sub
+'1426323
+'
+'Macro name: PasteInverted
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:24 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,52 @@
+'MacroName:UncontrolRestoreCursor.2010.01
+'MacroDescription:Uncontrols a heading but keeps the cursor in its original position.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 3 August 2010.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro to uncontrol a heading but keep the cursor where it was.
+'
+' The menu command Edit>Control Headings>Uncontrol Single (or the corresponding shortcut
+' keys [CTRL-F11]) moves the cursor to the beginning of the field when the heading is
+' made uncontrolled. Sometimes that's an inconvenience, such as when a subdivision is to
+' be added to the field, because then the cursor has to be moved to the point of
+' insertion. This macro deals with that inconvenience by simply storing the position of
+' the cursor when the macro is run, and then moving the cursor back to that position
+' after the heading has been uncontrolled. If the cursor is placed in the controlled
+' field in the position where data is to be entered, the macro presents the uncontrolled
+' field ready for data entry.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim ColPos%
+
+ColPos% = CS.CursorColumn
+
+If CS.UncontrolHeading Then
+    CS.CursorColumn = ColPos%
+End If
+
+End Sub
+'743817
+'
+'Macro name: UncontrolRestoreCursor
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:36:38 AM using "MacroBookInspector" macro by Walter F. Nickeson.

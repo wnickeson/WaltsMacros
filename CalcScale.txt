@@ -1,0 +1,423 @@
+'MacroName:CalcScale.2017.09
+'MacroDescription:Calculates the representative fraction from the scale ratio on a map.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Design partly inspired by Terry Reese's "Scale Calculator" at
+' http://reeset.net/scale-calculator/
+'
+' Last updated: 26 June 2017.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro to open a dialog box in which to enter the two numbers of a
+' scale ratio (including decimals or fractions--use the slash / (solidus or stroke) to
+' enter a fraction) and their corresponding units of length. It then calculates and
+' displays the ratio or representative fraction, putting the denominator on the
+' Clipboard so it can be pasted into the 034 field if desired. (The displayed number
+' includes commas for readability, but the pasted number doesn't.)
+'
+' As this macro is designed to be used for scales on maps, the unit of length of the
+' first number is only inches or centimeters; it is not a general-purpose unit converter.
+'
+' You do not need to be logged on to use this macro.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function CheckInput     ( StrInput$ )          As Integer
+Declare Function ConvertStrToNum( CandidateString$ )   As Double
+Declare Function Roundup        ( NumInput As Double ) As Double
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global WaltsMacros$
+
+Global UnitsList1( 1 ) As String
+Global UnitsList2( 4 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box function when the "Cancel" button is clicked.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+UnitsList1( 0 ) = "inches"
+UnitsList1( 1 ) = "centimeters"
+
+UnitsList2( 0 ) = "miles"
+UnitsList2( 1 ) = "yards"
+UnitsList2( 2 ) = "feet"
+UnitsList2( 3 ) = "kilometers"
+UnitsList2( 4 ) = "meters"
+
+WaltsMacros$ = "[Walt's macros] Extras2:CalcScale"
+
+Begin Dialog Dialog1Definition  224, 114, "WaltsMacros", .Dialog1ControlFunction
+  PushButton      8,  48, 208,  16, "&Calculate",                                        .Calc
+  CancelButton   16,  18,   1,   1
+  PushButton    104,  92,  52,  14, "Clea&r",                                            .Clear
+  PushButton    164,  92,  52,  14, "Cl&ose",                                            .Close
+  TextBox        16,  18,  32,  12,                                                      .TextBox1
+  DropListBox    54,  18,  52,  32, UnitsList1(),                                        .Units1
+  TextBox       116,  18,  32,  12,                                                      .TextBox2
+  DropListBox   156,  18,  52,  64, UnitsList2(),                                        .Units2
+  Text          108,  20,   4,   8, "="
+  TextBox        34,  72,  88,  12,                                                      .Answer
+  GroupBox        8,   4, 208,  36, "Enter numbers (including decimals and fractions):"
+  Text          128,  70,  80,  16, "Denominator also copied to Clipboard.",             .CopyDenominator
+  Text            8,  74,  24,   8, "Result:"
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+End Sub
+
+'****************************************************************************************
+
+Function CheckInput( StrInput$ ) As Integer
+
+' This function checks the input for existence (SOMETHING needs to be entered) and
+' validity (only numbers and a decimal point are acceptable).
+
+Dim DecimalEquivalent!
+Dim Denominator%
+Dim Numerator%
+Dim SlashCount%
+Dim SpaceCount%
+Dim TempString$
+Dim TestChar$
+Dim WholeNum$
+
+Dim i As Integer
+
+If StrInput$ = "" Then
+    CheckInput = 0
+    Exit Function
+  Else
+    For i = 1 To Len( StrInput$ )
+      TestChar$ = Mid$( StrInput$, i, 1 )
+
+      Select Case TestChar$
+
+        Case ".", "0" To "9"
+          TempString$ = TempString$ & TestChar$
+
+        Case " "
+          SpaceCount% = SpaceCount% + 1
+          If SpaceCount% > 1 Or SlashCount% > 0 Then     'Can't have a space after the slash.
+              CheckInput = 3
+              Exit Function
+            Else
+              WholeNum$ = TempString$      'Space found: Whole number complete.
+              TempString$ = ""             'Empty string to start numerator.
+          End If
+
+        Case "/"
+          If SlashCount% = 0 Then
+              If TempString$ = "" Then     'Nothing for numerator: Problem.
+                  CheckInput = 3
+                  Exit Function
+                Else
+                  Numerator% = Val( TempString$ )
+                  TempString$ = ""         'Empty string to start denominator.
+                  SlashCount% = SlashCount% + 1
+              End If
+            Else
+              CheckInput = 3
+              Exit Function
+          End If
+
+        Case Else
+          CheckInput = 1
+          Exit Function
+
+      End Select
+
+    Next i
+End If
+
+If SlashCount% = 1 Then
+    Denominator% = Val( TempString$ )
+  Else
+    WholeNum$ = TempString$
+End If
+
+If Numerator% = 0 And Denominator% = 0 Then
+    DecimalEquivalent! = 0
+  Else
+    DecimalEquivalent! = Numerator% / Denominator%
+End If
+
+If DecimalEquivalent! = 0 Then
+    StrInput$ = WholeNum$
+  Else
+    StrInput$ = WholeNum$ & Trim$( Str$( DecimalEquivalent! ) )
+End If
+
+CheckInput = 2
+
+End Function
+
+'****************************************************************************************
+
+Function ConvertStrToNum( CandidateString$ ) As Double
+
+' Converts a string to a number, preserving a decimal.
+
+Dim DecPart#
+Dim InputString$
+Dim IntPart#
+Dim NumString$
+Dim TempChar$
+
+Dim Decimal                  : Decimal = FALSE
+
+Dim i As Integer
+
+InputString$ = CandidateString$
+
+For i = 1 To Len( InputString$ )
+  TempChar$ = Mid$( InputString$, i, 1 )
+  If TempChar$ Like "[0-9]" Then
+      NumString$ = NumString$ & TempChar$
+    ElseIf TempChar$ = "." Then
+      IntPart#   = Val( NumString$ )
+      Decimal    = TRUE
+      NumString$ = ""
+  End If
+Next i
+
+If Decimal = FALSE Then
+    IntPart# = Val( NumString$ )
+  Else
+    DecPart# = Val( NumString$ )/(10 ^ Len( NumString$ ) )
+End If
+
+ConvertStrToNum = IntPart# + DecPart#
+
+End Function
+
+'****************************************************************************************
+
+Function Roundup( NumInput As Double ) As Double
+
+' Rounds up numbers.
+
+Const MAX_INTEGER As Integer = 32767
+
+Dim DecimalPart$
+Dim RoundUpChar$
+Dim StringNum$
+Dim TempNum As Double
+
+Dim p As Integer
+
+If NumInput > MAX_INTEGER Then
+    StringNum$ = CStr( NumInput )
+    p = InStr( StringNum$, "E" )
+    If p > 0 Then
+        Roundup = -5
+        Exit Function
+    End If
+    p = InStr( StringNum$, "." )
+    If p > 0 Then
+        DecimalPart$ = Mid$( StringNum$, p + 1, 1 )
+        If Val( DecimalPart$ ) >= 5 Then
+            RoundUpChar$ = Mid$( StringNum$, p - 1, 1 )
+            RoundUpChar$ = CStr( Val( RoundUpChar$ ) + 1 )
+            StringNum$   = Left$( StringNum$, p - 2 ) & RoundUpChar$
+            TempNum      = Val( StringNum$ )
+          Else
+            TempNum      = Val( Left$( StringNum$, p - 1 ) )
+        End If
+      Else
+        TempNum = NumInput
+    End If
+  Else
+    TempNum = Int( NumInput )
+    If NumInput - TempNum > .5 Then TempNum = TempNum + 1
+End If
+
+Roundup = TempNum
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' Calculate the ratio.
+
+Const CONTROL_CHANGE  As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const FOCUS_CHANGE    As Integer = 4   'The value of the dialog box function parameter "Action%" when the control focus changes.
+Const INITIALIZE      As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE       As Integer = 0   'The value to make a dialog box control invisible.
+Const KEEP_DLG_OPEN   As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+Const VISIBLE         As Integer = 1   'The value to make a dialog box control visible.
+Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Dim Answer$
+Dim Calc#
+Dim Denominator#
+Dim InputString1$
+Dim InputString2$
+Dim LengthAnswer%
+Dim Numerator#
+Dim TempString$
+Dim ThreeDigits$
+Dim UnitsList1Selection%
+Dim UnitsList2Selection%
+Dim ValidityCheck%
+
+Dim i As Integer, x As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible "CopyDenominator", INVISIBLE
+    DlgFocus   "TextBox1"
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "Calc"
+        InputString1$  = Trim$( DlgText( "TextBox1" ) )
+        InputString2$  = Trim$( DlgText( "TextBox2" ) )
+        ValidityCheck% = CheckInput( InputString1$ ) * CheckInput( InputString2$ )
+
+'If the input strings are valid, proceed with the calculation.
+
+        If ValidityCheck% = 4 Then
+
+            Numerator#           = ConvertStrToNum( InputString1$ )
+            Denominator#         = ConvertStrToNum( InputString2$ )
+            UnitsList1Selection% = DlgValue( "Units1" )
+            UnitsList2Selection% = DlgValue( "Units2" )
+
+            Select Case UnitsList1Selection%
+
+              Case 0
+
+                Select Case UnitsList2Selection%
+                  Case 0          'miles
+                    Calc# = Roundup( ( Denominator# * 63360 ) / Numerator# )
+                  Case 1          'yards
+                    Calc# = Roundup( ( Denominator# * 36 ) / Numerator# )
+                  Case 2          'feet
+                    Calc# = Roundup( ( Denominator# * 12 ) / Numerator# )
+                  Case 3          'Kilometers
+                    Calc# = Roundup( ( Denominator# * 39370 ) / Numerator# )
+                  Case 4          'meters
+                    Calc# = Roundup( ( Denominator# * 39.37 ) / Numerator# )
+                End Select
+
+              Case 1
+
+                Select Case UnitsList2Selection%
+                  Case 0          'miles
+                    Calc# = Roundup( ( Denominator# * 160934.4 ) / Numerator# )
+                  Case 1          'yards
+                    Calc# = Roundup( ( Denominator# * 40233.6 ) / Numerator# )
+                  Case 2          'feet
+                    Calc# = Roundup( ( Denominator# * 30.48 ) / Numerator# )
+                  Case 3          'Kilometers
+                    Calc# = Roundup( ( Denominator# * 100000 ) / Numerator# )
+                  Case 4          'meters
+                    Calc# = Roundup( ( Denominator# * 100 ) / Numerator# )
+
+                End Select
+
+            End Select
+
+          If Calc# = -5 Then
+              MsgBox "Sorry, the results are numbers too big for this macro.", WARNING_MESSAGE, WaltsMacros$
+              DlgEnd 0
+            Else
+              Answer$ = Cstr( Calc# )
+          End If
+
+' Add commas as thousands separators for legibility.
+
+            LengthAnswer% = Len( Answer$ )
+            i = 2
+            Do
+              ThreeDigits$ = Mid$( Answer$, LengthAnswer% - i, 3 )
+              If i = 2 Then
+                  TempString$ = ThreeDigits$
+                Else
+                  TempString$ = ThreeDigits$ & "," & TempString$
+              End If
+              i = i + 3
+            Loop Until i >= LengthAnswer%
+            x = i - LengthAnswer%
+            Select Case x
+              Case 0
+                TempString$ = Left$( Answer$, 2 ) & "," & TempString$
+              Case 1
+                TempString$ = Left$( Answer$, 1 ) & "," & TempString$
+            End Select
+
+            Clipboard.Clear
+            Clipboard.SetText Answer$
+
+            DlgText    "Answer", "1:" & TempString$
+            DlgVisible "CopyDenominator", VISIBLE
+            Dialog1ControlFunction = KEEP_DLG_OPEN
+            DlgFocus   "Cancel"
+
+          Else
+
+            If ValidityCheck% = 0 Then
+                MsgBox "Please enter values to calculate!", WARNING_MESSAGE, WaltsMacros$
+              ElseIf ValidityCheck% Mod 3 = 0 Then
+                MsgBox "Please check formatting of the fraction!", WARNING_MESSAGE, WaltsMacros$
+              Else
+                MsgBox "Please enter only numbers!", WARNING_MESSAGE, WaltsMacros$
+            End If
+            Dialog1ControlFunction = KEEP_DLG_OPEN
+            DlgFocus   "TextBox1"
+        End If
+
+      Case "Close"
+        DlgEnd 0
+
+      Case "Clear"
+        DlgText    "Answer",          ""
+        DlgVisible "CopyDenominator", INVISIBLE
+        DlgFocus   "TextBox1"
+        DlgText    "TextBox1",        ""
+        DlgText    "TextBox2",        ""
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+  Case FOCUS_CHANGE
+
+    If Id$ = "Answer" Then
+        DlgFocus   "Close"
+    End If
+
+End Select
+
+End Function
+'44515660
+'
+'Macro name: CalcScale
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 6/28/2017 11:35:16 AM using "MacroBookInspector" macro by Walter F. Nickeson.
