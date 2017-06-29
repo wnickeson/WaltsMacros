@@ -1,0 +1,1165 @@
+'MacroName:ShortcutKeysIndex.2017.39
+'MacroDescription:Lists all shortcuts that use the selected key.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 28 June 2017.
+' Check for the latest versions of this and my other macros at
+' https://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works. Run the macro (there is no need to log on) to see which actions or
+' functions have been assigned as shortcuts to any particular key. Select which type of
+' shortcut (macro, menu command, character, or text string) and which set of keys
+' (alphanumeric, function, other (punctuation and special), and numeric keypad) to view.
+' Then select a key. The macro displays all the actions associated with that key. The
+' default view includes actions built in to the Client, but unchecking the checkbox
+' limits the display to only user-assigned shortcuts. The list of keys is shown in a
+' drop-down box, which, when it has the focus, is able to have its contents scrolled
+' through quickly by use of the mouse wheel or the up and down arrow keys. This makes for
+' rapid scanning of all the keys in use.
+'
+' The Client offers two views of shortcut keys used: alphabetically by name (that is, the
+' name of a macro or character, or the complete text of a menu command or a text string),
+' or by the entire set of keys used ("ALT" before "CTRL" before "SHIFT"). This macro
+' offers a different view. Consider it an index to the list of shortcuts by the base key,
+' so you can see all the shortcuts assigned to any individual key. A key can have up to
+' eight shortcuts assigned to it--seven of them from adding to the base key the three
+' modifier keys ALT, CTRL, and SHIFT, and their various combinations. For each key, this
+' macro shows all eight (or however many are present) of those shortcuts. This can be
+' useful when, for example, a key would be mnemomically appropriate for a certain
+' shortcut, but you don't remember what shortcuts have been assigned to that key already
+' and if there might be a conflict.
+'
+' The user-assigned shortcuts are stored, by default, in the file "C:\Users\[username]\
+' AppData\Roaming\OCLC\Connex\Profiles\MyProfile\Custom.Keymap.xml" in Windows 7 and 10.
+' There may be other custom keymap files in the directory. The macro starts by listing
+' shortcuts in "Custom"; if there are other files, select them to view their shortcuts
+' (this option is only visible when there are two or more keymap files in the directory).
+' For all keymap files, the macro extracts all the key assignments in the selected one
+' and puts them in an array. Each assignment contains three pieces of information of
+' interest: The key assigned, the type or category of action, and the name of the action.
+' When a key is selected, the macro runs through the array. It first tries to match the
+' selected category, then tries to match the selected key. If both match attempts are
+' successful, the name of the action is displayed in the dialog box.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub ClearDisplay
+Declare Sub FillArrays
+Declare Sub GetShortcutsFromFile( InString$ )
+
+Declare Function UnicodeConvert( InString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                               ' a big "X") in a message box; used to report the macro quitting.
+
+Global Const aACTION   As Integer = 2
+Global Const aCATEGORY As Integer = 0
+Global Const aCODE     As Integer = 0
+Global Const aKEYS     As Integer = 1
+Global Const aNAME     As Integer = 1
+
+Global FileCounter%
+Global IndexOfCustom As Variant
+Global MyProfilePath$
+Global NullChar$
+Global WaltsMacros$
+Global XMLSuffix$
+
+Global Success
+
+Global AlphaNums     ( 36 )     As String
+Global AppAssigned   ( 2, 172 ) As String
+Global Category      ( 4 )      As String
+Global Characters    ( 1, 102 ) As String
+Global Functions     ( 12 )     As String
+Global KeyGroup      ( 3 )      As String
+Global KeymapFiles   ()         As String
+Global NumPadDisplay ( 28 )     As String
+Global NumPadOCLC    ( 28 )     As String
+Global OthersDisplay ( 31 )     As String
+Global OthersOCLC    ( 31 )     As String
+Global Shortcuts     ()         As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'Maximum number of reads of environment strings to try.
+
+Dim AppData$
+Dim CompletePath$
+Dim EnvironmentString$
+Dim KeymapFile$
+Dim KeymapFilesPath$
+Dim KeymapFileLength%
+
+Dim i As Integer, p As Integer, q As Integer, x As Integer
+
+FileCounter%   = 0
+MyProfilePath$ = ""
+NullChar$      = Chr$( 0 )
+Success        = TRUE
+WaltsMacros$   = "[Walt's macros] MacroTools:ShortcutKeysIndex"
+XMLSuffix$     = ".Keymap.xml"
+
+Erase KeymapFiles
+
+' The first step is to find all the keymap files. For Windows Vista, 7, 8, and 10, the
+' files are located in X:\Users\[user name]\AppData\Roaming\OCLC\Connex\Profiles\MyProfile\,
+' where X is the letter of the hard drive. The first part of this path, which tells what
+' X and the user name are, is given in the "APPDATA" variable. There may be multiple
+' profile folders, but this macro looks only in the one named "MyProfile."
+
+i = 1
+Do
+  EnvironmentString$ = Environ( i )
+  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
+      AppData$ = Mid$( EnvironmentString$, 9 )
+      Exit Do
+  End If
+  i = i + 1
+Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
+If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GoTo FileFailure:
+
+' Multiple keymaps files may exist, all with the suffix ".Keymap.xml". OCLC starts off
+' with one named "Custom." This routine gets all the files. If a file is larger than 32K
+' bytes the macro can't, at this time, handle it.
+
+MyProfilePath$   = AppData$ & "\OCLC\Connex\Profiles\MyProfile\"
+KeymapFilesPath$ = MyProfilePath$ & "*" & XMLSuffix$
+IndexOfCustom    = NullChar$
+
+' Fill the array with the names of the files. Keep track of the "Custom" file, as that
+' will be the default, or the first, file displayed. Exclude the
+' "AppExclusions.Keymap.xml" as that file stores de-assigned shortcut keys. An empty but
+' valid shortcut file contains only the string "<Keymap />" (in 22 bytes). That, and any
+' file of smaller size, will not be included in the list.
+
+On Error GoTo FileFailure:
+KeymapFile$ = Dir( KeymapFilesPath$ )
+
+Do While KeymapFile$ <> ""
+  KeymapFileLength% = FileLen( MyProfilePath$ & KeymapFile$ )
+  If KeymapFileLength% > 32000 Then GoTo FileFailure:
+  If KeymapFile$ <> "AppExclusions.Keymap.xml" And KeymapFileLength% > 22 Then
+      ReDim Preserve KeymapFiles( FileCounter% )
+      p                           = InStr( KeymapFile$, XMLSuffix$ )
+      KeymapFile$                 = Left$( KeymapFile$, p - 1 )
+      If KeymapFile$ = "Custom" Then
+          IndexOfCustom = FileCounter%
+      End If
+      KeymapFiles( FileCounter% ) = KeymapFile$
+      FileCounter%                = FileCounter% + 1
+  End If
+  KeymapFile$ = Dir
+Loop
+
+' No valid files found: Exit the macro.
+
+If FileCounter% = 0 Then GoTo FileFailure:
+
+' If there is a Custom.Keymap file, send that to the sub for extraction of shortcuts;
+' otherwise, send the first file in the list.
+
+If VarType( IndexOfCustom ) = 2 Then
+    CompletePath$ = MyProfilePath$ & KeymapFiles( IndexOfCustom )
+  Else
+    CompletePath$ = MyProfilePath$ & KeymapFiles( 0 )
+End If
+
+Call GetShortcutsFromFile( CompletePath$ & XMLSuffix$ )
+
+' A problem reading the file means exiting the macro.
+
+If Success = FALSE Then Exit Sub
+
+' If all is OK, then fill the arrays.
+
+FillArrays
+
+' Then run the dialog box to show what has been found.
+
+Begin Dialog Dialog1Definition  352, 220, WaltsMacros$, .Dialog1ControlFunction
+  PushButton    268, 194,  72,  16, "Close",                  .Close
+  CancelButton   32,  21,   1,   1
+  PushButton     12, 194,  72,  16, "Copy to Clipboard",      .CopyButton
+  DropListBox    30,  19,  80,  56, Category(),               .DropListBoxCategory
+  CheckBox      114,  19,  84,  12, "Include app categories", .IncludeAppsCheckbox
+  DropListBox   242,  19,  80,  63, KeyGroup(),               .DropListBoxKeyGroup
+  DropListBox    22,  58,  88, 160, "",                       .DropListBoxKey
+  Text          100, 197,  64,   8, "Select keymap file:",    .SelectAFile
+  DropListBox   164, 195,  80,  80, KeymapFiles(),            .DropListBoxFiles
+  Text          250,  60,  88,   8, "",                       .ShortcutCount
+  Text           24,  82,  80,   8, "unmodified"
+  Text           24,  94,  20,   8, "SHIFT"
+  Text           24, 106,  20,   8, "CTRL"
+  Text           24, 118,  14,   8, "ALT"
+  Text           24, 130,  48,   8, "SHIFT + CTRL"
+  Text           24, 142,  42,   8, "SHIFT + ALT"
+  Text           24, 154,  40,   8, "CTRL + ALT"
+  Text           24, 166,  70,   8, "SHIFT + CTRL + ALT"
+  GroupBox       20,  75, 310,  17, ""
+  GroupBox       20,  87, 310,  17, ""
+  GroupBox       20,  99, 310,  17, ""
+  GroupBox       20, 111, 310,  17, ""
+  GroupBox       20, 123, 310,  17, ""
+  GroupBox       20, 135, 310,  17, ""
+  GroupBox       20, 147, 310,  17, ""
+  GroupBox       20, 159, 310,  17, ""
+  Text          100,  82, 228,   8, "",                       .Unmodified
+  Text          100,  94, 228,   8, "",                       .Label_SHIFT
+  Text          100, 106, 228,   8, "",                       .Label_CTRL
+  Text          100, 118, 228,   8, "",                       .Label_ALT
+  Text          100, 130, 228,   8, "",                       .Label_SHIFT_CTRL
+  Text          100, 142, 228,   8, "",                       .Label_SHIFT_ALT
+  Text          100, 154, 228,   8, "",                       .Label_CTRL_ALT
+  Text          100, 166, 228,   8, "",                       .Label_SHIFT_CTRL_ALT
+  Text           17,  78,   4, 100, ""
+  Text          327,  78,   4, 100, ""
+  GroupBox       12,   6, 204,  34, "Select a category:"
+  GroupBox      224,   6, 116,  34, "Select a key group:"
+  GroupBox       12,  45, 328, 140, ""
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+
+Exit Sub
+
+FileFailure:
+
+MsgBox "Sorry, could not find the keymap file.", CRITICAL_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Sub ClearDisplay
+
+' Simply resets the display of all the key combinations to blank.
+
+DlgText         "Unmodified",           ""
+DlgText         "Label_ALT",            ""
+DlgText         "Label_CTRL",           ""
+DlgText         "Label_SHIFT",          ""
+DlgText         "Label_CTRL_ALT",       ""
+DlgText         "Label_SHIFT_ALT",      ""
+DlgText         "Label_SHIFT_CTRL",     ""
+DlgText         "Label_SHIFT_CTRL_ALT", ""
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrays
+
+Dim QUOTE As String*1        : QUOTE = Chr$( 034 )
+
+AlphaNums( 0  ) = "Select a key:"
+AlphaNums( 1  ) = "A"
+AlphaNums( 2  ) = "B"
+AlphaNums( 3  ) = "C"
+AlphaNums( 4  ) = "D"
+AlphaNums( 5  ) = "E"
+AlphaNums( 6  ) = "F"
+AlphaNums( 7  ) = "G"
+AlphaNums( 8  ) = "H"
+AlphaNums( 9  ) = "I"
+AlphaNums( 10 ) = "J"
+AlphaNums( 11 ) = "K"
+AlphaNums( 12 ) = "L"
+AlphaNums( 13 ) = "M"
+AlphaNums( 14 ) = "N"
+AlphaNums( 15 ) = "O"
+AlphaNums( 16 ) = "P"
+AlphaNums( 17 ) = "Q"
+AlphaNums( 18 ) = "R"
+AlphaNums( 19 ) = "S"
+AlphaNums( 20 ) = "T"
+AlphaNums( 21 ) = "U"
+AlphaNums( 22 ) = "V"
+AlphaNums( 23 ) = "W"
+AlphaNums( 24 ) = "X"
+AlphaNums( 25 ) = "Y"
+AlphaNums( 26 ) = "Z"
+AlphaNums( 27 ) = "1"
+AlphaNums( 28 ) = "2"
+AlphaNums( 29 ) = "3"
+AlphaNums( 30 ) = "4"
+AlphaNums( 31 ) = "5"
+AlphaNums( 32 ) = "6"
+AlphaNums( 33 ) = "7"
+AlphaNums( 34 ) = "8"
+AlphaNums( 35 ) = "9"
+AlphaNums( 36 ) = "0"
+
+Category( 0 )   = "All categories"
+Category( 1 )   = "Macros"
+Category( 2 )   = "Characters"
+Category( 3 )   = "Text strings"
+Category( 4 )   = "Menu items"
+
+Functions( 0  ) = "Select a key:"
+Functions( 1  ) = "F1"
+Functions( 2  ) = "F2"
+Functions( 3  ) = "F3"
+Functions( 4  ) = "F4"
+Functions( 5  ) = "F5"
+Functions( 6  ) = "F6"
+Functions( 7  ) = "F7"
+Functions( 8  ) = "F8"
+Functions( 9  ) = "F9"
+Functions( 10 ) = "F10"
+Functions( 11 ) = "F11"
+Functions( 12 ) = "F12"
+
+KeyGroup( 0 )   = "Alphanumeric keys"
+KeyGroup( 1 )   = "Function keys"
+KeyGroup( 2 )   = "Other keys"
+KeyGroup( 3 )   = "Numeric keypad"
+
+NumPadDisplay( 0  ) = "Select a key:"             : NumPadOCLC( 0  ) = ""
+NumPadDisplay( 1  ) = "0"                         : NumPadOCLC( 1  ) = "NumPad0"
+NumPadDisplay( 2  ) = "1"                         : NumPadOCLC( 2  ) = "NumPad1"
+NumPadDisplay( 3  ) = "2"                         : NumPadOCLC( 3  ) = "NumPad2"
+NumPadDisplay( 4  ) = "3"                         : NumPadOCLC( 4  ) = "NumPad3"
+NumPadDisplay( 5  ) = "4"                         : NumPadOCLC( 5  ) = "NumPad4"
+NumPadDisplay( 6  ) = "5"                         : NumPadOCLC( 6  ) = "NumPad5"
+NumPadDisplay( 7  ) = "6"                         : NumPadOCLC( 7  ) = "NumPad6"
+NumPadDisplay( 8  ) = "7"                         : NumPadOCLC( 8  ) = "NumPad7"
+NumPadDisplay( 9  ) = "8"                         : NumPadOCLC( 9  ) = "NumPad8"
+NumPadDisplay( 10 ) = "9"                         : NumPadOCLC( 10 ) = "NumPad9"
+NumPadDisplay( 11 ) = "center 5"                  : NumPadOCLC( 11 ) = "Clear"
+NumPadDisplay( 12 ) = "decimal point  ."          : NumPadOCLC( 12 ) = "Decimal"
+NumPadDisplay( 13 ) = "DEL"                       : NumPadOCLC( 13 ) = "Del"
+NumPadDisplay( 14 ) = "divide  /"                 : NumPadOCLC( 14 ) = "Divide"
+NumPadDisplay( 15 ) = "down arrow"                : NumPadOCLC( 15 ) = "Down Arrow"
+NumPadDisplay( 16 ) = "END"                       : NumPadOCLC( 16 ) = "End"
+NumPadDisplay( 17 ) = "ENTER"                     : NumPadOCLC( 17 ) = "Enter"
+NumPadDisplay( 18 ) = "HOME"                      : NumPadOCLC( 18 ) = "Home"
+NumPadDisplay( 19 ) = "INS"                       : NumPadOCLC( 19 ) = "Ins"
+NumPadDisplay( 20 ) = "left arrow"                : NumPadOCLC( 20 ) = "Left"
+NumPadDisplay( 21 ) = "multiply  *"               : NumPadOCLC( 21 ) = "Multiply"
+NumPadDisplay( 22 ) = "NUM LOCK"                  : NumPadOCLC( 22 ) = "NumLock"
+NumPadDisplay( 23 ) = "PGDN"                      : NumPadOCLC( 23 ) = "PgDn"
+NumPadDisplay( 24 ) = "PGUP"                      : NumPadOCLC( 24 ) = "PgUp Arrow"
+NumPadDisplay( 25 ) = "plus  +"                   : NumPadOCLC( 25 ) = "Add"
+NumPadDisplay( 26 ) = "right arrow"               : NumPadOCLC( 26 ) = "Right"
+NumPadDisplay( 27 ) = "subtract  -"               : NumPadOCLC( 27 ) = "Subtract"
+NumPadDisplay( 28 ) = "up arrow"                  : NumPadOCLC( 28 ) = "Up Arrow"
+
+OthersDisplay( 0  ) = "Select a key:"             : OthersOCLC( 0  ) = ""
+OthersDisplay( 1  ) = "backward slash  \|"        : OthersOCLC( 1  ) = "Oem5"
+OthersDisplay( 2  ) = "CAPS LOCK"                 : OthersOCLC( 2  ) = "Capital"
+OthersDisplay( 3  ) = "comma  ,<"                 : OthersOCLC( 3  ) = "Comma"
+OthersDisplay( 4  ) = "DELETE"                    : OthersOCLC( 4  ) = "Del"
+OthersDisplay( 5  ) = "down arrow"                : OthersOCLC( 5  ) = "Down Arrow"
+OthersDisplay( 6  ) = "END"                       : OthersOCLC( 6  ) = "End"
+OthersDisplay( 7  ) = "ENTER"                     : OthersOCLC( 7  ) = "Enter"
+OthersDisplay( 8  ) = "ESC"                       : OthersOCLC( 8  ) = "Escape"
+OthersDisplay( 9  ) = "equal  =+"                 : OthersOCLC( 9  ) = "Equal"
+OthersDisplay( 10 ) = "forward slash  /?"         : OthersOCLC( 10 ) = "Question"
+OthersDisplay( 11 ) = "grave  `~"                 : OthersOCLC( 11 ) = "Grave"
+OthersDisplay( 12 ) = "HOME"                      : OthersOCLC( 12 ) = "Home"
+OthersDisplay( 13 ) = "hyphen  -_"                : OthersOCLC( 13 ) = "Minus"
+OthersDisplay( 14 ) = "INSERT"                    : OthersOCLC( 14 ) = "Ins"
+OthersDisplay( 15 ) = "left arrow"                : OthersOCLC( 15 ) = "Left"
+OthersDisplay( 16 ) = "left bracket  [{"          : OthersOCLC( 16 ) = "OpenBrackets"
+OthersDisplay( 17 ) = "left Windows"              : OthersOCLC( 17 ) = "LWin"
+OthersDisplay( 18 ) = "menu"                      : OthersOCLC( 18 ) = "Apps"
+OthersDisplay( 19 ) = "PAGE DOWN"                 : OthersOCLC( 19 ) = "PgDn"
+OthersDisplay( 20 ) = "PAGE UP"                   : OthersOCLC( 20 ) = "PgUp Arrow"
+OthersDisplay( 21 ) = "PAUSE/BREAK"               : OthersOCLC( 21 ) = "Pause"
+OthersDisplay( 22 ) = "period  .>"                : OthersOCLC( 22 ) = "Period"
+OthersDisplay( 23 ) = "PRINT SCREEN"              : OthersOCLC( 23 ) = "PrintScreen"
+OthersDisplay( 24 ) = "quotation mark  '" & QUOTE : OthersOCLC( 24 ) = "Oem7"
+OthersDisplay( 25 ) = "right arrow"               : OthersOCLC( 25 ) = "Right"
+OthersDisplay( 26 ) = "right bracket  ]}"         : OthersOCLC( 26 ) = "Oem6"
+OthersDisplay( 27 ) = "right Windows"             : OthersOCLC( 27 ) = "RWin"
+OthersDisplay( 28 ) = "SCROLL LOCK"               : OthersOCLC( 28 ) = "Scroll"
+OthersDisplay( 29 ) = "semi-colon  ;:"            : OthersOCLC( 29 ) = "Oem1"
+OthersDisplay( 30 ) = "TAB"                       : OthersOCLC( 30 ) = "Tab"
+OthersDisplay( 31 ) = "up arrow"                  : OthersOCLC( 31 ) = "Up Arrow"
+
+' The app-assigned shortcuts:
+
+AppAssigned( aCATEGORY, 0   ) = "Command"   : AppAssigned( aKEYS, 0   ) = "Enter"                    : AppAssigned( aACTION, 0   ) = "(App Command) EditCutCopyPasteInsertBlankFieldBelowCurrentField"
+AppAssigned( aCATEGORY, 1   ) = "Command"   : AppAssigned( aKEYS, 1   ) = "Alt"                      : AppAssigned( aACTION, 1   ) = "(App Command) Menu Bar"
+AppAssigned( aCATEGORY, 2   ) = "Command"   : AppAssigned( aKEYS, 2   ) = "F1"                       : AppAssigned( aACTION, 2   ) = "(App Command) HelpClientHelp"
+AppAssigned( aCATEGORY, 3   ) = "Command"   : AppAssigned( aKEYS, 3   ) = "F2"                       : AppAssigned( aACTION, 3   ) = "(App Command) CatalogingSearchWorldCat"
+AppAssigned( aCATEGORY, 4   ) = "Command"   : AppAssigned( aKEYS, 4   ) = "F3"                       : AppAssigned( aACTION, 4   ) = "(App Command) CatalogingSearchLocalSaveFile"
+AppAssigned( aCATEGORY, 5   ) = "Command"   : AppAssigned( aKEYS, 5   ) = "F4"                       : AppAssigned( aACTION, 5   ) = "(App Command) ActionSaveRecordtoLocalFile"
+AppAssigned( aCATEGORY, 6   ) = "Command"   : AppAssigned( aKEYS, 6   ) = "F5"                       : AppAssigned( aACTION, 6   ) = "(App Command) ActionExport"
+AppAssigned( aCATEGORY, 7   ) = "Command"   : AppAssigned( aKEYS, 7   ) = "F6"                       : AppAssigned( aACTION, 7   ) = "(App Command) EditNextRecordArea"
+AppAssigned( aCATEGORY, 8   ) = "Command"   : AppAssigned( aKEYS, 8   ) = "F7"                       : AppAssigned( aACTION, 8   ) = "(App Command) ToolsCheckSpelling"
+AppAssigned( aCATEGORY, 9   ) = "Command"   : AppAssigned( aKEYS, 9   ) = "F8"                       : AppAssigned( aACTION, 9   ) = "(App Command) ActionHoldingsUpdateHoldings"
+AppAssigned( aCATEGORY, 10  ) = "Command"   : AppAssigned( aKEYS, 10  ) = "F9"                       : AppAssigned( aACTION, 10  ) = "(App Command) ViewNavigateRecordsandListsForward"
+AppAssigned( aCATEGORY, 11  ) = "Command"   : AppAssigned( aKEYS, 11  ) = "F11"                      : AppAssigned( aACTION, 11  ) = "(App Command) EditControlHeadingsSingle"
+AppAssigned( aCATEGORY, 12  ) = "Command"   : AppAssigned( aKEYS, 12  ) = "F12"                      : AppAssigned( aACTION, 12  ) = "(App Command) FilePrint"
+AppAssigned( aCATEGORY, 13  ) = "Command"   : AppAssigned( aKEYS, 13  ) = "Shift+F1"                 : AppAssigned( aACTION, 13  ) = "(App Command) HelpMARCFieldHelp"
+AppAssigned( aCATEGORY, 14  ) = "Command"   : AppAssigned( aKEYS, 14  ) = "Shift+F2"                 : AppAssigned( aACTION, 14  ) = "(App Command) AuthoritiesSearchLCNamesandSubjects"
+AppAssigned( aCATEGORY, 15  ) = "Command"   : AppAssigned( aKEYS, 15  ) = "Shift+F3"                 : AppAssigned( aACTION, 15  ) = "(App Command) AuthoritiesSearchLocalSaveFile"
+AppAssigned( aCATEGORY, 16  ) = "Command"   : AppAssigned( aKEYS, 16  ) = "Shift+F4"                 : AppAssigned( aACTION, 16  ) = "(App Command) ViewPinned"
+AppAssigned( aCATEGORY, 17  ) = "Command"   : AppAssigned( aKEYS, 17  ) = "Shift+F5"                 : AppAssigned( aACTION, 17  ) = "(App Command) EditValidate"
+AppAssigned( aCATEGORY, 18  ) = "Command"   : AppAssigned( aKEYS, 18  ) = "Shift+F6"                 : AppAssigned( aACTION, 18  ) = "(App Command) EditPreviousRecordArea"
+AppAssigned( aCATEGORY, 19  ) = "Command"   : AppAssigned( aKEYS, 19  ) = "Shift+F7"                 : AppAssigned( aACTION, 19  ) = "(App Command) ActionHoldingsProduceandUpdateHoldings"
+AppAssigned( aCATEGORY, 20  ) = "Command"   : AppAssigned( aKEYS, 20  ) = "Shift+F8"                 : AppAssigned( aACTION, 20  ) = "(App Command) ActionHoldingsDeleteHoldings"
+AppAssigned( aCATEGORY, 21  ) = "Command"   : AppAssigned( aKEYS, 21  ) = "Shift+F9"                 : AppAssigned( aACTION, 21  ) = "(App Command) ViewNavigateRecordsandListsBack"
+AppAssigned( aCATEGORY, 22  ) = "Command"   : AppAssigned( aKEYS, 22  ) = "Shift+F10"                : AppAssigned( aACTION, 22  ) = "(App Command) FilePrintLabel(s)"
+AppAssigned( aCATEGORY, 23  ) = "Command"   : AppAssigned( aKEYS, 23  ) = "Shift+F11"                : AppAssigned( aACTION, 23  ) = "(App Command) EditControlHeadingsAll"
+AppAssigned( aCATEGORY, 24  ) = "Command"   : AppAssigned( aKEYS, 24  ) = "Shift+F12"                : AppAssigned( aACTION, 24  ) = "(App Command) FilePrintList"
+AppAssigned( aCATEGORY, 25  ) = "Command"   : AppAssigned( aKEYS, 25  ) = "Shift+Del"                : AppAssigned( aACTION, 25  ) = "(App Command) EditCutCopyPasteCut"
+AppAssigned( aCATEGORY, 26  ) = "Command"   : AppAssigned( aKEYS, 26  ) = "Shift+Enter"              : AppAssigned( aACTION, 26  ) = "(App Command) EditCutCopyPasteInsertBlankFieldAboveCurrentField"
+AppAssigned( aCATEGORY, 27  ) = "Command"   : AppAssigned( aKEYS, 27  ) = "Shift+Ins"                : AppAssigned( aACTION, 27  ) = "(App Command) EditCutCopyPastePaste"
+AppAssigned( aCATEGORY, 28  ) = "Command"   : AppAssigned( aKEYS, 28  ) = "Ctrl+A"                   : AppAssigned( aACTION, 28  ) = "(App Command) EditConstantDataOnlineApplyDefault"
+AppAssigned( aCATEGORY, 29  ) = "Command"   : AppAssigned( aKEYS, 29  ) = "Ctrl+B"                   : AppAssigned( aACTION, 29  ) = "(App Command) EditConstantDataLocalApplybyName"
+AppAssigned( aCATEGORY, 30  ) = "Command"   : AppAssigned( aKEYS, 30  ) = "Ctrl+C"                   : AppAssigned( aACTION, 30  ) = "(App Command) EditCutCopyPasteCopy"
+AppAssigned( aCATEGORY, 31  ) = "Character" : AppAssigned( aKEYS, 31  ) = "Ctrl+D"                   : AppAssigned( aACTION, 31  ) = "(App Character) Subfield delimiter"
+AppAssigned( aCATEGORY, 32  ) = "Command"   : AppAssigned( aKEYS, 32  ) = "Ctrl+E"                   : AppAssigned( aACTION, 32  ) = "(App Command) EditEnterDiacritics"
+AppAssigned( aCATEGORY, 33  ) = "Command"   : AppAssigned( aKEYS, 33  ) = "Ctrl+F"                   : AppAssigned( aACTION, 33  ) = "(App Command) EditFind/Replace"
+AppAssigned( aCATEGORY, 34  ) = "Command"   : AppAssigned( aKEYS, 34  ) = "Ctrl+I"                   : AppAssigned( aACTION, 34  ) = "(App Command) EditDeriveNewConstantData"
+AppAssigned( aCATEGORY, 35  ) = "Command"   : AppAssigned( aKEYS, 35  ) = "Ctrl+L"                   : AppAssigned( aACTION, 35  ) = "(App Command) CatalogingSearchLocalConstantData"
+AppAssigned( aCATEGORY, 36  ) = "Command"   : AppAssigned( aKEYS, 36  ) = "Ctrl+N"                   : AppAssigned( aACTION, 36  ) = "(App Command) CatalogingSearchOnlineConstantData"
+AppAssigned( aCATEGORY, 37  ) = "Command"   : AppAssigned( aKEYS, 37  ) = "Ctrl+O"                   : AppAssigned( aACTION, 37  ) = "(App Command) CatalogingShowByOnlineSaveFileStatus"
+AppAssigned( aCATEGORY, 38  ) = "Command"   : AppAssigned( aKEYS, 38  ) = "Ctrl+P"                   : AppAssigned( aACTION, 38  ) = "(App Command) FilePrint"
+AppAssigned( aCATEGORY, 39  ) = "Command"   : AppAssigned( aKEYS, 39  ) = "Ctrl+R"                   : AppAssigned( aACTION, 39  ) = "(App Command) EditReformat"
+AppAssigned( aCATEGORY, 40  ) = "Command"   : AppAssigned( aKEYS, 40  ) = "Ctrl+T"                   : AppAssigned( aACTION, 40  ) = "(App Command) EditCutCopyPasteCopyControlNumber"
+AppAssigned( aCATEGORY, 41  ) = "Command"   : AppAssigned( aKEYS, 41  ) = "Ctrl+U"                   : AppAssigned( aACTION, 41  ) = "(App Command) EditConstantDataOnlineApplybyName"
+AppAssigned( aCATEGORY, 42  ) = "Command"   : AppAssigned( aKEYS, 42  ) = "Ctrl+V"                   : AppAssigned( aACTION, 42  ) = "(App Command) EditCutCopyPastePaste"
+AppAssigned( aCATEGORY, 43  ) = "Command"   : AppAssigned( aKEYS, 43  ) = "Ctrl+X"                   : AppAssigned( aACTION, 43  ) = "(App Command) EditCutCopyPasteCut"
+AppAssigned( aCATEGORY, 44  ) = "Command"   : AppAssigned( aKEYS, 44  ) = "Ctrl+Y"                   : AppAssigned( aACTION, 44  ) = "(App Command) EditConstantDataLocalApplyDefault"
+AppAssigned( aCATEGORY, 45  ) = "Command"   : AppAssigned( aKEYS, 45  ) = "Ctrl+Z"                   : AppAssigned( aACTION, 45  ) = "(App Command) EditCutCopyPasteUndo"
+AppAssigned( aCATEGORY, 46  ) = "Command"   : AppAssigned( aKEYS, 46  ) = "Ctrl+F1"                  : AppAssigned( aACTION, 46  ) = "(App Command) FileLogon"
+AppAssigned( aCATEGORY, 47  ) = "Command"   : AppAssigned( aKEYS, 47  ) = "Ctrl+F2"                  : AppAssigned( aACTION, 47  ) = "(App Command) CatalogingBrowseWorldCat"
+AppAssigned( aCATEGORY, 48  ) = "Command"   : AppAssigned( aKEYS, 48  ) = "Ctrl+F3"                  : AppAssigned( aACTION, 48  ) = "(App Command) CatalogingSearchOnlineSaveFile"
+AppAssigned( aCATEGORY, 49  ) = "Command"   : AppAssigned( aKEYS, 49  ) = "Ctrl+F4"                  : AppAssigned( aACTION, 49  ) = "(App Command) Close Window"
+AppAssigned( aCATEGORY, 50  ) = "Command"   : AppAssigned( aKEYS, 50  ) = "Ctrl+F5"                  : AppAssigned( aACTION, 50  ) = "(App Command) ViewNews"
+AppAssigned( aCATEGORY, 51  ) = "Command"   : AppAssigned( aKEYS, 51  ) = "Ctrl+F6"                  : AppAssigned( aACTION, 51  ) = "(App Command) Next Document Window"
+AppAssigned( aCATEGORY, 52  ) = "Command"   : AppAssigned( aKEYS, 52  ) = "Ctrl+F8"                  : AppAssigned( aACTION, 52  ) = "(App Command) FilePrint"
+AppAssigned( aCATEGORY, 53  ) = "Command"   : AppAssigned( aKEYS, 53  ) = "Ctrl+F11"                 : AppAssigned( aACTION, 53  ) = "(App Command) EditControlHeadingsUncontrolSingle"
+AppAssigned( aCATEGORY, 54  ) = "Command"   : AppAssigned( aKEYS, 54  ) = "Ctrl+Ins"                 : AppAssigned( aACTION, 54  ) = "(App Command) EditCutCopyPasteCopy"
+AppAssigned( aCATEGORY, 55  ) = "Character" : AppAssigned( aKEYS, 55  ) = "Ctrl+Pipe"                : AppAssigned( aACTION, 55  ) = "(App Character) Character |"
+AppAssigned( aCATEGORY, 56  ) = "Character" : AppAssigned( aKEYS, 56  ) = "Alt+0"                    : AppAssigned( aACTION, 56  ) = "(App Character) Subscript 0"
+AppAssigned( aCATEGORY, 57  ) = "Character" : AppAssigned( aKEYS, 57  ) = "Alt+1"                    : AppAssigned( aACTION, 57  ) = "(App Character) Subscript 1"
+AppAssigned( aCATEGORY, 58  ) = "Character" : AppAssigned( aKEYS, 58  ) = "Alt+2"                    : AppAssigned( aACTION, 58  ) = "(App Character) Subscript 2"
+AppAssigned( aCATEGORY, 59  ) = "Character" : AppAssigned( aKEYS, 59  ) = "Alt+3"                    : AppAssigned( aACTION, 59  ) = "(App Character) Subscript 3"
+AppAssigned( aCATEGORY, 60  ) = "Character" : AppAssigned( aKEYS, 60  ) = "Alt+4"                    : AppAssigned( aACTION, 60  ) = "(App Character) Subscript 4"
+AppAssigned( aCATEGORY, 61  ) = "Character" : AppAssigned( aKEYS, 61  ) = "Alt+5"                    : AppAssigned( aACTION, 61  ) = "(App Character) Subscript 5"
+AppAssigned( aCATEGORY, 62  ) = "Character" : AppAssigned( aKEYS, 62  ) = "Alt+6"                    : AppAssigned( aACTION, 62  ) = "(App Character) Subscript 6"
+AppAssigned( aCATEGORY, 63  ) = "Character" : AppAssigned( aKEYS, 63  ) = "Alt+7"                    : AppAssigned( aACTION, 63  ) = "(App Character) Subscript 7"
+AppAssigned( aCATEGORY, 64  ) = "Character" : AppAssigned( aKEYS, 64  ) = "Alt+8"                    : AppAssigned( aACTION, 64  ) = "(App Character) Subscript 8"
+AppAssigned( aCATEGORY, 65  ) = "Character" : AppAssigned( aKEYS, 65  ) = "Alt+9"                    : AppAssigned( aACTION, 65  ) = "(App Character) Subscript 9"
+AppAssigned( aCATEGORY, 66  ) = "Command"   : AppAssigned( aKEYS, 66  ) = "Alt+F1"                   : AppAssigned( aACTION, 66  ) = "(App Command) FileLogoff"
+AppAssigned( aCATEGORY, 67  ) = "Command"   : AppAssigned( aKEYS, 67  ) = "Alt+F2"                   : AppAssigned( aACTION, 67  ) = "(App Command) AuthoritiesBrowseLCNamesandSubjects"
+AppAssigned( aCATEGORY, 68  ) = "Command"   : AppAssigned( aKEYS, 68  ) = "Alt+F3"                   : AppAssigned( aACTION, 68  ) = "(App Command) AuthoritiesSearchOnlineSaveFile"
+AppAssigned( aCATEGORY, 69  ) = "Command"   : AppAssigned( aKEYS, 69  ) = "Alt+F4"                   : AppAssigned( aACTION, 69  ) = "(App Command) FileExit"
+AppAssigned( aCATEGORY, 70  ) = "Command"   : AppAssigned( aKEYS, 70  ) = "Alt+F8"                   : AppAssigned( aACTION, 70  ) = "(App Command) ActionLockMasterRecord"
+AppAssigned( aCATEGORY, 71  ) = "Command"   : AppAssigned( aKEYS, 71  ) = "Alt+F9"                   : AppAssigned( aACTION, 71  ) = "(App Command) ActionReleaseRecordLock"
+AppAssigned( aCATEGORY, 72  ) = "Command"   : AppAssigned( aKEYS, 72  ) = "Alt+F10"                  : AppAssigned( aACTION, 72  ) = "(App Command) ActionReplaceRecord"
+AppAssigned( aCATEGORY, 73  ) = "Command"   : AppAssigned( aKEYS, 73  ) = "Alt+F11"                  : AppAssigned( aACTION, 73  ) = "(App Command) ActionReplaceandUpdateHoldings"
+AppAssigned( aCATEGORY, 74  ) = "Character" : AppAssigned( aKEYS, 74  ) = "Alt+CloseBrackets"        : AppAssigned( aACTION, 74  ) = "(App Character) Subscript right parenthesis"
+AppAssigned( aCATEGORY, 75  ) = "Command"   : AppAssigned( aKEYS, 75  ) = "Alt+Del"                  : AppAssigned( aACTION, 75  ) = "(App Command) EditCutCopyPasteDeleteField"
+AppAssigned( aCATEGORY, 76  ) = "Command"   : AppAssigned( aKEYS, 76  ) = "Alt+Down"                 : AppAssigned( aACTION, 76  ) = "(App Command) EditCutCopyPasteMoveFieldDown"
+AppAssigned( aCATEGORY, 77  ) = "Command"   : AppAssigned( aKEYS, 77  ) = "Alt+Ins"                  : AppAssigned( aACTION, 77  ) = "(App Command) EditCutCopyPasteCopyField"
+AppAssigned( aCATEGORY, 78  ) = "Character" : AppAssigned( aKEYS, 78  ) = "Alt+Minus"                : AppAssigned( aACTION, 78  ) = "(App Character) Subscript minus"
+AppAssigned( aCATEGORY, 79  ) = "Character" : AppAssigned( aKEYS, 79  ) = "Alt+OpenBrackets"         : AppAssigned( aACTION, 79  ) = "(App Character) Subscript left parenthesis"
+AppAssigned( aCATEGORY, 80  ) = "Character" : AppAssigned( aKEYS, 80  ) = "Alt+Plus"                 : AppAssigned( aACTION, 80  ) = "(App Character) Subscript plus"
+AppAssigned( aCATEGORY, 81  ) = "Command"   : AppAssigned( aKEYS, 81  ) = "Alt+Up"                   : AppAssigned( aACTION, 81  ) = "(App Command) EditCutCopyPasteMoveFieldUp"
+AppAssigned( aCATEGORY, 82  ) = "Command"   : AppAssigned( aKEYS, 82  ) = "Ctrl+Shift+A"             : AppAssigned( aACTION, 82  ) = "(App Command) ViewHoldingsAll"
+AppAssigned( aCATEGORY, 83  ) = "Command"   : AppAssigned( aKEYS, 83  ) = "Ctrl+Shift+B"             : AppAssigned( aACTION, 83  ) = "(App Command) CatalogingCreateSingleRecordBooks"
+AppAssigned( aCATEGORY, 84  ) = "Command"   : AppAssigned( aKEYS, 84  ) = "Ctrl+Shift+D"             : AppAssigned( aACTION, 84  ) = "(App Command) ViewHoldingsDefault"
+AppAssigned( aCATEGORY, 85  ) = "Command"   : AppAssigned( aKEYS, 85  ) = "Ctrl+Shift+F"             : AppAssigned( aACTION, 85  ) = "(App Command) CatalogingShowDefaultOnlineConstantData"
+AppAssigned( aCATEGORY, 86  ) = "Command"   : AppAssigned( aKEYS, 86  ) = "Ctrl+Shift+F6"            : AppAssigned( aACTION, 86  ) = "(App Command) Previous Document Window"
+AppAssigned( aCATEGORY, 87  ) = "Command"   : AppAssigned( aKEYS, 87  ) = "Ctrl+Shift+G"             : AppAssigned( aACTION, 87  ) = "(App Command) ViewHoldingsRegional"
+AppAssigned( aCATEGORY, 88  ) = "Command"   : AppAssigned( aKEYS, 88  ) = "Ctrl+Shift+H"             : AppAssigned( aACTION, 88  ) = "(App Command) AuthoritiesSearchOnlineConstantData"
+AppAssigned( aCATEGORY, 89  ) = "Command"   : AppAssigned( aKEYS, 89  ) = "Ctrl+Shift+I"             : AppAssigned( aACTION, 89  ) = "(App Command) CatalogingCreateSingleRecordMixedMaterials"
+AppAssigned( aCATEGORY, 90  ) = "Command"   : AppAssigned( aKEYS, 90  ) = "Ctrl+Shift+K"             : AppAssigned( aACTION, 90  ) = "(App Command) AuthoritiesCreateSingleRecordBlankRecord"
+AppAssigned( aCATEGORY, 91  ) = "Command"   : AppAssigned( aKEYS, 91  ) = "Ctrl+Shift+L"             : AppAssigned( aACTION, 91  ) = "(App Command) CatalogingCreateSingleRecordContinuingResources"
+AppAssigned( aCATEGORY, 92  ) = "Command"   : AppAssigned( aKEYS, 92  ) = "Ctrl+Shift+M"             : AppAssigned( aACTION, 92  ) = "(App Command) CatalogingCreateSingleRecordMaps"
+AppAssigned( aCATEGORY, 93  ) = "Command"   : AppAssigned( aKEYS, 93  ) = "Ctrl+Shift+N"             : AppAssigned( aACTION, 93  ) = "(App Command) CatalogingCreateConstantData"
+AppAssigned( aCATEGORY, 94  ) = "Command"   : AppAssigned( aKEYS, 94  ) = "Ctrl+Shift+O"             : AppAssigned( aACTION, 94  ) = "(App Command) AuthoritiesShowDefaultOnlineConstantData"
+AppAssigned( aCATEGORY, 95  ) = "Command"   : AppAssigned( aKEYS, 95  ) = "Ctrl+Shift+P"             : AppAssigned( aACTION, 95  ) = "(App Command) CatalogingCreateSingleRecordComputerFiles"
+AppAssigned( aCATEGORY, 96  ) = "Command"   : AppAssigned( aKEYS, 96  ) = "Ctrl+Shift+Q"             : AppAssigned( aACTION, 96  ) = "(App Command) AuthoritiesCreateConstantData"
+AppAssigned( aCATEGORY, 97  ) = "Command"   : AppAssigned( aKEYS, 97  ) = "Ctrl+Shift+R"             : AppAssigned( aACTION, 97  ) = "(App Command) CatalogingCreateSingleRecordSoundRecordings"
+AppAssigned( aCATEGORY, 98  ) = "Command"   : AppAssigned( aKEYS, 98  ) = "Ctrl+Shift+V"             : AppAssigned( aACTION, 98  ) = "(App Command) CatalogingCreateSingleRecordVisualMaterials"
+AppAssigned( aCATEGORY, 99  ) = "Command"   : AppAssigned( aKEYS, 99  ) = "Ctrl+Shift+X"             : AppAssigned( aACTION, 99  ) = "(App Command) EditGuidedEntryEdit"
+AppAssigned( aCATEGORY, 100 ) = "Command"   : AppAssigned( aKEYS, 100 ) = "Ctrl+Shift+Z"             : AppAssigned( aACTION, 100 ) = "(App Command) EditCutCopyPasteCancelChanges"
+AppAssigned( aCATEGORY, 101 ) = "Character" : AppAssigned( aKEYS, 101 ) = "Alt+Shift+0"              : AppAssigned( aACTION, 101 ) = "(App Character) Superscript 0"
+AppAssigned( aCATEGORY, 102 ) = "Character" : AppAssigned( aKEYS, 102 ) = "Alt+Shift+1"              : AppAssigned( aACTION, 102 ) = "(App Character) Superscript 1"
+AppAssigned( aCATEGORY, 103 ) = "Character" : AppAssigned( aKEYS, 103 ) = "Alt+Shift+2"              : AppAssigned( aACTION, 103 ) = "(App Character) Superscript 2"
+AppAssigned( aCATEGORY, 104 ) = "Character" : AppAssigned( aKEYS, 104 ) = "Alt+Shift+3"              : AppAssigned( aACTION, 104 ) = "(App Character) Superscript 3"
+AppAssigned( aCATEGORY, 105 ) = "Character" : AppAssigned( aKEYS, 105 ) = "Alt+Shift+4"              : AppAssigned( aACTION, 105 ) = "(App Character) Superscript 4"
+AppAssigned( aCATEGORY, 106 ) = "Character" : AppAssigned( aKEYS, 106 ) = "Alt+Shift+5"              : AppAssigned( aACTION, 106 ) = "(App Character) Superscript 5"
+AppAssigned( aCATEGORY, 107 ) = "Character" : AppAssigned( aKEYS, 107 ) = "Alt+Shift+6"              : AppAssigned( aACTION, 107 ) = "(App Character) Superscript 6"
+AppAssigned( aCATEGORY, 108 ) = "Character" : AppAssigned( aKEYS, 108 ) = "Alt+Shift+7"              : AppAssigned( aACTION, 108 ) = "(App Character) Superscript 7"
+AppAssigned( aCATEGORY, 109 ) = "Character" : AppAssigned( aKEYS, 109 ) = "Alt+Shift+8"              : AppAssigned( aACTION, 109 ) = "(App Character) Superscript 8"
+AppAssigned( aCATEGORY, 110 ) = "Command"   : AppAssigned( aKEYS, 110 ) = "Alt+Shift+S"              : AppAssigned( aACTION, 110 ) = "(App Command) ActionSetStatus"
+AppAssigned( aCATEGORY, 111 ) = "Character" : AppAssigned( aKEYS, 111 ) = "Alt+Shift+CloseBrackets"  : AppAssigned( aACTION, 111 ) = "(App Character) Superscript right parenthesis"
+AppAssigned( aCATEGORY, 112 ) = "Character" : AppAssigned( aKEYS, 112 ) = "Alt+Shift+Minus"          : AppAssigned( aACTION, 112 ) = "(App Character) Superscript minus"
+AppAssigned( aCATEGORY, 113 ) = "Character" : AppAssigned( aKEYS, 113 ) = "Alt+Shift+OpenBrackets"   : AppAssigned( aACTION, 113 ) = "(App Character) Superscript left parenthesis"
+AppAssigned( aCATEGORY, 114 ) = "Character" : AppAssigned( aKEYS, 114 ) = "Alt+Shift+Plus"           : AppAssigned( aACTION, 114 ) = "(App Character) Superscript plus"
+AppAssigned( aCATEGORY, 115 ) = "Character" : AppAssigned( aKEYS, 115 ) = "Ctrl+Alt+0"               : AppAssigned( aACTION, 115 ) = "(App Character) Ayn"
+AppAssigned( aCATEGORY, 116 ) = "Character" : AppAssigned( aKEYS, 116 ) = "Ctrl+Alt+1"               : AppAssigned( aACTION, 116 ) = "(App Character) l with slash, lowercase"
+AppAssigned( aCATEGORY, 117 ) = "Character" : AppAssigned( aKEYS, 117 ) = "Ctrl+Alt+2"               : AppAssigned( aACTION, 117 ) = "(App Character) o with slash, lowercase"
+AppAssigned( aCATEGORY, 118 ) = "Character" : AppAssigned( aKEYS, 118 ) = "Ctrl+Alt+4"               : AppAssigned( aACTION, 118 ) = "(App Character) Thorn, lowercase"
+AppAssigned( aCATEGORY, 119 ) = "Character" : AppAssigned( aKEYS, 119 ) = "Ctrl+Alt+5"               : AppAssigned( aACTION, 119 ) = "(App Character) ae, lowercase"
+AppAssigned( aCATEGORY, 120 ) = "Character" : AppAssigned( aKEYS, 120 ) = "Ctrl+Alt+6"               : AppAssigned( aACTION, 120 ) = "(App Character) oe, lowercase"
+AppAssigned( aCATEGORY, 121 ) = "Character" : AppAssigned( aKEYS, 121 ) = "Ctrl+Alt+9"               : AppAssigned( aACTION, 121 ) = "(App Character) British pound"
+AppAssigned( aCATEGORY, 122 ) = "Command"   : AppAssigned( aKEYS, 122 ) = "Ctrl+Alt+A"               : AppAssigned( aACTION, 122 ) = "(App Command) ActionAddtoAuthorityFile"
+AppAssigned( aCATEGORY, 123 ) = "Character" : AppAssigned( aKEYS, 123 ) = "Ctrl+Alt+B"               : AppAssigned( aACTION, 123 ) = "(App Character) Acute"
+AppAssigned( aCATEGORY, 124 ) = "Command"   : AppAssigned( aKEYS, 124 ) = "Ctrl+Alt+C"               : AppAssigned( aACTION, 124 ) = "(App Command) EditDeriveNewMasterRecord"
+AppAssigned( aCATEGORY, 125 ) = "Command"   : AppAssigned( aKEYS, 125 ) = "Ctrl+Alt+D"               : AppAssigned( aACTION, 125 ) = "(App Command) ActionDeleteRecord"
+AppAssigned( aCATEGORY, 126 ) = "Character" : AppAssigned( aKEYS, 126 ) = "Ctrl+Alt+E"               : AppAssigned( aACTION, 126 ) = "(App Character) Macron"
+AppAssigned( aCATEGORY, 127 ) = "Character" : AppAssigned( aKEYS, 127 ) = "Ctrl+Alt+F"               : AppAssigned( aACTION, 127 ) = "(App Character) Breve"
+AppAssigned( aCATEGORY, 128 ) = "Character" : AppAssigned( aKEYS, 128 ) = "Ctrl+Alt+G"               : AppAssigned( aACTION, 128 ) = "(App Character) Superior dot"
+AppAssigned( aCATEGORY, 129 ) = "Character" : AppAssigned( aKEYS, 129 ) = "Ctrl+Alt+H"               : AppAssigned( aACTION, 129 ) = "(App Character) Umlaut"
+AppAssigned( aCATEGORY, 130 ) = "Character" : AppAssigned( aKEYS, 130 ) = "Ctrl+Alt+I"               : AppAssigned( aACTION, 130 ) = "(App Character) Hacek"
+AppAssigned( aCATEGORY, 131 ) = "Character" : AppAssigned( aKEYS, 131 ) = "Ctrl+Alt+J"               : AppAssigned( aACTION, 131 ) = "(App Character) Circle above letter"
+AppAssigned( aCATEGORY, 132 ) = "Character" : AppAssigned( aKEYS, 132 ) = "Ctrl+Alt+K"               : AppAssigned( aACTION, 132 ) = "(App Character) Ligature (left half)"
+AppAssigned( aCATEGORY, 133 ) = "Character" : AppAssigned( aKEYS, 133 ) = "Ctrl+Alt+L"               : AppAssigned( aACTION, 133 ) = "(App Character) Ligature (right half)"
+AppAssigned( aCATEGORY, 134 ) = "Character" : AppAssigned( aKEYS, 134 ) = "Ctrl+Alt+M"               : AppAssigned( aACTION, 134 ) = "(App Character) High comma, off-center"
+AppAssigned( aCATEGORY, 135 ) = "Character" : AppAssigned( aKEYS, 135 ) = "Ctrl+Alt+N"               : AppAssigned( aACTION, 135 ) = "(App Character) Double acute"
+AppAssigned( aCATEGORY, 136 ) = "Character" : AppAssigned( aKEYS, 136 ) = "Ctrl+Alt+O"               : AppAssigned( aACTION, 136 ) = "(App Character) Candrabindu"
+AppAssigned( aCATEGORY, 137 ) = "Character" : AppAssigned( aKEYS, 137 ) = "Ctrl+Alt+Q"               : AppAssigned( aACTION, 137 ) = "(App Character) Right hook"
+AppAssigned( aCATEGORY, 138 ) = "Character" : AppAssigned( aKEYS, 138 ) = "Ctrl+Alt+R"               : AppAssigned( aACTION, 138 ) = "(App Character) Dot below letter"
+AppAssigned( aCATEGORY, 139 ) = "Character" : AppAssigned( aKEYS, 139 ) = "Ctrl+Alt+S"               : AppAssigned( aACTION, 139 ) = "(App Character) Double dot below letter"
+AppAssigned( aCATEGORY, 140 ) = "Character" : AppAssigned( aKEYS, 140 ) = "Ctrl+Alt+T"               : AppAssigned( aACTION, 140 ) = "(App Character) Circle below letter"
+AppAssigned( aCATEGORY, 141 ) = "Character" : AppAssigned( aKEYS, 141 ) = "Ctrl+Alt+U"               : AppAssigned( aACTION, 141 ) = "(App Character) Double underscore"
+AppAssigned( aCATEGORY, 142 ) = "Command"   : AppAssigned( aKEYS, 142 ) = "Ctrl+Alt+V"               : AppAssigned( aACTION, 142 ) = "(App Command) ActionSaveRecordtoOnlineFile"
+AppAssigned( aCATEGORY, 143 ) = "Character" : AppAssigned( aKEYS, 143 ) = "Ctrl+Alt+X"               : AppAssigned( aACTION, 143 ) = "(App Character) Inverted cedilla"
+AppAssigned( aCATEGORY, 144 ) = "Character" : AppAssigned( aKEYS, 144 ) = "Ctrl+Alt+Y"               : AppAssigned( aACTION, 144 ) = "(App Character) Upadhmaniya"
+AppAssigned( aCATEGORY, 145 ) = "Character" : AppAssigned( aKEYS, 145 ) = "Ctrl+Alt+Z"               : AppAssigned( aACTION, 145 ) = "(App Character) Double tilde (left half)"
+AppAssigned( aCATEGORY, 146 ) = "Character" : AppAssigned( aKEYS, 146 ) = "Ctrl+Alt+Comma"           : AppAssigned( aACTION, 146 ) = "(App Character) o with hook, lowercase"
+AppAssigned( aCATEGORY, 147 ) = "Character" : AppAssigned( aKEYS, 147 ) = "Ctrl+Alt+Minus"           : AppAssigned( aACTION, 147 ) = "(App Character) u with hook, lowercase"
+AppAssigned( aCATEGORY, 148 ) = "Character" : AppAssigned( aKEYS, 148 ) = "Ctrl+Alt+OpenBrackets"    : AppAssigned( aACTION, 148 ) = "(App Character) Double tilde (right half)"
+AppAssigned( aCATEGORY, 149 ) = "Character" : AppAssigned( aKEYS, 149 ) = "Ctrl+Alt+Period"          : AppAssigned( aACTION, 149 ) = "(App Character) Character "
+AppAssigned( aCATEGORY, 150 ) = "Character" : AppAssigned( aKEYS, 150 ) = "Ctrl+Alt+Plus"            : AppAssigned( aACTION, 150 ) = "(App Character) U with hook, uppercase"
+AppAssigned( aCATEGORY, 151 ) = "Character" : AppAssigned( aKEYS, 151 ) = "Ctrl+Alt+Quotes"          : AppAssigned( aACTION, 151 ) = "(App Character) Miagkii znak"
+AppAssigned( aCATEGORY, 152 ) = "Character" : AppAssigned( aKEYS, 152 ) = "Ctrl+Alt+Shift+0"         : AppAssigned( aACTION, 152 ) = "(App Character) Musical flat"
+AppAssigned( aCATEGORY, 153 ) = "Character" : AppAssigned( aKEYS, 153 ) = "Ctrl+Alt+Shift+1"         : AppAssigned( aACTION, 153 ) = "(App Character) L with slash, uppercase"
+AppAssigned( aCATEGORY, 154 ) = "Character" : AppAssigned( aKEYS, 154 ) = "Ctrl+Alt+Shift+3"         : AppAssigned( aACTION, 154 ) = "(App Character) D with crossbar, uppercase"
+AppAssigned( aCATEGORY, 155 ) = "Character" : AppAssigned( aKEYS, 155 ) = "Ctrl+Alt+Shift+4"         : AppAssigned( aACTION, 155 ) = "(App Character) Thorn, uppercase"
+AppAssigned( aCATEGORY, 156 ) = "Character" : AppAssigned( aKEYS, 156 ) = "Ctrl+Alt+Shift+5"         : AppAssigned( aACTION, 156 ) = "(App Character) AE, uppercase"
+AppAssigned( aCATEGORY, 157 ) = "Character" : AppAssigned( aKEYS, 157 ) = "Ctrl+Alt+Shift+9"         : AppAssigned( aACTION, 157 ) = "(App Character) Dot in center of line"
+AppAssigned( aCATEGORY, 158 ) = "Command"   : AppAssigned( aKEYS, 158 ) = "Ctrl+Alt+Shift+B"         : AppAssigned( aACTION, 158 ) = "(App Command) EditGuidedEntryInsert006Books"
+AppAssigned( aCATEGORY, 159 ) = "Command"   : AppAssigned( aKEYS, 159 ) = "Ctrl+Alt+Shift+C"         : AppAssigned( aACTION, 159 ) = "(App Command) EditGuidedEntryInsert006Scores"
+AppAssigned( aCATEGORY, 160 ) = "Command"   : AppAssigned( aKEYS, 160 ) = "Ctrl+Alt+Shift+G"         : AppAssigned( aACTION, 160 ) = "(App Command) ToolsMacrosManage"
+AppAssigned( aCATEGORY, 161 ) = "Command"   : AppAssigned( aKEYS, 161 ) = "Ctrl+Alt+Shift+I"         : AppAssigned( aACTION, 161 ) = "(App Command) EditGuidedEntryInsert006MixedMaterials"
+AppAssigned( aCATEGORY, 162 ) = "Command"   : AppAssigned( aKEYS, 162 ) = "Ctrl+Alt+Shift+L"         : AppAssigned( aACTION, 162 ) = "(App Command) EditGuidedEntryInsert006ContinuingResources"
+AppAssigned( aCATEGORY, 163 ) = "Command"   : AppAssigned( aKEYS, 163 ) = "Ctrl+Alt+Shift+P"         : AppAssigned( aACTION, 163 ) = "(App Command) EditGuidedEntryInsert006ComputerFiles"
+AppAssigned( aCATEGORY, 164 ) = "Command"   : AppAssigned( aKEYS, 164 ) = "Ctrl+Alt+Shift+R"         : AppAssigned( aACTION, 164 ) = "(App Command) EditGuidedEntryInsert006SoundRecordings"
+AppAssigned( aCATEGORY, 165 ) = "Command"   : AppAssigned( aKEYS, 165 ) = "Ctrl+Alt+Shift+T"         : AppAssigned( aACTION, 165 ) = "(App Command) ToolsMacrosStop"
+AppAssigned( aCATEGORY, 166 ) = "Command"   : AppAssigned( aKEYS, 166 ) = "Ctrl+Alt+Shift+U"         : AppAssigned( aACTION, 166 ) = "(App Command) ViewNavigateRecordsandListsPrevious100Records"
+AppAssigned( aCATEGORY, 167 ) = "Command"   : AppAssigned( aKEYS, 167 ) = "Ctrl+Alt+Shift+V"         : AppAssigned( aACTION, 167 ) = "(App Command) EditGuidedEntryInsert006VisualMaterials"
+AppAssigned( aCATEGORY, 168 ) = "Command"   : AppAssigned( aKEYS, 168 ) = "Ctrl+Alt+Shift+X"         : AppAssigned( aACTION, 168 ) = "(App Command) ViewNavigateRecordsandListsNext100Records"
+AppAssigned( aCATEGORY, 169 ) = "Character" : AppAssigned( aKEYS, 169 ) = "Ctrl+Alt+Shift+Comma"     : AppAssigned( aACTION, 169 ) = "(App Character) O with hook, uppercase"
+AppAssigned( aCATEGORY, 170 ) = "Character" : AppAssigned( aKEYS, 170 ) = "Ctrl+Alt+Shift+Plus"      : AppAssigned( aACTION, 170 ) = "(App Character) Plus or minus"
+AppAssigned( aCATEGORY, 171 ) = "Character" : AppAssigned( aKEYS, 171 ) = "Ctrl+Alt+Shift+Quotes"    : AppAssigned( aACTION, 171 ) = "(App Character) O with slash, uppercase"
+AppAssigned( aCATEGORY, 172 ) = "Character" : AppAssigned( aKEYS, 172 ) = "Ctrl+Alt+Shift+Semicolon" : AppAssigned( aACTION, 172 ) = "(App Character) Eth, lowercase"
+
+' The "Characters" array is for all characters able to be added by means of a shortcut.
+' The number in the first dimension of the array is the decimal representation of the
+' character's UTF-16 encoding.
+
+Characters( aCODE, 0   ) = "94"    : Characters( aNAME, 0   ) = "Circumflex, spacing"
+Characters( aCODE, 1   ) = "95"    : Characters( aNAME, 1   ) = "Underscore, spacing"
+Characters( aCODE, 2   ) = "96"    : Characters( aNAME, 2   ) = "Grave, spacing"
+Characters( aCODE, 3   ) = "123"   : Characters( aNAME, 3   ) = "Left curly bracket"
+Characters( aCODE, 4   ) = "124"   : Characters( aNAME, 4   ) = "Pipe"
+Characters( aCODE, 5   ) = "125"   : Characters( aNAME, 5   ) = "Right curly bracket"
+Characters( aCODE, 6   ) = "126"   : Characters( aNAME, 6   ) = "Tilde, spacing"
+Characters( aCODE, 7   ) = "161"   : Characters( aNAME, 7   ) = "Inverted exclamation point"
+Characters( aCODE, 8   ) = "163"   : Characters( aNAME, 8   ) = "British pound"
+Characters( aCODE, 9   ) = "169"   : Characters( aNAME, 9   ) = "Copyright mark"
+Characters( aCODE, 10  ) = "174"   : Characters( aNAME, 10  ) = "Subscript patent mark"
+Characters( aCODE, 11  ) = "176"   : Characters( aNAME, 11  ) = "Degree sign"
+Characters( aCODE, 12  ) = "177"   : Characters( aNAME, 12  ) = "Plus or minus"
+Characters( aCODE, 13  ) = "183"   : Characters( aNAME, 13  ) = "Dot in center of line"
+Characters( aCODE, 14  ) = "191"   : Characters( aNAME, 14  ) = "Inverted question mark"
+Characters( aCODE, 15  ) = "198"   : Characters( aNAME, 15  ) = "AE, uppercase"
+Characters( aCODE, 16  ) = "216"   : Characters( aNAME, 16  ) = "O with slash, uppercase"
+Characters( aCODE, 17  ) = "222"   : Characters( aNAME, 17  ) = "Thorn, uppercase"
+Characters( aCODE, 18  ) = "223"   : Characters( aNAME, 18  ) = "Eszett"
+Characters( aCODE, 19  ) = "230"   : Characters( aNAME, 19  ) = "ae, lowercase"
+Characters( aCODE, 20  ) = "240"   : Characters( aNAME, 20  ) = "Eth, lowercase"
+Characters( aCODE, 21  ) = "248"   : Characters( aNAME, 21  ) = "o with slash, lowercase"
+Characters( aCODE, 22  ) = "254"   : Characters( aNAME, 22  ) = "Thorn, lowercase"
+Characters( aCODE, 23  ) = "272"   : Characters( aNAME, 23  ) = "D with crossbar, uppercase"
+Characters( aCODE, 24  ) = "272"   : Characters( aNAME, 24  ) = "Eth, uppercase"
+Characters( aCODE, 25  ) = "273"   : Characters( aNAME, 25  ) = "d with crossbar, lowercase"
+Characters( aCODE, 26  ) = "305"   : Characters( aNAME, 26  ) = "Turkish I without dot, lowercase"
+Characters( aCODE, 27  ) = "321"   : Characters( aNAME, 27  ) = "L with slash, uppercase"
+Characters( aCODE, 28  ) = "322"   : Characters( aNAME, 28  ) = "l with slash, lowercase"
+Characters( aCODE, 29  ) = "338"   : Characters( aNAME, 29  ) = "OE, uppercase"
+Characters( aCODE, 30  ) = "339"   : Characters( aNAME, 30  ) = "oe, lowercase"
+Characters( aCODE, 31  ) = "416"   : Characters( aNAME, 31  ) = "O with hook, uppercase"
+Characters( aCODE, 32  ) = "417"   : Characters( aNAME, 32  ) = "o with hook, lowercase"
+Characters( aCODE, 33  ) = "431"   : Characters( aNAME, 33  ) = "U with hook, uppercase"
+Characters( aCODE, 34  ) = "432"   : Characters( aNAME, 34  ) = "u with hook, lowercase"
+Characters( aCODE, 35  ) = "450"   : Characters( aNAME, 35  ) = "Subfield delimiter"
+Characters( aCODE, 36  ) = "697"   : Characters( aNAME, 36  ) = "Miagkii znak"
+Characters( aCODE, 37  ) = "698"   : Characters( aNAME, 37  ) = "Tverdyi znak"
+Characters( aCODE, 38  ) = "699"   : Characters( aNAME, 38  ) = "Ayn"
+Characters( aCODE, 39  ) = "700"   : Characters( aNAME, 39  ) = "Alif"
+Characters( aCODE, 40  ) = "768"   : Characters( aNAME, 40  ) = "Grave, non-spacing"
+Characters( aCODE, 41  ) = "769"   : Characters( aNAME, 41  ) = "Acute"
+Characters( aCODE, 42  ) = "770"   : Characters( aNAME, 42  ) = "Circumflex, non-spacing"
+Characters( aCODE, 43  ) = "771"   : Characters( aNAME, 43  ) = "Tilde, non-spacing"
+Characters( aCODE, 44  ) = "772"   : Characters( aNAME, 44  ) = "Macron"
+Characters( aCODE, 45  ) = "774"   : Characters( aNAME, 45  ) = "Breve"
+Characters( aCODE, 46  ) = "775"   : Characters( aNAME, 46  ) = "Superior dot"
+Characters( aCODE, 47  ) = "776"   : Characters( aNAME, 47  ) = "Umlaut"
+Characters( aCODE, 48  ) = "777"   : Characters( aNAME, 48  ) = "Pseudo question mark"
+Characters( aCODE, 49  ) = "779"   : Characters( aNAME, 49  ) = "Double acute"
+Characters( aCODE, 50  ) = "780"   : Characters( aNAME, 50  ) = "Hacek"
+Characters( aCODE, 51  ) = "784"   : Characters( aNAME, 51  ) = "Candrabindu"
+Characters( aCODE, 52  ) = "787"   : Characters( aNAME, 52  ) = "High comma, centered"
+Characters( aCODE, 53  ) = "789"   : Characters( aNAME, 53  ) = "High comma, off-center"
+Characters( aCODE, 54  ) = "796"   : Characters( aNAME, 54  ) = "Inverted cedilla"
+Characters( aCODE, 55  ) = "803"   : Characters( aNAME, 55  ) = "Dot below letter"
+Characters( aCODE, 56  ) = "804"   : Characters( aNAME, 56  ) = "Double dot below letter"
+Characters( aCODE, 57  ) = "805"   : Characters( aNAME, 57  ) = "Circle below letter"
+Characters( aCODE, 58  ) = "806"   : Characters( aNAME, 58  ) = "Left hook"
+Characters( aCODE, 59  ) = "807"   : Characters( aNAME, 59  ) = "Cedilla"
+Characters( aCODE, 60  ) = "808"   : Characters( aNAME, 60  ) = "Right hook"
+Characters( aCODE, 61  ) = "814"   : Characters( aNAME, 61  ) = "Upadhmaniya"
+Characters( aCODE, 62  ) = "818"   : Characters( aNAME, 62  ) = "Underscore, non-spacing"
+Characters( aCODE, 63  ) = "819"   : Characters( aNAME, 63  ) = "Double underscore"
+Characters( aCODE, 64  ) = "889"   : Characters( aNAME, 64  ) = "Circle above letter"
+Characters( aCODE, 65  ) = "8304"  : Characters( aNAME, 65  ) = "Superscript 0"
+Characters( aCODE, 66  ) = "185"   : Characters( aNAME, 66  ) = "Superscript 1"
+Characters( aCODE, 67  ) = "178"   : Characters( aNAME, 67  ) = "Superscript 2"
+Characters( aCODE, 68  ) = "179"   : Characters( aNAME, 68  ) = "Superscript 3"
+Characters( aCODE, 69  ) = "8308"  : Characters( aNAME, 69  ) = "Superscript 4"
+Characters( aCODE, 70  ) = "8309"  : Characters( aNAME, 70  ) = "Superscript 5"
+Characters( aCODE, 71  ) = "8310"  : Characters( aNAME, 71  ) = "Superscript 6"
+Characters( aCODE, 72  ) = "8311"  : Characters( aNAME, 72  ) = "Superscript 7"
+Characters( aCODE, 73  ) = "8312"  : Characters( aNAME, 73  ) = "Superscript 8"
+Characters( aCODE, 74  ) = "8313"  : Characters( aNAME, 74  ) = "Superscript 9"
+Characters( aCODE, 75  ) = "8314"  : Characters( aNAME, 75  ) = "Superscript plus"
+Characters( aCODE, 76  ) = "8315"  : Characters( aNAME, 76  ) = "Superscript minus"
+Characters( aCODE, 77  ) = "8317"  : Characters( aNAME, 77  ) = "Superscript left parenthesis"
+Characters( aCODE, 78  ) = "8318"  : Characters( aNAME, 78  ) = "Superscript right parenthesis"
+Characters( aCODE, 79  ) = "8320"  : Characters( aNAME, 79  ) = "Subscript 0"
+Characters( aCODE, 80  ) = "8321"  : Characters( aNAME, 80  ) = "Subscript 1"
+Characters( aCODE, 81  ) = "8322"  : Characters( aNAME, 81  ) = "Subscript 2"
+Characters( aCODE, 82  ) = "8323"  : Characters( aNAME, 82  ) = "Subscript 3"
+Characters( aCODE, 83  ) = "8324"  : Characters( aNAME, 83  ) = "Subscript 4"
+Characters( aCODE, 84  ) = "8325"  : Characters( aNAME, 84  ) = "Subscript 5"
+Characters( aCODE, 85  ) = "8326"  : Characters( aNAME, 85  ) = "Subscript 6"
+Characters( aCODE, 86  ) = "8327"  : Characters( aNAME, 86  ) = "Subscript 7"
+Characters( aCODE, 87  ) = "8328"  : Characters( aNAME, 87  ) = "Subscript 8"
+Characters( aCODE, 88  ) = "8329"  : Characters( aNAME, 88  ) = "Subscript 9"
+Characters( aCODE, 89  ) = "8330"  : Characters( aNAME, 89  ) = "Subscript plus"
+Characters( aCODE, 90  ) = "8331"  : Characters( aNAME, 90  ) = "Subscript minus"
+Characters( aCODE, 91  ) = "8333"  : Characters( aNAME, 91  ) = "Subscript left parenthesis"
+Characters( aCODE, 92  ) = "8334"  : Characters( aNAME, 92  ) = "Subscript right parenthesis"
+Characters( aCODE, 93  ) = "8364"  : Characters( aNAME, 93  ) = "Euro sign"
+Characters( aCODE, 94  ) = "8467"  : Characters( aNAME, 94  ) = "Script l"
+Characters( aCODE, 95  ) = "8471"  : Characters( aNAME, 95  ) = "Phonogram copyright mark"
+Characters( aCODE, 96  ) = "8718"  : Characters( aNAME, 96  ) = "Fill character"
+Characters( aCODE, 97  ) = "9837"  : Characters( aNAME, 97  ) = "Musical flat"
+Characters( aCODE, 98  ) = "9839"  : Characters( aNAME, 98  ) = "Musical sharp"
+Characters( aCODE, 99  ) = "65056" : Characters( aNAME, 99  ) = "Ligature (left half)"
+Characters( aCODE, 100 ) = "65057" : Characters( aNAME, 100 ) = "Ligature (right half)"
+Characters( aCODE, 101 ) = "65058" : Characters( aNAME, 101 ) = "Double tilde (left half)"
+Characters( aCODE, 102 ) = "65059" : Characters( aNAME, 102 ) = "Double tilde (right half)"
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetShortcutsFromFile( FileName$ )
+
+Const LENGTH_INPUT_STRING  As Integer = 32000  'The constant for the maximum string size in this macro is based on an OML memory
+                                               ' limit, even though OML can handle a string length of up to 32,767 bytes.
+Const NORMAL_FILE          As Integer = 0      'Attribute of a normal file.
+Const NORMAL_FILE_ARCHIVE  As Integer = 32     'Attribute of a normal file with archive bit set?
+
+Dim Attributes%
+Dim CheckStringBegin$
+Dim CheckStringEnd$
+Dim CountOfShortcuts%
+Dim FileNum%
+Dim FileString As String*LENGTH_INPUT_STRING
+Dim Start%
+Dim TempString$
+
+CheckStringBegin$ = Chr$( 255 ) & Chr$( 254 ) & "<" & NullChar$ & "K" & NullChar$ & "e" & NullChar$ & _
+                    "y" & NullChar$ & "m" & NullChar$ & "a" & NullChar$ & "p" & NullChar$ & ">" & NullChar$
+CheckStringEnd$   = "<" & NullChar$ & "/" & NullChar$ & "K"
+
+Dim p As Integer, q As Integer, x As Integer
+
+On Error GoTo ReadFailure:
+Attributes% = GetAttr( FileName$ )
+If Attributes% = NORMAL_FILE Or Attributes% = NORMAL_FILE_ARCHIVE Then
+    FileNum% = FreeFile
+    On Error GoTo ReadFailure:
+    Open FileName$ For Binary Access Read As #FileNum%
+    Get #FileNum%, , FileString
+    Close #FileNum%
+    Reset
+End If
+
+' Check that file is encoded in Unicode and begins with "<Keymap>".
+
+If Left$( FileString, 18 ) <> CheckStringBegin$ Then GoTo ReadFailure:
+
+' If the file is valid, read its data. The lines in the file look like these:
+'
+'   <Macro Key="Ctrl+Shift+F12" Value="OCLC!BrowseBibliographicIndex" />
+'   <Macro Key="Alt+Shift+N" Value="MacroTools!RandomRecord" />
+'   <Command Key="Ctrl+Shift+F11" Value="EditControlHeadingsUncontrolAllMenu" />
+'   <Character Key="Divide" Value="774" />
+'   <Text Key="Alt+Shift+B" Value="Includes bibliographical references" />
+'
+' Read each line by looking for each left angle bracket. The file is encoded in Unicode,
+' rather than in ASCII text, which in practical terms means each text character is
+' followed by a null character. The macro reads each line, converting it to plain ASCII
+' text by means of the function "UnicodeConvert." Within the line, the very first word is
+' the category of shortcut. Then the words "Key" and "Value" locate the other two pieces
+' of information--the assigned key, and the name of the action. The three bits of
+' extracted information are stored in the array "Shortcuts." Manipulation of that
+' information for display happens while the dialog box is running.
+
+Start% = 15
+Do
+  p = InStr( Start%, FileString, "<" )
+  If p > 0 Then
+      q = InStr( p + 10, FileString, "/" & NullChar$ & ">" )
+      If q > 0 Then
+          TempString$ = Trim$( UnicodeConvert( Mid$( FileString, p + 1, q - p - 5 ) ) )
+          ReDim Preserve Shortcuts( 2, CountOfShortcuts% )
+          x = InStr( TempString$, "Key" )
+          If x > 0 Then
+              Shortcuts( 0, CountOfShortcuts% ) = Trim$( Left$( TempString$, x - 1 ) )
+              TempString$ = Trim$( Mid$( TempString$, x + 5 ) )
+          End If
+          x = InStr( TempString$, "Value=" )
+          If x > 0 Then
+              Shortcuts( 1, CountOfShortcuts% ) = Trim$( Left$( TempString$, x - 3 ) )
+              Shortcuts( 2, CountOfShortcuts% ) = Mid$( TempString$, x + 7 )
+          End If
+          CountOfShortcuts% = CountOfShortcuts% + 1
+        Else
+
+' If the closing "/>" is not found, either the file is corrupt, or its end has been
+' reached. If the macro is at the end of the file, it will have found the opening angle
+' bracket in the last line, which is "</Keymap>"; check for the first three characters at
+' the position of that bracket, and if they are correct, assume the file is OK and the
+' job of extracting the shortcuts is done.
+
+          If Mid$( FileString, p, 5 ) = CheckStringEnd$ Then
+              Exit Do
+            Else
+              GoTo ReadFailure:
+          End If
+      End If
+      Start% = q + 1
+    Else
+
+' If no angle bracket is detected at the very beginning, something must be wrong with the
+' file. Exit the macro.
+
+      If Start% = 15 Then GoTo ReadFailure:
+
+  End If
+Loop Until p = 0
+
+Exit Sub
+
+ReadFailure:
+
+MsgBox "Sorry, could not read the keymap file.", CRITICAL_MESSAGE, WaltsMacros$
+Success = FALSE
+
+End Sub
+
+'****************************************************************************************
+
+Function UnicodeConvert( InString$ ) As String
+
+' This function converts a string in Unicode to ASCII and vice versa. The simple presence
+' or absence of the null character determines which way the conversion goes.
+
+Dim CharT$
+Dim TempString$
+
+Dim i As Integer
+
+TempString$ = ""
+
+If InStr( InString$, NullChar$ ) Then
+    For i = 1 To Len( InString$ )
+      CharT$ = Mid$( InString$, i, 1 )
+      If CharT$ <> NullChar$ Then
+          TempString$ = TempString$ & CharT$
+      End If
+    Next i
+  Else
+    For i = 1 To Len( InString$ )
+      TempString$ = TempString$ & Mid$( InString$, i, 1 ) & NullChar$
+    Next i
+End If
+
+UnicodeConvert = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CHECKED             As Integer = 1   'The value of a checkbox when it is checked.
+Const CONTROL_CHANGE      As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const DISABLED            As Integer = 0   'The value to make a dialog box control disabled.
+Const ENABLED             As Integer = 1   'The value to make a dialog box control enabled.
+Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
+Const INITIALIZE          As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE           As Integer = 0   'The value to make a dialog box control invisible.
+Const UNCHECKED           As Integer = 0   'The value of a checkbox when it is not checked.
+Const VISIBLE             As Integer = 1   'The value to make a dialog box control visible.
+
+Const ALPHANUMERICS       As integer = 0
+Const FUNCTION_KEYS       As Integer = 1
+Const NUMBER_PAD          As Integer = 3
+Const OTHER_KEYS          As Integer = 2
+
+Dim Category$
+Dim CopiedString$
+Dim CopyMessage$
+Static CurrentFileSelection As Variant
+Dim Cycle%
+Dim KeyCount%
+Dim Keys$
+Dim KeySelection$
+Dim KeyString$
+Dim LenTestString%
+Dim MatchType$
+Dim NumberCopied$
+Dim QUOTE As String*1        : QUOTE = Chr$( 034 )
+Dim TempString$
+Dim TestString$
+Dim UBShortcuts%
+Dim ValString$
+
+Dim KeyAlreadyUsed           : KeyAlreadyUsed  = FALSE
+
+Dim i As Integer, j As Integer, p As Integer, x As Integer
+
+Static CompStore() As String
+Static KeyStore()  As String
+Static ValStore()  As String
+
+CurrentFileSelection = NullChar$
+
+Select Case Action%
+
+  Case INITIALIZE
+
+Recycle:
+
+    DlgListBoxArray "DropListBoxKey",       AlphaNums()
+    DlgValue        "DropListBoxKey",       0
+    DlgEnable       "CopyButton",           DISABLED
+    DlgValue        "IncludeAppsCheckbox",  CHECKED
+    If FileCounter% < 2 Then
+        DlgVisible      "SelectAFile",          INVISIBLE
+        DlgVisible      "DropListBoxFiles",     INVISIBLE
+      Else
+        If VarType( CurrentFileSelection ) = 2 Then
+            DlgValue "DropListBoxFiles", CurrentFileSelection
+          Else
+            If VarType( IndexOfCustom ) = 2 Then
+                DlgValue "DropListBoxFiles", IndexOfCustom
+              Else
+                DlgValue "DropListBoxFiles", 0
+            End If
+        End If
+    End If
+    DlgText         "ShortcutCount",        Trim$( Str$( UBound( Shortcuts, 2 ) + 174 ) ) & " shortcuts assigned."
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "Close"
+        DlgEnd 0
+
+      Case "DropListBoxKeyGroup"
+
+        ClearDisplay
+        Select Case DlgValue( "DropListBoxKeyGroup" )
+          Case 0
+            DlgListBoxArray "DropListBoxKey",       AlphaNums()
+          Case 1
+            DlgListBoxArray "DropListBoxKey",       Functions()
+          Case 2
+            DlgListBoxArray "DropListBoxKey",       OthersDisplay()
+          Case 3
+            DlgListBoxArray "DropListBoxKey",       NumPadDisplay()
+        End Select
+        DlgValue         "DropListBoxKey",       0
+
+      Case "DropListBoxFiles"
+
+        Call GetShortcutsFromFile( MyProfilePath$ & DlgText( "DropListBoxFiles" ) & XMLSuffix$ )
+        CurrentFileSelection = DlgValue( "DropListBoxFiles" )
+        ClearDisplay
+        GoTo Recycle:
+
+      Case "CopyButton"
+
+        x = UBound( KeyStore )
+        For i = 0 To x
+          CopiedString$ = CopiedString$ & KeyStore( i ) & Chr$( 009 ) & ValStore( i ) & Chr$( 013 )
+        Next i
+        Clipboard.Clear
+        Clipboard.SetText CopiedString$
+        NumberCopied$ = Trim$( Str$( x + 1 ) )
+        If i = 1 Then
+            CopyMessage$ = NumberCopied$ & " shortcut key definition was copied to the Clipboard."
+          Else
+            CopyMessage$ = NumberCopied$ & " shortcut key definitions were copied to the Clipboard."
+        End If
+        MsgBox CopyMessage$, INFORMATION_MESSAGE, WaltsMacros$
+        DlgEnd 0
+
+      Case "DropListBoxKey", "DropListBoxCategory", "DropListBoxKeyGroup", "IncludeAppsCheckbox"
+
+        If DlgValue( "DropListBoxKey" ) > 0 Then
+            ClearDisplay
+            KeySelection$ = DlgText( "DropListBoxKey" )
+            MatchType$    = DlgText( "DropListBoxCategory" )
+
+            Select Case MatchType$
+              Case "Macros"
+                MatchType$ = "Macro"
+              Case "Characters"
+                MatchType$ = "Character"
+              Case "Text strings"
+                MatchType$ = "Text"
+              Case "Menu items"
+                MatchType$ = "Command"
+            End Select
+
+            UBShortcuts% = UBound( Shortcuts, 2 )
+
+            For Cycle% = 1 To 2
+
+              ReDim CompStore( 2, UBShortcuts% )
+              If Cycle% = 1 Then
+                  For i = 0 To UBShortcuts%
+                    CompStore( aCATEGORY, i ) = Shortcuts( aCATEGORY, i )
+
+' Different keyboards may send different codes to the system. The following list shows
+' codes used by US standard keyboards, according to Microsoft
+' <https://msdn.microsoft.com/en-us/library/windows/desktop/dd375731(v=vs.85).aspx>,
+' "Virtual-Key Codes" (viewed 24 May 2017). Connexion stores most of these codes in user-
+' assigned shortcuts, but supplies names for them in its own, app-assigned shortcuts.
+' For the user-assigned shortcuts, change the codes to OCLC's standard nomenclature for
+' display.
+'
+'   Oem1 = ;:
+'   Oem2 = /?  Stored by Connexion as "Question"
+'   Oem3 = `~  Stored by Connexion as "Grave"
+'   Oem4 = [{  Stored by Connexion as "OpenBrackets"
+'   Oem5 = \|
+'   Oem6 = ]}
+'   Oem7 = '"
+
+                    TempString$ = Shortcuts( aKEYS, i )
+                    p = InStr( TempString$, "Oem" )
+                    If p > 0  And Right$( TempString$, 1 ) Like "[1567]" Then
+                        Select Case Right$( TempString$, 1 )
+                      Case "1"
+                            CompStore( aKEYS, i ) = Left$( TempString$, p - 1 ) & "Semicolon"
+                          Case "5"
+                            CompStore( aKEYS, i ) = Left$( TempString$, p - 1 ) & "Pipe"
+                          Case "6"
+                            CompStore( aKEYS, i ) = Left$( TempString$, p - 1 ) & "CloseBrackets"
+                          Case "7"
+                            CompStore( aKEYS, i ) = Left$( TempString$, p - 1 ) & "Quotes"
+                        End Select
+                      Else
+                        CompStore( aKEYS, i ) = TempString$
+                    End If
+                    CompStore( aACTION, i )   = Shortcuts( aACTION, i )
+                  Next i
+                Else
+                  ReDim CompStore( 2, 172 )
+                  For i = 0 To 172
+                    CompStore( aCATEGORY, i ) = AppAssigned( aCATEGORY, i )
+                    CompStore( aKEYS, i )     = AppAssigned( aKEYS, i )
+                    CompStore( aACTION, i )   = AppAssigned( aACTION, i )
+                  Next i
+              End If
+
+              For i = 0 To UBShortcuts%
+
+                If CompStore( aCATEGORY, i ) = MatchType$ OR MatchType$ = "All categories" Then
+
+                    Select Case DlgValue( "DropListBoxKeyGroup" )
+
+                      Case ALPHANUMERICS
+
+                        TestString$ = CompStore( aKEYS, i )
+                        If KeySelection$ = Right$( TestString$, 1 ) Then
+                            LenTestString% = Len( TestString$ )
+                            If LenTestString% > 1 Then
+                                If Mid$( TestString$, LenTestString% - 1, 1 ) = "+" Then
+                                    KeyString$ = CompStore( aKEYS, i )
+                                    ValString$ = CompStore( aACTION, i )
+                                End If
+                              Else
+                                KeyString$ = CompStore( aKEYS, i )
+                                ValString$ = CompStore( aACTION, i )
+                            End If
+                        End If
+
+                      Case FUNCTION_KEYS
+
+                        If Right$( CompStore( aKEYS, i ), Len( KeySelection$ ) ) = KeySelection$ Then
+                            KeyString$ = CompStore( aKEYS, i )
+                            ValString$ = CompStore( aACTION, i )
+                        End If
+
+                      Case OTHER_KEYS
+
+                        KeySelection$ = OthersOCLC( DlgValue( "DropListBoxKey" ) )
+                        If InStr( CompStore( aKEYS, i ), KeySelection$ ) Then
+                            KeyString$ = CompStore( aKEYS, i )
+                            ValString$ = CompStore( aACTION, i )
+                        End If
+
+                      Case NUMBER_PAD
+
+                        KeySelection$ = NumPadOCLC( DlgValue( "DropListBoxKey" ) )
+                        If InStr( CompStore( aKEYS, i ), KeySelection$ ) Then
+                            KeyString$ = CompStore( aKEYS, i )
+                            ValString$ = CompStore( aACTION, i )
+                        End If
+
+                    End Select
+
+' If a match has been found, add the key and the action name to the arrays--except if the
+' key already appears, which will be the case when an action has been given to an app-
+' assigned key. In that case, keep the first occurrence only, which will be the user-
+' assigned action.
+
+                    If KeyString$ <> "" Then
+                        If KeyCount% > 0 Then
+                            For j = 0 To KeyCount% - 1
+                              If KeyStore( j ) = KeyString$ Then
+                                  KeyAlreadyUsed = TRUE
+                              End If
+                            Next j
+                        End If
+                        If KeyAlreadyUsed = FALSE Then
+                            ReDim Preserve KeyStore( KeyCount% )
+                            ReDim Preserve ValStore( KeyCount% )
+                            KeyStore( KeyCount% ) = KeyString$
+
+' Some action names require manipulation for nice display. For text strings, add
+' quotation marks around the string. For user-assigned character shortcuts, convert
+' the number to a name.
+
+                            Category$ = CompStore( aCATEGORY, i )
+                            Select Case Category$
+                              Case "Text"
+                                ValString$ = QUOTE & ValString$ & QUOTE
+                              Case "Character"
+                                If ValString$ Like "9#" Or ValString$ Like "###" Or ValString$ Like "####" Or ValString$ Like "650##" Then
+                                    For j = 0 To 102
+                                      If ValString$ = Characters( aCODE, j ) Then
+                                          ValString$ = "Character " & Characters( aNAME, j )
+                                      End If
+                                    Next j
+                                End If
+                            End Select
+                            ValStore( KeyCount% ) = ValString$
+                            KeyCount% = KeyCount% + 1
+                          Else
+                            KeyAlreadyUsed = FALSE
+                        End If
+                    End If
+                    KeyString$ = ""
+                    ValString$ = ""
+                End If
+
+              Next i
+
+              If DlgValue( "IncludeAppsCheckbox" ) = UNCHECKED Then
+                  DlgText         "ShortcutCount",        Trim$( Str$( UBound( Shortcuts, 2 ) + 1 ) ) & " shortcuts assigned."
+                  Exit For
+                Else
+                  DlgText         "ShortcutCount",        Trim$( Str$( UBound( Shortcuts, 2 ) + 174 ) ) & " shortcuts assigned."
+              End If
+
+            Next Cycle%
+
+            If KeyCount% = 0 Then
+
+                Select Case DlgValue( "DropListBoxCategory" )
+                  Case 1
+                    Category$ = "macro "
+                  Case 2
+                    Category$ = "character "
+                  Case 3
+                    Category$ = "text string "
+                  Case 4
+                    Category$ = "menu item "
+                End Select
+
+                Keys$ = "The selected key is not used in any " & Category$ & "shortcuts."
+                DlgEnable       "CopyButton",           DISABLED
+
+              Else
+
+                DlgEnable       "CopyButton",           ENABLED
+                For i = 0 To UBound( KeyStore )
+                  TempString$ = KeyStore( i )
+                  If Left$( TempString$, 14 ) = "Ctrl+Alt+Shift" Then
+                      DlgText         "Label_SHIFT_CTRL_ALT", ValStore( i )
+                    ElseIf Left$( TempString$, 10 ) = "Ctrl+Shift" Then
+                      DlgText         "Label_SHIFT_CTRL",     ValStore( i )
+                    ElseIf Left$( TempString$, 9 ) = "Alt+Shift" Then
+                      DlgText         "Label_SHIFT_ALT",      ValStore( i )
+                    ElseIf Left$( TempString$, 8 ) = "Ctrl+Alt" Then
+                      DlgText         "Label_CTRL_ALT",       ValStore( i )
+                    ElseIf Left$( TempString$, 5 ) = "Shift" Then
+                      DlgText         "Label_SHIFT",          ValStore( i )
+                    ElseIf Left$( TempString$, 4 ) = "Ctrl" Then
+                      DlgText         "Label_CTRL",           ValStore( i )
+                    ElseIf Left$( TempString$, 3 ) = "Alt" Then
+                      DlgText         "Label_ALT",            ValStore( i )
+                    Else
+                      DlgText         "Unmodified",           ValStore( i )
+                  End If
+                Next i
+            End If
+        End If
+
+    End Select
+
+  End Select
+
+End Function
+'118978541
+'
+'Macro name: ShortcutKeysIndex
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
+'Saved: 6/29/2017 9:08:06 AM using "MacroBookInspector" macro by Walter F. Nickeson.
