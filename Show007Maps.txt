@@ -1,0 +1,500 @@
+'MacroName:Show007Maps.2015.01
+'MacroDescription:Displays the codes in an 007 field for maps in a friendly way for
+' verification and/or correction.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' with lots of ideas and some code from Joel Hahn.
+'
+' Last updated: 27 August 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'***************************************************************************************#
+' How it works: In a record for a map, run the macro. It looks for the first map 007
+' field and shows the field's values in a dialog box with drop-down lists so the values
+' can be verified and changed if necessary. If the cursor is placed in a map 007, that
+' field is used in the macro (i.e., the macro will not search for another 007 field). If
+' there is no 007, use the dialog box to enter correct values in a new field. Default
+' values for new fields can be set in the section below that starts on line 89.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function CheckValue%( Subfield$, EnteredValue$ )
+
+Global WaltsMacros$
+
+'****************************************************************************************
+
+Sub Main
+
+Const ANSWER_YES           As Integer = 6   'The value returned by a message box when the "Yes" button is clicked.
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL As Integer = 0   'The value returned by the dialog function when the "Cancel" button is clicked.
+Const INFORMATION_MESSAGE  As Integer = 64  'The value to display the "Information message" icon in a message box.
+Const WARNING_QUERY        As Integer = 32  'The value to display the "Warning query" icon in a message box.
+Const YES_NO               As Integer = 4   'The value to display "Yes" and "No" buttons in a message box.
+
+Dim CS As Object
+Set CS = CreateObject( "Connex.Client" )
+
+Dim Answer%
+Dim BArrayChoice%, DArrayChoice%, EArrayChoice%, FArrayChoice%, GArrayChoice%, HArrayChoice%
+Dim BValue$, DValue$, EValue$, FValue$, GValue$, HValue$
+Dim DefaultSubfieldB$, DefaultSubfieldD$, DefaultSubfieldE$, DefaultSubfieldF$, DefaultSubfieldG$, DefaultSubfieldH$
+Dim Field007String$
+Dim FieldData$
+Dim FixedFieldType$
+Dim Instance%                : Instance%    = 1
+Dim Row%
+Dim SubfB$                   : SubfB$       = Chr$( 223 ) & "b"
+Dim SubfD$                   : SubfD$       = Chr$( 223 ) & "d"
+Dim SubfE$                   : SubfE$       = Chr$( 223 ) & "e"
+Dim SubfF$                   : SubfF$       = Chr$( 223 ) & "f"
+Dim SubfG$                   : SubfG$       = Chr$( 223 ) & "g"
+Dim SubfH$                   : SubfH$       = Chr$( 223 ) & "h"
+Dim TypeOfWindow%
+Dim Warning$
+
+Dim AddNew                   : AddNew       = FALSE
+Dim Changed                  : Changed      = FALSE
+Dim Field007Bool             : Field007Bool = FALSE
+
+Dim BArray() As String
+Dim DArray() As String
+Dim EArray() As String
+Dim FArray() As String
+Dim GArray() As String
+Dim HArray() As String
+
+Dim p As Integer
+
+WaltsMacros$ = "[Walt's macros] Extras1:Show007Maps"
+
+'****************************************************************************************
+' SET THE DEFAULT VALUES FOR NEW 007 FIELDS HERE
+' Enter values in lowercase. Input a blank (" ") as the value for optional subfields that
+' will not be coded
+DefaultSubfieldB$ = "j"   'MANDATORY SUBFIELD
+DefaultSubfieldD$ = "a"   'OPTIONAL SUBFIELD
+DefaultSubfieldE$ = "a"   'OPTIONAL SUBFIELD
+DefaultSubfieldF$ = "n"   'OPTIONAL SUBFIELD
+DefaultSubfieldG$ = "z"   'OPTIONAL SUBFIELD
+DefaultSubfieldH$ = "n"   'OPTIONAL SUBFIELD
+'****************************************************************************************
+
+' If what is displayed is not a bibliographic record, quit.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 2 To 16, 18, 20 To 34, 36
+    MsgBox "Sorry, this macro only works in an bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' If the cursor is in a map 007 field, work on that one; otherwise cycle through the
+' first 10 007 fields in the record looking for a map 007.
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
+    If Mid$( FieldData$, 1, 3 ) = "007" And Mid$( FieldData$, 6, 1 ) = "a" Then GoTo GetValues:
+End If
+
+Do Until Field007Bool = TRUE Or Instance% = 10
+  Field007Bool = CS.GetField( "007", Instance%, FieldData$ )
+  If Field007Bool = TRUE Then
+      If Mid$( FieldData$, 6, 1 ) = "a" Then
+          Exit Do
+        Else
+          Field007Bool = FALSE
+      End If
+  End If
+  Instance% = Instance% + 1
+Loop
+
+If Instance% = 10 Then
+    If MsgBox( "No map 007 field found! Create a new one?", WARNING_QUERY + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
+        AddNew  = TRUE
+        Changed = TRUE
+      Else
+        GoTo Done:
+    End If
+End If
+
+' Now find all the subfields and their values. Subfield $b is mandatory, so if it is not
+' found, that means no 007 field exists and a new one is added, with the default values
+' given above.
+
+GetValues:
+
+p = Instr( FieldData$, SubfB$ )
+If p <> 0 Then
+    BValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    BValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfD$ )
+If p <> 0 Then
+    DValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    DValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfE$ )
+If p <> 0 Then
+    EValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    EValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfF$ )
+If p <> 0 Then
+    FValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    FValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfG$ )
+If p <> 0 Then
+    GValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    GValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfH$ )
+If p <> 0 Then
+    HValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    HValue$ = " "
+End If
+
+' Populate arrays for use in the dialog box, and determine which item in the array is
+' already in the 007 field.
+
+ReDim BArray( 0 to 11 )
+BArray( 0 )  = " "
+BArray( 1 )  = " ----------"
+BArray( 2 )  = "d - Atlas"
+BArray( 3 )  = "g - Diagram"
+BArray( 4 )  = "p - Map"
+BArray( 5 )  = "k - Profile"
+BArray( 6 )  = "q - Model"
+BArray( 7 )  = "r - Remote-sensing image"
+BArray( 8 )  = "s - Section"
+BArray( 9 )  = "u - Unspecified"
+BArray( 10 ) = "y - View"
+BArray( 11 ) = "z - Other"
+
+If AddNew = TRUE Then BValue$ = DefaultSubfieldB$
+Select Case BValue$
+  Case "d"
+    BArrayChoice% = 2
+  Case "g"
+    BArrayChoice% = 3
+  Case "j"
+    BArrayChoice% = 4
+  Case "k"
+    BArrayChoice% = 5
+  Case "q"
+    BArrayChoice% = 6
+  Case "r"
+    BArrayChoice% = 7
+  Case "s"
+    BArrayChoice% = 8
+  Case "u"
+    BArrayChoice% = 9
+  Case "y"
+    BArrayChoice% = 10
+  Case "z"
+    BArrayChoice% = 11
+  Case Else
+    BArrayChoice% = 0
+End Select
+
+ReDim DArray( 0 to 3 )
+DArray( 0 ) = " "
+DArray( 1 ) = " ----- [use this for a blank] -----"
+DArray( 2 ) = "a - One color"
+DArray( 3 ) = "c - Multicolor"
+
+If AddNew = TRUE Then DValue$ = DefaultSubfieldD$
+Select Case DValue$
+  Case "a"
+    DArrayChoice% = 2
+  Case "c"
+    DArrayChoice% = 3
+  Case Else
+    DArrayChoice% = 0
+End Select
+
+ReDim EArray( 0 to 17 )
+EArray( 0 )  = " "
+EArray( 1 )  = " ----- [use this for a blank] -----"
+EArray( 2 )  = "a - Paper"
+EArray( 3 )  = "b - Wood"
+EArray( 4 )  = "c - Stone"
+EArray( 5 )  = "d - Metal"
+EArray( 6 )  = "e - Synthetics"
+EArray( 7 )  = "f - Skins"
+EArray( 8 )  = "g - Textile"
+EArray( 9 )  = "p - Glass"
+EArray( 10 ) = "p - Plaster"
+EArray( 11 ) = "q - Positive flexible base photographic medium"
+EArray( 12 ) = "r - Negative flexible base photographic medium"
+EArray( 13 ) = "s - Positive non-flexible base photographic medium"
+EArray( 14 ) = "t - Negative non-flexible base photographic medium"
+EArray( 15 ) = "u - Unknown"
+EArray( 16 ) = "y - Other photographic material"
+EArray( 17 ) = "z - Other"
+
+If AddNew = TRUE Then EValue$ = DefaultSubfieldE$
+Select Case EValue$
+  Case "a"
+    EArrayChoice% = 2
+  Case "b"
+    EArrayChoice% = 3
+  Case "c"
+    EArrayChoice% = 4
+  Case "d"
+    EArrayChoice% = 5
+  Case "e"
+    EArrayChoice% = 6
+  Case "f"
+    EArrayChoice% = 7
+  Case "g"
+    EArrayChoice% = 8
+  Case "j"
+    EArrayChoice% = 9
+  Case "p"
+    EArrayChoice% = 10
+  Case "q"
+    EArrayChoice% = 11
+  Case "r"
+    EArrayChoice% = 12
+  Case "s"
+    EArrayChoice% = 13
+  Case "t"
+    EArrayChoice% = 14
+  Case "u"
+    EArrayChoice% = 15
+  Case "y"
+    EArrayChoice% = 16
+  Case "z"
+    EArrayChoice% = 17
+  Case Else
+    EArrayChoice% = 0
+End Select
+
+ReDim FArray( 0 to 5 )
+FArray( 0 ) = " "
+FArray( 1 ) = " ----- [use this for a blank] -----"
+FArray( 2 ) = "f - Facsimile"
+FArray( 3 ) = "n - Not applicable"
+FArray( 4 ) = "u - Unknown"
+FArray( 5 ) = "z - Other"
+
+If AddNew = TRUE Then FValue$ = DefaultSubfieldF$
+Select Case FValue$
+  Case "f"
+    FArrayChoice% = 2
+  Case "n"
+    FArrayChoice% = 3
+  Case "u"
+    FArrayChoice% = 4
+  Case "z"
+    FArrayChoice% = 5
+  Case Else
+    FArrayChoice% = 0
+End Select
+
+ReDim GArray( 0 to 7 )
+GArray( 0 ) = " "
+GArray( 1 ) = " ----- [use this for a blank] -----"
+GArray( 2 ) = "a - Photocopy, blueline print"
+GArray( 3 ) = "b - Photocopy"
+GArray( 4 ) = "c - Pre-production"
+GArray( 5 ) = "d - Film"
+GArray( 6 ) = "u - Unknown"
+GArray( 7 ) = "z - Other"
+
+If AddNew = TRUE Then GValue$ = DefaultSubfieldG$
+Select Case GValue$
+  Case "a"
+    GArrayChoice% = 2
+  Case "b"
+    GArrayChoice% = 3
+  Case "c"
+    GArrayChoice% = 4
+  Case "d"
+    GArrayChoice% = 5
+  Case "u"
+    GArrayChoice% = 6
+  Case "z"
+    GArrayChoice% = 7
+  Case Else
+    GArrayChoice% = 0
+End Select
+
+ReDim HArray( 0 to 5 )
+HArray( 0 ) = " "
+HArray( 1 ) = " ----- [use this for a blank] -----"
+HArray( 2 ) = "a - Positive"
+HArray( 3 ) = "b - Negative"
+HArray( 4 ) = "m - Mixed"
+HArray( 5 ) = "n - Not applicable"
+
+If AddNew = TRUE Then HValue$ = DefaultSubfieldH$
+Select Case HValue$
+  Case "a"
+    HArrayChoice% = 2
+  Case "b"
+    HArrayChoice% = 3
+  Case "m"
+    HArrayChoice% = 4
+  Case "n"
+    HArrayChoice% = 5
+  Case Else
+    HArrayChoice% = 0
+End Select
+
+' The existing values in the 007 field are made to be the first items in the arrays, so
+' they show as the element in the drop-down list box.
+
+BArray( 0 ) = BArray( BArrayChoice%)
+DArray( 0 ) = DArray( DArrayChoice%)
+EArray( 0 ) = EArray( EArrayChoice%)
+FArray( 0 ) = FArray( FArrayChoice%)
+GArray( 0 ) = GArray( GArrayChoice%)
+HArray( 0 ) = HArray( HArrayChoice%)
+
+' The main dialog box, showing the present values in the 007 field and offering drop-down
+' lists for changing those values, or adding new ones.
+
+Begin Dialog Dialog1Definition  256, 202, WaltsMacros$
+  OKButton      18, 140,  64,  18
+  CancelButton  18, 168,  64,  18
+  DropListBox  128,  11, 120, 108, BArray(), .B
+  DropListBox  128,  27, 120, 172, DArray(), .D
+  DropListBox  128,  43, 120,  72, EArray(), .E
+  DropListBox  128,  59, 120,  72, FArray(), .F
+  DropListBox  128,  75, 120, 144, GArray(), .G
+  DropListBox  128,  91, 120, 120, HArray(), .H
+  Text          18,  13, 108,   8, "Specific material designation:"
+  Text          18,  29, 108,   8, "*Color:"
+  Text          18,  45, 108,   8, "*Physical medium:"
+  Text          18,  61, 108,   8, "*Type of reproduction:"
+  Text          18,  77, 108,   8, "*Production/ reproduction details:"
+  Text          18,  93, 108,   8, "*Positive/negative aspect:"
+  Text          16, 114, 108,   8, "*Optional fields"
+  Text          92, 140, 154,  18, "Click OK to accept changes made above, or to accept the 007 as is."
+  Text          92, 168, 154,  18, "Click Cancel to terminate the macro and leave the 007 unchanged."
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+
+If Dialog( Dialog1 ) = DIALOG_BUTTON_CANCEL Then GoTo Done:
+
+' Test to see if any of the values have been changed.
+
+If Dialog1.B <> 0 Then
+    BValue$ = Left$( BArray( Dialog1.B ), 1 )
+    Changed = TRUE
+    If CheckValue%( "b", BValue$ ) = 0 Then GoTo GetValues:
+End If
+
+If Dialog1.D <> 0 Then
+    DValue$ = Left$( DArray( Dialog1.D ), 1 )
+    Changed = TRUE
+End If
+
+If Dialog1.E <> 0 Then
+    EValue$ = Left$( EArray( Dialog1.E ), 1 )
+    Changed = TRUE
+End If
+
+If Dialog1.F <> 0 Then
+    FValue$ = Left$( FArray( Dialog1.F ), 1 )
+    Changed = TRUE
+End If
+
+If Dialog1.G <> 0 Then
+    GValue$ = Left$( GArray( Dialog1.G ), 1 )
+    Changed = TRUE
+End If
+
+If Dialog1.H <> 0 Then
+    HValue$ = Left$( HArray( Dialog1.H ), 1 )
+    Changed = TRUE
+End If
+
+' Build a new 007 field with the values derived from the dialog.
+
+If Changed = TRUE Then
+
+    If AddNew = FALSE Then
+        Warning$ = FieldData$ & " " & Chr$( 014 ) & "PREVIOUS MAP 007!" & Chr$( 014 )
+        If CS.SetField( Instance%, Warning$ ) = FALSE Then GoTo AddIt:
+    End If
+    Field007String$ = "007  a " & SubfB$ & " " & BValue$
+    If DVAlue$ <> " " Then Field007String$ = Field007String$ & " " & SubfD$ & " " & DValue$
+    If EVAlue$ <> " " Then Field007String$ = Field007String$ & " " & SubfE$ & " " & EValue$
+    If FVAlue$ <> " " Then Field007String$ = Field007String$ & " " & SubfF$ & " " & FValue$
+    If GVAlue$ <> " " Then Field007String$ = Field007String$ & " " & SubfG$ & " " & GValue$
+    If HVAlue$ <> " " Then Field007String$ = Field007String$ & " " & SubfH$ & " " & HValue$
+  Else
+    MsgBox "No change made to 007!", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End If
+
+AddIt:
+
+If CS.AddField( 1, Field007String$ ) = TRUE Then
+    If AddNew = FALSE Then
+        Answer% = MsgBox( "New map 007 field added. Delete previous map 007?", 36, WaltsMacros$ )
+        If Answer% = 6 Then
+            CS.CursorRow = CS.CursorRow + 1
+            CS.DeleteCurrentField
+            CS.CursorRow = 1
+        End If
+      Else
+        MsgBox "New map 007 field added.", INFORMATION_MESSAGE, WaltsMacros$
+        CS.CursorRow = 1
+    End If
+    Exit Sub
+  Else
+    MsgBox "Sorry, could not add map 007 field.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+Done:
+
+End Sub
+
+'****************************************************************************************
+
+Function CheckValue%( Subfield$, EnteredValue$ )
+
+Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+If EnteredValue$ = " " Then
+    MsgBox "Invalid value (blank) in subfield $" & Subfield$ & ", 007 not added.", WARNING_MESSAGE, WaltsMacros$
+    CheckValue% = 0
+  Else
+    CheckValue% = 1
+End If
+
+End Function
+'52217121
+'
+'Macro name: Show007Maps
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
+'Saved: 6/28/2017 11:34:18 AM using "MacroBookInspector" macro by Walter F. Nickeson.

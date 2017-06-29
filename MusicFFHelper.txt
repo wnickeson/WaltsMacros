@@ -1,0 +1,1939 @@
+'MacroName:MusicFFHelper.2016.12
+'MacroDescription:Helps fill in elements in the fixed field for music materials: "AccM",
+' "Comp", "FMus", "LTxt", "Part", and "TrAr". Also helps add or edit an 047 field.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 27 December 2016.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro while viewing a bibliographic record for music material,
+' that is, a sound recording or notated music (e.g., a score). The macro displays the
+' contents and codes, with explanations (when available), of these elements in the fixed
+' field: "AccM", "Comp", "FMus", "LTxt", "Part", and "TrAr"--depending on the type of
+' record displayed. It also shows the contents of an 047 field, if present. Use the
+' mouse pointer to select a code in the macro's list boxes to add it to or remove it from
+' the fixed field element. If the macro doesn't already show the code, the click adds it.
+' If the code is present, the click removes it. Clicking on a code also displays the
+' explanation of its use from the MARC documentation. The explanation remains displayed
+' until a different code is selected. The dialog box remains open until all changes have
+' been made. When done, click "OK" to apply those changes to the bibliographic record.
+' Click "Cancel" to exit the macro without changing the record. Click "Reset" to return
+' the dialog box to its initial state. Note that resetting the macro does nothing to the
+' bibliographic record: it's not an "Undo."
+'
+' Notes on specific elements of the fixed field:
+'
+'  + "AccM" is an appropriate element for all types of records for music. Enter up to six
+'    codes; the macro orders them alphabetically. If a seventh code is selected the macro
+'    displays a warning. In that case, click on a code to remove it from the list to make
+'    room for a different code.
+'
+'  + "FMus", "Part", and "TrAr" are appropriate only in records for scores.
+'
+'  + "LTxt" is appropriate only in records for non-musical sound recordings. Enter up to
+'    two codes, in order of importance. If a third code is selected the macro displays a
+'    warning. In that case, click on a code to remove it from the list to make room for a
+'    different code. If the first code is removed, selecting another code puts it into
+'    that first position; if the first position is still empty when the macro is done,
+'    the code in the second position will be added to the bibliographic record.
+'
+'  + "Comp" is an appropriate element for all types of records for music. If more than
+'    one code is applicable for a manifestation, the value of "Comp" should be "mu", and
+'    the specific codes given in an 047 field. The macro displays the codes in an 047
+'    field in a separate listbox. If "Comp" is empty, selecting a code adds it; clicking
+'    on that same code again removes it. Selecting a second code changes "Comp" to "mu",
+'    and both codes appear in the listbox. Selecting additional codes simply adds them to
+'    the listbox. Although these codes in the 047 field should ultimately appear in order
+'    of importance, they can be entered in the macro in any order, and rearranged later.
+'    The listbox has "Up" and "Down" buttons to move a selected code (unfortunately, the
+'    macro language doesn't allow dragging and dropping), and a "Remove" button to delete
+'    it from the field. Removing codes so only one is left changes "Comp" back from "mu"
+'    to the single remaining code, and the 047 listbox disappears.
+
+'    The five codes "mu", "nn", "uu", "zz", or "||" are a special class. If any of them
+'    have been selected, they are added only to "Comp" and not to the list for an 047
+'    field. All but "mu" will empty and close the 047 listbox, if displayed, when
+'    clicked. If any of the five codes are present in "Comp", clicking on it a second
+'    time clears "Comp" and also clears all codes assembled in the 047 listbox.
+'
+'    When done, clicking "OK" adds the codes in the 047 listbox to the record, either
+'    replacing the existing field or adding a new one. If all the codes in an existing
+'    047 field are removed, the macro will delete that field from the record as its last
+'    action. If all but one of those existing codes are removed, that code is inserted
+'    into the fixed field as the new value for "Comp" and an existing 047 field is
+'    deleted.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub Build047   ( InString$ )
+Declare Sub BuildString( ListBox$, Selection% )
+Declare Sub LoadAccMCodes
+Declare Sub LoadCompCodes
+Declare Sub LoadScoreCodes
+Declare Sub LoadLTxtCodes
+
+Declare Function AddSpaces( InString$ ) As String
+
+Declare Function Dialog2ControlFunction( Id$, Action%, Suppvalue& )
+
+Global Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
+
+Global Const ACCM_CODE_COUNT As Integer = 14  'The number of codes available for "Accompanying Matter."
+Global Const COMP_CODE_COUNT As Integer = 73  'The number of codes available for "Form of Musical Composition."
+Global Const FMUS_CODE_COUNT As Integer = 16  'The number of codes available for "Format of Music."
+Global Const LTXT_CODE_COUNT As Integer = 20  'The number of codes available for "Literary Text for Sound Recordings."
+Global Const PART_CODE_COUNT As Integer = 6   'The number of codes available for "Music Parts."
+Global Const TRAR_CODE_COUNT As Integer = 6   'The number of codes available for "Transposition and Arrangement."
+
+Global AccM$
+Global Comp$
+Global Count047Codes%
+Global FMus$
+Global ListBoxClick%
+Global LTxt$
+Global Original047$
+Global OriginalAccM$
+Global OriginalComp$
+Global OriginalCount047Codes%
+Global OriginalFMus$
+Global OriginalLTxt$
+Global OriginalPart$
+Global OriginalTrAr$
+Global Part$
+Global PrevSelection%
+Global QUOTE As String*1
+Global Rearrange$
+Global RecordType$
+Global TrAr$
+Global WaltsMacros$
+Global When047Displays$
+
+Global CompCodesByTerm
+Global InvalidCode
+
+Global AccMExplain  ( ACCM_CODE_COUNT ) As String
+Global AccMValues   ( ACCM_CODE_COUNT ) As String
+Global CompValuesC  ( COMP_CODE_COUNT ) As String
+Global CompValuesT  ( COMP_CODE_COUNT ) As String
+Global Field047Codes( )                 As String
+Global FMusExplain  ( FMUS_CODE_COUNT ) As String
+Global FMusValues   ( FMUS_CODE_COUNT ) As String
+Global LTxtExplain  ( LTXT_CODE_COUNT ) As String
+Global LTxtValues   ( LTXT_CODE_COUNT ) As String
+Global PartExplain  ( PART_CODE_COUNT ) As String
+Global PartValues   ( PART_CODE_COUNT ) As String
+Global TrArExplain  ( TRAR_CODE_COUNT ) As String
+Global TrArValues   ( TRAR_CODE_COUNT ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE     As Integer = 16   'The value to display a "Critical message" (which includes the red button with
+                                             ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL As Integer = 102  'The value returned by the dialog function when the "Cancel" button is clicked.
+Const DISPLAY_FF_AT_TOP    As Integer = 1    'The value to display the fixed field at the top of a record.
+Const WARNING_MESSAGE      As Integer = 48   'The value to display the "Warning message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim Candidate047$
+Dim FieldData$
+Dim FILL_CHAR As String*1    : FILL_CHAR  = Chr$( 252 )
+Dim OptionChangeComp$
+Dim OptionDelete047$
+Dim OptionDoNothing1$
+Dim OptionDoNothing2$
+Dim OptionOptions$
+Dim PosFF%
+Dim TypeOfRecord$
+Dim TypeOfWindow%
+
+Dim Change047                : Change047  = FALSE
+Dim ChangeComp               : ChangeComp = FALSE
+Dim ChangeFF                 : ChangeFF   = FALSE
+
+Dim i As Integer, x As Integer
+
+QUOTE            = Chr$( 034 )
+Rearrange$       = "Select a code to move it up or down in the list or to remove it:"
+WaltsMacros$     = "[Walt's macros] Extras1:MusicFFHelper"
+When047Displays$ = "No 047 field. Codes display here only when there are two or more."
+
+CompCodesByTerm  = TRUE
+InvalidCode      = FALSE
+
+ReDim Field047Codes( 0 )
+
+' Begin by making sure a bibliographic record is displayed, and that it is for a sound
+' recording.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+
+TypeOfWindow% = CS.ItemType
+
+Select Case TypeOfWindow%
+
+  Case 0 To 1, 17, 35
+    If CS.GetFixedField( "Type", TypeOfRecord$ ) Then
+        If TypeOfRecord$ Like "[!cdij]" Then
+            MsgBox "Sorry, this macro only works with bibliographic records for music materials.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+          Else
+
+' Fill the arrays with values only as needed, depending on the type of record being
+' worked on. Codes for accompanying material are valid for all types.
+
+            LoadAccMCodes
+
+            Select Case TypeOfRecord$
+
+' For scores, add codes for all the other elements except "LTxt".
+
+              Case "c", "d"
+                LoadScoreCodes
+                LoadCompCodes
+                RecordType$ = "SCORE"
+
+' For non-musical sound recordings, the only other set of codes to add is "LTxt".
+
+              Case "i"
+                LoadLTxtCodes
+                RecordType$ = "NON-MUSICAL SOUND RECORDING"
+
+' For musical sound recordings, only add codes for "Comp".
+
+              Case "j"
+                LoadCompCodes
+                RecordType$ = "MUSICAL SOUND RECORDING"
+
+            End Select
+
+' Change the fill character to the pipe character, so OML can manipulate it, and record
+' the original string for comparison so the macro can tell if anything was changed.
+
+            If CS.GetFixedField( "AccM", AccM$ ) Then
+                If Left$( AccM$, 1 ) = FILL_CHAR Then AccM$ = "|"
+                OriginalAccM$ = AccM$
+            End If
+
+            If CS.GetFixedField( "Comp", Comp$ ) Then
+                If Comp$ = FILL_CHAR & FILL_CHAR Then Comp$ = "||"
+                OriginalComp$ = Comp$
+            End If
+
+            If CS.GetFixedField( "FMus", FMus$ ) Then
+                If FMus$ = FILL_CHAR Then FMus$ = "|"
+                OriginalFMus$ = FMus$
+            End If
+
+            If CS.GetFixedField( "Part", Part$ ) Then
+                If Part$ = FILL_CHAR Then Part$ = "|"
+                OriginalPart$ = Part$
+            End If
+
+            If CS.GetFixedField( "TrAr", TrAr$ ) Then
+                If TrAr$ = FILL_CHAR Then TrAr$ = "|"
+                OriginalTrAr$ = TrAr$
+            End If
+
+            If CS.GetFixedField( "LTxt", LTxt$ ) Then
+                If Left$( LTxt$, 1 ) = FILL_CHAR Then
+                    Mid$( LTxt$, 1, 1 ) = "|"
+                End If
+                If Right$( LTxt$, 1 ) = FILL_CHAR Then
+                    Mid$( LTxt$, 2, 1 ) = "|"
+                End If
+                OriginalLTxt$ = LTxt$
+            End If
+
+' Check for an 047 field. If one is found, the code in "Comp:" must be "mu". If it isn't,
+' offer to fix the problem, by either changing the code or deleting the field.
+
+            If CS.GetField( "047", 1, FieldData$ ) Then
+                Original047$ = Mid$( FieldData$, 6 )
+                If Comp$ <> "mu" Then
+                    OptionChangeComp$ = "&Change the value of Comp: to " & QUOTE & "mu" & QUOTE
+                    OptionDelete047$  = "&Keep the value of " & QUOTE & Comp$ & QUOTE & " in Comp: and delete the 047 field"
+                    OptionDoNothing1$ = "Do &nothing (but Comp: will be marked with an asterisk"
+                    OptionDoNothing2$ = "to indicate a problem)"
+                    OptionOptions$    = "The presence of an 047 field means the value of Comp: should be " & QUOTE & "mu" & QUOTE & " instead of " & QUOTE & Comp$ & QUOTE & ". Choose a solution:"
+
+                    Begin Dialog Dialog1Definition 224, 112, WaltsMacros$
+                      OkButton       100, 88,  52, 14
+                      CancelButton   160, 88,  52, 14
+                      OptionGroup .OptionGroup1
+                       OptionButton   20, 32, 192, 12, OptionChangeComp$, .OptionButton1
+                       OptionButton   20, 46, 192, 12, OptionDelete047$,  .OptionButton2
+                       OptionButton   20, 60, 192, 12, OptionDoNothing1$, .OptionButton3
+                      Text            33, 72, 144,  8, OptionDoNothing2$
+                      Text            12,  8, 200, 16, OptionOptions$
+                    End Dialog
+
+                    Dim Dialog1 as Dialog1Definition
+
+                    If Dialog( Dialog1 ) = 0 Then Exit Sub
+
+                    Select Case Dialog1.OptionGroup1
+
+                      Case 0
+                        Comp$ = "mu"
+
+                      Case 1
+                        Candidate047$  = ""
+                        Count047Codes% = 0
+
+                      Case 2
+                        Comp$ = Comp$ & "*"
+                        GoTo Continue:
+
+                    End Select
+
+                  Else
+
+' Otherwise, if the field contains only MARC Composition Codes, separate those codes into
+' an array.
+
+Continue:
+                    If Mid$( FieldData$, 5, 1 ) <> "7" Then
+                        FieldData$   = Mid$( FieldData$, 6 )
+                        Build047( FieldData$ )
+                        OriginalCount047Codes% = Count047Codes%
+                    End If
+                End If
+
+' If no 047 field exists but there is a code in "Comp" other than the values "mu", "nn",
+' "uu", "zz", or "||", create the array to build that field, just in case, with that
+' initial code as the first element. The code "mu" might mean that eventually there will
+' be codes named that will constitute an 047 field, but "mu" will not appear in it. For
+' the other special codes, their very definition precludes an 047 field from existing at
+' all.
+
+              Else
+                If Comp$ <> "mu" And Comp$ <> "nn" And Comp$ <> "uu" And Comp$ <> "zz" And Comp$ <> "||" Then
+                    For i = 0 To COMP_CODE_COUNT
+                      If Comp$ = Left$( CompValuesT( i ), 2 ) Then
+                          Field047Codes( 0 ) = CompValuesT( i )
+                          Count047Codes%     = Count047Codes% + 1
+                          Exit For
+                      End If
+                    Next i
+                End If
+            End If
+        End If
+    End If
+
+  Case Else
+    MsgBox "Sorry, this macro only works with bibliographic records for music materials.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End Select
+
+CS.FixedFieldPosition = PosFF%
+
+' Display the dialog box, which uses layering and visibility of GroupBox lines and Text
+' areas to simulate side tabs. Their visibility is controlled by the dialog box function.
+
+Begin Dialog Dialog2Definition  384, 292, WaltsMacros$, .Dialog2ControlFunction
+  OkButton       260, 268,  52,  14
+  CancelButton   320, 268,  52,  14
+  PushButton     216, 200,  52,  14, "",              .Sort
+  PushButton     224, 146,  48,  14, "Move &up",      .Up
+  PushButton     308, 146,  48,  14, "Move &down",    .Down
+  PushButton     266, 164,  48,  14, "Remo&ve",       .Remove
+  PushButton      12, 268,  52,  14, "&Reset",        .Reset
+  OptionGroup .TabButtons
+   OptionButton   24,  27,  80,  18, "",              .Tab1Button
+   OptionButton  118,  27,  54,  18, "",              .Tab2Button
+   OptionButton  184,  27,  54,  18, "",              .Tab3Button
+   OptionButton  250,  27,  54,  18, "",              .Tab4Button
+   OptionButton  316,  27,  54,  18, "",              .Tab5Button
+  ListBox         20,  52, 188, 132, AccMValues(),    .ListBoxAccM
+  ListBox         20,  52, 188, 176, CompValuesT(),   .ListBoxComp
+  ListBox         20,  52, 188, 178, LTxtValues(),    .ListBoxLTxt
+  ListBox         20,  52, 188, 132, FMusValues(),    .ListBoxFMus
+  ListBox         20,  52, 188,  64, PartValues(),    .ListBoxPart
+  ListBox         20,  52, 188,  64, TrArValues(),    .ListBoxTrAr
+  ListBox        224,  86, 132,  64, Field047Codes(), .ListBox047
+  GroupBox        12,  41, 360, 180, "",              .MasterOutline
+  GroupBox        12, 224, 360,  38, "",              .InstructionsBox
+  GroupBox       216,  52, 148, 132, "047 field",     .Field047Box
+  Text            18, 232, 348,  24, "",              .InstructionsText
+  Text           224,  64, 126,  16, "",              .Field047Text
+  GroupBox        12,  22,  96,  24, "",              .Tab1Box
+  GroupBox       106,  22,  68,  24, "",              .Tab2Box
+  GroupBox       172,  22,  68,  24, "",              .Tab3Box
+  GroupBox       238,  22,  68,  24, "",              .Tab4Box
+  GroupBox       304,  22,  68,  24, "",              .Tab5Box
+  Text            13,  44,  92,   4, "",              .Tab1LineCover
+  Text           107,  44,  64,   4, "",              .Tab2LineCover
+  Text           173,  44,  64,   4, "",              .Tab3LineCover
+  Text           239,  44,  64,   4, "",              .Tab4LineCover
+  Text           305,  44,  64,   4, "",              .Tab5LineCover
+  Text            12,   8, 340,   8, "",              .Title
+  Text           214,  54, 144,  88, "",              .CodeExplanation
+  Text           208, 202,   8,   8, "<<",            .Arrow
+End Dialog
+
+Dim Dialog2 As Dialog2Definition
+On Error Resume Next
+Dialog Dialog2
+If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+' Take the result of the dialog box and change the fixed field, if necessary.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+
+If Left$( Comp$, 2 ) <> OriginalComp$ Then
+    ChangeFF = TRUE
+    If Comp$ = "" Then Comp$ = " "
+    If CS.SetFixedField( "Comp", Comp$ ) = FALSE Then
+        GoTo Fail:
+    End If
+End If
+
+If AccM$ <> OriginalAccM$ Then
+    ChangeFF = TRUE
+    If AccM$ = "" Then
+        AccM$ = " "
+      ElseIf AccM$ = "|" Then
+        AccM$ = FILL_CHAR & FILL_CHAR & FILL_CHAR & FILL_CHAR & FILL_CHAR & FILL_CHAR
+    End If
+    If CS.SetFixedField( "AccM", AccM$ ) = FALSE Then
+        GoTo Fail:
+    End If
+End If
+
+If FMus$ <> OriginalFMus$ Then
+    ChangeFF = TRUE
+    If FMus$ = "|" Then FMus$ = FILL_CHAR
+    If CS.SetFixedField( "FMus", FMus$ ) = FALSE Then
+        GoTo Fail:
+    End If
+End If
+
+If LTxt$ <> OriginalLTxt$ Then
+    ChangeFF = TRUE
+    If LTxt$ = "" Then
+        LTxt$ = " "
+      ElseIf Left$( LTxt$, 1 ) = "_" Then
+        LTxt$ = Right$( LTxt$, 1 )
+    End If
+    If CS.SetFixedField( "LTxt", LTxt$ ) = FALSE Then
+        GoTo Fail:
+    End If
+End If
+
+If Part$ <> OriginalPart$ Then
+    ChangeFF = TRUE
+    If Part$ = "" Then
+        Part$ = " "
+      ElseIf Part$ = "|" Then
+        Part$ = FILL_CHAR
+    End If
+    If CS.SetFixedField( "Part", Part$ ) = FALSE Then
+        GoTo Fail:
+    End If
+End If
+
+If TrAr$ <> OriginalTrAr$ Then
+    ChangeFF = TRUE
+    If TrAr$ = "" Then
+        TrAr$ = " "
+      ElseIf TrAr$ = "|" Then
+        TrAr$ = FILL_CHAR
+    End If
+    If CS.SetFixedField( "TrAr", TrAr$ ) = FALSE Then
+        GoTo Fail:
+    End If
+End If
+
+CS.FixedFieldPosition = PosFF%
+
+' If the existing 047 field has been changed, replace it; if a new one has been
+' constructed, add it; if codes have been removed so it is no longer appropriate (that
+' is, there is no or only one code remaining for "Comp"), delete it. But the first step,
+' if several "Comp" codes have been identified, is to construct a new 047 field, in order
+' to be able to compare it to an existing one.
+
+If Count047Codes% > 1 Then
+    Candidate047$ = Left$( Field047Codes( 0 ), 2 )
+    For i = 1 To UBound( Field047Codes )
+      Candidate047$ = Candidate047$ & " " & Chr$( 223 ) & "a " & Left$( Field047Codes( i ), 2 )
+    Next i
+End If
+
+If Candidate047$ <> Original047$ Then
+    Change047 = TRUE
+    If Count047Codes% > 1 Then
+        If CS.SetField( 1, "047  " & Candidate047$ ) = FALSE Then
+            GoTo Fail:
+        End If
+      Else
+        If Original047$ <> "" Then
+            If CS.DeleteField( "047", 1 ) = FALSE Then
+                GoTo Fail:
+            End If
+        End If
+    End If
+End If
+
+' Results messages. The various conditions there was no failure in any action: Nothing in
+' the record was changed; the fixed field was changed; the 047 field was changed or
+' deleted, or a new one added; both the fixed field and the 047 field were changed.
+
+If ChangeFF And Change047 Then
+    If Original047$ = "" Then
+        MsgBox "The fixed field was changed and an 047 field was added.", INFORMATION_MESSAGE, WaltsMacros$
+      ElseIf Original047$ <> "" And Candidate047$ = "" Then
+        MsgBox "The fixed field was changed and the 047 field was deleted.", INFORMATION_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "The fixed field and 047 field were changed.", INFORMATION_MESSAGE, WaltsMacros$
+    End If
+  ElseIf ChangeFF = TRUE And Change047 = FALSE Then
+    If Original047$ = "" Then
+        MsgBox "The fixed field was changed.", INFORMATION_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "The fixed field was changed but the 047 field was not changed.", INFORMATION_MESSAGE, WaltsMacros$
+    End If
+  ElseIf ChangeFF = FALSE And Change047 = TRUE Then
+    MsgBox "The fixed field was not changed, but the 047 field was changed.", INFORMATION_MESSAGE, WaltsMacros$
+  ElseIf ChangeFF = FALSE And Change047 = FALSE Then
+    MsgBox "The record was not changed.", INFORMATION_MESSAGE, WaltsMacros$
+End If
+Exit Sub
+
+' Messages for when changing the record fails.
+
+Fail:
+
+If ChangeFF And Change047 Then
+    MsgBox "Sorry, the record could not be changed.", CRITICAL_MESSAGE, WaltsMacros$
+  ElseIf ChangeFF = TRUE And Change047 = FALSE Then
+    MsgBox "Sorry, the fixed field could not be changed.", CRITICAL_MESSAGE, WaltsMacros$
+  ElseIf ChangeFF = FALSE And Change047 = TRUE Then
+    MsgBox "Sorry, the 047 field could not be changed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub Build047( InString$ )
+
+' This routine takes a string of codes in an 047 field and parses them into an array for
+' manipulation in a dialog box listbox.
+
+Dim Candidate047$
+Dim TempString$
+
+Dim i As Integer, j As Integer
+
+TempString$ = InString$
+
+ReDim Field047Codes( 0 )
+Field047Codes( 0 ) = Left$( TempString$, 2 )
+If Len( TempString$ ) > 2 Then
+    TempString$ = Mid$( TempString$, 7 )
+    i = 1
+    Do
+      Count047Codes% = Count047Codes% + 1
+      ReDim Preserve Field047Codes( Count047Codes% )
+      Field047Codes( Count047Codes% ) = Candidate047$ & Mid$( TempString$, i, 2 )
+      i = i + 6
+    Loop Until i > Len( TempString$ )
+    Count047Codes% = Count047Codes% + 1
+End If
+
+For i = 0 To UBound( Field047Codes )
+  For j = 0 To COMP_CODE_COUNT
+    If Field047Codes( i ) = Left$( CompValuesC( j ), 2 ) Then
+        Field047Codes( i ) = CompValuesC( j )
+        Exit For
+    End If
+  Next j
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub BuildString( ListBox$, Selection% )
+
+' This routine takes the number of the selection in a listbox and the name of the
+' listbox to retrieve a value from the appropriate array. This value will either be added
+' to or removed from the candidate string for insertion into the record. The edited
+' string is put in the dialog box for display.
+
+Const DISABLED  As Integer = 0  'The value to make a dialog box control disabled.
+Const ENABLED   As Integer = 1  'The value to make a dialog box control enabled.
+Const INVISIBLE As Integer = 0  'The value to make a dialog box control invisible.
+Const VISIBLE   As Integer = 1  'The value to make a dialog box control visible.
+
+Dim CandidateCode$
+Dim CandidateLine$
+Dim CharT$
+Dim Code1$
+Dim Code2$
+Dim LengthIDString%
+Dim TempString$
+Dim UpperBoundField047Codes%
+
+Dim i As Integer, j As Integer, k As Integer
+
+Select Case ListBox$
+
+' In the case of "AccM" the codes must be sorted alphabetically. This means comparing the
+' new value with all the old ones in order to insert it into the correct position in the
+' string. If the new code matches an existing code, that code is removed from the string,
+' and any subsequent characters move left one position, so no hole is left in the string.
+
+  Case "ListBoxAccM"
+
+    If InvalidCode Then
+        AccM$       = ""
+        DlgText         "Tab1Button",            "&AccM: " & AccM$
+        InvalidCode = FALSE
+        Exit Sub
+    End If
+
+    If Selection% = 0 Then
+        AccM$ = ""
+        DlgText         "Tab1Button",            "&AccM: " & AddSpaces( AccM$ )
+        Exit Sub
+    End If
+    LengthIDString% = Len( AccM$ )
+    CandidateCode$  = Left$( AccMValues( Selection% ), 1 )
+
+    Select Case LengthIDString%
+
+      Case 0
+        AccM$ = CandidateCode$
+
+      Case 1
+        If CandidateCode$ < AccM$ Then
+            AccM$ = CandidateCode$ & AccM$
+          ElseIf CandidateCode$ = AccM$ Then
+            AccM$ = ""
+            DlgValue        "ListBoxAccM",           0
+          ElseIf CandidateCode$ > AccM$ Then
+            AccM$ = AccM$ & CandidateCode$
+        End If
+
+      Case Else
+        For i = 1 To LengthIDString% Step 1
+          CharT$ = Mid$( AccM$, i, 1 )
+          If CandidateCode$ = CharT$ Then
+              AccM$ = Left$( AccM$, i - 1 ) & Mid$( AccM$, i + 1 )
+              Exit For
+            ElseIf CandidateCode$ < CharT$ Then
+              If i = 1 Then
+                  If LengthIDString% < 6 Then
+                      AccM$ = CandidateCode$ & AccM$
+                    Else
+                      MsgBox "There are already 6 codes selected for " & QUOTE & "AccM" & QUOTE & ". Remove one or more codes in order to add new ones.", INFORMATION_MESSAGE, WaltsMacros$
+                      Exit Sub
+                  End If
+                Else
+                  If LengthIDString% < 6 Then
+                      AccM$ = Left$( AccM$, i - 1 ) & CandidateCode$ & Mid$( AccM$, i )
+                    Else
+                      MsgBox "There are already 6 codes selected for " & QUOTE & "AccM" & QUOTE & ". Remove one or more codes in order to add new ones.", INFORMATION_MESSAGE, WaltsMacros$
+                      Exit Sub
+                  End If
+              End If
+              Exit For
+            Else
+              If i = LengthIDString% Then
+                  If LengthIDString% < 6 Then
+                      AccM$ = AccM$ & CandidateCode$
+                    Else
+                      MsgBox "There are already 6 codes selected for " & QUOTE & "AccM" & QUOTE & ". Remove one or more codes in order to add new ones.", INFORMATION_MESSAGE, WaltsMacros$
+                      Exit Sub
+                  End If
+              End If
+          End If
+          AccM$ = Trim$( AccM$ )
+        Next i
+
+    End Select
+
+    DlgText         "Tab1Button",            "&AccM: " & AddSpaces( AccM$ )
+
+' For "Comp," the codes must be entered in order of importance. If there is only one
+' code, the list box for the 047 field is invisible, except when "Comp" is "mu" for
+' multiple forms; in that case, the 047 list box shows as a reminder that it needs to be
+' filled. When there are two or more codes, the value of the fixed field element changes
+' automatically to "mu," and the list box appears, displaying all the codes to be added
+' to the record. Rearranging the codes in that list is taken care of in the main dialog
+' function.
+
+  Case "ListBoxComp"
+    If CompCodesByTerm Then
+        CandidateLine$ = CompValuesT( Selection% )
+      Else
+        CandidateLine$ = CompValuesC( Selection% )
+    End If
+    CandidateCode$ = Left$( CandidateLine$, 2 )
+
+' If Comp is blank, add the new code immediately.
+
+    If Comp$ = "" Then
+        Comp$ = CandidateCode$
+        DlgText         "Tab2Button",            "&Comp: " & Comp$
+        ReDim Field047Codes( 0 )
+
+        Select Case Comp$
+
+          Case "mu"
+            DlgText         "Field047Text",          Rearrange$
+            DlgListBoxArray "ListBox047",            Field047Codes()
+            DlgVisible      "ListBox047",            VISIBLE
+
+          Case "nn", "uu", "zz", "||"
+
+          Case Else
+            Field047Codes( 0 ) = CandidateLine$
+            Count047Codes%     = Count047Codes% + 1
+
+        End Select
+
+' Otherwise, check to see if the new code is present, as that means erasing it entirely.
+
+      Else
+        For i = 0 To COMP_CODE_COUNT
+          If CandidateCode$ = Left$( CompValuesT( i ), 2 ) Then
+
+' If the incoming code matches "Comp", remove "Comp".
+
+              If CandidateCode$ = Comp$ Then
+                  Comp$ = ""
+                  ReDim Field047Codes( 0 )
+                  Count047Codes% = 0
+                  DlgVisible      "Down",                  INVISIBLE
+                  DlgText         "Field047Text",          When047Displays$
+                  DlgVisible      "ListBox047",            INVISIBLE
+                  DlgVisible      "Remove",                INVISIBLE
+                  DlgText         "Tab2Button",            "&Comp: " & Comp$
+                  DlgVisible      "Up",                    INVISIBLE
+                  Exit Sub
+
+' Otherwise, see if the incoming code matches one in the 047 array. If it does, remove
+' it. Then exit the sub.
+
+                Else
+                  j = 0
+                  Do
+                    UpperBoundField047Codes% = UBound( Field047Codes )
+                    If CandidateLine$ = Field047Codes( j ) Then
+                        If UpperBoundField047Codes% = 0 Then
+                            ReDim Field047Codes( 0 )
+                            Exit Sub
+                          Else
+                            For k = j To UpperBoundField047Codes% - 1
+                              Field047Codes( k ) = Field047Codes( k + 1 )
+                            Next k
+                            ReDim Preserve Field047Codes( UpperBoundField047Codes% - 1 )
+                            UpperBoundField047Codes% = UBound( Field047Codes )
+                            DlgListBoxArray "ListBox047",            Field047Codes()
+                            Count047Codes% = Count047Codes% - 1
+                            If Count047Codes% = 1 Then
+                                Comp$ = Left$( Field047Codes( 0 ), 2 )
+                                DlgText         "Tab2Button",            "  &Comp: " & Comp$
+                                For k = 0 To COMP_CODE_COUNT
+                                  If Comp$ = Left$( CompValuesT( k ), 2 ) Then
+                                      DlgValue        "ListBoxComp",           k
+                                  End If
+                                Next k
+                            End If
+                            Exit Sub
+                        End If
+                        Count047Codes% = Count047Codes% - 1
+                        If Count047Codes% = 1 Then
+                            DlgVisible      "Down",                  INVISIBLE
+                            DlgText         "Field047Text",          When047Displays$
+                            DlgVisible      "ListBox047",            INVISIBLE
+                            DlgVisible      "Remove",                INVISIBLE
+                            DlgVisible      "Up",                    INVISIBLE
+                            Comp$ = Left$( Field047Codes( 0 ), 2 )
+                            DlgText         "Tab2Button",            "&Comp: " & Comp$
+                            For k = 0 To COMP_CODE_COUNT
+                              If Comp$ = Left$( CompValuesT( k ), 2 ) Then
+                                  DlgValue        "ListBoxComp",           k
+                              End If
+                            Next k
+                            Exit Sub
+                        End If
+                    End If
+                    j = j + 1
+                  Loop Until j > UpperBoundField047Codes%
+
+' The code "mu" for "Comp" dictates the presence of an 047 field, whereas some other
+' codes dictate its absence. In the latter case, the addition of those codes empties the
+' 047 array. If "mu" is a new addition it also empties the array so the new codes can be
+' added.
+
+                  If CandidateCode$ = "mu" Or CandidateCode$ = "nn" Or CandidateCode$ = "uu" Or CandidateCode$ = "zz" Or CandidateCode$ = "||" Then
+                      ReDim Field047Codes( 0 )
+                      Count047Codes% = 0
+                      Comp$          = CandidateCode$
+                      DlgVisible      "Down",                  INVISIBLE
+                      DlgText         "Field047Text",          When047Displays$
+                      DlgVisible      "ListBox047",            INVISIBLE
+                      DlgVisible      "Remove",                INVISIBLE
+                      DlgText         "Tab2Button",            "&Comp: " & Comp$
+                      DlgVisible      "Up",                    INVISIBLE
+
+' If the code is brand new, add it to the end of the 047 array.
+
+                    Else
+                      If Count047Codes% = 0 Then
+                          Field047Codes( 0 ) = CandidateLine$
+                          Count047Codes%     = Count047Codes% + 1
+                          Comp$              = Left$( Field047Codes( 0 ), 2 )
+                          DlgText         "Tab2Button",            "  &Comp: " & Comp$
+                        Else
+                          ReDim Preserve Field047Codes( UpperBoundField047Codes% + 1 )
+                          Field047Codes( UpperBoundField047Codes% + 1 ) = CandidateLine$
+                          Count047Codes% = Count047Codes% + 1
+                          If Count047Codes% = 1 And Comp$ = "mu" Then
+                              DlgVisible      "Down",                  INVISIBLE
+                              DlgText         "Field047Text",          Rearrange$
+                              DlgListBoxArray "ListBox047",            Field047Codes()
+                              DlgVisible      "ListBox047",            VISIBLE
+                              DlgVisible      "Remove",                INVISIBLE
+                              DlgVisible      "Up",                    INVISIBLE
+                          End If
+                      End If
+                      If Count047Codes% > 1 Or Comp$ = "mu" Then
+                          Comp$ = "mu"
+                          DlgEnable       "Down",                  DISABLED
+                          DlgVisible      "Down",                  VISIBLE
+                          DlgText         "Field047Text",          Rearrange$
+                          DlgListBoxArray "ListBox047",            Field047Codes()
+                          DlgVisible      "ListBox047",            VISIBLE
+                          DlgEnable       "Remove",                DISABLED
+                          DlgVisible      "Remove",                VISIBLE
+                          DlgText         "Tab2Button",            "&Comp: " & Comp$
+                          DlgEnable       "Up",                    DISABLED
+                          DlgVisible      "Up",                    VISIBLE
+                      End If
+                  End If
+                  Exit Sub
+              End If
+          End If
+        Next i
+    End If
+
+  Case "ListBoxFMus"
+    CandidateCode$ = Left$( FMusValues( Selection% ), 1 )
+    If FMus$ = CandidateCode$ Then
+        FMus$ = ""
+      Else
+        FMus$ = CandidateCode$
+    End If
+    DlgText         "Tab3Button",            "&FMus: " & FMus$
+
+' In the case of "LTxt", a the codes must be kept in the order entered, so a replacement
+' of the first code by a repeated click can't simply slide the second code into its
+' position. If the clicked code matches the first code, replace the value with the
+' underscore, "_". Although this shows up in the display, as a cue that the first, most
+' important position is open, it is removed when added to the record. For the second
+' position, whatever is clicked is added if there is no character there already, or is
+' put in place of an existing character. If two codes are present and a third, different
+' code is added, the macro protests and the routine ends.
+
+  Case "ListBoxLTxt"
+
+    If InvalidCode Then
+        LTxt$       = ""
+        DlgText         "Tab5Button",            "&LTxt: " & LTxt$
+        InvalidCode = FALSE
+        Exit Sub
+    End If
+
+    CandidateCode$ = Left$( LTxtValues( Selection% ), 1 )
+
+    Select Case Len( LTxt$ )
+
+      Case 0
+        LTxt$ = CandidateCode$
+
+      Case 1
+        If LTxt$ = "" Then
+            LTxt$ = CandidateCode$
+          ElseIf CandidateCode$ = LTxt$ Then
+            LTxt$ = ""
+          ElseIf CandidateCode$ = "[" Then
+            LTxt$ = ""
+          Else
+            LTxt$ = LTxt$ & CandidateCode$
+        End If
+
+      Case 2
+        Code1$ = Left$( LTxt$, 1 )
+        Code2$ = Right$( LTxt$, 1 )
+        If CandidateCode$ = Code2$ Then
+            LTxt$ = Code1$
+            If LTxt$ = "_" Then
+                LTxt$ = ""
+              Else
+                For i = 0 To LTXT_CODE_COUNT Step 1
+                  If LTxt$ = Left$( LTxtValues( i ), 1 ) Then
+                      DlgValue        "ListBoxLTxt",           i
+                      Exit For
+                  End If
+                Next i
+            End If
+          ElseIf CandidateCode$ = Code1$ Then
+            LTxt$ = "_" & Code2$
+            For i = 0 To LTXT_CODE_COUNT Step 1
+              If Code2$ = Left$( LTxtValues( i ), 1 ) Then
+                  DlgValue        "ListBoxLTxt",           i
+                  Exit For
+              End If
+            Next i
+          ElseIf Code1$ = "_" Then
+            LTxt$ = CandidateCode$ & Code2$
+          Else
+            MsgBox "There are already 2 codes selected for " & QUOTE & "LTxt" & QUOTE & ". Remove one or both codes in order to add new ones.", INFORMATION_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+
+    End Select
+
+    DlgText         "Tab2Button",            "&LTxt: " & AddSpaces( LTxt$ )
+
+  Case "ListBoxPart"
+    If Selection% = 0 Then Part$ = "["
+    CandidateCode$ = Left$( PartValues( Selection% ), 1 )
+    If Part$ = CandidateCode$ Then
+        Part$ = ""
+      Else
+        If Part$ = "[" Then
+            Part$ = ""
+          Else
+            Part$ = CandidateCode$
+        End If
+    End If
+
+    DlgText         "Tab4Button",            "&Part: " & Part$
+
+  Case "ListBoxTrAr"
+    If Selection% = 0 Then TrAr$ = "["
+    CandidateCode$ = Left$( TrArValues( Selection% ), 1 )
+    If TrAr$ = CandidateCode$ Then
+        TrAr$ = ""
+      Else
+        If TrAr$ = "[" Then
+            TrAr$ = ""
+          Else
+            TrAr$ = CandidateCode$
+        End If
+    End If
+
+    DlgText         "Tab5Button",            "&TrAr: " & TrAr$
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub LoadAccMCodes
+
+AccMValues( 0 )   = "[No accompanying matter]"
+AccMValues( 1 )   = "a - Discography"
+AccMValues( 2 )   = "b - Bibliography"
+AccMValues( 3 )   = "c - Thematic index"
+AccMValues( 4 )   = "d - Libretto or text"
+AccMValues( 5 )   = "e - Biography of composer or author"
+AccMValues( 6 )   = "f - Biography of performer or history of ensemble"
+AccMValues( 7 )   = "g - Technical and/or historical information on instruments"
+AccMValues( 8 )   = "h - Technical information on music"
+AccMValues( 9 )   = "i - Historical information"
+AccMValues( 10 )  = "k - Ethnological information"
+AccMValues( 11 )  = "r - Instructional materials"
+AccMValues( 12 )  = "s - Music"
+AccMValues( 13 )  = "z - Other"
+AccMValues( 14 )  = "| - No attempt to code"
+
+AccMExplain( 0 )  = "No accompanying matter or no indication of accompanying matter appears on the item."
+AccMExplain( 1 )  = "Accompanying matter contains a discography or other bibliography of recorded sound."
+AccMExplain( 2 )  = "Accompanying matter contains a bibliography."
+AccMExplain( 3 )  = "Accompanying matter contains a thematic index."
+AccMExplain( 4 )  = "Accompanying matter contains a printed transcription of the libretto or other text (e.g., a transcript of verbal contents of a sound recording)."
+AccMExplain( 5 )  = "Accompanying matter contains significant biographical information on a composer or author."
+AccMExplain( 6 )  = "Accompanying matter contains significant biographical information on a performer or a history of an ensemble."
+AccMExplain( 7 )  = "Accompanying matter contains technical and/or historical information on instruments."
+AccMExplain( 8 )  = "Accompanying matter contains significant technical information, including instructions for performance."
+AccMExplain( 9 )  = "Accompanying matter contains significant historical information."
+AccMExplain( 10 ) = "Accompanying matter contains significant ethnological information that relates to the musical part of the item."
+AccMExplain( 11 ) = "Accompanying matter contains instructional materials."
+AccMExplain( 12 ) = "Accompanying matter contains a score or other music format than that of the main item."
+AccMExplain( 13 ) = "Accompanying matter for which none of the other defined codes are appropriate."
+AccMExplain( 14 ) = "No attempt to code."
+
+End Sub
+
+'****************************************************************************************
+
+Sub LoadCompCodes
+
+CompValuesT( 0  ) = "[No information supplied]"
+CompValuesT( 1  ) = "an - Anthems"
+CompValuesT( 2  ) = "bd - Ballads"
+CompValuesT( 3  ) = "bt - Ballets"
+CompValuesT( 4  ) = "bg - Bluegrass music"
+CompValuesT( 5  ) = "bl - Blues"
+CompValuesT( 6  ) = "cn - Canons and rounds"
+CompValuesT( 7  ) = "ct - Cantatas"
+CompValuesT( 8  ) = "cz - Canzonas"
+CompValuesT( 9  ) = "cr - Carols"
+CompValuesT( 10 ) = "ca - Chaconnes"
+CompValuesT( 11 ) = "cs - Chance compositions"
+CompValuesT( 12 ) = "cp - Chansons, polyphonic"
+CompValuesT( 13 ) = "cc - Chant, Christian"
+CompValuesT( 14 ) = "cb - Chants, Other religions"
+CompValuesT( 15 ) = "cl - Chorale preludes"
+CompValuesT( 16 ) = "ch - Chorales"
+CompValuesT( 17 ) = "cg - Concerti grossi"
+CompValuesT( 18 ) = "co - Concertos"
+CompValuesT( 19 ) = "cy - Country music"
+CompValuesT( 20 ) = "df - Dance forms"
+CompValuesT( 21 ) = "dv - Divertimentos, serenades, cassations, divertissements, and notturni"
+CompValuesT( 22 ) = "ft - Fantasias"
+CompValuesT( 23 ) = "fl - Flamenco"
+CompValuesT( 24 ) = "fm - Folk music"
+CompValuesT( 25 ) = "fg - Fugues"
+CompValuesT( 26 ) = "gm - Gospel music"
+CompValuesT( 27 ) = "hy - Hymns"
+CompValuesT( 28 ) = "jz - Jazz"
+CompValuesT( 29 ) = "md - Madrigals"
+CompValuesT( 30 ) = "mr - Marches"
+CompValuesT( 31 ) = "ms - Masses"
+CompValuesT( 32 ) = "mz - Mazurkas"
+CompValuesT( 33 ) = "mi - Minuets"
+CompValuesT( 34 ) = "mo - Motets"
+CompValuesT( 35 ) = "mp - Motion picture music"
+CompValuesT( 36 ) = "mu - Multiple forms"
+CompValuesT( 37 ) = "mc - Musical revues and comedies"
+CompValuesT( 38 ) = "|| - No attempt to code"
+CompValuesT( 39 ) = "nc - Nocturnes"
+CompValuesT( 40 ) = "nn - Not applicable"
+CompValuesT( 41 ) = "op - Operas"
+CompValuesT( 42 ) = "or - Oratorios"
+CompValuesT( 43 ) = "zz - Other"
+CompValuesT( 44 ) = "ov - Overtures"
+CompValuesT( 45 ) = "pt - Part-songs"
+CompValuesT( 46 ) = "ps - Passacaglias"
+CompValuesT( 47 ) = "pm - Passion music"
+CompValuesT( 48 ) = "pv - Pavans"
+CompValuesT( 49 ) = "po - Polonaises"
+CompValuesT( 50 ) = "pp - Popular music"
+CompValuesT( 51 ) = "pr - Preludes"
+CompValuesT( 52 ) = "pg - Program music"
+CompValuesT( 53 ) = "rg - Ragtime music"
+CompValuesT( 54 ) = "rq - Requiems"
+CompValuesT( 55 ) = "rp - Rhapsodies"
+CompValuesT( 56 ) = "ri - Ricercars"
+CompValuesT( 57 ) = "rc - Rock music"
+CompValuesT( 58 ) = "rd - Rondos"
+CompValuesT( 59 ) = "sn - Sonatas"
+CompValuesT( 60 ) = "sg - Songs"
+CompValuesT( 61 ) = "sd - Square dance music"
+CompValuesT( 62 ) = "st - Studies and exercises"
+CompValuesT( 63 ) = "su - Suites"
+CompValuesT( 64 ) = "sp - Symphonic poems"
+CompValuesT( 65 ) = "sy - Symphonies"
+CompValuesT( 66 ) = "tl - Teatro lirico"
+CompValuesT( 67 ) = "tc - Toccatas"
+CompValuesT( 68 ) = "ts - Trio-sonatas"
+CompValuesT( 69 ) = "uu - Unknown"
+CompValuesT( 70 ) = "vr - Variations"
+CompValuesT( 71 ) = "vi - Villancicos"
+CompValuesT( 72 ) = "wz - Waltzes"
+CompValuesT( 73 ) = "za - Zarzuelas"
+
+CompValuesC( 0  ) = "[No information supplied]"
+CompValuesC( 1  ) = "an - Anthems"
+CompValuesC( 2  ) = "bd - Ballads"
+CompValuesC( 3  ) = "bg - Bluegrass music"
+CompValuesC( 4  ) = "bl - Blues"
+CompValuesC( 5  ) = "bt - Ballets"
+CompValuesC( 6  ) = "ca - Chaconnes"
+CompValuesC( 7  ) = "cb - Chants, Other religions"
+CompValuesC( 8  ) = "cc - Chant, Christian"
+CompValuesC( 9  ) = "cg - Concerti grossi"
+CompValuesC( 10 ) = "ch - Chorales"
+CompValuesC( 11 ) = "cl - Chorale preludes"
+CompValuesC( 12 ) = "cn - Canons and rounds"
+CompValuesC( 13 ) = "co - Concertos"
+CompValuesC( 14 ) = "cp - Chansons, polyphonic"
+CompValuesC( 15 ) = "cr - Carols"
+CompValuesC( 16 ) = "cs - Chance compositions"
+CompValuesC( 17 ) = "ct - Cantatas"
+CompValuesC( 18 ) = "cy - Country music"
+CompValuesC( 19 ) = "cz - Canzonas"
+CompValuesC( 20 ) = "df - Dance forms"
+CompValuesC( 21 ) = "dv - Divertimentos, serenades, cassations, divertissements, and notturni"
+CompValuesC( 22 ) = "fg - Fugues"
+CompValuesC( 23 ) = "fl - Flamenco"
+CompValuesC( 24 ) = "fm - Folk music"
+CompValuesC( 25 ) = "ft - Fantasias"
+CompValuesC( 26 ) = "gm - Gospel music"
+CompValuesC( 27 ) = "hy - Hymns"
+CompValuesC( 28 ) = "jz - Jazz"
+CompValuesC( 29 ) = "mc - Musical revues and comedies"
+CompValuesC( 30 ) = "md - Madrigals"
+CompValuesC( 31 ) = "mi - Minuets"
+CompValuesC( 32 ) = "mo - Motets"
+CompValuesC( 33 ) = "mp - Motion picture music"
+CompValuesC( 34 ) = "mr - Marches"
+CompValuesC( 35 ) = "ms - Masses"
+CompValuesC( 36 ) = "mu - Multiple forms"
+CompValuesC( 37 ) = "mz - Mazurkas"
+CompValuesC( 38 ) = "nc - Nocturnes"
+CompValuesC( 39 ) = "nn - Not applicable"
+CompValuesC( 40 ) = "op - Operas"
+CompValuesC( 41 ) = "or - Oratorios"
+CompValuesC( 42 ) = "ov - Overtures"
+CompValuesC( 43 ) = "pg - Program music"
+CompValuesC( 44 ) = "pm - Passion music"
+CompValuesC( 45 ) = "po - Polonaises"
+CompValuesC( 46 ) = "pp - Popular music"
+CompValuesC( 47 ) = "pr - Preludes"
+CompValuesC( 48 ) = "ps - Passacaglias"
+CompValuesC( 49 ) = "pt - Part-songs"
+CompValuesC( 50 ) = "pv - Pavans"
+CompValuesC( 51 ) = "rc - Rock music"
+CompValuesC( 52 ) = "rd - Rondos"
+CompValuesC( 53 ) = "rg - Ragtime music"
+CompValuesC( 54 ) = "ri - Ricercars"
+CompValuesC( 55 ) = "rp - Rhapsodies"
+CompValuesC( 56 ) = "rq - Requiems"
+CompValuesC( 57 ) = "sd - Square dance music"
+CompValuesC( 58 ) = "sg - Songs"
+CompValuesC( 59 ) = "sn - Sonatas"
+CompValuesC( 60 ) = "sp - Symphonic poems"
+CompValuesC( 61 ) = "st - Studies and exercises"
+CompValuesC( 62 ) = "su - Suites"
+CompValuesC( 63 ) = "sy - Symphonies"
+CompValuesC( 64 ) = "tc - Toccatas"
+CompValuesC( 65 ) = "tl - Teatro lirico"
+CompValuesC( 66 ) = "ts - Trio-sonatas"
+CompValuesC( 67 ) = "uu - Unknown"
+CompValuesC( 68 ) = "vi - Villancicos"
+CompValuesC( 69 ) = "vr - Variations"
+CompValuesC( 70 ) = "wz - Waltzes"
+CompValuesC( 71 ) = "za - Zarzuelas"
+CompValuesC( 72 ) = "zz - Other"
+CompValuesC( 73 ) = "|| - No attempt to code"
+
+End Sub
+
+'****************************************************************************************
+
+Sub LoadScoreCodes
+
+FMusValues( 0 )   = "a - Full score"
+FMusValues( 1 )   = "b - Miniature or study score"
+FMusValues( 2 )   = "c - Accompaniment reduced for keyboard"
+FMusValues( 3 )   = "d - Voice score with accompaniment omitted"
+FMusValues( 4 )   = "e - Condensed score or piano-conductor score"
+FMusValues( 5 )   = "g - Close score"
+FMusValues( 6 )   = "h - Chorus score"
+FMusValues( 7 )   = "i - Condensed score"
+FMusValues( 8 )   = "j - Performer-conductor part"
+FMusValues( 9 )   = "k - Vocal score"
+FMusValues( 10 )  = "l - Score"
+FMusValues( 11 )  = "m - Multiple score formats"
+FMusValues( 12 )  = "n - Not applicable"
+FMusValues( 13 )  = "p - Piano score"
+FMusValues( 14 )  = "u - Unknown"
+FMusValues( 15 )  = "z - Other"
+FMusValues( 16 )  = "| - No attempt to code"
+
+FMusExplain( 0 )  = "Staff notation representing the sounds of all the parts of an ensemble (instrumental and/or vocal), arranged so that they can be read simultaneously. Note: code l (Score) may be used for works recorded with graphic, symbolic (e.g., staff), or word-based notation representing the sounds of all the parts of an ensemble, arranged so that they can be read simultaneously, or a work for solo performer or electronic media."
+FMusExplain( 1 )  = "Miniature score that is usually smaller in size and not intended to be used in performances."
+FMusExplain( 2 )  = "Score with instrumental accompaniment reduced for keyboard(s). For chorus scores and vocal scores prefer codes h (Chorus score) and k (Vocal score)."
+FMusExplain( 3 )  = "Score for solo and/or choral voice(s) with the accompaniment omitted. Vocal works originally unaccompanied are assigned other codes as appropriate. For chorus scores and vocal scores, prefer codes h (Chorus score) and k (Vocal score)."
+FMusExplain( 4 )  = "Orchestral or band music that has been reduced. It may be part of an ensemble work for a particular instrument, with cues for other instruments. Such a score is used by an individual playing the instrument for which the score was written or for the conductor. Prefer code i (Condensed score) or code j (Performer-conductor part) if the two types of scores can be distinguished."
+FMusExplain( 5 )  = "Score (e.g., a hymnal) that has separate parts transcribed in condensed form."
+FMusExplain( 6 )  = "Score of a work for solo voices and chorus showing only the parts for chorus, with the instrumental accompaniment either arranged for keyboard(s) or other chordal instrument(s) or omitted. Note: see code k (Vocal score) for scores that include solo voices as well as chorus parts."
+FMusExplain( 7 )  = "Score that has been reduced, generally organized by instrumental sections, and often with cues for individual parts. An example would be reduction to two or a few staves, for scores presented in staff notation. Sometimes called: Reduced score, Short score. Recorded with musical notation."
+FMusExplain( 8 )  = "A performance part for a single instrument in an ensemble, with cues for the other instruments that enable the performer of that part also to conduct."
+FMusExplain( 9 )  = "Score showing all vocal parts, solo and/or choral, with the instrumental accompaniment either arranged for keyboard(s) or other chordal instrument(s) or omitted. Note: See code h (Chorus score) for scores of works for solo voices and chorus that include only chorus parts."
+FMusExplain( 10 ) = "Graphical, symbolic (e.g., staff), or word-based musical notation representing the sounds of all the parts of an ensemble, arranged so that they can be read simultaneously, or a work for solo performer or electronic media. Do not confuse with Part."
+FMusExplain( 11 ) = "Several types of scores are issued together, as is frequently the case with band music."
+FMusExplain( 12 ) = "Item is a sound recording."
+FMusExplain( 13 ) = "Format of the item is unknown."
+FMusExplain( 14 ) = "None of the other defined codes are appropriate. Usually it signifies that the item is not a score. Choir books, table books, and sets of parts are examples in which code z is appropriate."
+FMusExplain( 15 ) = "No attempt to code."
+
+PartValues( 0 )   = "[No parts in hand or not specified]"
+PartValues( 1 )   = "d - Instrumental and vocal parts"
+PartValues( 2 )   = "e - Instrumental parts"
+PartValues( 3 )   = "f - Vocal parts"
+PartValues( 4 )   = "n - Not applicable"
+PartValues( 5 )   = "u - Unknown"
+PartValues( 6 )   = "| - No attempt to code"
+
+PartExplain( 0 )  = "No parts in hand or the musical parts are not specified."
+PartExplain( 1 )  = "Both instrumental and vocal parts are present."
+PartExplain( 2 )  = "Instrumental parts are present."
+PartExplain( 3 )  = "Vocal parts are present."
+PartExplain( 4 )  = "Item is not notated music."
+PartExplain( 5 )  = "Unknown whether the item being cataloged contains parts. May be used for records created without examining the item, such as retrospective conversion from a printed card."
+PartExplain( 6 )  = "No attempt to code."
+
+TrArValues( 0 )   = "[Not arrangement or transposition or not specified]"
+TrArValues( 1 )   = "a - Transposition"
+TrArValues( 2 )   = "b - Arrangement"
+TrArValues( 3 )   = "c - Both transposed and arranged"
+TrArValues( 4 )   = "n - Not applicable"
+TrArValues( 5 )   = "u - Unknown"
+TrArValues( 6 )   = "| - No attempt to code"
+
+TrArExplain( 0 )  = "Not arrangements or the transposition of the item is not specified."
+TrArExplain( 1 )  = "Item has been transposed to a different pitch from the original."
+TrArExplain( 2 )  = "Item has been adapted as regards medium and/or texture."
+TrArExplain( 3 )  = "Item has been both transposed to a different pitch from the original and has been adapted as regards medium and/or texture."
+TrArExplain( 4 )  = "Item is not notated music."
+TrArExplain( 5 )  = "Unknown whether the item is a transposition or arrangement."
+TrArExplain( 6 )  = "No attempt to code."
+
+End Sub
+
+'****************************************************************************************
+
+Sub LoadLTxtCodes
+
+LTxtValues( 0 )   = "[Item is a music sound recording]"
+LTxtValues( 1 )   = "a - Autobiography"
+LTxtValues( 2 )   = "b - Biography"
+LTxtValues( 3 )   = "c - Conference proceedings"
+LTxtValues( 4 )   = "d - Drama"
+LTxtValues( 5 )   = "e - Essays"
+LTxtValues( 6 )   = "f - Fiction"
+LTxtValues( 7 )   = "g - Reporting"
+LTxtValues( 8 )   = "h - History"
+LTxtValues( 9 )   = "i - Instruction"
+LTxtValues( 10 )  = "j - Language instruction"
+LTxtValues( 11 )  = "k - Comedy"
+LTxtValues( 12 )  = "l - Lectures, speeches"
+LTxtValues( 13 )  = "m - Memoirs"
+LTxtValues( 14 )  = "n - Not applicable"
+LTxtValues( 15 )  = "o - Folktales"
+LTxtValues( 16 )  = "p - Poetry"
+LTxtValues( 17 )  = "r - Rehearsals"
+LTxtValues( 18 )  = "s - Sounds"
+LTxtValues( 19 )  = "t - Interviews"
+LTxtValues( 20 )  = "z - Other"
+
+LTxtExplain( 0 )  = ""
+LTxtExplain( 1 )  = ""
+LTxtExplain( 2 )  = ""
+LTxtExplain( 3 )  = ""
+LTxtExplain( 4 )  = ""
+LTxtExplain( 5 )  = ""
+LTxtExplain( 6 )  = "Fiction includes novels, short stories, etc."
+LTxtExplain( 7 )  = "Reports of newsworthy events and informative messages are included in this category."
+LTxtExplain( 8 )  = "History includes historical narration, etc. that may also be covered by one of the other codes (e.g., historical poetry)."
+LTxtExplain( 9 )  = "Includes instructions on how to accomplish a task, learn an art, etc. (e.g., how to replace a light switch). Note: Language instruction text is assigned code j."
+LTxtExplain( 10 ) = "May include passages that fall under the definition for one of the other codes (e.g., language text that includes poetry)."
+LTxtExplain( 11 ) = "Spoken comedy."
+LTxtExplain( 12 ) = ""
+LTxtExplain( 13 ) = "Memoirs are usually autobiographical."
+LTxtExplain( 14 ) = "Not a sound recording (e.g., printed or manuscript music)."
+LTxtExplain( 15 ) = ""
+LTxtExplain( 16 ) = ""
+LTxtExplain( 17 ) = "Rehearsals are performances of any of a variety of nonmusical productions."
+LTxtExplain( 18 ) = "Includes nonmusical utterances and vocalizations that may or may not convey meaning."
+LTxtExplain( 19 ) = ""
+LTxtExplain( 20 ) = "None of the other defined codes are appropriate."
+
+End Sub
+
+'****************************************************************************************
+
+Function AddSpaces( InString$ ) As String
+
+' This function simply adds a space between the characters of the two multi-character
+' elements, "LTxt" and "AccM", for display purposes.
+
+Dim StringLength%
+Dim TempString$
+
+Dim i As Integer
+
+StringLength% = Len( InString$ )
+If StringLength% > 1 Then
+    For i = 1 To StringLength%
+      TempString$ = TempString$ & Mid$( InString$, i, 1 ) & " "
+    Next i
+    TempString$ = Trim$( TempString$ )
+  Else
+    TempString$ = InString$
+End If
+
+AddSpaces = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$, Action%, Suppvalue& )
+
+' The function that does most of the work by controlling the actions of the dialog box.
+
+Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const DISABLED       As Integer = 0   'The value to make a dialog box control disabled.
+Const ENABLED        As Integer = 1   'The value to make a dialog box control enabled.
+Const INITIALIZE     As Integer = 1   'The value of the dialog function parameter "Action%" when the dialog box opens.
+Const INVISIBLE      As Integer = 0   'The value to make a dialog box control invisible.
+Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog function to keep a dialog box open.
+Const VISIBLE        As Integer = 1   'The value to make a dialog box control visible.
+
+Const [1ST_CLICK]          As Integer = 1
+Const [2ND_CLICK]          As Integer = 2
+
+Dim CharT$
+Dim InstructionsAccM$
+Dim InstructionsComp$
+Dim InstructionsLTxt$
+Dim InstructionsScore$
+Dim InvalidWarning$
+Dim SelectedTerm$
+Dim Selection%
+Dim TempString$
+Dim UBField047Codes%
+
+Dim i As Integer
+
+' Some text strings.
+
+InvalidWarning$ = " is an invalid code! Click any code on the list to delete it."
+
+InstructionsAccM$  = "Click on a code to view its explanation; click on the code again to add it to, or remove it from, the tab. Add up to 6 codes. They will be sorted alphabetically. "
+InstructionsAccM$  = InstructionsAccM$ & "Click OK when done to apply changes to the fixed field."
+
+InstructionsComp$  = "Click on a code to add it to the tab or the 047 string; click on the code again to remove it. Add codes in order of importance. "
+InstructionsComp$  = InstructionsComp$ & "Click again on " & QUOTE & "mu" & QUOTE & ", " & QUOTE & "nn" & QUOTE & ", " & QUOTE & "uu" & QUOTE & ", " & QUOTE
+InstructionsComp$  = InstructionsComp$ & "zz" & QUOTE & ", or " & QUOTE & "||" & QUOTE & " to remove all codes. Click OK when done to apply changes to the fixed field "
+InstructionsComp$  = InstructionsComp$ & "and to add, delete, or change the 047 field."
+
+InstructionsLTxt$  = "Click on a code to view its explanation; click on the code again to add it to, or remove it from, the tab. Add up to 2 codes in order of importance. "
+InstructionsLTxt$  = InstructionsLTxt$ & "An empty first position will be removed when the changes are applied. Click OK when done to apply changes to the fixed field."
+
+InstructionsScore$ = "Click on a code to view its explanation; click on the code again to add it to, or remove it from, the tab. Click OK when done to apply changes to the fixed field."
+
+Select Case Action%
+
+' The default tab is for "AccM," as this element is valid for all types of music
+' materials.
+
+  Case INITIALIZE
+
+Recycle:
+
+    DlgVisible      "Arrow",                 INVISIBLE
+    DlgVisible      "Down",                  INVISIBLE
+    DlgVisible      "Field047Box",           INVISIBLE
+    DlgVisible      "Field047Text",          INVISIBLE
+    DlgText         "InstructionsText",      InstructionsAccM$
+    DlgVisible      "ListBox047",            INVISIBLE
+    DlgVisible      "ListBoxComp",           INVISIBLE
+    DlgVisible      "ListBoxFMus",           INVISIBLE
+    DlgVisible      "ListBoxLTxt",           INVISIBLE
+    DlgVisible      "ListBoxPart",           INVISIBLE
+    DlgVisible      "ListBoxTrAr",           INVISIBLE
+    DlgVisible      "Remove",                INVISIBLE
+    DlgEnable       "Reset",                 DISABLED
+    DlgVisible      "Sort",                  INVISIBLE
+    DlgText         "Tab1Button",            "&AccM: " & AddSpaces( AccM$ )
+    DlgVisible      "Tab2LineCover",         INVISIBLE
+    DlgVisible      "Tab3LineCover",         INVISIBLE
+    DlgVisible      "Tab4LineCover",         INVISIBLE
+    DlgVisible      "Tab5LineCover",         INVISIBLE
+    DlgText         "Title",                 RecordType$ & " : " & "ACCOMPANYING MATTER"
+    DlgVisible      "Up",                    INVISIBLE
+    If AccM$ = "" Then
+        DlgText         "CodeExplanation",       AccMExplain( 0 )
+        DlgValue        "ListBoxAccM",           0
+      Else
+        CharT$ = Left$( AccM$, 1 )
+        For i = 0 To ACCM_CODE_COUNT
+          If CharT$ = Left$( AccMValues( i ), 1 ) Then
+              DlgText         "CodeExplanation",       AccMExplain( i )
+              DlgValue        "ListBoxAccM",           i
+              Exit For
+            Else
+              If i = ACCM_CODE_COUNT Then
+                  InvalidCode = TRUE
+                  DlgText         "CodeExplanation",       QUOTE & AccM$ & QUOTE & InvalidWarning$
+              End If
+          End If
+        Next i
+    End If
+    ListBoxClick%  = [1ST_CLICK]
+    PrevSelection% = DlgValue( "ListBoxAccM" )
+
+' Show only the tabs appropriate to the record.
+
+    Select Case RecordType$
+
+      Case "MUSICAL SOUND RECORDING"
+        DlgText         "Tab2Button",            "&Comp: " & Comp$
+        DlgVisible      "Tab3Box",               INVISIBLE
+        DlgVisible      "Tab3Button",            INVISIBLE
+        DlgVisible      "Tab4Box",               INVISIBLE
+        DlgVisible      "Tab4Button",            INVISIBLE
+        DlgVisible      "Tab5Box",               INVISIBLE
+        DlgVisible      "Tab5Button",            INVISIBLE
+
+      Case "NON-MUSICAL SOUND RECORDING"
+        DlgText         "Tab2Button",            "&LTxt: " & AddSpaces( LTxt$ )
+        DlgVisible      "Tab3Box",               INVISIBLE
+        DlgVisible      "Tab3Button",            INVISIBLE
+        DlgVisible      "Tab4Box",               INVISIBLE
+        DlgVisible      "Tab4Button",            INVISIBLE
+        DlgVisible      "Tab5Box",               INVISIBLE
+        DlgVisible      "Tab5Button",            INVISIBLE
+
+      Case "SCORE"
+        DlgText         "Tab2Button",            "&Comp: " & Comp$
+        DlgText         "Tab3Button",            "&FMus: " & FMus$
+        DlgText         "Tab4Button",            "&Part: " & Part$
+        DlgText         "Tab5Button",            "&TrAr: " & TrAr$
+
+    End Select
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' The "Down" button moves the selection down in the listbox, and so is disabled when the
+' selection is, or moves to, the last row (the last element can't move down any more!).
+
+      Case "Down"
+        Selection% = DlgValue( "ListBox047" )
+        If Selection% < UBound( Field047Codes) Then
+            SelectedTerm$                   = Field047Codes( Selection% )
+            Field047Codes( Selection% )     = Field047Codes( Selection% + 1)
+            Field047Codes( Selection% + 1 ) = SelectedTerm$
+            DlgListBoxArray "ListBox047",            Field047Codes
+            DlgValue        "ListBox047",            Selection% + 1
+            If Selection% + 1 = UBound( Field047Codes ) Then
+                DlgEnable       "Down",                  DISABLED
+            End If
+            If DlgEnable( "Up" ) = DISABLED Then
+                DlgEnable       "Up",                    ENABLED
+            End If
+        End If
+        Dialog2ControlFunction = KEEP_DLG_OPEN
+
+' If the listbox for the codes for the 047 field is clicked, enable the move buttons
+' depending on which entry is selected: The first entry can't move up, and the last one
+' can't move down. The "remove" button also is disabled until a selection is made.
+
+      Case "ListBox047"
+        Selection% = DlgValue( "ListBox047" )
+        If Count047Codes% > 1 Then
+            DlgVisible      "Down",                  VISIBLE
+            DlgEnable       "Remove",                ENABLED
+            DlgVisible      "Remove",                VISIBLE
+            DlgVisible      "Up",                    VISIBLE
+            Select Case Selection%
+              Case 0
+                DlgEnable       "Down",                  ENABLED
+                DlgEnable       "Up",                    DISABLED
+              Case Count047Codes% - 1
+                DlgEnable       "Down",                  DISABLED
+                DlgEnable       "Up",                    ENABLED
+              Case Else
+                DlgEnable       "Down",                  ENABLED
+                DlgEnable       "Up",                    ENABLED
+            End Select
+        End If
+
+' When a list box is clicked, determine if it's the first or second click on a selection.
+' On a first click, the only change to the dialog box is displaying the explanation of
+' the selected code. A second click is necessary to actually change the code string. If
+' the dialog box is displaying a code already in the record, consider that a 1st click
+' has been done, even if the dialog box has just opened or a tab has been selected. On a
+' 2nd click, send the selection and the name of the current listbox to the sub
+' "BuildString" to add or delete the selected code.
+
+      Case "ListBoxAccM", "ListBoxComp", "ListBoxFMus", "ListBoxLTxt", "ListBoxPart", "ListBoxTrAr"
+        Selection% = DlgValue( Id$ )
+        If Selection% <> PrevSelection% Then
+            ListBoxClick% = [1ST_CLICK]
+          Else
+            ListBoxClick% = [2ND_CLICK]
+        End If
+        PrevSelection% = Selection%
+
+        Select Case Id$
+
+          Case "ListBoxAccM"
+            Select Case ListBoxClick%
+              Case [1ST_CLICK]
+                DlgText         "CodeExplanation",       AccMExplain( PrevSelection% )
+                ListBoxClick% = [2ND_CLICK]
+              Case [2ND_CLICK]
+                BuildString "ListBoxAccM", PrevSelection%
+                ListBoxClick% = [1ST_CLICK]
+            End Select
+
+          Case "ListBoxComp"
+            BuildString "ListBoxComp", PrevSelection%
+
+          Case "ListBoxFMus"
+            Select Case ListBoxClick%
+              Case [1ST_CLICK]
+                DlgText         "CodeExplanation",       FMusExplain( PrevSelection% )
+                ListBoxClick% = [2ND_CLICK]
+              Case [2ND_CLICK]
+                BuildString "ListBoxFMus", PrevSelection%
+                ListBoxClick% = [1ST_CLICK]
+            End Select
+
+          Case "ListBoxLTxt"
+            Select Case ListBoxClick%
+              Case [1ST_CLICK]
+                DlgText         "CodeExplanation",       LTxtExplain( PrevSelection% )
+                ListBoxClick% = [2ND_CLICK]
+              Case [2ND_CLICK]
+                BuildString "ListBoxLTxt", PrevSelection%
+                ListBoxClick% = [1ST_CLICK]
+            End Select
+
+          Case "ListBoxPart"
+            Select Case ListBoxClick%
+              Case [1ST_CLICK]
+                DlgText         "CodeExplanation",       PartExplain( PrevSelection% )
+                ListBoxClick% = [2ND_CLICK]
+              Case [2ND_CLICK]
+                BuildString "ListBoxPart", PrevSelection%
+                ListBoxClick% = [1ST_CLICK]
+            End Select
+
+          Case "ListBoxTrAr"
+            Select Case ListBoxClick%
+              Case [1ST_CLICK]
+                DlgText         "CodeExplanation",       TrArExplain( PrevSelection% )
+                ListBoxClick% = [2ND_CLICK]
+              Case [2ND_CLICK]
+                BuildString "ListBoxTrAr", PrevSelection%
+                ListBoxClick% = [1ST_CLICK]
+            End Select
+
+        End Select
+
+' The "Remove" button has to account for when the next-to-last code is removed. When only
+' one "Comp" code remains, an 047 field is inappropriate, so the 047 listbox must be
+' removed and the tab value changed to that last code.
+
+      Case "Remove"
+        UBField047Codes% = UBound( Field047Codes )
+        Selection%       = DlgValue( "ListBox047" )
+        If Selection% = UBField047Codes% Then
+            ReDim Preserve Field047Codes( UBField047Codes% - 1 )
+          Else
+            For i = Selection% To UBField047Codes% - 1
+              Field047Codes( i ) = Field047Codes( i + 1 )
+            Next i
+            If i > 0 Then
+                ReDim Preserve Field047Codes( i - 1 )
+              Else
+                ReDim Preserve Field047Codes( 0 )
+            End If
+        End If
+        Count047Codes% = Count047Codes% - 1
+        If Count047Codes% = 1 Then
+            Comp$ = Left$( Field047Codes( 0 ), 2 )
+            DlgVisible      "Down",                  INVISIBLE
+            DlgText         "Field047Text",          When047Displays$
+            DlgVisible      "ListBox047",            INVISIBLE
+            DlgVisible      "Remove",                INVISIBLE
+            DlgText         "Tab2Button",            "&Comp: " & Comp$
+            DlgVisible      "Up",                    INVISIBLE
+            For i = 0 To COMP_CODE_COUNT
+              If Comp$ = Left$( CompValuesT( i ), 2 ) Then
+                  DlgValue        "ListBoxComp",           i
+                  Exit For
+              End If
+            Next i
+          Else
+            DlgListBoxArray "ListBox047",            Field047Codes
+        End If
+        Dialog2ControlFunction = KEEP_DLG_OPEN
+
+' "Reset" restores the dialog box to its initial state, clearing all changes that have
+' been made, but doing nothing to the bibliographic record.
+
+      Case "Reset"
+        AccM$ = OriginalAccM$
+        Comp$ = OriginalComp$
+        FMus$ = OriginalFMus$
+        LTxt$ = OriginalLTxt$
+        Part$ = OriginalPart$
+        TrAr$ = OriginalTrAr$
+        ReDim Field047Codes( 0 )
+        Count047Codes% = 0
+        Build047( Original047$ )
+        DlgVisible      "CodeExplanation",       VISIBLE
+        DlgVisible      "ListBoxAccM",           VISIBLE
+        DlgVisible      "Tab1LineCover",         VISIBLE
+        DlgValue        "TabButtons",            0
+        Dialog2ControlFunction = KEEP_DLG_OPEN
+        GoTo Recycle:
+
+' The "Sort" button simply swaps the two arrays of "Comp" codes in and out. It appears on
+' only on the "Comp" tab because the lists for the other elements aren't long enough to
+' make it useful--this tab contains the only listbox that requires a scroll bar. However,
+' since changing the array in a listbox essentially resets it, keep track of the code
+' that was selected so it can remain selected when the new array is inserted.
+
+      Case "Sort"
+        Selection% = DlgValue( "ListBoxComp" )
+        If CompCodesByTerm Then
+            CharT$ = Left$( CompValuesT( Selection% ), 2 )
+            For i = 0 To COMP_CODE_COUNT
+              If CharT$ = Left$( CompValuesC( i ), 2 ) Then
+                  Exit For
+              End If
+            Next i
+            DlgListBoxArray "ListBoxComp",           CompValuesC
+            DlgValue        "ListBoxComp",           i
+            CompCodesByTerm = FALSE
+            DlgText         "Sort",                  "&Sort by term"
+          Else
+            CharT$ = Left$( CompValuesC( Selection% ), 2 )
+            For i = 0 To COMP_CODE_COUNT
+              If CharT$ = Left$( CompValuesT( i ), 2 ) Then
+                  Exit For
+              End If
+            Next i
+            DlgListBoxArray "ListBoxComp",           CompValuesT
+            DlgValue        "ListBoxComp",           i
+            CompCodesByTerm = TRUE
+            DlgText         "Sort",                  "&Sort by code"
+        End If
+        Dialog2ControlFunction = KEEP_DLG_OPEN
+
+' When a tab is chosen for display, manipulate the visibility of the GroupBox lines and
+' Text areas to give the illusion of tabs. The active tab appears to be connected to the
+' list box area when its Text area is visible, and covers some of the GroupBox lines; the
+' other tabs appear to be cut off from the list box area, and partly hidden behind it,
+' because their Text areas are invisible, allowing the lines of separation to show
+' through. Check for invalid codes on initial display (unlikely to appear except in some
+' cases of batchloaded or vendor records). If the existing code isn't in the array, any
+' click on the list will remove it.
+
+      Case "Tab1Button"
+        DlgVisible      "Arrow",                 INVISIBLE
+        DlgVisible      "CodeExplanation",       VISIBLE
+        DlgVisible      "Down",                  INVISIBLE
+        DlgVisible      "Field047Box",           INVISIBLE
+        DlgVisible      "Field047Text",          INVISIBLE
+        DlgText         "InstructionsText",      InstructionsAccM$
+        DlgVisible      "ListBox047",            INVISIBLE
+        DlgVisible      "ListBoxAccM",           VISIBLE
+        DlgVisible      "ListBoxComp",           INVISIBLE
+        DlgVisible      "ListBoxFMus",           INVISIBLE
+        DlgVisible      "ListBoxLTxt",           INVISIBLE
+        DlgVisible      "ListBoxPart",           INVISIBLE
+        DlgVisible      "ListBoxTrAr",           INVISIBLE
+        DlgVisible      "Remove",                INVISIBLE
+        DlgVisible      "Sort",                  INVISIBLE
+        DlgVisible      "Tab1LineCover",         VISIBLE
+        DlgVisible      "Tab2LineCover",         INVISIBLE
+        DlgVisible      "Tab3LineCover",         INVISIBLE
+        DlgVisible      "Tab4LineCover",         INVISIBLE
+        DlgVisible      "Tab5LineCover",         INVISIBLE
+        DlgText         "Title",                 RecordType$ & " : " & "ACCOMPANYING MATTER"
+        DlgVisible      "Up",                    INVISIBLE
+        If AccM$ = "" Then
+            DlgText         "CodeExplanation",       AccMExplain( 0 )
+            DlgValue        "ListBoxAccM",           0
+          Else
+            CharT$ = Left$( AccM$, 1 )
+            For i = 0 To ACCM_CODE_COUNT
+              If CharT$ = Left$( AccMValues( i ), 1 ) Then
+                  DlgText         "CodeExplanation",       AccMExplain( i )
+                  DlgValue        "ListBoxAccM",           i
+                  Exit For
+                Else
+                  If i = ACCM_CODE_COUNT Then
+                      DlgText         "CodeExplanation",       QUOTE & AccM$ & QUOTE & InvalidWarning$
+                  End If
+              End If
+            Next i
+        End If
+        PrevSelection% = DlgValue( "ListBoxAccM" )
+
+' The second tab is a special case because it is the only tab shared between elements.
+' Depending on the type of record, it will show either the codes for "Comp" or for
+' "LTxt", so the controls for one must be hidden when displaying the other.
+
+      Case "Tab2Button"
+        DlgVisible      "ListBoxAccM",           INVISIBLE
+        DlgVisible      "ListBoxFMus",           INVISIBLE
+        DlgVisible      "ListBoxPart",           INVISIBLE
+        DlgVisible      "ListBoxTrAr",           INVISIBLE
+        DlgVisible      "Tab1LineCover",         INVISIBLE
+        DlgVisible      "Tab2LineCover",         VISIBLE
+        DlgVisible      "Tab3LineCover",         INVISIBLE
+        DlgVisible      "Tab4LineCover",         INVISIBLE
+        DlgVisible      "Tab5LineCover",         INVISIBLE
+
+        If RecordType$ = "NON-MUSICAL SOUND RECORDING" Then
+
+            DlgVisible      "Arrow",                 INVISIBLE
+            DlgVisible      "CodeExplanation",       VISIBLE
+            DlgVisible      "Down",                  INVISIBLE
+            DlgVisible      "Field047Box",           INVISIBLE
+            DlgVisible      "Field047Text",          INVISIBLE
+            DlgText         "InstructionsText",      InstructionsLTxt$
+            DlgVisible      "ListBox047",            INVISIBLE
+            DlgVisible      "ListBoxComp",           INVISIBLE
+            DlgVisible      "ListBoxLTxt",           VISIBLE
+            DlgVisible      "Remove",                INVISIBLE
+            DlgVisible      "Sort",                  INVISIBLE
+            DlgText         "Title",                 RecordType$ & " : " & "LITERARY TEXT FOR SOUND RECORDINGS"
+            DlgVisible      "Up",                    INVISIBLE
+            If LTxt$ = "" Then
+                DlgText         "CodeExplanation",       LTxtExplain( LTXT_CODE_COUNT )
+                DlgValue        "ListBoxLTxt",           0
+              Else
+                CharT$ = Left$( LTxt$, 1 )
+                For i = 0 To LTXT_CODE_COUNT
+                  If CharT$ = Left$( LTxtValues( i ), 1 ) Then
+                      DlgText         "CodeExplanation",       LTxtExplain( i )
+                      DlgValue        "ListBoxLTxt",           i
+                      Exit For
+                    Else
+                      If i = LTXT_CODE_COUNT Then
+                          InvalidCode = TRUE
+                          DlgText         "CodeExplanation",       QUOTE & LTxt$ & QUOTE & InvalidWarning$
+                      End If
+                  End If
+                Next i
+            End If
+
+          Else
+
+            DlgVisible      "Arrow",                 VISIBLE
+            DlgVisible      "CodeExplanation",       INVISIBLE
+            DlgVisible      "Field047Box",           VISIBLE
+            DlgVisible      "Field047Text",          VISIBLE
+            DlgText         "InstructionsText",      InstructionsComp$
+            DlgVisible      "ListBoxComp",           VISIBLE
+            DlgText         "Sort",                  "&Sort by code"
+            DlgVisible      "Sort",                  VISIBLE
+            DlgText         "Title",                 RecordType$ & " : " & "FORM OF COMPOSITION"
+            If Comp$ <> "" Then
+                For i = 0 To COMP_CODE_COUNT
+                  If Comp$ = Left$( CompValuesT( i ), 2 ) Then
+                      DlgValue        "ListBoxComp",           i
+                      Exit For
+                    Else
+                      If i = COMP_CODE_COUNT Then
+                          InvalidCode = TRUE
+                          DlgText         "CodeExplanation",       QUOTE & Comp$ & QUOTE & InvalidWarning$
+                      End If
+                  End If
+                Next i
+              Else
+                DlgValue        "ListBoxComp",           0
+            End If
+            If Count047Codes% < 2 Then
+                DlgText         "Field047Text",          When047Displays$
+              Else
+                DlgText         "Field047Text",          Rearrange$
+            End If
+            CompCodesByTerm = TRUE
+            If Count047Codes% > 1 Then
+                DlgEnable       "Down",                  DISABLED
+                DlgVisible      "Down",                  VISIBLE
+                DlgListBoxArray "ListBox047",            Field047Codes()
+                DlgVisible      "ListBox047",            VISIBLE
+                DlgEnable       "Remove",                DISABLED
+                DlgVisible      "Remove",                VISIBLE
+                DlgEnable       "Up",                    DISABLED
+                DlgVisible      "Up",                    VISIBLE
+            End If
+        End If
+        PrevSelection% = DlgValue( "ListBoxComp" )
+
+      Case "Tab3Button"
+        DlgVisible      "Arrow",                 INVISIBLE
+        DlgVisible      "CodeExplanation",       VISIBLE
+        DlgVisible      "Down",                  INVISIBLE
+        DlgVisible      "Field047Box",           INVISIBLE
+        DlgVisible      "Field047Text",          INVISIBLE
+        DlgText         "InstructionsText",      InstructionsScore$
+        DlgVisible      "ListBox047",            INVISIBLE
+        DlgVisible      "ListBoxAccM",           INVISIBLE
+        DlgVisible      "ListBoxComp",           INVISIBLE
+        DlgVisible      "ListBoxFMus",           VISIBLE
+        DlgVisible      "ListBoxLTxt",           INVISIBLE
+        DlgVisible      "ListBoxPart",           INVISIBLE
+        DlgVisible      "ListBoxTrAr",           INVISIBLE
+        DlgVisible      "Remove",                INVISIBLE
+        DlgVisible      "Sort",                  INVISIBLE
+        DlgVisible      "Tab1LineCover",         INVISIBLE
+        DlgVisible      "Tab2LineCover",         INVISIBLE
+        DlgVisible      "Tab3LineCover",         VISIBLE
+        DlgVisible      "Tab4LineCover",         INVISIBLE
+        DlgVisible      "Tab5LineCover",         INVISIBLE
+        DlgText         "Title",                 RecordType$ & " : " & "FORMAT OF MUSIC"
+        DlgVisible      "Up",                    INVISIBLE
+        For i = 0 To FMUS_CODE_COUNT
+          If FMus$ = Left$( FMusValues( i ), 1 ) Then
+              DlgText         "CodeExplanation",       FMusExplain( i )
+              DlgValue        "ListBoxFMus",           i
+              Exit For
+            Else
+              If i = FMUS_CODE_COUNT Then
+                  InvalidCode = TRUE
+                  DlgText         "CodeExplanation",       QUOTE & FMus$ & QUOTE & InvalidWarning$
+              End If
+          End If
+        Next i
+        PrevSelection% = DlgValue( "ListBoxFMus" )
+
+      Case "Tab4Button"
+        DlgVisible      "Arrow",                 INVISIBLE
+        DlgVisible      "CodeExplanation",       VISIBLE
+        DlgVisible      "Down",                  INVISIBLE
+        DlgVisible      "Field047Box",           INVISIBLE
+        DlgVisible      "Field047Text",          INVISIBLE
+        DlgText         "InstructionsText",      InstructionsScore$
+        DlgVisible      "ListBox047",            INVISIBLE
+        DlgVisible      "ListBoxAccM",           INVISIBLE
+        DlgVisible      "ListBoxComp",           INVISIBLE
+        DlgVisible      "ListBoxFMus",           INVISIBLE
+        DlgVisible      "ListBoxLTxt",           INVISIBLE
+        DlgVisible      "ListBoxPart",           VISIBLE
+        DlgVisible      "ListBoxTrAr",           INVISIBLE
+        DlgVisible      "Remove",                INVISIBLE
+        DlgVisible      "Sort",                  INVISIBLE
+        DlgVisible      "Tab1LineCover",         INVISIBLE
+        DlgVisible      "Tab2LineCover",         INVISIBLE
+        DlgVisible      "Tab3LineCover",         INVISIBLE
+        DlgVisible      "Tab4LineCover",         VISIBLE
+        DlgVisible      "Tab5LineCover",         INVISIBLE
+        DlgText         "Title",                 RecordType$ & " : " & "MUSIC PARTS"
+        DlgVisible      "Up",                    INVISIBLE
+        If Part$ = "" Then
+            DlgText         "CodeExplanation",       PartExplain( 0 )
+            DlgValue        "ListBoxPart",           0
+          Else
+            For i = 0 To PART_CODE_COUNT
+              If Part$ = Left$( PartValues( i ), 1 ) Then
+                  DlgText         "CodeExplanation",       PartExplain( PART_CODE_COUNT )
+                  DlgValue        "ListBoxPart",           i
+                  Exit For
+                Else
+                  If i = PART_CODE_COUNT Then
+                      InvalidCode = TRUE
+                      DlgText         "CodeExplanation",       QUOTE & Part$ & QUOTE & InvalidWarning$
+                  End If
+              End If
+            Next i
+        End If
+        PrevSelection% = DlgValue( "ListBoxPart" )
+
+      Case "Tab5Button"
+        DlgVisible      "Arrow",                 INVISIBLE
+        DlgVisible      "CodeExplanation",       VISIBLE
+        DlgVisible      "Down",                  INVISIBLE
+        DlgVisible      "Field047Box",           INVISIBLE
+        DlgVisible      "Field047Text",          INVISIBLE
+        DlgText         "InstructionsText",      InstructionsScore$
+        DlgVisible      "ListBox047",            INVISIBLE
+        DlgVisible      "ListBoxAccM",           INVISIBLE
+        DlgVisible      "ListBoxComp",           INVISIBLE
+        DlgVisible      "ListBoxFMus",           INVISIBLE
+        DlgVisible      "ListBoxLTxt",           INVISIBLE
+        DlgVisible      "ListBoxPart",           INVISIBLE
+        DlgVisible      "ListBoxTrAr",           VISIBLE
+        DlgVisible      "Remove",                INVISIBLE
+        DlgVisible      "Sort",                  INVISIBLE
+        DlgVisible      "Tab1LineCover",         INVISIBLE
+        DlgVisible      "Tab2LineCover",         INVISIBLE
+        DlgVisible      "Tab3LineCover",         INVISIBLE
+        DlgVisible      "Tab4LineCover",         INVISIBLE
+        DlgVisible      "Tab5LineCover",         VISIBLE
+        DlgText         "Title",                 RecordType$ & " : " & "TRANSPOSITION AND ARRANGEMENT"
+        DlgVisible      "Up",                    INVISIBLE
+        If TrAr$ = "" Then
+            DlgText         "CodeExplanation",       TrArExplain( 0 )
+            DlgValue        "ListBoxTrAr",           0
+          Else
+            For i = 0 To TRAR_CODE_COUNT
+              If TrAr$ = Left$( TrArValues( i ), 1 ) Then
+                  DlgText         "CodeExplanation",       TrArExplain( i )
+                  DlgValue        "ListBoxTrAr",           i
+                  Exit For
+                Else
+                  If i = TRAR_CODE_COUNT Then
+                      InvalidCode = TRUE
+                      DlgText         "CodeExplanation",       QUOTE & TrAr$ & QUOTE & InvalidWarning$
+                  End If
+              End If
+            Next i
+        End If
+        PrevSelection% = DlgValue( "ListBoxTrAr" )
+
+' Similarly to the "Down" button, the "Up" button is disabled when the selection is or
+' becomes the first element of the list.
+
+      Case "Up"
+        Selection% = DlgValue( "ListBox047" )
+        If Selection% > 0 Then
+            SelectedTerm$                   = Field047Codes( Selection% )
+            Field047Codes( Selection% )     = Field047Codes( Selection% - 1)
+            Field047Codes( Selection% - 1 ) = SelectedTerm$
+            DlgListBoxArray "ListBox047",            Field047Codes
+            DlgValue        "ListBox047",            Selection% - 1
+            If Selection% - 1 = 0 Then
+                DlgEnable       "Up",                    DISABLED
+            End If
+            If DlgEnable( "Down" ) = DISABLED Then
+                DlgEnable       "Down",                  ENABLED
+            End If
+        End If
+        Dialog2ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+End Select
+
+If AccM$ <> OriginalAccM$ Or FMus$ <> OriginalFMus$ Or LTxt$ <> OriginalLTxt$ Or _
+   Part$ <> OriginalPart$ Or TrAr$ <> OriginalTrAr$ Or Count047Codes% <> OriginalCount047Codes% Then
+    DlgEnable       "Reset",                 ENABLED
+End If
+
+End Function
+'196190280
+'
+'Macro name: MusicFFHelper
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
+'Saved: 6/28/2017 11:34:05 AM using "MacroBookInspector" macro by Walter F. Nickeson.

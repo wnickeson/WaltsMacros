@@ -1,0 +1,642 @@
+'MacroName:Show007Micro.2015.01
+'MacroDescription:Displays the codes in an 007 field for microforms in a friendly way for
+' verification and/or correction.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' with lots of ideas and some code from Joel Hahn
+'
+' Last updated: 27 August 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'***************************************************************************************#
+' How it works: In a record for a microform, run the macro. It looks for the first
+' microform 007 field and shows the field's values in a dialog box with drop-down lists
+' so the values can be verified and changed if necessary. If the cursor is placed in a
+' microform 007, that field is used in the macro. If there is no 007, use the dialog box
+' to enter correct values in a new field. Default values for new fields can be set in the
+' section below that starts on line 98.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function CheckValue%( Subfield$, EnteredValue$ )
+
+Global Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Global WaltsMacros$
+
+'****************************************************************************************
+
+Sub Main
+
+Const ANSWER_YES           As Integer = 6   'The value returned by a message box when the "Yes" button is clicked.
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL As Integer = 0   'The value returned by the dialog function when the "Cancel" button is clicked.
+
+Const INFORMATION_MESSAGE  As Integer = 64  'The value to display the "Information message" icon in a message box.
+Const WARNING_QUERY        As Integer = 32  'The value to display the "Warning query" icon in a message box.
+Const YES_NO               As Integer = 4   'The value to display "Yes" and "No" buttons in a message box.
+
+Dim CS As Object
+Set CS = CreateObject( "Connex.Client" )
+
+Dim Answer%
+Dim AValue$, BValue$, DValue$, EValue$, FValue$, FRatio$, GValue$, HValue$, IValue$, JValue$
+Dim BArrayChoice%, DArrayChoice%, EArrayChoice%, FArrayChoice%
+Dim DefaultSubfieldB$, DefaultSubfieldD$, DefaultSubfieldE$, DefaultSubfieldF$
+Dim DefaultSubfieldG$, DefaultSubfieldH$, DefaultSubfieldI$, DefaultSubfieldJ$
+Dim Field007String$
+Dim FieldData$
+Dim FixedFieldType$
+Dim GArrayChoice%, HArrayChoice%, IArrayChoice%, JArrayChoice%
+Dim Instance%                : Instance%    = 1
+Dim Row%
+Dim SubfB$                   : SubfB$       = Chr$( 223 ) & "b"
+Dim SubfD$                   : SubfD$       = Chr$( 223 ) & "d"
+Dim SubfE$                   : SubfE$       = Chr$( 223 ) & "e"
+Dim SubfF$                   : SubfF$       = Chr$( 223 ) & "f"
+Dim SubfG$                   : SubfG$       = Chr$( 223 ) & "g"
+Dim SubfH$                   : SubfH$       = Chr$( 223 ) & "h"
+Dim SubfI$                   : SubfI$       = Chr$( 223 ) & "i"
+Dim SubfJ$                   : SubfJ$       = Chr$( 223 ) & "j"
+Dim Warning$
+
+Dim AddNew                   : AddNew       = FALSE
+Dim Changed                  : Changed      = FALSE
+Dim Field007Bool             : Field007Bool = FALSE
+
+Dim BArray() As String
+Dim DArray() As String
+Dim EArray() As String
+Dim FArray() As String
+Dim GArray() As String
+Dim HArray() As String
+Dim IArray() As String
+Dim JArray() As String
+
+Dim p As Integer
+
+WaltsMacros$ = "[Walt's macros] Extras1:Show007Micro"
+
+'****************************************************************************************
+' SET THE DEFAULT VALUES FOR NEW 007 FIELDS HERE
+' Enter values in lowercase. Input a blank (" ") as the value for optional subfields that
+' will not be coded.
+DefaultSubfieldB$ = "d"   'MANDATORY SUBFIELD
+DefaultSubfieldD$ = "a"   'MANDATORY SUBFIELD
+DefaultSubfieldE$ = "f"   'MANDATORY SUBFIELD
+DefaultSubfieldF$ = "u"   'OPTIONAL SUBFIELD
+DefaultSubfieldG$ = "b"   'OPTIONAL SUBFIELD
+DefaultSubfieldH$ = "a"   'OPTIONAL SUBFIELD
+DefaultSubfieldI$ = "c"   'REQUIRED IF APPLICABLE
+DefaultSubfieldJ$ = "a"   'OPTIONAL SUBFIELD
+'****************************************************************************************
+
+' If the cursor is in a microform 007 field, work on that one; otherwise cycle through
+' the first 10 007 fields in the record looking for a microform 007.
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
+    If Mid$( FieldData$, 1, 3 ) = "007" And Mid$( FieldData$, 6, 1 ) = "h" Then GoTo GetValues:
+End If
+
+Do Until Field007Bool = TRUE Or Instance% = 10
+  Field007Bool = CS.GetField( "007", Instance%, FieldData$ )
+  If Field007Bool = TRUE Then
+      If Mid$( FieldData$, 6, 1 ) = "h" Then
+          Exit Do
+        Else
+          Field007Bool = FALSE
+      End If
+  End If
+  Instance% = Instance% + 1
+Loop
+
+If Instance% = 10 Then
+    If MsgBox( "No microform 007 field found! Create a new one?", WARNING_QUERY + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
+        AddNew  = TRUE
+        Changed = TRUE
+      Else
+        GoTo Done:
+    End If
+End If
+
+' Now find all the subfields and their values. Subfields $b, $d, and $e are mandatory, so
+' if they are not found, that means no 007 field exists and a new one is added, with the
+' default values given above.
+
+GetValues:
+
+p = Instr( FieldData$, SubfB$ )
+If p <> 0 Then
+    BValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    BValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfD$ )
+If p <> 0 Then
+    DValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    DValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfE$ )
+If p <> 0 Then
+    EValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    EValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfF$ )
+If p <> 0 Then
+    FValue$ = Mid$( FieldData$, p + 3, 1 )
+    FRatio$ = Mid$( FieldData$, p + 4, 3 )
+  Else
+    FValue$ = " "
+    FRatio$ = ""
+End If
+
+p = Instr( FieldData$, SubfG$ )
+If p <> 0 Then
+    GValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    GValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfH$ )
+If p <> 0 Then
+    HValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    HValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfI$ )
+If p <> 0 Then
+    IValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    IValue$ = " "
+End If
+
+p = Instr( FieldData$, SubfJ$ )
+If p <> 0 Then
+    JValue$ = Mid$( FieldData$, p + 3, 1 )
+  Else
+    JValue$ = " "
+End If
+
+' Populate arrays for use in the dialog box, and determine which item in the array is
+' already in the 007 field.
+
+ReDim BArray( 0 to 10 )
+BArray( 0 )  = " "
+BArray( 1 )  = " ----------"
+BArray( 2 )  = "a - Aperture card"
+BArray( 3 )  = "b - Microfilm cartridge"
+BArray( 4 )  = "c - Microfilm cassette"
+BArray( 5 )  = "d - Microfilm reel"
+BArray( 6 )  = "e - Microfiche"
+BArray( 7 )  = "f - Microfiche cassette"
+BArray( 8 )  = "g - Microopaque"
+BArray( 9 )  = "u - Unspecified"
+BArray( 10 ) = "z - Other"
+
+If AddNew = TRUE Then BValue$ = DefaultSubfieldB$
+Select Case BValue$
+  Case "a"
+    BArrayChoice% = 2
+  Case "b"
+    BArrayChoice% = 3
+  Case "c"
+    BArrayChoice% = 4
+  Case "d"
+    BArrayChoice% = 5
+  Case "e"
+    BArrayChoice% = 6
+  Case "f"
+    BArrayChoice% = 7
+  Case "g"
+    BArrayChoice% = 8
+  Case "u"
+    BArrayChoice% = 9
+  Case "z"
+    BArrayChoice% = 10
+  Case Else
+    BArrayChoice% = 0
+End Select
+
+ReDim DArray( 0 to 5 )
+DArray( 0 ) = " "
+DArray( 1 ) = " ----------"
+DArray( 2 ) = "a - Positive"
+DArray( 3 ) = "b - Negative"
+DArray( 4 ) = "m - Mixed polarity"
+DArray( 5 ) = "u - Unknown"
+
+If AddNew = TRUE Then DValue$ = DefaultSubfieldD$
+Select Case DValue$
+  Case "a"
+    DArrayChoice% = 2
+  Case "b"
+    DArrayChoice% = 3
+  Case "m"
+    DArrayChoice% = 4
+  Case "u"
+    DArrayChoice% = 5
+  Case Else
+    DArrayChoice% = 0
+End Select
+
+ReDim EArray( 0 to 12 )
+EArray( 0 )  = " "
+EArray( 1 )  = " ----------"
+EArray( 2 )  = "a - 8 mm"
+EArray( 3 )  = "d - 16 mm"
+EArray( 4 )  = "f - 35 mm"
+EArray( 5 )  = "g - 70 mm"
+EArray( 6 )  = "h - 105 mm"
+EArray( 7 )  = "l - 3 × 5 in. (8 × 13 cm)"
+EArray( 8 )  = "m - 4 × 6 in. (11 × 15 cm)"
+EArray( 9 )  = "o - 6 × 9 in. (16 × 23 cm)"
+EArray( 10 ) = "p - 3 1/4 × 7 3/8 in. (9 × 19 cm)"
+EArray( 11 ) = "u - Unknown"
+EArray( 12 ) = "z - Other"
+
+If AddNew = TRUE Then EValue$ = DefaultSubfieldE$
+Select Case EValue$
+  Case "a"
+    EArrayChoice% = 2
+  Case "d"
+    EArrayChoice% = 3
+  Case "f"
+    EArrayChoice% = 4
+  Case "g"
+    EArrayChoice% = 5
+  Case "h"
+    EArrayChoice% = 6
+  Case "l"
+    EArrayChoice% = 7
+  Case "m"
+    EArrayChoice% = 8
+  Case "o"
+    EArrayChoice% = 9
+  Case "p"
+    EArrayChoice% = 10
+  Case "u"
+    EArrayChoice% = 11
+  Case "z"
+    EArrayChoice% = 12
+  Case Else
+    EArrayChoice% = 0
+End Select
+
+ReDim FArray( 0 to 8 )
+FArray( 0 ) = " "
+FArray( 1 ) = " ----- [use this for a blank] -----"
+FArray( 2 ) = "a - Low reduction (less than 16x)"
+FArray( 3 ) = "b - Normal reduction (16-30x)"
+FArray( 4 ) = "c - High reduction (31-60x)"
+FArray( 5 ) = "d - Very high reduction (61-90x)"
+FArray( 6 ) = "e - Ultra high reduction (over 90x)"
+FArray( 7 ) = "u - Unknown"
+FArray( 8 ) = "v - Reduction ratio varies"
+
+If AddNew = TRUE Then FValue$ = DefaultSubfieldF$
+Select Case FValue$
+  Case "a"
+    FArrayChoice% = 2
+  Case "b"
+    FArrayChoice% = 3
+  Case "c"
+    FArrayChoice% = 4
+  Case "d"
+    FArrayChoice% = 5
+  Case "e"
+    FArrayChoice% = 6
+  Case "u"
+    FArrayChoice% = 7
+  Case "v"
+    FArrayChoice% = 8
+  Case Else
+    FArrayChoice% = 0
+End Select
+
+ReDim GArray( 0 to 6 )
+GArray( 0 ) = " "
+GArray( 1 ) = " ----- [use this for a blank] -----"
+GArray( 2 ) = "b - Black-and-white"
+GArray( 3 ) = "c - Multicolored"
+GArray( 4 ) = "m - Mixed"
+GArray( 5 ) = "u - Unknown"
+GArray( 6 ) = "z - Other"
+
+If AddNew = TRUE Then GValue$ = DefaultSubfieldG$
+Select Case GValue$
+  Case "b"
+    GArrayChoice% = 2
+  Case "c"
+    GArrayChoice% = 3
+  Case "m"
+    GArrayChoice% = 4
+  Case "u"
+    GArrayChoice% = 5
+  Case "z"
+    GArrayChoice% = 6
+  Case Else
+    GArrayChoice% = 0
+End Select
+
+ReDim HArray( 0 to 8 )
+HArray( 0 ) = " "
+HArray( 1 ) = " ----- [use this for a blank] -----"
+HArray( 2 ) = "a - Silver halide"
+HArray( 3 ) = "b - Diazo"
+HArray( 4 ) = "c - Vesicular"
+HArray( 5 ) = "m - Mixed"
+HArray( 6 ) = "n - Not applicable"
+HArray( 7 ) = "u - Unknown"
+HArray( 8 ) = "z - Other"
+
+If AddNew = TRUE Then HValue$ = DefaultSubfieldH$
+Select Case HValue$
+  Case "a"
+    HArrayChoice% = 2
+  Case "b"
+    HArrayChoice% = 3
+  Case "c"
+    HArrayChoice% = 4
+  Case "m"
+    HArrayChoice% = 5
+  Case "n"
+    HArrayChoice% = 6
+  Case "u"
+    HArrayChoice% = 7
+  Case "z"
+    HArrayChoice% = 8
+  Case Else
+    HArrayChoice% = 0
+End Select
+
+ReDim IArray( 0 to 6 )
+IArray( 0 ) = " "
+IArray( 1 ) = " ----------"
+IArray( 2 ) = "a - First generation master"
+IArray( 3 ) = "b - Printing master"
+IArray( 4 ) = "c - Service copy"
+IArray( 5 ) = "m - Mixed generation"
+IArray( 6 ) = "u - Unknown"
+
+If AddNew = TRUE Then IValue$ = DefaultSubfieldI$
+Select Case IValue$
+  Case "a"
+    IArrayChoice% = 2
+  Case "b"
+    IArrayChoice% = 3
+  Case "c"
+    IArrayChoice% = 4
+  Case "m"
+    IArrayChoice% = 5
+  Case "u"
+    IArrayChoice% = 6
+  Case Else
+    IArrayChoice% = 0
+End Select
+
+ReDim JArray( 0 to 12 )
+JArray( 0 )  = " "
+JArray( 1 )  = " ----- [use this for a blank] -----"
+JArray( 2 )  = "a - Safety base, undetermined"
+JArray( 3 )  = "c - Safety base, acetate undetermined"
+JArray( 4 )  = "d - Safety base, diacetate"
+JArray( 5 )  = "i - Nitrate base"
+JArray( 6 )  = "m - Mixed base, nitrate and safety"
+JArray( 7 )  = "n - Not applicable"
+JArray( 8 )  = "p - Safety base, polyester"
+JArray( 9 )  = "r - Safety base, mixed"
+JArray( 10 ) = "t - Safety base, triacetate"
+JArray( 11 ) = "u - Unknown"
+JArray( 12 ) = "z - Other"
+
+If AddNew = TRUE Then JValue$ = DefaultSubfieldJ$
+Select Case JValue$
+  Case "a"
+    JArrayChoice% = 2
+  Case "c"
+    JArrayChoice% = 3
+  Case "d"
+    JArrayChoice% = 4
+  Case "i"
+    JArrayChoice% = 5
+  Case "m"
+    JArrayChoice% = 6
+  Case "n"
+    JArrayChoice% = 7
+  Case "p"
+    JArrayChoice% = 8
+  Case "r"
+    JArrayChoice% = 9
+  Case "t"
+    JArrayChoice% = 10
+  Case "u"
+    JArrayChoice% = 11
+  Case "z"
+    JArrayChoice% = 12
+  Case Else
+    JArrayChoice% = 0
+End Select
+
+' The existing values in the 007 field are made to be the first items in the arrays, so
+' they show as the default element in the drop-down list box.
+
+BArray( 0 ) = BArray( BArrayChoice% )
+DArray( 0 ) = DArray( DArrayChoice% )
+EArray( 0 ) = EArray( EArrayChoice% )
+FArray( 0 ) = FArray( FArrayChoice% )
+GArray( 0 ) = GArray( GArrayChoice% )
+HArray( 0 ) = HArray( HArrayChoice% )
+IArray( 0 ) = IArray( IArrayChoice% )
+JArray( 0 ) = JArray( JArrayChoice% )
+
+' The main dialog box, showing the present values in the 007 field and offering drop-down
+' lists for changing those values, or adding new ones.
+
+ShowValues:
+
+Begin Dialog Dialog1Definition  252, 251, WaltsMacros$
+  OKButton      18, 192,  64,  18
+  CancelButton  18, 221,  64,  18
+  DropListBox  128,  11, 120, 108, BArray(), .B
+  DropListBox  128,  27, 120, 172, DArray(), .D
+  DropListBox  128,  43, 120, 120, EArray(), .E
+  DropListBox  128,  59, 120, 120, FArray(), .F
+  DropListBox  128,  97, 120,  72, GArray(), .G
+  DropListBox  128, 113, 120, 120, HArray(), .H
+  DropListBox  128, 129, 120, 120, IArray(), .I
+  DropListBox  128, 145, 120, 120, JArray(), .J
+  TextBox      128,  78,  16,  11,           .FRatio
+  Text          18,  13, 108,   8, "Specific material designation:"
+  Text          18,  29, 108,   8, "Positive/negative aspect:"
+  Text          18,  45, 108,   8, "Dimensions:"
+  Text          18,  61, 108,   8, "*Reduction ratio range:"
+  Text          18,  80, 108,   8, "*Reduction ratio:"
+  Text         148,  80,  88,   8, "(Leave blank for unknown)"
+  Text          18,  99, 108,   8, "*Color:"
+  Text          18, 115, 108,   8, "*Emulsion on film:"
+  Text          18, 131, 108,   8, "Generation:"
+  Text          18, 146, 108,   8, "*Base of film:"
+  Text          18, 168, 108,   8, "*Optional fields"
+  Text          92, 193, 154,  18, "Click OK to accept changes made above, or to accept the 007 as is."
+  Text          92, 221, 154,  18, "Click Cancel to terminate the macro and leave the 007 unchanged."
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+
+If FRatio$ = "---" Then
+    Dialog1.FRatio = "   "
+  Else
+    Dialog1.FRatio = FRatio$
+End If
+
+If Dialog( Dialog1 ) = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+' Test to see if the any of the values have been changed
+
+If Dialog1.B <> 0 Then
+    BValue$ = Left$( BArray( Dialog1.B ), 1 )
+    Changed = TRUE
+    If CheckValue%( "b", BValue$ ) = 0 Then GoTo GetValues:
+End If
+
+If Dialog1.D <> 0 Then
+    DValue$ = Left$( DArray( Dialog1.D ), 1 )
+    Changed = TRUE
+    If CheckValue%( "d", DValue$ ) = 0 Then GoTo GetValues:
+End If
+
+If Dialog1.E <> 0 Then
+    EValue$ = Left$( EArray( Dialog1.E ), 1 )
+    Changed = TRUE
+    If CheckValue%( "e", EValue$ ) = 0 Then GoTo GetValues:
+End If
+
+If Dialog1.F <> 0 Then
+    FValue$ = Left$( FArray( Dialog1.F ), 1 )
+    Changed = TRUE
+End If
+
+Dialog1.FRatio = Trim( Dialog1.FRatio )
+If Dialog1.FRatio = "" Then Dialog1.FRatio = "---"
+
+If FValue$ = "u" Then
+    If Dialog1.FRatio <> "---" Then
+        MsgBox "An unknown reduction ratio range requires blanks in the reduction ratio box. Please try again.", WARNING_MESSAGE, WaltsMacros$
+        GoTo ShowValues:
+    End If
+  Else
+    If Dialog1.FRatio <> "---" Then
+        If Len( Dialog1.FRatio ) > 3 Then
+            MsgBox "Reduction ratio must be three digits!", WARNING_MESSAGE, WaltsMacros$
+            GoTo ShowValues:
+          ElseIf Len( Dialog1.FRatio ) = 1 Then
+            Dialog1.FRatio = "00" & Dialog1.FRatio
+          ElseIf Len( Dialog1.FRatio ) = 2 Then
+            Dialog1.FRatio = "0" & Dialog1.FRatio
+        End If
+    End If
+End If
+
+If Dialog1.FRatio <> FRatio$ Then
+     FRatio$ = Dialog1.FRatio
+     Changed = TRUE
+End If
+
+If Dialog1.G <> 0 Then
+    GValue$ = Left$( GArray( Dialog1.G ), 1 )
+    Changed = TRUE
+End If
+
+If Dialog1.H <> 0 Then
+    HValue$ = Left$( HArray( Dialog1.H ), 1 )
+    Changed = TRUE
+End If
+
+If Dialog1.I <> 0 Then
+    IValue$ = Left$( IArray( Dialog1.I ), 1 )
+    Changed = TRUE
+    If CheckValue%( "i", IValue$ ) = 0 Then GoTo GetValues:
+End If
+
+If Dialog1.J <> 0 Then
+    JValue$ = Left$( JArray( Dialog1.J ), 1 )
+    Changed = TRUE
+End If
+
+' Build a new 007 field with the values derived from the dialog
+
+If Changed = TRUE Then
+
+    If AddNew = FALSE Then
+        Warning$ = FieldData$ & " " & Chr$( 014 ) & "PREVIOUS MICROFORM 007!" & Chr$( 014 )
+        If CS.SetField( Instance%, Warning$ ) = FALSE Then GoTo AddIt:
+    End If
+    Field007String$ = "007  h " & SubfB$ & " " & BValue$ & " " & SubfD$ & " " & DValue$ & " " & SubfE$ & " " & EValue$
+    If FVAlue$ <> " " Then Field007String$ = Field007String$ & " " & SubfF$ & " " & FValue$ & FRatio$
+    If GVAlue$ <> " " Then Field007String$ = Field007String$ & " " & SubfG$ & " " & GValue$
+    If HValue$ <> " " Then Field007String$ = Field007String$ & " " & SubfH$ & " " & HValue$
+    Field007String$ = Field007String$ & " " & SubfI$ & " " & IValue$
+    If JValue$ <> " " Then Field007String$ = Field007String$ & " " & SubfJ$ & " " & JValue$
+  Else
+    MsgBox "No change made to 007!", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End If
+
+AddIt:
+
+If CS.AddField( 1, Field007String$ ) = TRUE Then
+    If AddNew = FALSE Then
+        Answer% = MsgBox( "New microform 007 field added. Delete previous microform 007?", 36, WaltsMacros$ )
+        If Answer% = 6 Then
+            CS.CursorRow = CS.CursorRow + 1
+            CS.DeleteCurrentField
+            CS.CursorRow = 1
+        End If
+      Else
+        MsgBox "New microform 007 field added", INFORMATION_MESSAGE, WaltsMacros$
+        CS.CursorRow = 1
+    End If
+    Exit Sub
+  Else
+    MsgBox "Sorry, could not add microform 007.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+Done:
+
+End Sub
+
+'****************************************************************************************
+
+Function CheckValue%( Subfield$, EnteredValue$ )
+
+If EnteredValue$ = " " Then
+    MsgBox "Invalid value (blank) in subfield $" & Subfield$ & ", 007 not added.", WARNING_MESSAGE, WaltsMacros$
+    CheckValue% = 0
+  Else
+    CheckValue% = 1
+End If
+
+End Function
+'66420845
+'
+'Macro name: Show007Micro
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
+'Saved: 6/28/2017 11:34:22 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,1007 @@
+'MacroName:Show007SoundRecs.2016.11
+'MacroDescription:Displays the codes in 007 fields for sound recordings in a friendly way
+' for verification and/or correction.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Thank to Joel Hahn for some good ideas for an earlier draft of this macro. However, all
+' responsibility for this macro's appearance and functionality are mine alone.
+'
+' Last updated: 1 April 2016.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic record. If no 007 field for a sound
+' recording is found, the macro offers to add one, the default values being those for
+' compact discs. (All default values can be set in the "SetDefaults" subroutine at the
+' very end of the macro.) If sound recordings 007 fields are found, the macro shows their
+' codes with explanations in a dialog box with drop-down lists, so the values can easily
+' be verified and changed if necessary. Additional 007 fields can be added with the
+' default values defined at the end of the macro. The macro does no error-checking,
+' leaving that up to you.
+'****************************************************************************************
+
+Option Explicit
+
+Type FieldContents
+  CaptureAndStorage       As String*1
+  Changed                 As String*1
+  Dimensions              As String*1
+  FieldOccurrence         As Integer
+  Groove                  As String*1
+  KindOfCutting           As String*1
+  KindOfMaterial          As String*1
+  KindOfObject            As String*1
+  OriginalField           As String*12
+  PlaybackChannels        As String*1
+  PlaybackCharacteristics As String*1
+  SMD                     As String*1
+  Speed                   As String*1
+  TapeConfiguration       As String*1
+  TapeWidth               As String*1
+End Type
+
+Declare Sub SetDefaults   ( Which007% )
+Declare Sub SetDefinitions
+Declare Sub SetListValues ( Which007% )
+
+Declare Function ListSelection( Which007%, WhichField$ ) As Integer
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global Const ADD           As String  = "A"  'The flag to add a new field.
+Global Const ANSWER_YES    As Integer = 6    'The value returned by a message box when the "Yes" button is clicked.
+Global Const BLANK         As String  = " "
+Global Const REPLACE       As String  = "R"  'The flag to replace an existing field.
+Global Const UNCHANGED     As String  = "U"  'The flag that the macro has not changed a field.
+Global Const WARNING_QUERY As Integer = 32   'The value to display the "Warning query" icon in a message box.
+Global Const YES_NO        As Integer = 4    'The value to display "Yes" and "No" buttons in a message box.
+
+Global NewField%
+Global SR007Count%
+Global SR007Instance%
+Global WaltsMacros$
+
+Global Changed
+Global Missing
+
+Global FieldStorage()     As FieldContents
+Global Subfield_B  ( 11 ) As String
+Global Subfield_D  ( 16 ) As String
+Global Subfield_E  ( 5  ) As String
+Global Subfield_F  ( 5  ) As String
+Global Subfield_G  ( 13 ) As String
+Global Subfield_H  ( 7  ) As String
+Global Subfield_I  ( 9  ) As String
+Global Subfield_J  ( 11 ) As String
+Global Subfield_K  ( 13 ) As String
+Global Subfield_L  ( 4  ) As String
+Global Subfield_M  ( 11 ) As String
+Global Subfield_N  ( 6  ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL As Integer = 0   'The value returned by the dialog function when the "Cancel" button is clicked.
+Const INFORMATION_MESSAGE  As Integer = 64  'The value to display the "Information message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject( "Connex.Client" )
+
+Dim DELIMITER As String* 1   : DELIMITER = Chr$( 223 )
+
+Dim Added%
+Dim ConcludingMessage$
+Dim Count007%
+Dim DelimiterB$              : DelimiterB$    = DELIMITER & "b"
+Dim DelimiterD$              : DelimiterD$    = DELIMITER & "d"
+Dim DelimiterE$              : DelimiterE$    = DELIMITER & "e"
+Dim DelimiterF$              : DelimiterF$    = DELIMITER & "f"
+Dim DelimiterG$              : DelimiterG$    = DELIMITER & "g"
+Dim DelimiterH$              : DelimiterH$    = DELIMITER & "h"
+Dim DelimiterI$              : DelimiterI$    = DELIMITER & "i"
+Dim DelimiterJ$              : DelimiterJ$    = DELIMITER & "j"
+Dim DelimiterK$              : DelimiterK$    = DELIMITER & "k"
+Dim DelimiterL$              : DelimiterL$    = DELIMITER & "l"
+Dim DelimiterM$              : DelimiterM$    = DELIMITER & "m"
+Dim DelimiterN$              : DelimiterN$    = DELIMITER & "n"
+Dim Field007String$
+Dim FieldData$
+Dim FieldPosition%
+Dim FILLCHAR As String*1     : FILLCHAR       = Chr$( 252 )
+Dim FILLCHAR_X As String*1   : FILLCHAR_X     = Chr$( 127 )
+Dim Instance%
+Dim MandatoryNote$           : MandatoryNote$ = "* Please supply values for mandatory subfields!"
+Dim Replaced%
+Dim TempString$
+Dim TestChar$
+Dim TypeOfWindow%
+Dim ValueB$, ValueD$, ValueE$, ValueF$, ValueG$, ValueH$, ValueI$, ValueJ$, ValueK$, ValueL$, ValueM$, ValueN$
+
+Dim Found007                 : Found007    = TRUE
+
+Dim i As Integer, p As Integer
+
+Changed      = FALSE
+Missing      = FALSE
+WaltsMacros$ = "[Walt's macros] Extras1:Show007SoundRecs"
+
+' If what is displayed is not a bibliographic record, quit.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 2 To 16, 18, 20 To 34, 36
+    MsgBox "Sorry, this macro only works in an bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Find all the sound recordings 007 fields and store their values in the array
+' "FieldStorage". If any of the mandatory subfields $b, $d, $e, and $g are lacking, set a
+' flag to display a warning message in the dialog box.
+
+Instance% = 1
+Do Until Found007 = FALSE
+  Found007 = CS.GetField( "007", Instance%, FieldData$ )
+  If Found007 = TRUE Then
+      If Mid$( FieldData$, 6, 1 ) = "s" Then
+          ReDim Preserve FieldStorage( SR007Count% )
+          FieldStorage( SR007Count% ).FieldOccurrence = Count007%
+          FieldStorage( SR007Count% ).Changed         = UNCHANGED
+          TempString$ = ""
+
+          p = Instr( FieldData$, DelimiterB$ )
+          If p <> 0 Then
+              TestChar$ = Mid$( FieldData$, p + 3, 1 )
+              If TestChar$ = FILLCHAR Then       'If a fill character is found,
+                  TestChar$ = FILLCHAR_X         ' convert it for display purposes.
+              End If
+              FieldStorage( SR007Count% ).SMD = TestChar$
+            Else
+              FieldStorage( SR007Count% ).SMD = BLANK
+              Missing = TRUE
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).SMD
+
+          p = Instr( FieldData$, DelimiterD$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).Speed = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).Speed = BLANK
+              Missing = TRUE
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).Speed
+
+          p = Instr( FieldData$, DelimiterE$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).PlaybackChannels = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).PlaybackChannels = BLANK
+              Missing = TRUE
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).PlaybackChannels
+
+          p = Instr( FieldData$, DelimiterF$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).Groove = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).Groove = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).Groove
+
+          p = Instr( FieldData$, DelimiterG$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).Dimensions = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).Dimensions = BLANK
+              Missing = TRUE
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).Dimensions
+
+          p = Instr( FieldData$, DelimiterH$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).TapeWidth = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).TapeWidth = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).TapeWidth
+
+          p = Instr( FieldData$, DelimiterI$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).TapeConfiguration = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).TapeConfiguration = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).TapeConfiguration
+
+          p = Instr( FieldData$, DelimiterJ$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).KindOfObject = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).KindOfObject = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).KindOfObject
+
+          p = Instr( FieldData$, DelimiterK$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).KindOfMaterial = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).KindOfMaterial = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).KindOfMaterial
+
+          p = Instr( FieldData$, DelimiterL$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).KindOfCutting = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).KindOfCutting = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).KindOfCutting
+
+          p = Instr( FieldData$, DelimiterM$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).PlaybackCharacteristics = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).PlaybackCharacteristics = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).PlaybackCharacteristics
+
+          p = Instr( FieldData$, DelimiterN$ )
+          If p <> 0 Then
+              FieldStorage( SR007Count% ).CaptureAndStorage = Mid$( FieldData$, p + 3, 1 )
+            Else
+              FieldStorage( SR007Count% ).CaptureAndStorage = BLANK
+          End If
+          TempString$ = TempString$ & FieldStorage( SR007Count% ).CaptureAndStorage
+
+          FieldStorage( SR007Count% ).OriginalField = TempString$
+          SR007Count% = SR007Count% + 1
+
+      End If
+      Count007% = Count007% + 1
+  End If
+  Instance% = Instance% + 1
+Loop
+
+' If no 007 field for a sound recording is found, ask whether to create one. If a new
+' field is to be added, fill the array with the default values found in the Sub at the
+' end of the macro.
+
+If SR007Count% = 0 Then
+    If MsgBox( "No sound recordings 007 field found! Create a new one?", WARNING_QUERY + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
+        ReDim FieldStorage( SR007Count% )
+        FieldStorage( SR007Count% ).FieldOccurrence = Count007% + 1
+        FieldStorage( SR007Count% ).Changed         = ADD
+        Call SetDefaults( SR007Count% )
+        SR007Count% = SR007Count% + 1
+      Else
+        Exit Sub
+    End If
+End If
+
+Call SetDefinitions
+
+' The main dialog box, showing the present values in the 007 field and offering drop-down
+' lists for changing those values, or adding new ones.
+
+SR007Instance% = 1
+
+Begin Dialog Dialog1Definition  278, 268, WaltsMacros, .Dialog1ControlFunction
+  OkButton      128, 242,  64,  16
+  CancelButton  204, 242,  64,  16
+  PushButton    128, 206,  52,  14, "<< &Prev. 007", .Prev
+  PushButton    216, 206,  52,  14, "&Next 007 >>",  .Next
+  PushButton     12, 242,  64,  16, "&Add new 007",  .New
+  DropListBox   128,  12, 140, 108, Subfield_B(),    .B
+  DropListBox   128,  28, 140, 172, Subfield_D(),    .D
+  DropListBox   128,  44, 140,  72, Subfield_E(),    .E
+  DropListBox   128,  60, 140,  72, Subfield_F(),    .F
+  DropListBox   128,  76, 140, 144, Subfield_G(),    .G
+  DropListBox   128,  92, 140, 120, Subfield_H(),    .H
+  DropListBox   128, 108, 140, 120, Subfield_I(),    .I
+  DropListBox   128, 124, 140, 120, Subfield_J(),    .J
+  DropListBox   128, 140, 140, 144, Subfield_K(),    .K
+  DropListBox   128, 156, 140, 120, Subfield_L(),    .L
+  DropListBox   128, 172, 140, 120, Subfield_M(),    .M
+  DropListBox   128, 188, 140, 120, Subfield_N(),    .N
+  Text            8,  14,   4,   8, "*",             .Man1
+  Text           12,  14, 108,   8, "/01, Specific material designation:"
+  Text            8,  30,   4,   8, "*",             .Man2
+  Text           12,  30, 108,   8, "/03, Speed:"
+  Text            8,  46,   4,   8, "*",             .Man3
+  Text           12,  46, 108,   8, "/04, Config. of playback channels:"
+  Text           12,  62, 108,   8, "/05, Groove width/groove pitch:"
+  Text            8,  78,   4,   8, "*",             .Man4
+  Text           12,  78, 108,   8, "/06, Dimensions:"
+  Text           12,  94, 108,   8, "/07, Tape width:"
+  Text           12, 110, 108,   8, "/08, Tape configuration:"
+  Text           12, 126, 108,   8, "/09, Kind of disc, cylinder or tape:"
+  Text           12, 142, 108,   8, "/10, Kind of material:"
+  Text           12, 158, 108,   8, "/11, Kind of cutting:"
+  Text           12, 174, 108,   8, "/12, Special playback characteristics:"
+  Text           12, 190, 108,   8, "/13, Capture and storage:"
+  Text           12, 206, 108,  16, MandatoryNote$,  .Mandatory
+  Text          166, 224,  88,   8, "",              .FieldManager
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+
+If Dialog( Dialog1 ) = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+' If a change has been detected, construct a new 007 string by reading the values of the
+' list boxes when the OK button was clicked and adding them all together. If an element
+' is blank, don't bother adding it to the string.
+
+For i = 0 To SR007Count% - 1
+
+  If FieldStorage( i ).Changed <> UNCHANGED Then
+      ValueB$     = FieldStorage( i ).SMD
+      If ValueB$ = FILLCHAR_X Then ValueB$ = FILLCHAR
+      ValueD$     = FieldStorage( i ).Speed
+      ValueE$     = FieldStorage( i ).PlaybackChannels
+      ValueF$     = FieldStorage( i ).Groove
+      ValueG$     = FieldStorage( i ).Dimensions
+      ValueH$     = FieldStorage( i ).TapeWidth
+      ValueI$     = FieldStorage( i ).TapeConfiguration
+      ValueJ$     = FieldStorage( i ).KindOfObject
+      ValueK$     = FieldStorage( i ).KindOfMaterial
+      ValueL$     = FieldStorage( i ).KindOfCutting
+      ValueM$     = FieldStorage( i ).PlaybackCharacteristics
+      ValueN$     = FieldStorage( i ).CaptureAndStorage
+      TempString$ = ValueB$ & ValueD$ & ValueE$ & ValueF$ & ValueG$ & ValueH$ & ValueI$ & ValueJ$ & ValueK$ & ValueL$ & ValueM$ & ValueN$
+
+' Although the storage variable contains an indication of a change having been made to
+' the field, the change could have been reversed, so compare the current values with the
+' original values to verify that a change actually occurred.
+
+      If TempString$ <> FieldStorage( i ).OriginalField Then
+          Field007String$ = "007  s " & DelimiterB$ & BLANK & ValueB$ & BLANK & DelimiterD$ & BLANK & ValueD$ & BLANK & DelimiterE$ & BLANK & ValueE$
+
+          If ValueF$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterF$ & BLANK & ValueF$
+          End If
+
+          Field007String$ = Field007String$ & BLANK & DelimiterG$ & BLANK & ValueG$
+
+          If ValueH$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterH$ & BLANK & ValueH$
+          End If
+
+          If ValueI$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterI$ & BLANK & ValueI$
+          End If
+
+          If ValueJ$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterJ$ & BLANK & ValueJ$
+          End If
+
+          If ValueK$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterK$ & BLANK & ValueK$
+          End If
+
+          If ValueL$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterL$ & BLANK & ValueL$
+          End If
+
+          If ValueM$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterM$ & BLANK & ValueM$
+          End If
+
+          If ValueN$ <> BLANK Then
+              Field007String$ = Field007String$ & BLANK & DelimiterN$ & BLANK & ValueN$
+          End If
+
+' Add a new field after all existing sound recordings 007 fields. Otherwise, a changed
+' field replaces an existing one.
+
+          FieldPosition% = FieldStorage( i ).FieldOccurrence + 1
+          If FieldStorage( i ).Changed = ADD Then
+              If CS.AddField( FieldPosition%, Field007String$ ) Then
+                  Added% = Added% + 1
+                Else
+                  MsgBox "Sorry, could not add 007.", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+              End If
+            ElseIf FieldStorage( i ).Changed = REPLACE Then
+              If CS.SetField( FieldPosition%, Field007String$ ) Then
+                  Replaced% = Replaced% + 1
+                Else
+                  MsgBox "Sorry, could not replace 007.", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+              End If
+          End If
+      End If
+  End If
+Next i
+
+' Display a message about added and replaced fields.
+
+If Added% = 0 And Replaced% = 0 Then
+    If SR007Count% = 0 Then
+        ConcludingMessage$ = "No change was made to the record."
+      ElseIf SR007Count% = 1 Then
+        ConcludingMessage$ = "No change was made to the 007 field."
+      ElseIf SR007Count% > 1 Then
+        ConcludingMessage$ = "No changes were made to the 007 fields."
+    End If
+  ElseIf Added% = 1 And Replaced% = 0 Then
+    ConcludingMessage$ = "A new 007 field was added."
+  ElseIf Added% > 1 And Replaced% = 0 Then
+    ConcludingMessage$ = "New 007 fields were added."
+  ElseIf Added% = 0 And Replaced% = 1 Then
+    If SR007Count% = 1 Then
+        ConcludingMessage$ = "The 007 field was replaced."
+      Else
+        ConcludingMessage$ = "One 007 field was replaced."
+    End If
+  ElseIf Added% = 1 And Replaced% = 1 Then
+    ConcludingMessage$ = "A new 007 field was added and one 007 field was replaced."
+  ElseIf Added% = 1 And Replaced% > 1 Then
+    ConcludingMessage$ = "A new 007 field was added and " & Trim$( Str$( Replaced% ) ) & " 007 fields were replaced."
+  ElseIf Added% > 1 And Replaced% > 1 Then
+    ConcludingMessage$ = "New 007 fields were added and " & Trim$( Str$( Replaced% ) ) & " 007 fields were replaced."
+End If
+
+MsgBox ConcludingMessage$, INFORMATION_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' The place where all the action happens.
+
+Const CONTROL_CHANGE  As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const DISABLED        As Integer = 0   'The value to make a dialog box control disabled.
+Const ENABLED         As Integer = 1   'The value to make a dialog box control enabled.
+Const INITIALIZE      As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE       As Integer = 0   'The value to make a dialog box control invisible.
+Const KEEP_DLG_OPEN   As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+Const VISIBLE         As Integer = 1   'The value to make a dialog box control visible.
+Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+' Display of the "Prev" and "Next" buttons depends on how many sound recording 007 fields
+' there are. If a new field is in the process of being added, indicate that by showing
+' "new" after the number of the field. Such a field will always be the last one in the
+' group of 007 fields.
+
+AddNew:
+
+    If SR007Count% < 2 Then
+        DlgVisible "FieldManager", INVISIBLE
+        DlgVisible "Next",         INVISIBLE
+        DlgVisible "Prev",         INVISIBLE
+      Else
+        DlgVisible "FieldManager", VISIBLE
+        If SR007Instance% = NewField% Then
+            DlgText    "FieldManager", "Field " & Trim$( Str$( SR007Instance% ) ) & " (new) of " & Trim$( Str$( SR007Count% ) ) & " shown."
+          Else
+            DlgText    "FieldManager", "Field " & Trim$( Str$( SR007Instance% ) ) & " of " & Trim$( Str$( SR007Count% ) ) & " shown."
+        End If
+        DlgVisible "Next",         VISIBLE
+        DlgVisible "Prev",         VISIBLE
+        If SR007Instance% = 1 Then
+            DlgEnable  "Next",         ENABLED
+            DlgEnable  "Prev",         DISABLED
+          ElseIf SR007Instance% = SR007Count% Then
+            DlgEnable  "Next",         DISABLED
+            DlgEnable  "Prev",         ENABLED
+          Else
+            DlgEnable  "Next",         ENABLED
+            DlgEnable  "Prev",         ENABLED
+        End If
+    End If
+
+' If there are no 007 sound recording fields, hide the "Add new field" button, because
+' the macro is adding a new field anyway. Or, if the "New" button has just been clicked,
+' hide it because the field it is going to add is being edited. But if an existing 007
+' field is being displayed for editing, then the option to add a new field via the "New"
+' button must be available.
+
+    If FieldStorage( SR007Count% - 1 ).Changed = ADD Then
+        DlgVisible "New",          INVISIBLE
+      Else
+        DlgEnable  "New",          VISIBLE
+    End If
+
+' When the macro opens, the first 007 field (whether it's being added, or it already
+' exists) is always displayed. If a new field (in addition to any existing fields) is
+' being added, it's the last in the group, and is the one shown.
+
+    If NewField% = 0 Then
+        Call SetListValues( 0 )
+      Else
+        Call SetListValues( SR007Count% - 1 )
+    End If
+
+' If an existing 007 field lacks mandatory subfields, display in the dialog box the
+' warning message and the asterisks to highlight the mandatory subfields.
+
+    If Missing = TRUE Then
+        DlgVisible "Mandatory",    VISIBLE
+        DlgVisible "Man1",         VISIBLE
+        DlgVisible "Man2",         VISIBLE
+        DlgVisible "Man3",         VISIBLE
+        DlgVisible "Man4",         VISIBLE
+      Else
+        DlgVisible "Mandatory",    INVISIBLE
+        DlgVisible "Man1",         INVISIBLE
+        DlgVisible "Man2",         INVISIBLE
+        DlgVisible "Man3",         INVISIBLE
+        DlgVisible "Man4",         INVISIBLE
+    End If
+
+    Case CONTROL_CHANGE
+
+      Select Case Id$
+
+' If a new field is to be added, enlarge the array. Set the flag to show that the field
+' is a new one to be added. Increment the 007 field count so it gets added after any
+' existing 007 fields. Make this new field the one to display in the dialog box, and
+' populate it with the default values.
+
+        Case "New"
+          ReDim Preserve FieldStorage( SR007Count% )
+          FieldStorage( SR007Count% ).Changed = ADD
+          FieldStorage( SR007Count% ).FieldOccurrence = FieldStorage( SR007Count% - 1 ).FieldOccurrence + 1
+          Call SetDefaults( SR007Count% )
+          Call SetListValues( SR007Count% )
+          SR007Count%            = SR007Count% + 1
+          SR007Instance%         = SR007Count%
+          DlgEnable  "New",          DISABLED
+          NewField%              = SR007Instance%
+          Dialog1ControlFunction = KEEP_DLG_OPEN
+          GoTo AddNew:
+
+' The Next and Prev buttons navigate through multiple 007 fields.
+
+        Case "Next", "Prev"
+          If Id$ = "Next" Then
+              SR007Instance% = SR007Instance% + 1
+              DlgEnable  "Prev",         ENABLED
+              If SR007Instance% = SR007Count% Then
+                  DlgEnable  "Next",         DISABLED
+              End If
+            Else
+              SR007Instance% = SR007Instance% - 1
+              DlgEnable  "Next",         ENABLED
+              If SR007Instance% = 1 Then
+                  DlgEnable  "Prev",         DISABLED
+              End If
+          End If
+
+' Indicate if a field is being newly added by adding the word "new" after its occurrence.
+' A newly added field always appears following the existing fields.
+
+          If SR007Instance% = NewField% Then
+              DlgText    "FieldManager", "Field " & Trim$( Str$( SR007Instance% ) ) & " (new) of " & Trim$( Str$( SR007Count% ) ) & " shown."
+            Else
+              DlgText    "FieldManager", "Field " & Trim$( Str$( SR007Instance% ) ) & " of " & Trim$( Str$( SR007Count% ) ) & " shown."
+          End If
+          Call SetListValues( SR007Instance% - 1 )
+          Dialog1ControlFunction = KEEP_DLG_OPEN
+
+' If some mandatory subfields have no values selected when the OK button is clicked, a
+' warning must show and the dialog box stay open to accept a fix.
+
+        Case "OK"
+          If DlgText( "B" ) = BLANK Or DlgText( "D" ) = BLANK Or DlgText( "E" ) = BLANK Or DlgText( "G" ) = BLANK Then
+              MsgBox "One or more mandatory subfields requires appropriate codes! Please select appropriate values to add to those subfields.", WARNING_MESSAGE, WaltsMacros$
+              Dialog1ControlFunction = KEEP_DLG_OPEN
+          End If
+
+' If the "Cancel" button was clicked but changes have been recorded, confirm that the
+' intent is to quit the macro.
+
+        Case "Cancel"
+          If Changed Then
+              If MsgBox( "Do you want to abandon your changes and stop the macro?", WARNING_QUERY + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
+                  DlgEnd     0
+                Else
+                  Dialog1ControlFunction = KEEP_DLG_OPEN
+              End If
+          End If
+
+' When a value in a list box changes, update the Contents array, and set the flag to mark
+' that a change was made.
+
+        Case "B"
+          FieldStorage( SR007Instance% - 1 ).SMD = Left$( Subfield_B( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "D"
+          FieldStorage( SR007Instance% - 1 ).Speed = Left$( Subfield_D( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "E"
+          FieldStorage( SR007Instance% - 1 ).PlaybackChannels = Left$( Subfield_E( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "F"
+          FieldStorage( SR007Instance% - 1 ).Groove = Left$( Subfield_F( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "G"
+          FieldStorage( SR007Instance% - 1 ).Dimensions = Left$( Subfield_G( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "H"
+          FieldStorage( SR007Instance% - 1 ).TapeWidth = Left$( Subfield_H( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "I"
+          FieldStorage( SR007Instance% - 1 ).TapeConfiguration = Left$( Subfield_I( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "J"
+          FieldStorage( SR007Instance% - 1 ).KindOfObject = Left$( Subfield_J( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "K"
+          FieldStorage( SR007Instance% - 1 ).KindOfMaterial = Left$( Subfield_K( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "L"
+          FieldStorage( SR007Instance% - 1 ).KindOfCutting = Left$( Subfield_L( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "M"
+          FieldStorage( SR007Instance% - 1 ).PlaybackCharacteristics = Left$( Subfield_M( SVal& ), 1 )
+          Changed = TRUE
+
+        Case "N"
+          FieldStorage( SR007Instance% - 1 ).CaptureAndStorage = Left$( Subfield_N( SVal& ), 1 )
+          Changed = TRUE
+
+      End Select
+
+      If Changed Then
+          If FieldStorage( SR007Instance% - 1 ).Changed = UNCHANGED Then
+              FieldStorage( SR007Instance% - 1 ).Changed = REPLACE
+          End If
+      End If
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function ListSelection( Which007%, WhichField$ ) As Integer
+
+' This function, given a specific 007 field and the field of the "FieldContents"
+' variable, returns the index number of the selected code in the array for the
+' appropriate subfield. It does this by finding the code in that variable and comparing
+' it to the possible values in the array. When it finds a match, that index number is the
+' return value of the function.
+
+Dim Code$
+
+Dim i As Integer
+
+Select Case WhichField$
+
+  Case "SMD"
+    Code$ = FieldStorage( Which007% ).SMD
+    For i = 0 To 11
+      If Code$ = Left$( Subfield_B( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "Speed"
+    Code$ = FieldStorage( Which007% ).Speed
+    For i = 0 To 16
+      If Code$ = Left$( Subfield_D( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "PlaybackChannels"
+    Code$ = FieldStorage( Which007% ).PlaybackChannels
+    For i = 0 To 5
+      If Code$ = Left$( Subfield_E( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "Groove"
+    Code$ = FieldStorage( Which007% ).Groove
+    For i = 0 To 5
+      If Code$ = Left$( Subfield_F( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "Dimensions"
+    Code$ = FieldStorage( Which007% ).Dimensions
+    For i = 0 To 13
+      If Code$ = Left$( Subfield_G( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "TapeWidth"
+    Code$ = FieldStorage( Which007% ).TapeWidth
+    For i = 0 To 7
+      If Code$ = Left$( Subfield_H( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "TapeConfiguration"
+    Code$ = FieldStorage( Which007% ).TapeConfiguration
+    For i = 0 To 9
+      If Code$ = Left$( Subfield_I( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "KindOfObject"
+    Code$ = FieldStorage( Which007% ).KindOfObject
+    For i = 0 To 11
+      If Code$ = Left$( Subfield_J( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "KindOfMaterial"
+    Code$ = FieldStorage( Which007% ).KindOfMaterial
+    For i = 0 To 13
+      If Code$ = Left$( Subfield_K( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "KindOfCutting"
+    Code$ = FieldStorage( Which007% ).KindOfCutting
+    For i = 0 To 4
+      If Code$ = Left$( Subfield_L( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "PlaybackCharacteristics"
+    Code$ = FieldStorage( Which007% ).PlaybackCharacteristics
+    For i = 0 To 11
+      If Code$ = Left$( Subfield_M( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+  Case "CaptureAndStorage"
+    Code$ = FieldStorage( Which007% ).CaptureAndStorage
+    For i = 0 To 6
+      If Code$ = Left$( Subfield_N( i ), 1 ) Then
+          ListSelection = i
+          Exit Function
+      End If
+    Next i
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Sub SetDefinitions
+
+' This sub fills the arrays presented by the dialog box as the available options for each
+' subfield. A space, or blank, appears as the first element in some arrays and as the
+' last in others. In optional subfields, it signals no attempt to code; a blank subfield
+' will simply not appear in the final, formatted field. It can be the first element of an
+' array because it is valid, and sometimes an appropriate choice. On the other hand, for
+' mandatory subfields, the space is the last element of the array. Because it is not a
+' valid option, its placement below all the other values may mean it is less likely to be
+' selected by accident.
+
+Subfield_B( 0 )  = "d - Sound disc"
+Subfield_B( 1 )  = "e - Cylinder"
+Subfield_B( 2 )  = "g - Sound cartridge"
+Subfield_B( 3 )  = "i - Sound-track film"
+Subfield_B( 4 )  = "q - Roll"
+Subfield_B( 5 )  = "s - Sound cassette"
+Subfield_B( 6 )  = "t - Sound-tape reel"
+Subfield_B( 7 )  = "u - Unspecified"
+Subfield_B( 8 )  = "w - Wire recording"
+Subfield_B( 9 )  = "z - Other"
+Subfield_B( 10 ) = Chr$( 127 ) & " - No attempt made to code"
+Subfield_B( 11 ) = BLANK
+
+Subfield_D( 0 )  = "a - 16 rpm [analog disc]"
+Subfield_D( 1 )  = "b - 33-1/3 rpm [analog disc]"
+Subfield_D( 2 )  = "c - 45 rpm [analog disc]"
+Subfield_D( 3 )  = "d - 78 rpm [analog disc]"
+Subfield_D( 4 )  = "e - 8 rpm [analog disc]"
+Subfield_D( 5 )  = "f - 1.4 m. per second [compact disc]"
+Subfield_D( 6 )  = "h - 120 rpm [cylinders]"
+Subfield_D( 7 )  = "i - 160 rpm [cylinders]"
+Subfield_D( 8 )  = "k - 15/16 ips [tapes]"
+Subfield_D( 9 )  = "l - 1-7/8 ips [tapes]"
+Subfield_D( 10 ) = "m - 3-3/4 ips [tapes]"
+Subfield_D( 11 ) = "o - 7-1/2 ips [tapes]"
+Subfield_D( 12 ) = "p - 15 ips [tapes]"
+Subfield_D( 13 ) = "r - 30 ips [tapes]"
+Subfield_D( 14 ) = "u - Unknown"
+Subfield_D( 15 ) = "z - Other"
+Subfield_D( 16 ) = BLANK
+
+Subfield_E( 0 )  = "m - Monaural"
+Subfield_E( 1 )  = "q - Quadraphonic, multichannel, or surround"
+Subfield_E( 2 )  = "s - Stereophonic"
+Subfield_E( 3 )  = "u - Unknown"
+Subfield_E( 4 )  = "z - Other"
+Subfield_E( 5 )  = BLANK
+
+Subfield_F( 0 )  = BLANK
+Subfield_F( 1 )  = "m - Microgroove/fine"
+Subfield_F( 2 )  = "n - Not applicable"
+Subfield_F( 3 )  = "s - Coarse/standard"
+Subfield_F( 4 )  = "u - Unknown"
+Subfield_F( 5 )  = "z - Other"
+
+Subfield_G( 0 )  = "a - 3 in."
+Subfield_G( 1 )  = "b - 5 in."
+Subfield_G( 2 )  = "c - 7 in."
+Subfield_G( 3 )  = "d - 10 in."
+Subfield_G( 4 )  = "e - 12 in."
+Subfield_G( 5 )  = "f - 16 in."
+Subfield_G( 6 )  = "g - 4-3/4 in. ( 12 cm )"
+Subfield_G( 7 )  = "j - 3-7/8 x 2-1/2 in. [cassette]"
+Subfield_G( 8 )  = "o - 5-1/4 x 3-7/8 in. [cartridge]"
+Subfield_G( 9 )  = "s - 2-3/4 x 4 in. [cylinder]"
+Subfield_G( 10 ) = "n - Not applicable"
+Subfield_G( 11 ) = "u - Unknown"
+Subfield_G( 12 ) = "z - Other"
+Subfield_G( 13 ) = BLANK
+
+Subfield_H( 0 )  = BLANK
+Subfield_H( 1 )  = "l - 1/8 in."
+Subfield_H( 2 )  = "m - 1/4 in."
+Subfield_H( 3 )  = "n - Not applicable"
+Subfield_H( 4 )  = "o - 1/2 in."
+Subfield_H( 5 )  = "p - 1 in."
+Subfield_H( 6 )  = "u - Unknown"
+Subfield_H( 7 )  = "z - Other"
+
+Subfield_I( 0 )  = BLANK
+Subfield_I( 1 )  = "a - Full ( 1 ) track"
+Subfield_I( 2 )  = "b - Half ( 2 ) track"
+Subfield_I( 3 )  = "c - Quarter ( 4 ) track"
+Subfield_I( 4 )  = "d - 8 track"
+Subfield_I( 5 )  = "e - 12 track"
+Subfield_I( 6 )  = "f - 16 track"
+Subfield_I( 7 )  = "n - Not applicable"
+Subfield_I( 8 )  = "u - Unknown"
+Subfield_I( 9 )  = "z - Other"
+
+Subfield_J( 0 )  = BLANK
+Subfield_J( 1 )  = "a - Master tape"
+Subfield_J( 2 )  = "b - Tape duplication master"
+Subfield_J( 3 )  = "d - Disc master (negative)"
+Subfield_J( 4 )  = "i - Instantaneous (recorded on the spot)"
+Subfield_J( 5 )  = "m - Mass produced"
+Subfield_J( 6 )  = "n - Not applicable"
+Subfield_J( 7 )  = "r - Mother (positive)"
+Subfield_J( 8 )  = "s - Stamper (negative)"
+Subfield_J( 9 )  = "t - Test pressing"
+Subfield_J( 10 ) = "u - Unknown"
+Subfield_J( 11 ) = "z - Other"
+
+Subfield_K( 0 )  = BLANK
+Subfield_K( 1 )  = "a - Lacquer coating"
+Subfield_K( 2 )  = "b - Cellulose nitrate"
+Subfield_K( 3 )  = "c - Acetate tape with ferrous oxide"
+Subfield_K( 4 )  = "g - Glass with lacquer"
+Subfield_K( 5 )  = "i - Aluminum with lacquer"
+Subfield_K( 6 )  = "l - Metal"
+Subfield_K( 7 )  = "m - Plastic with metal"
+Subfield_K( 8 )  = "p - Plastic"
+Subfield_K( 9 )  = "r - Paper with lacquer or ferrous oxide"
+Subfield_K( 10 ) = "s - Shellac"
+Subfield_K( 11 ) = "u - Unknown"
+Subfield_K( 12 ) = "w - Wax"
+Subfield_K( 13 ) = "z - Other"
+
+Subfield_L( 0 )  = BLANK
+Subfield_L( 1 )  = "h - Hill-and-dale cutting"
+Subfield_L( 2 )  = "l - Lateral or combined cutting"
+Subfield_L( 3 )  = "n - Not applicable"
+Subfield_L( 4 )  = "u - Unknown"
+
+Subfield_M( 0 )  = BLANK
+Subfield_M( 1 )  = "a - NAB standard"
+Subfield_M( 2 )  = "b - CCIR standard"
+Subfield_M( 3 )  = "c - Dolby-B encoded"
+Subfield_M( 4 )  = "d - dbx encoded"
+Subfield_M( 5 )  = "e - Digital recording"
+Subfield_M( 6 )  = "f - Dolby-A encoded"
+Subfield_M( 7 )  = "g - Dolby-C encoded"
+Subfield_M( 8 )  = "h - CX encoded"
+Subfield_M( 9 )  = "n - Not applicable"
+Subfield_M( 10 ) = "u - Unknown"
+Subfield_M( 11 ) = "z - Other"
+
+Subfield_N( 0 )  = BLANK
+Subfield_N( 1 )  = "a - Acoustical capture, direct storage"
+Subfield_N( 2 )  = "b - Direct storage, not acoustical"
+Subfield_N( 3 )  = "d - Digital storage"
+Subfield_N( 4 )  = "e - Analog electrical storage"
+Subfield_N( 5 )  = "u - Unknown"
+Subfield_N( 6 )  = "z - Other"
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetListValues( Which007% )
+
+' This sub sets the selection values of the lists in the dialog box (that is, which
+' entry in the list should be displayed in the drop-down box).
+
+DlgValue "B", ListSelection( Which007%, "SMD" )
+DlgValue "D", ListSelection( Which007%, "Speed" )
+DlgValue "E", ListSelection( Which007%, "PlaybackChannels" )
+DlgValue "F", ListSelection( Which007%, "Groove" )
+DlgValue "G", ListSelection( Which007%, "Dimensions" )
+DlgValue "H", ListSelection( Which007%, "TapeWidth" )
+DlgValue "I", ListSelection( Which007%, "TapeConfiguration" )
+DlgValue "J", ListSelection( Which007%, "KindOfObject" )
+DlgValue "K", ListSelection( Which007%, "KindOfMaterial" )
+DlgValue "L", ListSelection( Which007%, "KindOfCutting" )
+DlgValue "M", ListSelection( Which007%, "PlaybackCharacteristics" )
+DlgValue "N", ListSelection( Which007%, "CaptureAndStorage" )
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetDefaults( Which007% )
+
+' These are the default codes when a new 007 field is to be added. They are for compact
+' discs; change them as appropriate for other formats, or for more suitable values.
+
+FieldStorage( Which007% ).SMD                     = "d"    'MANDATORY
+FieldStorage( Which007% ).Speed                   = "f"    'MANDATORY
+FieldStorage( Which007% ).PlaybackChannels        = "u"    'MANDATORY
+FieldStorage( Which007% ).Groove                  = "n"    'OPTIONAL
+FieldStorage( Which007% ).Dimensions              = "g"    'MANDATORY
+FieldStorage( Which007% ).TapeWidth               = "n"    'REQUIRED IF APPLICABLE
+FieldStorage( Which007% ).TapeConfiguration       = "n"    'REQUIRED IF APPLICABLE
+FieldStorage( Which007% ).KindOfObject            = BLANK  'OPTIONAL
+FieldStorage( Which007% ).KindOfMaterial          = BLANK  'OPTIONAL
+FieldStorage( Which007% ).KindOfCutting           = BLANK  'OPTIONAL
+FieldStorage( Which007% ).PlaybackCharacteristics = "e"    'OPTIONAL
+FieldStorage( Which007% ).CaptureAndStorage       = "d"    'OPTIONAL
+
+End Sub
+'102942204
+'
+'Macro name: Show007SoundRecs
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
+'Saved: 6/28/2017 11:34:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,538 @@
+'MacroName:ChangeCase.2015.01
+'MacroDescription:Changes the case of selected text within a field or of an entire field.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 30 April 2015.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic record to change the case of selected
+' text in a field, or, if nothing is selected, all the text in a field. A contents field
+' will have the case of only its titles changed. Text containing non-latin script will
+' cause the macro to stop gracefully.
+'
+' These are the options presented:
+'
+'   lowercase:     all letters are made lowercase.
+'
+'   UPPERCASE:     ALL LETTERS ARE MADE UPPERCASE.
+'
+'   Sentence case: The first letter found, and any letter that follows a period (full
+'                  stop) and a space, is capitalized. If the selected text or the field
+'                  is a single sentence, nothing is changed.
+'
+'   Initial Capitals Case:
+'                  Every Letter That Follows A Space Is Capitalized. All Other Letters
+'                  Are Made Lowercase.
+'
+'   Title Case:    Every Letter That Follows a Space Is Capitalized, but, following the
+'                  Chicago Manual of Style, Articles, Coordinate Conjunctions, and
+'                  Prepositions Are Made Lowercase. The Whole List Is below Starting on
+'                  Line 305.
+'
+'   Contents case: All titles in a contents note (505) are made into sentence case. In an
+'                  enhanced contents note, a title is a text string contained in a
+'                  subfield $t; text contained in any other subfield retains its case. In
+'                  a non-enhanced contents note, a title is identified by ISBD punctuation
+'                  (see AACR2 1.1G3 and the LCRI)--so the macro won't work properly in
+'                  non-ISBD records. A title string may be text between a pair of
+'                  semicolons (actually, the prescribed punctuation of space-semicolon-
+'                  space); or text following a period (or full stop) and a space; or text
+'                  followed by a slash (i.e, a space-slash-space, denoting a statement of
+'                  responsibility; or text between a pair of dashes (a dash being a
+'                  space-hyphen-hyphen-space, " -- "). For each title, the first letter
+'                  is capitalized, and all other letters are made lowercase.
+'
+' Since some text may be converted that should not be (proper nouns, initials, acronyms,
+' etc.), this macro may actually produce more problems than it corrects.
+'
+' This macro works by applying the BASIC commands LCase and UCase to text strings.
+' However, while LCase works reliably with regard to diacritics and special characters,
+' UCase does not. For example, LCase correctly transforms the string "RÉPERTOIRE DU
+' THÉÂTRE CONTEMPORAIN DE LANGUE FRANÇAISE" into "répertoire du théâtre contemporain de
+' langue française." On the other hand, UCase transforms that lowercase string into
+' "REÂPERTOIRE DU THEÂAÃTRE CONTEMPORAIN DE LANGUE FRANCÐAISE." Thus, for the macro to
+' operate correctly, the UCase command must be applied to specific characters, not to a
+' whole string, which usually means repeating the command in a For or Do loop.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Binary
+
+Declare Function ChangeContents( ChangedCase$, Enhanced$ )
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global Legend$
+
+Global AllLowerCase
+Global AllUpperCase
+Global ContentsField
+
+'****************************************************************************************
+
+Sub Main
+
+Const CANCEL           As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
+Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                        ' a big "X") in a message box; used to report the macro quitting.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim ChangedCase$
+Dim CharT$
+Dim Enhanced$
+Dim FieldData$
+Dim Indicators$
+Dim LC%
+Dim Row%
+Dim SelectedText$
+Dim Start%
+Dim Tag$
+Dim UC%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras1:ChangeCase"
+Dim Window%
+Dim Word$
+Dim WorkString$
+
+Dim Delimiter                : Delimiter    = FALSE
+
+Dim i As Integer, p As Integer
+
+AllLowerCase = FALSE
+AllUpperCase = FALSE
+
+' First, make sure a bibliographic record is displayed.
+
+Window% = CS.ItemType
+Select Case Window%
+  Case -1, 3 To 16, 18, 20-36
+    MsgBox "This macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Continue by checking whether text has been selected. If there is no selection, then get
+' the whole field. For either situation, non-Latin scripts make the macro stop.
+
+If CS.GetSelectedText( SelectedText$ ) = FALSE Or CS.CursorColumn < 6 Then
+    Row% = CS.CursorRow
+    If CS.GetFieldLine( Row%, FieldData$ ) Then
+        If FieldData$ = "Data contains non-latin script" Then
+            MsgBox "Sorry, this macro only works in fields with only Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+
+' If the cursor is in a contents field, the button for converting to contents case will
+' have the focus in the dialog box.
+
+        Tag$ = Left$( FieldData$, 3 )
+        If Tag$ = "505" Then
+            ContentsField = TRUE
+          Else
+            ContentsField = FALSE
+        End If
+        WorkString$ = FieldData$
+        Legend$     = "field " & Tag$
+      Else
+        MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    If SelectedText$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro only works with Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+    WorkString$ = SelectedText$
+    Legend$     = "selected text"
+End If
+
+' The next step is to quickly check whether the text of the string is already all
+' uppercase or all lowercase, to enable or disable the corresponding buttons in the
+' dialog box.
+
+For i = 1 To Len( WorkString$ )
+  CharT$ = Mid$( WorkString$, i, 1 )
+  Select Case CharT$
+    Case "a" To "z"
+      If Delimiter = FALSE Then
+          LC% = 1
+          If UC% = 1 Then Exit For
+        Else
+          Delimiter = FALSE
+      End If
+    Case "A" To "Z"
+      UC% = 1
+      If LC% = 1 Then Exit For
+    Case Chr$( 223 )
+      Delimiter = TRUE
+  End Select
+Next i
+
+' If there are no letters at all, exit the macro.
+
+If LC% = 0 And UC% = 1 Then
+    AllUpperCase = TRUE
+  ElseIf UC% = 0 and LC% = 1 Then
+    AllLowerCase = TRUE
+  ElseIf UC% = 0 and LC% = 0 Then
+    MsgBox "Please select some text to change its case!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Run the dialog, with the choices being presented as buttons so pressing the hotkey will
+' instantly execute the change.
+
+Begin Dialog Dialog1Definition 320, 96, WaltsMacros$ & ".  ||  Change case of " & Legend$ & " to ...", .Dialog1ControlFunction
+  CancelButton  1,1,1,1
+  ButtonGroup .Choice
+   PushButton     0,   0, 160,  32, "&lowercase",                            .L
+   PushButton   160,   0, 160,  32, "&UPPERCASE",                            .U
+   PushButton     0,  32, 160,  32, "&Sentence case.",                       .S
+   PushButton   160,  32, 160,  32, "&Initial Caps (Every Word)",            .I
+   PushButton     0,  64, 160,  32, "&Title Case (Chicago Manual of Style)", .T
+   PushButton   160,  64, 160,  32, "&Contents case -- Contents case.",      .C
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = CANCEL Then Exit Sub
+
+Select Case Dialog1.Choice
+
+' Lowercase.
+
+  Case 0
+    ChangedCase$ = LCase$( WorkString$ )
+
+' Uppercase.
+
+  Case 1
+    If AllUpperCase = FALSE Then
+        For i = 1 To Len( WorkString$ )
+          CharT$ = Mid$( WorkString$, i, 1 )
+          If CharT$ Like "[a-z]" Then
+              Mid$( WorkString$, i, 1 ) = UCase$( CharT$ )
+          End If
+        Next i
+    End If
+
+' The extra step here is to return any subfield codes that have been changed to uppercase
+' back to lower. Connexion will convert them automatically on a reformat or validation,
+' but it's easier on the eye to have them correct immediately.
+
+    Start% = 1
+    Do
+      p = InStr( Start%, WorkString$, Chr$( 223 ) )
+      If p <> 0 Then
+          CharT$ = Mid$( WorkString$, p + 1, 1 )
+          If CharT$ Like "[A-Z]" Then
+              Mid$( WorkString$, p + 1, 1 ) = LCase$( CharT$ )
+          End If
+          Start% = p + 1
+      End If
+    Loop Until p = 0
+    ChangedCase$ = WorkString$
+
+' Sentence case.
+
+  Case 2
+    WorkString$ = LCase$( WorkString$ )
+    Start% = 1
+    Do
+      p = InStr( Start%, WorkString$, ". " )
+      If p > 0 And p < Len( WorkString$ ) - 1 Then
+          Mid$( WorkString$, p + 2, 1 ) = UCase$( Mid$( WorkString$, p + 2, 1 ) )
+      End If
+      Start% = p + 1
+    Loop Until p = 0
+    For i = 1 To Len( WorkString$ )
+      CharT$ = Mid$( WorkString$, i, 1 )
+      If CharT$ Like "[A-Z]" Then
+          Exit For
+        ElseIf CharT$ Like "[a-z]" Then
+          Mid$( WorkString$, i, 1 ) = UCase$( CharT$ )
+          Exit For
+      End If
+    Next i
+    ChangedCase$ = WorkString$
+
+' Intial capitals.
+
+  Case 3
+    WorkString$ = LCase$( WorkString$ )
+    Start%  = 1
+    Do
+      p = InStr( Start%, WorkString$, " " )
+      If p > 0 And p < Len( WorkString$ ) Then
+          If Mid$( WorkString$, p + 1, 1 ) Like "[a-z]" Then
+              Mid$( WorkString$, p + 1, 1 ) = UCase$( Mid$( WorkString$, p + 1, 1 ) )
+          End If
+        ElseIf p = 0 And Len( WorkString$) > 1 Then
+          For i = 1 To Len( WorkString$ )
+            CharT$ = Mid$( WorkString$, i, 1 )
+            If CharT$ Like "[A-Z]" Then
+                Exit For
+              ElseIf CharT$ Like "[a-z]" Then
+                Mid$( WorkString$, i, 1 ) = UCase$( CharT$ )
+                Exit For
+            End If
+          Next i
+      End If
+      Start% = p + 1
+    Loop Until p = 0
+    ChangedCase$ = WorkString$
+
+' Title case.
+
+  Case 4
+    WorkString$ = LCase$( WorkString$ )
+    Start% = 1
+    Do
+      p = InStr( Start%, WorkString$, " " )
+      If p > 0 And p < Len( WorkString$) Then
+          Word$ = Mid$( WorkString$, Start%, p - Start% )
+        ElseIf p = 0 And Start% > 1 Then
+          Word$ = Mid$( WorkString$, Start% )
+      End If
+      Select Case Word$
+        Case "a", "aboard", "about", "above", "absent", "across", "after", "against", _
+        "along", "alongside", "amid", "amidst", "among", "amongst", "an", "and", _
+        "around", "as", "aslant", "astride", "at", "atop", "barring", "before", _
+        "behind", "below", "beneath", "beside", "besides", "between", "beyond", "but", _
+        "by", "concerning", "considering", "despite", "down", "during", "except", _
+        "excepting", "excluding", "failing", "following", "for", "from", "in", _
+        "inside", "into", "like", "mid", "minus", "near", "next", "nor", _
+        "notwithstanding", "of", "off", "on", "onto", "opposite", "or", "outside", _
+        "over", "past", "per", "plus", "regarding", "round", "save", "since", "than", _
+        "the", "through", "throughout", "till", "times", "to", "toward", "towards", _
+        "under", "underneath", "unlike", "until", "up", "upon", "versus", "via", _
+        "with", "within", "without"
+        Case Else
+          Mid$( WorkString$, Start%, 1 ) = UCase$( Mid$( WorkString$, Start%, 1 ) )
+      End Select
+      Start% = p + 1
+    Loop Until p = 0
+    For i = 1 To Len( WorkString$ )
+      CharT$ = Mid$( WorkString$, i, 1 )
+      If CharT$ Like "[A-Z]" Then
+          Exit For
+        ElseIf CharT$ Like "[a-z]" Then
+          Mid$( WorkString$, i, 1 ) = UCase$( CharT$ )
+          Exit For
+      End If
+    Next i
+    ChangedCase$ = WorkString$
+
+' Contents case.
+
+  Case 5
+    Indicators$  = Mid$( WorkString$, 4, 2 )
+    Enhanced$    = Right$( Indicators$, 1 )
+    WorkString$  = Mid$( WorkString$, 6 )
+    ChangedCase$ = Tag$ & Indicators$ & ChangeContents( WorkString$, Enhanced$ )
+
+End Select
+
+If Left$( Legend$, 5 ) = "field" Then
+    If CS.SetFieldLine( Row%, ChangedCase$ ) = FALSE Then
+        MsgBox "Sorry, could not change case of " & Legend$ & ".", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+  Else
+    If CS.SetSelectedText( ChangedCase$ ) = FALSE Then
+        MsgBox "Sorry, could not change case of the selection.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function ChangeContents( SelectedText$, Enhanced$ )
+
+Dim BeginTitle%
+Dim ChrDash$                 : ChrDash$      = " -- "
+Dim ChrDelimiter$            : ChrDelimiter$ = Chr$( 223 )
+Dim ChrFullStop$             : ChrFullStop$  = ". "
+Dim ChrSemicolon$            : ChrSemicolon$ = " ; "
+Dim ChrSlash$                : ChrSlash$     = " / "
+Dim Start%
+Dim Start1%
+Dim Start2%
+Dim SubfCode$
+Dim Title$
+Dim TitleCount%              : TitleCount%   = 0
+Dim TitleString$
+
+Dim i As Integer, p As Integer
+
+Dim Beginn                   : Beginn        = FALSE
+
+Dim Titles() As String
+
+' First, break up the field at dashes, storing each string in an element of an array. If
+' there are no dashes, there is nothing to process, so exit the function.
+
+Do
+  p = InStr( SelectedText$, ChrDash$ )
+  If p <> 0 Then
+      ReDim Preserve Titles( TitleCount% )
+      Titles( TitleCount% ) = Left$( SelectedText$, p - 1 )
+      SelectedText$         = Mid$( SelectedText$, p + 4 )
+      TitleCount%           = TitleCount% + 1
+    Else
+      If Len( SelectedText$ ) > 1 Then
+          ReDim Preserve Titles( TitleCount% )
+          Titles( TitleCount% ) = SelectedText$
+      End If
+  End If
+Loop Until p = 0
+If TitleCount% = 0 Then
+    ChangeContents = SelectedText$
+    Exit Function
+End If
+
+' Process each title, or array element.
+
+For i = 0 To UBound( Titles )
+  Title$ = Trim$( Titles( i ) )
+  If Enhanced$ = "0" Then
+
+' If the contents note is enhanced, then only text contained in a subfield $t will be
+' changed.
+
+      Start1% = 1
+      Start2% = Start1%
+      Do
+        p = InStr( Start1%, Title$, ChrDelimiter$ )
+        If p <> 0 Then
+            SubfCode$ = Mid$( Title$, p + 1, 1 )
+            If p > 1 Then
+                 If Beginn = TRUE Then
+                    Title$  = Left$( Title$, Start2% + 2 ) & UCase$( Mid$( Title$, Start2% + 3, 1 ) ) & LCase$( Mid$( Title$, Start2% + 4, p - Start2% - 4 ) ) & Mid$( Title$, p )
+                    Beginn  = FALSE
+                    Start1% = p
+                    Start2% = Start1%
+                End If
+            End If
+            If SubfCode$ = "t" Then
+                If Beginn = FALSE Then
+                    Start2% = p
+                    Beginn  = TRUE
+                  Else
+                    Title$  = Left$( Title$, Start2% + 2 ) & UCase$( Mid$( Title$, Start2% + 3, 1 ) ) & LCase$( Mid$( Title$, Start2% + 4, p - Start2% - 4 ) ) & Mid$( Title$, p )
+                    Start2% = p + 2
+                    Beginn  = FALSE
+                End If
+              Else
+                If Beginn = TRUE Then
+                    Title$  = Left$( Title$, Start2% + 2 ) & UCase$( Mid$( Title$, Start2% + 3, 1 ) ) & LCase$( Mid$( Title$, Start2% + 4, p - Start2% - 4 ) ) & Mid$( Title$, p )
+                  Else
+                    Start2% = p + 2
+                End If
+            End If
+            Start1% = p + 2
+          Else
+            If Beginn = TRUE Then
+                Title$ = Left$( Title$, Start2% + 2 ) & UCase$( Mid$( Title$, Start2% + 3, 1 ) ) & LCase$( Mid$( Title$, Start2% + 4 ) )
+                Beginn = FALSE
+            End If
+        End If
+      Loop Until p = 0
+    Else
+
+' For a regular contents note, prescribed ISBD punctuation determines capitalization. Go
+' through the string and examine the characters preceding each space. A space preceded by
+' either a semi-colon or a full stop indicates the end of a title. The first letter of
+' that title (which is either at the beginning of the whole string or was identified
+' earlier) is capitalized. A space-slash-space not only indicates the end of a title, but
+' also puts an end to conversion of characters in the string (because the rest of the
+' string is probably composed of names, which may likely be in correct case anyway).
+
+      Start%      = 1
+      BeginTitle% = 1
+      Do
+        p = InStr( Start%, Title$, " " )
+        Select Case p
+          Case 0
+            If Len( Title$ ) > 1 Then
+                Mid$( Title$, BeginTitle%, 1 )  = UCase$( Mid$( Title$, BeginTitle%, 1 ) )
+                Mid$( Title$, BeginTitle% + 1 ) = LCase$( Mid$( Title$, BeginTitle% + 1 ) )
+              Else
+                If i < UBound( Titles$ ) Then' p = 1
+                    Exit Do
+                End If
+            End If
+          Case 1 To 2
+            Start% = p + 2
+          Case Else
+            Mid$( Title$, BeginTitle%, 1 ) = UCase$( Mid$( Title$, BeginTitle%, 1 ) )
+            Mid$( Title$, BeginTitle% + 1, p - BeginTitle% ) = LCase$( Mid$( Title$, BeginTitle% + 1, p - BeginTitle% ) )
+            If Mid$( Title$, p - 1, 2 )       = ChrFullStop$ Then
+                BeginTitle% = p + 1
+              ElseIf Mid$( Title$, p - 2, 3 ) = ChrSemicolon$ Then
+                BeginTitle% = p + 1
+              ElseIf Mid$( Title$, p - 2, 3 ) = ChrSlash$ Then
+                Exit Do
+            End If
+            Start% = p + 2
+        End Select
+      Loop Until p = 0
+  End If
+  Titles( i ) = Title$
+Next i
+
+TitleString$ = Titles( 0 )
+For i = 1 To UBound( Titles )
+  TitleString$ = TitleString$ & ChrDash$ & Titles( i )
+Next i
+
+ChangeContents = TitleString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const DISABLED       As Integer = 0   'The value to make a dialog box control disabled.
+Const INITIALIZE     As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE      As Integer = 0   'The value to make a dialog box control invisible.
+Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+
+Select Case Action%
+
+  Case INITIALIZE
+    DlgVisible "Cancel", INVISIBLE
+    If AllUpperCase Then
+        DlgEnable  "U",      DISABLED
+      ElseIf AllLowerCase Then
+        DlgEnable  "L",      DISABLED
+    End If
+    If ContentsField Then
+        DlgFocus   "C"
+      Else
+        DlgEnable  "C",      DISABLED
+    End If
+
+  Case CONTROL_CHANGE
+    If Id$ = "X" Then Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'56021762
+'
+'Macro name: ChangeCase
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
+'Saved: 6/28/2017 11:33:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.

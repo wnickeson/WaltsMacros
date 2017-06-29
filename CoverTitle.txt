@@ -1,0 +1,161 @@
+'MacroName:CoverTitle.2016.06
+'MacroDescription:Adds phrase "Title from cover" in a 588 field. Also converts the phrase
+' "Cover title" in a 500 field to the 588 form.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 28 December 2016.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro converts the note "Cover title." in a 500 field of a
+' bibliographic record for books to 588 "Title from cover.", or adds such a note if one
+' is lacking. Cursor position is irrelevant when running this macro.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                           ' a big "X") in a message box; used to report the macro quitting.
+Const DISPLAY_FF_AT_TOP   As Integer = 1   'The value to display the fixed field at the top of a record.
+Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim BLvl$
+Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
+Dim FieldData$
+Dim First5XX%
+Dim PosFF%
+Dim QUOTE     As String*1    : QUOTE         = Chr$( 034 )
+Dim RecType$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras1:CoverTitle"
+
+Dim ChangedFFView            : ChangedFFView = FALSE
+Dim Found5XX                 : Found5XX      = FALSE
+Dim FoundField
+Dim FoundNote                : FoundNote     = FALSE
+Dim GetFF
+Dim Success
+
+Dim i As Integer, p As Integer
+
+' First, make sure that a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro only works in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End Select
+
+' Then, make sure the language of the record is English.
+
+If CS.GetField( "040", 1, FieldData$ ) Then
+    p = InStr( FieldData$, DELIMITER & "b" )
+    If p <> 0 Then
+        If Mid$( FieldData$, p + 3, 3 ) <> "eng" Then
+            MsgBox "Sorry, this macro works only in English-language records.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+End If
+
+' Also check the record's Type and Bibliographic Level, as such a note is very unlikely
+' to be applicable for anything but books.
+
+'PosFF% = CS.FixedFieldPosition
+'If PosFF% <> DISPLAY_FF_AT_TOP Then
+'    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+'    ChangedFFView         = TRUE
+'End If
+'
+'GetFF = CS.GetFixedField( "BLvl", BLvl$ )
+'GetFF = CS.GetFixedField( "Type", RecType$ )
+'
+'If RecType$ <> "a" Or BLvl$ <> "m" Then
+'    MsgBox "Sorry, this macro only works on bibliographic records for books.", CRITICAL_MESSAGE, WaltsMacros$
+'    Exit Sub
+'End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' If the record is OK, run through all its fields looking for the phrase "Cover title."
+' If this phrase is found in a 500 field, replace it with the 588 note "Title from
+' cover." If the phrase is not found, add the field. If that note is already on the
+' record, do nothing.
+
+i = 1
+Do
+  FoundField = CS.GetFieldLine( i, FieldData$ )
+  If FoundField Then
+      If Left$( FieldData$, 1 ) = "5" Then
+          If Found5XX = FALSE Then
+              Found5XX  = TRUE
+              First5XX% = i
+          End If
+          If FieldData$ = "500  Cover title." Or FieldData$ = "500  Cover-title." Or FieldData$ = "500  Title from cover." Then
+              If CS.SetFieldLine( i, "588  Title from cover." ) Then
+                  MsgBox QUOTE & "Title from cover" & QUOTE & " note changed.", INFORMATION_MESSAGE, WaltsMacros$
+                Else
+                  MsgBox "Sorry, could not change " & QUOTE & "Title from cover" & QUOTE & " note.", CRITICAL_MESSAGE, WaltsMacros$
+              End If
+              Exit Sub
+            Else
+              If Left$( FieldData$, 15 ) = "500  Title from" Then
+              If CS.SetFieldLine( i, "588" & Mid$( FieldData$, 4 ) ) Then
+                  MsgBox QUOTE & "Title from" & QUOTE & " note changed.", INFORMATION_MESSAGE, WaltsMacros$
+                Else
+                  MsgBox "Sorry, could not change " & QUOTE & "Title from" & QUOTE & " note.", CRITICAL_MESSAGE, WaltsMacros$
+              End If
+              Exit Sub
+              End If
+          End If
+      End If
+  End If
+  i = i + 1
+Loop Until FoundField = FALSE
+
+If FoundNote = FALSE Then
+    If First5XX% = 0 Then
+        If CS.AddField( 1, "588  Title from cover." ) Then
+            Success = TRUE
+          Else
+            Success = FALSE
+        End If
+      Else
+        If CS.AddFieldLine( First5XX%, "588  Title from cover." ) Then
+            Success = TRUE
+          Else
+            Success = FALSE
+        End If
+    End If
+End If
+
+If Success Then
+    MsgBox QUOTE & "Title from cover" & QUOTE & " note added.", INFORMATION_MESSAGE, WaltsMacros$
+  Else
+    MsgBox "Sorry, could not add " & QUOTE & "Title from cover" & QUOTE & " note.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'1837738
+'
+'Macro name: CoverTitle
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
+'Saved: 6/28/2017 11:33:38 AM using "MacroBookInspector" macro by Walter F. Nickeson.
