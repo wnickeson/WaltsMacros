@@ -8,3 +8,4 @@ The four macrobook files are: Essentials.mbk, Extras1.mbk, Extras2.mbk, and Macr
 
 Read a .txt file to see the macro code. Look for the "How it works" section near the top for complete information on how to use the macro and its features.
 
+Check back often for updates, enhancements, bug corrections, and new macros!
