@@ -1,4 +1,4 @@
-'MacroName:MacroBookInspector.2016.04
+'MacroName:MacroBookInspector.2017.01
 'MacroDescription:Lists the macros in a macro book, along with their descriptions and
 ' other information. Save the list, or the text of an individual macro, to a text file.
 '
@@ -11,11 +11,12 @@
 ' in the functionality of this macro with his earlier "MbkTool" macro, although all
 ' responsibility for this macro is mine alone. Microsoft's specification for its Compound
 ' File Binary File Format, version v20160714, was retrieved from
-' <https://msdn.microsoft.com/en-us/library/dd942138.aspx> on 8 August 2016.
+' <https://winprotocoldoc.blob.core.windows.net/productionwindowsarchives/MS-CFB/[MS-CFB].pdf>
+' on 1 July 2017.
 '
-' Last updated: 12 August 2016.
+' Last updated: 1 July 2017.
 ' Check for the latest versions of this and my other macros at
-' http://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
@@ -30,7 +31,7 @@
 ' user tool number assigned to it. Its first 25 lines or 1K of source code can be
 ' displayed separately. The list of macro books and the list of macros in the selected
 ' macro book can be saved as tab-delimited text files. The text of the selected macro may
-' also be saved as a text file. The default save location can be set below on line 292.
+' also be saved as a text file. The default save location can be set below on line 295.
 ' The simple list of macros is placed on the Windows clipboard.
 '
 ' Some simple error checking is done as this macro gathers information: If the length of
@@ -2603,8 +2604,8 @@ Select Case Action%
 End Select
 
 End Function
-'2610116251
+'2633116254
 '
 'Macro name: MacroBookInspector
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 6/28/2017 11:37:30 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 7/5/2017 9:33:45 AM using "MacroBookInspector" macro by Walter F. Nickeson.

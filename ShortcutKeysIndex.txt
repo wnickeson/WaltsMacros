@@ -1,11 +1,11 @@
-'MacroName:ShortcutKeysIndex.2017.39
+'MacroName:ShortcutKeysIndex.2017.42
 'MacroDescription:Lists all shortcuts that use the selected key.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 28 June 2017.
+' Last updated: 3 July 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -60,8 +60,9 @@ Declare Function UnicodeConvert( InString$ ) As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Global Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
-                                               ' a big "X") in a message box; used to report the macro quitting.
+Global Const APP_ASSIGNED_COUNT As Integer = 172
+Global Const CRITICAL_MESSAGE   As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                                 ' a big "X") in a message box; used to report the macro quitting.
 
 Global Const aACTION   As Integer = 2
 Global Const aCATEGORY As Integer = 0
@@ -79,7 +80,6 @@ Global XMLSuffix$
 Global Success
 
 Global AlphaNums     ( 36 )     As String
-Global AppAssigned   ( 2, 172 ) As String
 Global Category      ( 4 )      As String
 Global Characters    ( 1, 102 ) As String
 Global Functions     ( 12 )     As String
@@ -89,20 +89,26 @@ Global NumPadDisplay ( 28 )     As String
 Global NumPadOCLC    ( 28 )     As String
 Global OthersDisplay ( 31 )     As String
 Global OthersOCLC    ( 31 )     As String
-Global Shortcuts     ()         As String
+
+Global AppAssigned   ( 2, APP_ASSIGNED_COUNT ) As String
+Global UserAssigned  ()                        As String
 
 '****************************************************************************************
 
 Sub Main
 
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'Maximum number of reads of environment strings to try.
+Const MAX_ATTEMPTS_ENVIRON As Integer = 128    'Maximum number of reads of environment strings to try.
+Const MAX_FILE_SIZE        As Integer = 32000  'Maximum size in bytes of a file this macro can handle.
+Const MIN_FILE_SIZE        As Integer = 40     'Minimum size in bytes of a .keymap file. (This is the size of the default file
+                                               ' created by the Client if it doesn't find a keymap file in the profile.)
 
 Dim AppData$
 Dim CompletePath$
 Dim EnvironmentString$
+Dim FailMessage$
 Dim KeymapFile$
-Dim KeymapFilesPath$
 Dim KeymapFileLength%
+Dim KeymapFilesPath$
 
 Dim i As Integer, p As Integer, q As Integer, x As Integer
 
@@ -151,8 +157,11 @@ KeymapFile$ = Dir( KeymapFilesPath$ )
 
 Do While KeymapFile$ <> ""
   KeymapFileLength% = FileLen( MyProfilePath$ & KeymapFile$ )
-  If KeymapFileLength% > 32000 Then GoTo FileFailure:
-  If KeymapFile$ <> "AppExclusions.Keymap.xml" And KeymapFileLength% > 22 Then
+  If KeymapFileLength% > MAX_FILE_SIZE Then
+      FailMessage$ = "Sorry, the keymap file is larger than this macro can handle."
+      GoTo FileFailure:
+  End If
+  If KeymapFile$ <> "AppExclusions.Keymap.xml" And KeymapFileLength% > MIN_FILE_SIZE Then
       ReDim Preserve KeymapFiles( FileCounter% )
       p                           = InStr( KeymapFile$, XMLSuffix$ )
       KeymapFile$                 = Left$( KeymapFile$, p - 1 )
@@ -167,7 +176,10 @@ Loop
 
 ' No valid files found: Exit the macro.
 
-If FileCounter% = 0 Then GoTo FileFailure:
+If FileCounter% = 0 Then
+    FailMessage$ = "There are no keymap files for this profile!"
+    GoTo FileFailure:
+End If
 
 ' If there is a Custom.Keymap file, send that to the sub for extraction of shortcuts;
 ' otherwise, send the first file in the list.
@@ -240,7 +252,7 @@ Exit Sub
 
 FileFailure:
 
-MsgBox "Sorry, could not find the keymap file.", CRITICAL_MESSAGE, WaltsMacros$
+MsgBox FailMessage$, CRITICAL_MESSAGE, WaltsMacros$
 
 End Sub
 
@@ -683,6 +695,8 @@ End Sub
 
 Sub GetShortcutsFromFile( FileName$ )
 
+' This sub gets the user-defined shortcuts from each .keymap file in the user's profile.
+
 Const LENGTH_INPUT_STRING  As Integer = 32000  'The constant for the maximum string size in this macro is based on an OML memory
                                                ' limit, even though OML can handle a string length of up to 32,767 bytes.
 Const NORMAL_FILE          As Integer = 0      'Attribute of a normal file.
@@ -732,7 +746,7 @@ If Left$( FileString, 18 ) <> CheckStringBegin$ Then GoTo ReadFailure:
 ' text by means of the function "UnicodeConvert." Within the line, the very first word is
 ' the category of shortcut. Then the words "Key" and "Value" locate the other two pieces
 ' of information--the assigned key, and the name of the action. The three bits of
-' extracted information are stored in the array "Shortcuts." Manipulation of that
+' extracted information are stored in the array "UserAssigned." Manipulation of that
 ' information for display happens while the dialog box is running.
 
 Start% = 15
@@ -742,16 +756,16 @@ Do
       q = InStr( p + 10, FileString, "/" & NullChar$ & ">" )
       If q > 0 Then
           TempString$ = Trim$( UnicodeConvert( Mid$( FileString, p + 1, q - p - 5 ) ) )
-          ReDim Preserve Shortcuts( 2, CountOfShortcuts% )
+          ReDim Preserve UserAssigned( 2, CountOfShortcuts% )
           x = InStr( TempString$, "Key" )
           If x > 0 Then
-              Shortcuts( 0, CountOfShortcuts% ) = Trim$( Left$( TempString$, x - 1 ) )
+              UserAssigned( 0, CountOfShortcuts% ) = Trim$( Left$( TempString$, x - 1 ) )
               TempString$ = Trim$( Mid$( TempString$, x + 5 ) )
           End If
           x = InStr( TempString$, "Value=" )
           If x > 0 Then
-              Shortcuts( 1, CountOfShortcuts% ) = Trim$( Left$( TempString$, x - 3 ) )
-              Shortcuts( 2, CountOfShortcuts% ) = Mid$( TempString$, x + 7 )
+              UserAssigned( 1, CountOfShortcuts% ) = Trim$( Left$( TempString$, x - 3 ) )
+              UserAssigned( 2, CountOfShortcuts% ) = Mid$( TempString$, x + 7 )
           End If
           CountOfShortcuts% = CountOfShortcuts% + 1
         Else
@@ -850,13 +864,13 @@ Dim KeyString$
 Dim LenTestString%
 Dim MatchType$
 Dim NumberCopied$
-Dim QUOTE As String*1        : QUOTE = Chr$( 034 )
+Dim QUOTE As String*1        : QUOTE          = Chr$( 034 )
 Dim TempString$
 Dim TestString$
-Dim UBShortcuts%
+Static UBArray%
 Dim ValString$
 
-Dim KeyAlreadyUsed           : KeyAlreadyUsed  = FALSE
+Dim KeyAlreadyUsed           : KeyAlreadyUsed = FALSE
 
 Dim i As Integer, j As Integer, p As Integer, x As Integer
 
@@ -890,13 +904,14 @@ Recycle:
             End If
         End If
     End If
-    DlgText         "ShortcutCount",        Trim$( Str$( UBound( Shortcuts, 2 ) + 174 ) ) & " shortcuts assigned."
+    DlgText         "ShortcutCount",        Trim$( Str$( UBound( UserAssigned, 2 ) + 174 ) ) & " shortcuts assigned."
 
   Case CONTROL_CHANGE
 
     Select Case Id$
 
       Case "Close"
+
         DlgEnd 0
 
       Case "DropListBoxKeyGroup"
@@ -956,14 +971,14 @@ Recycle:
                 MatchType$ = "Command"
             End Select
 
-            UBShortcuts% = UBound( Shortcuts, 2 )
-
             For Cycle% = 1 To 2
 
-              ReDim CompStore( 2, UBShortcuts% )
               If Cycle% = 1 Then
-                  For i = 0 To UBShortcuts%
-                    CompStore( aCATEGORY, i ) = Shortcuts( aCATEGORY, i )
+
+                  UBArray% = UBound( UserAssigned, 2 )
+                  ReDim CompStore( 2, UBArray% )
+                  For i = 0 To UBArray%
+                    CompStore( aCATEGORY, i ) = UserAssigned( aCATEGORY, i )
 
 ' Different keyboards may send different codes to the system. The following list shows
 ' codes used by US standard keyboards, according to Microsoft
@@ -981,7 +996,7 @@ Recycle:
 '   Oem6 = ]}
 '   Oem7 = '"
 
-                    TempString$ = Shortcuts( aKEYS, i )
+                    TempString$ = UserAssigned( aKEYS, i )
                     p = InStr( TempString$, "Oem" )
                     If p > 0  And Right$( TempString$, 1 ) Like "[1567]" Then
                         Select Case Right$( TempString$, 1 )
@@ -997,18 +1012,22 @@ Recycle:
                       Else
                         CompStore( aKEYS, i ) = TempString$
                     End If
-                    CompStore( aACTION, i )   = Shortcuts( aACTION, i )
+                    CompStore( aACTION, i )   = UserAssigned( aACTION, i )
                   Next i
+
                 Else
-                  ReDim CompStore( 2, 172 )
-                  For i = 0 To 172
+
+                  UBArray% = APP_ASSIGNED_COUNT
+                  ReDim CompStore( 2, UBArray% )
+                  For i = 0 To UBArray%
                     CompStore( aCATEGORY, i ) = AppAssigned( aCATEGORY, i )
                     CompStore( aKEYS, i )     = AppAssigned( aKEYS, i )
                     CompStore( aACTION, i )   = AppAssigned( aACTION, i )
                   Next i
+
               End If
 
-              For i = 0 To UBShortcuts%
+              For i = 0 To UBArray%
 
                 If CompStore( aCATEGORY, i ) = MatchType$ OR MatchType$ = "All categories" Then
 
@@ -1103,10 +1122,10 @@ Recycle:
               Next i
 
               If DlgValue( "IncludeAppsCheckbox" ) = UNCHECKED Then
-                  DlgText         "ShortcutCount",        Trim$( Str$( UBound( Shortcuts, 2 ) + 1 ) ) & " shortcuts assigned."
+                  DlgText         "ShortcutCount",        Trim$( Str$( UBound( UserAssigned, 2 ) + 1 ) ) & " shortcuts assigned."
                   Exit For
                 Else
-                  DlgText         "ShortcutCount",        Trim$( Str$( UBound( Shortcuts, 2 ) + 174 ) ) & " shortcuts assigned."
+                  DlgText         "ShortcutCount",        Trim$( Str$( UBound( UserAssigned, 2 ) + 174 ) ) & " shortcuts assigned."
               End If
 
             Next Cycle%
@@ -1158,8 +1177,8 @@ Recycle:
   End Select
 
 End Function
-'118978541
+'120779366
 '
 'Macro name: ShortcutKeysIndex
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 6/29/2017 9:08:06 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 7/5/2017 9:33:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.
