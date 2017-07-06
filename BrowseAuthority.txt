@@ -1,4 +1,4 @@
-'MacroName:BrowseAuthority.2017.03
+'MacroName:BrowseAuthority.2017.04
 'MacroDescription:Browses the Authority File using an existing heading or selected text
 ' within a field.
 '
