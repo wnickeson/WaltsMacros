@@ -1181,4 +1181,4 @@ End Function
 '
 'Macro name: ShortcutKeysIndex
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 7/5/2017 9:33:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 7/6/2017 3:16:14 PM using "MacroBookInspector" macro by Walter F. Nickeson.
