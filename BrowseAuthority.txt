@@ -1,4 +1,4 @@
-'MacroName:BrowseAuthority.2017.02
+'MacroName:BrowseAuthority.2017.03
 'MacroDescription:Browses the Authority File using an existing heading or selected text
 ' within a field.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 21 June 2017.
+' Last updated: 5 July 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -160,9 +160,13 @@ Global Names()        As String
 Global Stopwords()    As String
 Global Subdivisions() As String
 
+Declare Sub LogMacroUse
+
 '****************************************************************************************
 
 Sub Main
+
+LogMacroUse
 
 Const CRITICAL_MESSAGE            As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                                    ' a big "X") in a message box; used to report the macro quitting.
@@ -1071,7 +1075,17 @@ If NotHeadingField Then
 
             p = InStr( SearchString$, "--" )
             If p = 0 Then
-                If CS.Browse( "AF", "su", SearchString$ ) = FALSE Then GoTo Failure:
+                If CS.Browse( "AF", "su", SearchString$ ) = FALSE Then
+                    GoTo Failure:
+                  Else
+
+' This next little bit of code highlights the search result that matches the search
+' exactly. When a heading is the same as a subdivision, in the list of "Root Results,"
+' the subdivision, which comes first in the list, is highlighted. Which is not what we
+' want.
+
+                    q = CS.SearchList( SearchString$, "Root Results", TRUE )
+                End If
               ElseIf p = 1 Then
                 If CS.Browse( "AF", "sb", Mid$( SearchString$, 4 ) ) = FALSE Then GoTo Failure:
               Else
@@ -2686,8 +2700,29 @@ Select Case Action%
 End Select
 
 End Function
-'2715107600
+'2725108020
+
+'########################################################################################
+Sub LogMacroUse                                                                       '##
+Dim FileLog%                 : FileLog% = Freefile                                    '##
+Dim Path$, FileName$                                                                  '##
+Dim i As Integer             : i = 1                                                  '##
+Do                                                                                    '##
+  Path$ = Environ( i )                                                                '##
+  If Left$( Path$, 11 ) = "USERPROFILE" Then                                          '##
+      FileName$ = Mid$( Path$, 13 ) & "\Documents\MacroLog.txt"                       '##
+      Exit Do                                                                         '##
+  End If                                                                              '##
+  i = i + 1                                                                           '##
+Loop Until Environ( i ) = ""                                                          '##
+If FileName$ = "" Then Exit Sub                                                       '##
+Open FileName$ For Append As #FileLog%                                                '##
+Print #FileLog%, "BrowseAuthority" & Chr$(9) & Date$ & " " & Time$                    '##
+Close #FileLog%                                                                       '##
+Reset                                                                                 '##
+End Sub                                                                               '##
+'########################################################################################
 '
 'Macro name: BrowseAuthority
-'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/28/2017 11:27:19 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\EssentialsW.mbk
+'Saved: 7/6/2017 3:15:33 PM using "MacroBookInspector" macro by Walter F. Nickeson.
