@@ -1,4 +1,4 @@
-'MacroName:MusicFFHelper.2016.12
+'MacroName:MusicFFHelper.2017.01
 'MacroDescription:Helps fill in elements in the fixed field for music materials: "AccM",
 ' "Comp", "FMus", "LTxt", "Part", and "TrAr". Also helps add or edit an 047 field.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 27 December 2016.
+' Last updated: 15 August 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -72,7 +72,7 @@
 '    into the fixed field as the new value for "Comp" and an existing 047 field is
 '    deleted.
 '****************************************************************************************
-
+'#124070461 Comp:mu 047: rc fm
 Option Explicit
 
 Declare Sub Build047   ( InString$ )
@@ -1180,7 +1180,7 @@ FMusExplain( 9 )  = "Score showing all vocal parts, solo and/or choral, with the
 FMusExplain( 10 ) = "Graphical, symbolic (e.g., staff), or word-based musical notation representing the sounds of all the parts of an ensemble, arranged so that they can be read simultaneously, or a work for solo performer or electronic media. Do not confuse with Part."
 FMusExplain( 11 ) = "Several types of scores are issued together, as is frequently the case with band music."
 FMusExplain( 12 ) = "Item is a sound recording."
-FMusExplain( 13 ) = "Format of the item is unknown."
+FMusExplain( 13 ) = "A reduction of an instrumental work or a vocal work with instruments to a version for piano. May include the words of a vocal work. Note: See code k (Vocal score) for a score showing all vocal parts with the accompaniment reduced for piano."
 FMusExplain( 14 ) = "None of the other defined codes are appropriate. Usually it signifies that the item is not a score. Choir books, table books, and sets of parts are examples in which code z is appropriate."
 FMusExplain( 15 ) = "No attempt to code."
 
@@ -1932,8 +1932,8 @@ If AccM$ <> OriginalAccM$ Or FMus$ <> OriginalFMus$ Or LTxt$ <> OriginalLTxt$ Or
 End If
 
 End Function
-'196190280
+'196190488
 '
 'Macro name: MusicFFHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 6/28/2017 11:34:05 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/15/2017 10:49:00 AM using "MacroBookInspector" macro by Walter F. Nickeson.

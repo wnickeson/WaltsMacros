@@ -1,4 +1,4 @@
-'MacroName:KeywordSearchHelper.2017.16
+'MacroName:KeywordSearchHelper.2017.23
 'MacroDescription:Helps construct a keyword search, including using a displayed
 ' record as a basis for the search terms.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 27 June 2017.
+' Last updated: 1 August 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -14,7 +14,7 @@
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
 ' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 '
-'****************************************************************************************
+'***************************************************************************************#
 ' How it works: Use this macro to help construct a keyword search. Run the macro to
 ' display a form that contains text boxes in which to enter search terms, drop-down lists
 ' for selecting index labels by which to search those terms, and various ways to qualify
@@ -22,18 +22,23 @@
 ' formats this information to construct and send a keyword search. This macro differs
 ' from the standard OCLC "Search WorldCat" search box in that it offers more than three
 ' text boxes in which to enter data, and the macro's text boxes are designed to search
-' for data from specific parts of a bibliographic record, so the search is more like a
-' guided or advanced search than the standard Client offering.
+' for data in specific parts of a bibliographic record, so the search is more like a
+' guided or advanced search than what the Client offers.
 '
 ' The macro also differs from the OCLC search box in that it is able to use an existing
 ' record as the source of search data. If the macro is run with a bibliographic record
 ' displayed, the form is automatically populated with information extracted from the
-' record--publisher, extent, subject, and so on. This extracted data can be edited,
+' record--publisher, extent, subjects, and so on. This extracted data can be edited,
 ' joined with appropriate search labels selected from the lists, and qualified with other
 ' information from the record to simplify the construction of a keyword search. If the
 ' macro is run while an authority record is displayed, the form starts with only the name
-' and/or title heading appearing. Almost always such a heading must be added to, or
-' qualified, to construct a meaningful search.
+' and/or title heading (that is, the authorized access point) appearing. Of course, such
+' a heading must almost always be added to, or qualified, to construct a meaningful
+' search.
+'
+' If a bibliographic record is used as a basis for the search, that record must contain
+' only Latin script characters. The presence of an 066 field will prevent the macro from
+' executing.
 '
 ' When extracting information from a bibliographic record, the macro presents that
 ' information from indexed subfields in editable text or drop-down combo boxes as
@@ -146,6 +151,10 @@
 '    codes in WorldCat.*
 '  + Country: From the fixed field element "Ctry" (008/15-17). Words or codes may be
 '    entered in this combo box.
+'
+' When the following qualifiers are used, they are automatically added unless prefixed by
+' the Boolean operator "not":
+
 '  + Language of cataloging: The default qualifier is the code for the language of
 '    cataloging found in subfield $b of the 040 field. If this subfield is not present,
 '    the qualifier, when applied, is the code for English. The list of supplied codes
@@ -165,8 +174,8 @@
 '    "dcrm" and "dcrmb", etc. When a search term is truncated it may limit the number of
 '    records retrieved, so it is best to be as specific as possible when choosing a term.
 '  + Holdings: The search may be limited to the holdings of a specific institution. The
-'    macro looks for the user's institution code in one of the application files in
-'    order to offer that limit as the alternative choice to "any".
+'    macro looks for the user's institution code in one of the application files in order
+'    to offer that limit as the alternative choice to "any".
 '
 ' *Frequency of occurrence as shown in MARC Usage in WorldCat
 '  <http://experimental.worldcat.org/marcusage/>
@@ -184,12 +193,8 @@
 ' and refinement of the search. The submitted search string is also placed on the Windows
 ' Clipboard, and so may be copied into the standard Connexion search box for editing to
 ' construct a search with greater flexibility and control than that offered by this
-' macro. To always view the search string before it's sent, edit the code on lines 2624-
-' 2626 below, removing the comment character.
-'
-' When using a bibliographic record as a basis for the search, that record must contain
-' only Latin script characters. The presence of an 066 field will prevent the macro from
-' executing.
+' macro. To always view the search string before it's sent, edit the code on lines 2693-
+' 2695 below, removing the comment character.
 '
 ' Complete documentation on keyword searching, including what fields are included in
 ' which indexes, and treatment of special characters, is available online at
@@ -212,6 +217,11 @@ Declare Function StripDollarSigns ( InString$ )                        As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SV& )
 
+Global Const DISABLED  As Integer = 0  'The value to make a dialog box control disabled.
+Global Const ENABLED   As Integer = 1  'The value to make a dialog box control enabled.
+Global Const INVISIBLE As Integer = 0  'The value to make a dialog box control invisible.
+Global Const UNCHECKED As Integer = 0  'The value of a checkbox when it is not checked.
+
 ' Names for some dialog box checkbox controls:
 
 Global Const NAME_checkbox    As Integer = 5
@@ -233,11 +243,8 @@ Global NameCount%
 Global NotesCount%
 Global PreviousNamesSelection%
 Global PreviousNamesTag$
-Global PreviousNotesSelection%
 Global PreviousNotesTag$
-Global PreviousSeriesSelection%
 Global PreviousSeriesTag$
-Global PreviousSubjectsSelection%
 Global PreviousSubjectsTag$
 Global PreviousTitlesSelection%
 Global PreviousTitlesTag$
@@ -262,21 +269,21 @@ Global TitlesComboBoxChange
 
 Global DescriptionFields( 2 ) As String
 Global NameLabels       ( 9 ) As String
-Global NamesDisplay     ()    As String
-Global NamesRaw         ()    As String
-Global NotesDisplay     ()    As String
-Global NotesRaw         ()    As String
+Global NamesDisplay      ()   As String
+Global NamesRaw          ()   As String
+Global NotesDisplay      ()   As String
+Global NotesRaw          ()   As String
 Global PlaceLabels      ( 1 ) As String
 Global PublisherLabels  ( 2 ) As String
-Global SeriesDisplay    ()    As String
+Global SeriesDisplay     ()   As String
 Global SeriesLabels     ( 5 ) As String
-Global SeriesRaw        ()    As String
+Global SeriesRaw         ()   As String
 Global SubjectLabels    ( 9 ) As String
-Global SubjectsDisplay  ()    As String
-Global SubjectsRaw      ()    As String
+Global SubjectsDisplay   ()   As String
+Global SubjectsRaw       ()   As String
 Global TitleLabels      ( 6 ) As String
-Global TitlesDisplay    ()    As String
-Global TitlesRaw        ()    As String
+Global TitlesDisplay     ()   As String
+Global TitlesRaw         ()   As String
 
 '****************************************************************************************
 
@@ -294,11 +301,9 @@ Dim Dates1$
 Dim Dates2$
 Dim DescFF$
 Dim DisplayString$
-Dim DtSt$
 Dim FFData$
 Dim FieldData$
 Dim FilingIndicator%
-Dim Indicator1$
 Dim Indicator2$
 Dim NamesLabels$
 Dim NameString$
@@ -316,7 +321,7 @@ Dim TitleString$
 Dim TranscribingAgency$
 Dim TypeOfWindow%
 
-Dim ChangedFFView            : ChangedFFView = FALSE
+Dim ChangedFFView            : ChangedFFView    = FALSE
 Dim DuplicateHeading         : DuplicateHeading = FALSE
 Dim FoundField
 
@@ -325,12 +330,12 @@ Dim i As Integer, p As Integer, q As Integer
 Dim CountryPub   ( 1 )  As String
 Dim DescCon      ( 20 ) As String
 Dim Formats      ( 8 )  As String
-Dim Holdings     ()     As String
+Dim Holdings      ()    As String
 Dim Inclusion    ( 2 )  As String
 Dim LangOfCatalog( 20 ) As String
 Dim Language     ( 20 ) As String
 Dim NotesLabels  ( 1 )  As String
-Dim Source       ()     As String
+Dim Source        ()    As String
 
 NamesLabels$           = "&Names (100-111, 700-711, 245 statement of responsibility)"
 SearchAsSubfieldA$     = "No indexed subfields for this search label. Field will be treated as a single subfield $a."
@@ -368,7 +373,6 @@ Select Case TypeOfWindow%
     If CS.GetField( "066", 1, FieldData$ ) Then
         MsgBox "Sorry, the macro can't derive keywords from this record because it contains non-Latin script.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
-      Else
     End If
 
   Case 3 To 4, 18, 20
@@ -472,14 +476,15 @@ NotesLabels( 0 )    = "Word (nt:)"
 NotesLabels( 1 )    = "Keyword (kw:)"
 
 ' Attempt to get the user's institution code. If it's available, add it to the qualifier
-' box list to limit searches to items held by that institution.
+' box list to limit searches to items held (or not held) by that institution.
 
 GetInstitutionCode
 
 If InstitutionCode$ <> "" Then
-    ReDim Holdings( 1 )
+    ReDim Holdings( 2 )
     Holdings( 0 ) = "Any"
     Holdings( 1 ) = InstitutionCode$
+    Holdings( 2 ) = "not " & InstitutionCode$
   Else
     ReDim Holdings( 0 )
     Holdings( 0 ) = "Any"
@@ -517,7 +522,7 @@ If BlankSlate = FALSE Or AuthorityRecord Then
         End If
     End If
 
-' If the first date is completely unknown, make it all zeroes. A second date completely
+' If the first date is completely unknown, make it all zeros. A second date completely
 ' unknown is discarded.
 
     If Dates1$ = "uuuu" Then
@@ -716,7 +721,6 @@ If BlankSlate = FALSE Then
           End If
           Tag$ = Left$( FieldData$, 3 )
           If Left$( Tag$, 1 ) Like "[1-8]" Then
-              Indicator1$ = Mid$( FieldData$, 4, 1 )
               Indicator2$ = Mid$( FieldData$, 5, 1 )
               FieldData$  = Mid$( FieldData$, 6 )
               If Left$( FieldData$, 1 ) <> DELIMITER Then
@@ -963,71 +967,77 @@ End If
 
 ' Finally, run the dialog box where it all comes together.
 
-Begin Dialog Dialog1Definition  468, 374, WaltsMacros$, .Dialog1ControlFunction          'ID
-  OKButton      344, 348,  52,  14                                                       '0
-  CancelButton  404, 348,  52,  14                                                       '1
-  CheckBox       12,  20, 320,  12, "Titles",                .Titles_CheckBox            '2  TITLE_checkbox
-  DropListBox    26,  34, 136, 144, TitleLabels(),           .Titles_Labels_ListBox      '3  TITLE_listbox
-  DropComboBox  168,  34, 288, 144, TitlesDisplay(),         .Titles_TextBox             '4  TITLE_combobox
-  CheckBox       12,  52, 320,  12, "Names",                 .Names_CheckBox             '5  NAME_checkbox
-  DropListBox    26,  66, 136, 144, NameLabels(),            .Names_Labels_ListBox       '6  NAME_listbox
-  DropComboBox  168,  66, 288, 144, NamesDisplay(),          .Names_TextBox              '7  NAME_combobox
-  CheckBox       12,  84, 160,  12, "Pla&ce of publication", .Place_CheckBox             '8
-  DropListBox    26,  98,  64,  64, PlaceLabels(),           .Place_Labels_ListBox       '9  PLACE_LABEL_listbox
-  TextBox        96,  98, 176,  12,                          .Place_TextBox              '10 PLACE_textbox
-  CheckBox       12, 116, 160,  12, "&Publisher",            .Publisher_CheckBox         '11
-  DropListBox    26, 130,  64,  64, PublisherLabels(),       .Publisher_Labels_ListBox   '12 PUBLISHER_LABEL_listbox
-  TextBox        96, 130, 176,  12,                          .Publisher_TextBox          '13 PUBLISHER_textbox
-  CheckBox      290, 100, 160,  12, "E&xtent",               .Extent_CheckBox            '14
-  TextBox       304, 114,  48,  12,                          .Extent_LabelBox            '15 EXTENT_LABEL_textbox
-  TextBox       360, 114,  96,  12,                          .Extent_TextBox             '16 EXTENT_textbox
-  CheckBox       12, 148, 160,  12, "&Notes",                .Notes_CheckBox             '17 NOTE_checkbox
-  DropListBox    26, 162,  64,  64, NotesLabels(),           .Notes_LabelBox             '18 NOTE_listbox
-  DropComboBox   96, 162, 360,  96, NotesDisplay(),          .Notes_TextBox              '19 NOTE_combobox
-  CheckBox       12, 180, 160,  12, "Su&bjects",             .Subjects_CheckBox          '20 SUBJECT_checkbox
-  DropListBox    26, 194, 136, 144, SubjectLabels(),         .Subjects_Labels_ListBox    '21 SUBJECT_listbox
-  DropComboBox  168, 194, 288,  96, SubjectsDisplay(),       .Subjects_TextBox           '22 SUBJECT_combobox
-  CheckBox       12, 212, 160,  12, "&Series",               .Series_CheckBox            '23 SERIES_checkbox
-  DropListBox    26, 226, 136, 144, SeriesLabels(),          .Series_Labels_ListBox      '24 SERIES_listbox
-  DropComboBox  168, 226, 288,  96, SeriesDisplay(),         .Series_TextBox             '25 SERIES_combobox
-  Text          100, 260,  48,   8, "&Format:"                                           '26
-  DropListBox   126, 258,  84,  88, Formats(),               .Format_DropListBox         '27 FORMAT_LIST
-  Text          172, 276,  40,   8, "microforms",            .MicroformsInclusion        '28
-  DropListBox   126, 275,  44,  48, Inclusion(),             .Microforms                 '29
-  Text          172, 294,  40,   8, "Internet",              .InternetInclusion          '30
-  DropListBox   126, 292,  44,  48, Inclusion(),             .Internet                   '31
-  CheckBox      108, 312,  40,  12, "&Date(s):",             .Date_CheckBox              '32
-  TextBox       150, 312,  52,  12,                          .Date_TextBox               '33 DATE_textbox
-  Text          230, 260,  48,   8, "*&Language:"                                        '34
-  DropComboBox  270, 258,  44, 144, Language(),              .Language_DropComboBox      '35 LANGUAGE_combobox
-  Text          238, 280,  48,   8, "*Countr&y:"                                         '36
-  DropComboBox  270, 278,  44,  48, CountryPub(),            .CountryPub_DropComboBox    '37 COUNTRY_combobox
-  Text          332, 260,  72,   8, "&Cataloging language:"                              '38
-  DropComboBox  402, 258,  44, 144, LangOfCatalog(),         .LangOfCatalog_DropComboBox '39 LANG_CAT_combobox
-  Text          340, 280,  64,   8, "Cataloging so&urce:"                                '40
-  DropComboBox  402, 278,  44, 144, Source(),                .Source_DropComboBox        '41 SOURCE_combobox
-  Text          320, 300,  80,   8, "Description con&ventions:"                          '42
-  DropComboBox  402, 298,  44, 144, DescCon(),               .DescCon_DropComboBox       '43 DESC_CON_combobox
-  Text          316, 320,  86,   8, "Limit search to holdings in:"                       '44
-  DropComboBox  402, 318,  44,  32, Holdings(),              .Holdings_DropComboBox      '45 HOLDINGS_combobox
-  GroupBox       92, 246, 364,  93, ""                                                   '46
-  PushButton     12, 250,  72,  28, "",                      .ControlQualifiers          '47 QUALIFIER_BUTTON
-  PushButton     12, 322,  72,  16, "&?",                    .Help                       '48 HELP_BUTTON
-  Pushbutton     12, 300,  72,  16, "&Reset",                .Reset                      '49 RESET_BUTTON
-  Text          230, 295,  72,  16, "*Words or codes may be entered here."               '50
-  Text           10,   6, 444,   8, TabInstructions$                                     '51
-  Text          450,  24,   8,   8, "1"                                                  '52
-  Text          450,  56,   8,   8, "2"                                                  '53
-  Text          266,  88,   8,   8, "3"                                                  '54
-  Text          266, 120,   8,   8, "4"                                                  '55
-  Text          450, 104,   8,   8, "5"                                                  '56
-  Text          450, 152,   8,   8, "6"                                                  '57
-  Text          450, 184,   8,   8, "7"                                                  '58
-  Text          450, 216,   8,   8, "8"                                                  '59
-  Text          168,  52, 280,   8, SearchAsSubfieldA$,      .SearchAsSubfA_Names        '60
-  Text          168, 180, 280,   8, SearchAsSubfieldA$,      .SearchAsSubfA_Subjects     '61
-  Text          168, 212, 280,   8, SearchAsSubfieldA$,      .SearchAsSubfA_Series       '62
-
+Begin Dialog Dialog1Definition  468, 394, WaltsMacros$, .Dialog1ControlFunction                       'ID
+  OKButton      344, 368,  52,  14                                                                    '0
+  CancelButton  404, 368,  52,  14                                                                    '1
+  CheckBox       12,  20, 320,  12, "Titles",                             .Titles_CheckBox            '2  TITLE_checkbox
+  DropListBox    26,  34, 136, 144, TitleLabels(),                        .Titles_Labels_ListBox      '3  TITLE_listbox
+  DropComboBox  168,  34, 288, 144, TitlesDisplay(),                      .Titles_TextBox             '4  TITLE_combobox
+  CheckBox       12,  52, 320,  12, "Names",                              .Names_CheckBox             '5  NAME_checkbox
+  DropListBox    26,  66, 136, 144, NameLabels(),                         .Names_Labels_ListBox       '6  NAME_listbox
+  DropComboBox  168,  66, 288, 144, NamesDisplay(),                       .Names_TextBox              '7  NAME_combobox
+  CheckBox       12,  84, 160,  12, "Pla&ce of publication",              .Place_CheckBox             '8
+  DropListBox    26,  98,  64,  64, PlaceLabels(),                        .Place_Labels_ListBox       '9  PLACE_LABEL_listbox
+  TextBox        96,  98, 176,  12,                                       .Place_TextBox              '10 PLACE_textbox
+  CheckBox       12, 116, 160,  12, "&Publisher",                         .Publisher_CheckBox         '11
+  DropListBox    26, 130,  64,  64, PublisherLabels(),                    .Publisher_Labels_ListBox   '12 PUBLISHER_LABEL_listbox
+  TextBox        96, 130, 176,  12,                                       .Publisher_TextBox          '13 PUBLISHER_textbox
+  CheckBox      290, 100, 160,  12, "E&xtent",                            .Extent_CheckBox            '14
+  TextBox       304, 114,  48,  12,                                       .Extent_LabelBox            '15 EXTENT_LABEL_textbox
+  TextBox       360, 114,  96,  12,                                       .Extent_TextBox             '16 EXTENT_textbox
+  CheckBox       12, 148, 160,  12, "&Notes",                             .Notes_CheckBox             '17 NOTE_checkbox
+  DropListBox    26, 162,  64,  64, NotesLabels(),                        .Notes_LabelBox             '18 NOTE_listbox
+  DropComboBox   96, 162, 360,  96, NotesDisplay(),                       .Notes_TextBox              '19 NOTE_combobox
+  CheckBox       12, 180, 160,  12, "Su&bjects",                          .Subjects_CheckBox          '20 SUBJECT_checkbox
+  DropListBox    26, 194, 136, 144, SubjectLabels(),                      .Subjects_Labels_ListBox    '21 SUBJECT_listbox
+  DropComboBox  168, 194, 288,  96, SubjectsDisplay(),                    .Subjects_TextBox           '22 SUBJECT_combobox
+  CheckBox       12, 212, 160,  12, "&Series",                            .Series_CheckBox            '23 SERIES_checkbox
+  DropListBox    26, 226, 136, 144, SeriesLabels(),                       .Series_Labels_ListBox      '24 SERIES_listbox
+  DropComboBox  168, 226, 288,  96, SeriesDisplay(),                      .Series_TextBox             '25 SERIES_combobox
+  Text          100, 260,  48,   8, "&Format:"                                                        '26
+  DropListBox   126, 258,  84,  88, Formats(),                            .Format_DropListBox         '27 FORMAT_LIST
+  Text          172, 276,  40,   8, "microforms",                         .MicroformsInclusion        '28
+  DropListBox   126, 275,  44,  48, Inclusion(),                          .Microforms                 '29
+  Text          172, 294,  40,   8, "Internet",                           .InternetInclusion          '30
+  DropListBox   126, 292,  44,  48, Inclusion(),                          .Internet                   '31
+  CheckBox      108, 312,  40,  12, "&Date(s):",                          .Date_CheckBox              '32
+  TextBox       150, 312,  52,  12,                                       .Date_TextBox               '33 DATE_textbox
+  DropComboBox  270, 258,  44, 144, Language(),                           .Language_DropComboBox      '34 LANGUAGE_combobox
+  DropComboBox  270, 278,  44,  48, CountryPub(),                         .CountryPub_DropComboBox    '35 COUNTRY_combobox
+  DropComboBox  390, 258,  56, 144, LangOfCatalog(),                      .LangOfCatalog_DropComboBox '36 LANG_CAT_combobox
+  DropComboBox  390, 278,  56, 144, Source(),                             .Source_DropComboBox        '37 SOURCE_combobox
+  DropComboBox  390, 298,  56, 144, DescCon(),                            .DescCon_DropComboBox       '38 DESC_CON_combobox
+  DropComboBox  390, 318,  56,  40, Holdings(),                           .Holdings_DropComboBox      '39 HOLDINGS_combobox
+  PushButton     12, 250,  72,  28, "",                                   .ControlQualifiers          '40 QUALIFIER_BUTTON
+  PushButton     12, 342,  72,  16, "&?",                                 .Help                       '41 HELP_BUTTON
+  Pushbutton     12, 320,  72,  16, "&Reset",                             .Reset                      '42 RESET_BUTTON
+  Text          230, 260,  40,   8, "*&Language:"                                                     '43
+  Text          238, 280,  32,   8, "*Countr&y:"                                                      '44
+  Text          338, 256,  40,   8, "**&Cataloging"                                                   '45
+  Text          354, 264,  36,   8, "language:"                                                       '46
+  Text          338, 276,  40,   8, "**Cataloging"                                                    '47
+  Text          362, 284,  28,   8, "so&urce:"                                                        '48
+  Text          338, 296,  44,   8, "**Description"                                                   '49
+  Text          344, 304,  40,   8, "con&ventions:"                                                   '50
+  Text          338, 316,  48,   8, "**Limit search"                                                  '51
+  Text          342, 324,  48,   8, "to holdings in:"                                                 '52
+  Text          230, 295,  80,   8, "*Words or codes may be"                                          '53
+  Text          234, 303,  88,   8, "used with these qualifiers."                                     '54
+  Text          338, 336, 108,   8, "**The prefix " & QUOTE & "not" & QUOTE & " may be added"         '55
+  Text          366, 344,  64,   8, "to these qualifiers."                                            '56
+  Text           10,   6, 444,   8, TabInstructions$                                                  '57
+  Text          450,  24,   8,   8, "1"                                                               '58
+  Text          450,  56,   8,   8, "2"                                                               '59
+  Text          266,  88,   8,   8, "3"                                                               '60
+  Text          266, 120,   8,   8, "4"                                                               '61
+  Text          450, 104,   8,   8, "5"                                                               '62
+  Text          450, 152,   8,   8, "6"                                                               '63
+  Text          450, 184,   8,   8, "7"                                                               '64
+  Text          450, 216,   8,   8, "8"                                                               '65
+  Text          168,  52, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Names        '66
+  Text          168, 180, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Subjects     '67
+  Text          168, 212, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Series       '68
+  GroupBox       92, 246, 364, 113, ""                                                                '69
 End Dialog
 
 Dim Dialog1 As Dialog1Definition
@@ -1095,7 +1105,6 @@ Sub GetInstitutionCode
 ' limit them to retrieve material cataloged by the user's institution or to material held
 ' by the institution.
 
-Const FILE_NOT_FOUND       As Integer = 53   'Error code in BASIC for the specified file not being found.
 Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'The maximum number of reads of environment strings to try to get the user profile path.
 Const NORMAL_FILE          As Integer = 0    'Attribute of a normal file.
 Const NORMAL_FILE_ARCHIVE  As Integer = 32   'Attribute of a normal file with archive bit set?
@@ -1107,7 +1116,6 @@ Dim FileNum%
 Dim ItemKey$
 Dim SearchTerm$
 Dim SearchTermInst$          : SearchTermInst$ = QUOTE & "InstCode" & QUOTE
-Dim Start%
 Dim UserLogonInfo$
 
 Dim i As Integer, p As Integer
@@ -1253,11 +1261,6 @@ End Sub
 
 Sub SetQualifiers
 
-Const DISABLED  As Integer = 0  'The value to make a dialog box control disabled.
-Const ENABLED   As Integer = 1  'The value to make a dialog box control enabled.
-Const INVISIBLE As Integer = 0  'The value to make a dialog box control invisible.
-Const UNCHECKED As Integer = 0  'The value of a checkbox when it is not checked.
-
 DlgText    "CountryPub_DropComboBox",    "Any"
 DlgText    "DescCon_DropComboBox",       "Any"
 DlgText    "Format_DropListBox",         "Any"
@@ -1291,7 +1294,6 @@ Function CheckParens( InString$ ) As String
 ' string is flagged as containing Boolean operators.
 
 Dim LeftTotal%
-Dim LengthTestString%
 Dim RightTotal%
 Dim Start%
 Dim TempString$
@@ -1386,8 +1388,6 @@ Function MakeSearchElement( TextBoxInput$, SearchLabel$, CheckBoxControl% ) As S
 ' Given the data string from the text or combo boxes, the search label from the list box,
 ' and the dialog box control (which specifies the search index), this function matches
 ' the data string with an appropriate search label.
-
-Const DISABLED As Integer = 0   'The value to make a dialog box control disabled.
 
 Dim Subfield$
 Dim SubfieldString As Variant
@@ -2274,20 +2274,18 @@ Function Dialog1ControlFunction( Id$, Action%, SV& )
 
 ' Names for dialog box controls:
 
-Const COUNTRY_combobox            As Integer = 37  ' "Country of Publication" drop combo box.
+Const COUNTRY_combobox            As Integer = 35  ' "Country of Publication" drop combo box.
 Const DATE_textbox                As Integer = 33  ' "Date" data entry text box.
-Const DESC_CON_combobox           As Integer = 43  ' "Descriptive Conventions" drop combo box.
+Const DESC_CON_combobox           As Integer = 38  ' "Descriptive Conventions" drop combo box.
 Const EXTENT_LABEL_textbox        As Integer = 15  ' "Extent" search label text box.
 Const EXTENT_textbox              As Integer = 16  ' "Extent" data entry text box.
 Const FORMAT_LIST                 As Integer = 27  ' "Format_DropListBox" drop list box.
-Const HELP_BUTTON                 As Integer = 48  ' "Help" button.
-Const HOLDINGS_combobox           As Integer = 45  ' "Holding Library" drop combo box.
-Const LANGUAGE_combobox           As Integer = 35  ' "Language" drop combo box.
-Const LANG_CAT_combobox           As Integer = 39  ' "Language of Cataloging" drop combo box.
-Const NAME_checkbox               As Integer = 5   ' "Names" check box.
+Const HELP_BUTTON                 As Integer = 41  ' "Help" button.
+Const HOLDINGS_combobox           As Integer = 39  ' "Holding Library" drop combo box.
+Const LANGUAGE_combobox           As Integer = 34  ' "Language" drop combo box.
+Const LANG_CAT_combobox           As Integer = 36  ' "Language of Cataloging" drop combo box.
 Const NAME_combobox               As Integer = 7   ' "Names" drop combo box.
 Const NAME_listbox                As Integer = 6   ' "Names" search label drop list box.
-Const NOTE_checkbox               As Integer = 17  ' "Notes" check box.
 Const NOTE_combobox               As Integer = 19  ' "Notes" drop combo box.
 Const NOTE_listbox                As Integer = 18  ' "Notes" search label drop list box.
 Const OK_BUTTON                   As Integer = 0   ' "OK" button.
@@ -2295,16 +2293,13 @@ Const PLACE_LABEL_listbox         As Integer = 9   ' "Place" search label list b
 Const PLACE_textbox               As Integer = 10  ' "Place" data entry text box.
 Const PUBLISHER_LABEL_listbox     As Integer = 12  ' "Publisher" search label list box.
 Const PUBLISHER_textbox           As Integer = 13  ' "Publisher" data entry text box.
-Const QUALIFIER_BUTTON            As Integer = 47  ' "ControlQualifiers" button.
-Const RESET_BUTTON                As Integer = 49  ' "Reset" button, to reset all the data in the dialog box and start over.
-Const SERIES_checkbox             As Integer = 23  ' "Series" check box.
+Const QUALIFIER_BUTTON            As Integer = 40  ' "ControlQualifiers" button.
+Const RESET_BUTTON                As Integer = 42  ' "Reset" button, to reset all the data in the dialog box and start over.
 Const SERIES_combobox             As Integer = 25  ' "Series" drop combo box.
 Const SERIES_listbox              As Integer = 24  ' "Series" search label drop list box.
-Const SOURCE_combobox             As Integer = 41  ' "Source" drop combo box.
-Const SUBJECT_checkbox            As Integer = 20  ' "Subject" check box.
+Const SOURCE_combobox             As Integer = 37  ' "Source" drop combo box.
 Const SUBJECT_combobox            As Integer = 22  ' "Subject" drop combo box.
 Const SUBJECT_listbox             As Integer = 21  ' "Subject" search label drop list box.
-Const TITLE_checkbox              As Integer = 2   ' "Title" check box.
 Const TITLE_combobox              As Integer = 4   ' "Title" drop combo box.
 Const TITLE_listbox               As Integer = 3   ' "Title" search label drop list box.
 
@@ -2314,16 +2309,12 @@ Const CHECKED                     As Integer = 1   'The value of a checkbox when
 Const COMBO_BOX_CHANGE            As Integer = 3   'The value for the state of a dialog box when a control changes.
 Const CONTROL_CHANGE              As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
 Const DIALOG_BUTTON_CANCEL        As Integer = 102 'The value returned by the dialog function when the "Cancel" button is clicked.
-Const DISABLED                    As Integer = 0   'The value to make a dialog box control disabled.
-Const ENABLED                     As Integer = 1   'The value to make a dialog box control enabled.
 Const FOCUS_CHANGE                As Integer = 4   'The value of the dialog function parameter "Action%" when the control focus changes.
 Const INFORMATION_MESSAGE         As Integer = 64  'The value to display the "Information message" icon in a message box.
 Const INITIALIZE                  As Integer = 1   'The value of the dialog function parameter "Action%" when the dialog box opens.
-Const INVISIBLE                   As Integer = 0   'The value to make a dialog box control invisible.
 Const KEEP_DLG_OPEN               As Integer = -1  'The value of the dialog function to keep a dialog box open.
 Const MSGBOX_RETURN_OK            As Integer = 1   'The value returned by a message box when the "OK" button is clicked.
 Const MSGBOX_SETBUTTONS_OK_CANCEL As Integer = 1   'The value to set two buttons, "OK" and "Cancel," in a message box.
-Const UNCHECKED                   As Integer = 0   'The value of a checkbox when it is not checked.
 Const VISIBLE                     As Integer = 1   'The value to make a dialog box control visible.
 Const WARNING_MESSAGE             As Integer = 48  'The value to display the "Warning message" icon in a message box.
 
@@ -2346,6 +2337,8 @@ Dim Selection%
 Dim Start%
 Dim Tag$
 Dim TempString$
+
+Dim QualifierAdd             : QualifierAdd = TRUE
 
 Dim i As Integer, p As Integer
 
@@ -2589,13 +2582,21 @@ ResetDialogBox:
             End If
         End If
 
-        For CheckBoxControl% = LANGUAGE_combobox To HOLDINGS_combobox Step 2
+        For CheckBoxControl% = LANGUAGE_combobox To HOLDINGS_combobox
+
+' For these qualifiers, the prefix "not" is an option, so check for its presence.
 
           QualifierString$ = ""
           QualifierText$   = LCase$( Trim$( DlgText( CheckBoxControl% ) ) )
           If QualifierText$ = "any" Then
               QualifierText$ = ""
             Else
+              If Len( QualifierText$ ) > 5 Then
+                  If Left$( QualifierText$, 4 ) = "not " Then
+                      QualifierAdd   = FALSE
+                      QualifierText$ = Trim$( Mid$( QualifierText$, 5 ) )
+                  End If
+              End If
               Select Case CheckBoxControl%
 
                 Case LANGUAGE_combobox
@@ -2631,9 +2632,16 @@ ResetDialogBox:
               End Select
 
           End If
+
           If QualifierString$ <> "" Then
-              SearchString$ = SearchString$ & " AND " & QualifierString$
+              If QualifierAdd Then
+                  SearchString$ = SearchString$ & " AND " & QualifierString$
+                Else
+                  SearchString$ = SearchString$ & " NOT " & QualifierString$
+              End If
           End If
+
+          QualifierAdd = TRUE
 
         Next CheckBoxControl%
 
@@ -2731,9 +2739,9 @@ KeepDialogOpen:
             DlgValue   "Format_DropListBox",         TypeOfRecord%
             DlgText    "Holdings_DropComboBox",      InstitutionCode$
             If Internets Then
-                DlgValue   "Internet",                 2
+                DlgValue   "Internet",                   2
               Else
-                DlgValue   "Internet",                 1
+                DlgValue   "Internet",                   1
             End If
             DlgText    "LangOfCatalog_DropComboBox", CatLang$
             DlgText    "Language_DropComboBox",      Lang$
@@ -2858,7 +2866,7 @@ KeepDialogOpen:
           Case NAME_listbox
             If Selection% < 0 And NamesComboBoxChange = TRUE Then
                 Tag$                 = PreviousNamesTag$
-                TempString$          = Tag$ & DELIMITER & "a" & DlgText( DialogControlID% + 1 )
+                TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = NamesRaw( PreviousNamesSelection% )
                 PreviousNamesTag$    = Left$( TempString$, 3 )
@@ -2868,7 +2876,7 @@ KeepDialogOpen:
           Case NOTE_listbox
             If Selection% < 0 And NotesComboBoxChange = TRUE Then
                 Tag$                 = PreviousNotesTag$
-                TempString$          = Tag$ & DELIMITER & "a" & DlgText( DialogControlID% + 1 )
+                TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = NotesRaw( Selection% )
                 PreviousNotesTag$    = Left$( TempString$, 3 )
@@ -2877,7 +2885,7 @@ KeepDialogOpen:
           Case SERIES_listbox
             If Selection% < 0 And SeriesComboBoxChange = TRUE Then
                 Tag$                 = PreviousSeriesTag$
-                TempString$          = Tag$ & DELIMITER & "a" & DlgText( DialogControlID% + 1 )
+                TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = SeriesRaw( Selection% )
                 PreviousSeriesTag$   = Left$( TempString$, 3 )
@@ -2886,7 +2894,7 @@ KeepDialogOpen:
           Case SUBJECT_listbox
             If Selection% < 0 And SubjectsComboBoxChange = TRUE Then
                 Tag$                 = PreviousNotesTag$
-                TempString$          = Tag$ & DELIMITER & "a" & DlgText( DialogControlID% + 1 )
+                TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = SubjectsRaw( Selection% )
                 PreviousSubjectsTag$ = Left$( TempString$, 3 )
@@ -2895,7 +2903,7 @@ KeepDialogOpen:
           Case TITLE_listbox
             If Selection% < 0 And TitlesComboBoxChange = TRUE Then
                 Tag$                 = PreviousTitlesTag$
-                TempString$          = Tag$ & DELIMITER & "a" & DlgText( DialogControlID% + 1 )
+                TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = TitlesRaw( PreviousTitlesSelection% )
                 PreviousTitlesTag$   = Left$( TempString$, 3 )
@@ -3039,8 +3047,8 @@ KeepDialogOpen:
 End Select
 
 End Function
-'3068121260
+'3076122572
 '
 'Macro name: KeywordSearchHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 6/28/2017 11:33:55 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/15/2017 10:57:11 AM using "MacroBookInspector" macro by Walter F. Nickeson.
