@@ -1,4 +1,4 @@
-'MacroName:ViewExportFiles.2017.02
+'MacroName:ViewExportFiles.2017.03
 'MacroDescription:Shows the records in the defined export files and allows deletion of
 ' individual records or of the whole file being viewed.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 24 May 2017.
+' Last updated: 3 August 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -73,24 +73,32 @@ Global RecordFields      () As String
 
 Sub Main
 
-Const ANSWER_YES           As Integer = 6      'The value returned by a message box when the "No" button is clicked.
-Const COPY_DATA_BUTTON     As Integer = 5      'The value returned by the dialog box when the button to copy information from the displayed
-                                               ' record is clicked.
-Const DELETE_FILE_BUTTON   As Integer = 1      'The value returned by the dialog box when the button to delete the file is clicked.
-Const DELETE_RECORD_BUTTON As Integer = 0      'The value returned by the dialog box when the button to delete the displayed record is clicked.
-Const DIALOG_BUTTON_CANCEL As Integer = 102    'The value returned by the dialog box when the "Cancel" button is clicked.
-Const FILE_NOT_FOUND       As Integer = 53     'Error code in BASIC for the specified file not being found.
-Const INFORMATION_MESSAGE  As Integer = 64     'The value to display the "Information message" icon in a message box.
-Const LENGTH_INPUT_STRING  As Long    = 32000  'The constant for the maximum string size in this macro is based on an OML
-                                               ' memory limit, even though OML can handle a string length of up to 32,767 bytes.
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128    'The maximum number of reads of environment strings to try to get the user profile path.
-Const NORMAL_FILE          As Integer = 0      'Attribute of a normal file.
-Const NORMAL_FILE_ARCHIVE  As Integer = 32     'Attribute of a normal file with archive bit set?
-Const OPEN_FILE_BUTTON     As Integer = 4      'The value returned by the dialog box when the button to open a different export file is clicked.
-Const SECOND_BUTTON        As Integer = 256    'The value to make the second button in a message box the default.
-Const WARNING_MESSAGE      As Integer = 48     'The value to display the "Warning message" icon in a message box.
-Const WARNING_QUERY        As Integer = 32     'The value to display the "Warning query" icon in a message box.
-Const YES_NO               As Integer = 4      'The value to display the "Warning message" icon in a message box with "Yes" and "No" buttons.
+Const ANSWER_YES                  As Integer = 6      'The value returned by a message box when the "No" button is clicked.
+Const DIALOG_BUTTON_CANCEL        As Integer = 102    'The value returned by the dialog box when the "Cancel" button is
+                                                      ' clicked.
+Const DIALOG_BUTTON_CLOSE         As Integer = 0      'The value returned by the dialog box when the "Close" button is clicked.
+Const DIALOG_BUTTON_COPY_DATA     As Integer = 6      'The value returned by the dialog box when the button to copy information
+                                                      ' from the displayed record is clicked.
+Const DIALOG_BUTTON_DELETE_FILE   As Integer = 2      'The value returned by the dialog box when the button to delete the file
+                                                      ' is clicked.
+Const DIALOG_BUTTON_DELETE_RECORD As Integer = 1      'The value returned by the dialog box when the button to delete the
+                                                      ' displayed record is clicked.
+Const DIALOG_BUTTON_OPEN_FILE     As Integer = 5      'The value returned by the dialog box when the button to open a different
+                                                      ' export file is clicked.
+Const FILE_NOT_FOUND              As Integer = 53     'Error code in BASIC for the specified file not being found.
+Const INFORMATION_MESSAGE         As Integer = 64     'The value to display the "Information message" icon in a message box.
+Const LENGTH_INPUT_STRING         As Long    = 32000  'The constant for the maximum string size in this macro is based on an
+                                                      ' OML memory limit, even though OML can handle a string length of up to
+                                                      ' 32,767 bytes.
+Const MAX_ATTEMPTS_ENVIRON        As Integer = 128    'The maximum number of reads of environment strings to try to get the
+                                                      ' user profile path.
+Const NORMAL_FILE                 As Integer = 0      'Attribute of a normal file.
+Const NORMAL_FILE_ARCHIVE         As Integer = 32     'Attribute of a normal file with archive bit set?
+Const SECOND_BUTTON               As Integer = 256    'The value to make the second button in a message box the default.
+Const WARNING_MESSAGE             As Integer = 48     'The value to display the "Warning message" icon in a message box.
+Const WARNING_QUERY               As Integer = 32     'The value to display the "Warning query" icon in a message box.
+Const YES_NO                      As Integer = 4      'The value to display the "Warning message" icon in a message box with
+                                                      ' "Yes" and "No" buttons.
 
 Dim AppData$
 Dim Attributes%
@@ -119,7 +127,6 @@ Dim RecordString$
 Dim Remainder&
 Dim Stanza$
 Dim Start%
-Dim XX%
 
 Dim ExportFilePaths() As String
 
@@ -385,8 +392,8 @@ JumpList$ = Left$( JumpList$, Len( JumpList$ ) - 1 )
 ' to jump to any record.
 
 Begin Dialog Dialog1Definition  392, 308, WaltsMacros$, .Dialog1ControlFunction
-  CancelButton  314, 240,  64,  16
   ButtonGroup .Choice
+   PushButton   314, 240,  64,  16, "&Close",                          .Close
    PushButton    12, 240,  64,  16, "&Delete record"
    PushButton    84, 240,  64,  16, "Delete &file"
    PushButton   122,  24,  70,  14, "<< &Previous record",             .Prev
@@ -402,6 +409,7 @@ Begin Dialog Dialog1Definition  392, 308, WaltsMacros$, .Dialog1ControlFunction
   DropListBox    64, 276, 192,  64, ExportDestinations(),              .FileList
   GroupBox       54, 264, 284,  33, "Select a different export file:", .Outline
   Text          186, 243,  88,   8, "",                                .Instructions
+  CancelButton  377, 255,   1,   1
 End Dialog
 
 Dim Dialog1 as Dialog1Definition
@@ -426,7 +434,11 @@ Select Case Dialog1.Choice
 ' jumps to the "FileDelete" section, which displays a confirmation message and also
 ' terminates the macro after deletion.
 
-  Case DELETE_RECORD_BUTTON
+
+  Case DIALOG_BUTTON_CLOSE
+    Exit Sub
+
+  Case DIALOG_BUTTON_DELETE_RECORD
     If CountOfRecords% > 1 Then
         If MsgBox( "Delete record " & Trim$( Str$( RecordNumber% + 1 ) ) & " from export file?", WARNING_QUERY + SECOND_BUTTON + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
             On Error Resume Next
@@ -464,7 +476,7 @@ Select Case Dialog1.Choice
         GoTo FileDelete:
     End If
 
-  Case DELETE_FILE_BUTTON
+  Case DIALOG_BUTTON_DELETE_FILE
 
 ' Start the file deletion process (which will also be the action when the file contains
 ' only one record anyway) with a request for confirmation. After deletion, check to make
@@ -491,10 +503,10 @@ FileDelete:
     Reset
     Exit Sub
 
-  Case OPEN_FILE_BUTTON     'To view a different export file.
+  Case DIALOG_BUTTON_OPEN_FILE     'To view a different export file.
     GoTo ReShow:
 
-  Case COPY_DATA_BUTTON
+  Case DIALOG_BUTTON_COPY_DATA
     MsgBox "The string " & QUOTE & CopiedData$ & QUOTE & " from record " & Trim$( Str$( RecordNumber% + 1 ) ) & " was copied to the Clipboard.", INFORMATION_MESSAGE, WaltsMacros$
     Exit Sub
 
@@ -1555,8 +1567,8 @@ Select Case Action%
 End Select
 
 End Function
-'158469376
+'159670175
 '
 'Macro name: ViewExportFiles
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:44 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/15/2017 11:03:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.
