@@ -1,11 +1,11 @@
-'MacroName:OCLCCNQuickSearch.2016.01
+'MacroName:OCLCCNQuickSearch.2017.01
 'MacroDescription:Searches WorldCat for the number string on the Windows Clipboard.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 22 April 2015.
+' Last updated: 11 September 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -27,6 +27,7 @@ Sub Main
 Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                            ' a big "X") in a message box; used to report the macro quitting.
 Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
+Const MAX_LENGTH_OCLCCN   As Integer = 10  'The maximum length of an OCLC control number.
 
 Dim CS As Object
 Set CS = CreateObject("Connex.Client")
@@ -91,7 +92,7 @@ Next i
 
 ' Test the edited string for length.
 
-If Len( SearchString$ ) > 9 Then
+If Len( SearchString$ ) > MAX_LENGTH_OCLCCN Then
     Message$ = "The number string is too long!" & Chr$( 013 )
     Message$ = Message$ & "Text on Clipboard: " & RawString$
     MsgBox Message$, CRITICAL_MESSAGE, WaltsMacros$
@@ -110,8 +111,8 @@ Results% = CS.Search( "WC", "#" & SearchString$ )
 If Results% = 0 Then MsgBox "No record was found for this control number: #" & SearchString$, INFORMATION_MESSAGE, WaltsMacros$
 
 End Sub
-'1395995
+'1406106
 '
 'Macro name: OCLCCNQuickSearch
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:19 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 9/11/2017 11:16:24 AM using "MacroBookInspector" macro by Walter F. Nickeson.
