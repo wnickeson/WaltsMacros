@@ -1,4 +1,4 @@
-'MacroName:GetCitationForm.2016.01
+'MacroName:GetCitationForm.2017.01
 'MacroDescription:Gets certain information from a bibliographic record and puts it into
 ' standard citation form for pasting into another bibliographic record as a 510 field.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 25 May 2015.
+' Last updated: 12 September 2016.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -777,6 +777,9 @@ OneOnly:
 
           If CS.AddField( 9, CitationForm$ ) = FALSE Then
               MsgBox "Sorry, could not add the citation field.", CRITICAL_MESSAGE, WaltsMacros$
+            Else
+              CS.CursorColumn = 6
+              CS.EndCell
           End If
           Exit Sub
         Case 2
@@ -946,8 +949,8 @@ End If
 Truncate = TempString$
 
 End Function
-'97539680
+'97839765
 '
 'Macro name: GetCitationForm
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:08 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 9/12/2017 4:04:06 PM using "MacroBookInspector" macro by Walter F. Nickeson.
