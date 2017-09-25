@@ -1,4 +1,4 @@
-'MacroName:KeywordSearchHelper.2017.23
+'MacroName:KeywordSearchHelper.2017.24
 'MacroDescription:Helps construct a keyword search, including using a displayed
 ' record as a basis for the search terms.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 1 August 2017.
+' Last updated: 25 August 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -1447,7 +1447,7 @@ If SearchLabel$ = "" Then
             End If
 
           Case "10", "11"
-            If Right$( TextBoxInput$, 1 ) = "%" Then
+            If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecord Then
                 SearchLabel$ = "Corp/Conf name whole phrase (cnw=)"
               Else
                 SearchLabel$ = "Corp/Conf name (cn:)"
@@ -3047,8 +3047,8 @@ KeepDialogOpen:
 End Select
 
 End Function
-'3076122572
+'3076122592
 '
 'Macro name: KeywordSearchHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 8/15/2017 10:57:11 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 9/25/2017 2:31:12 PM using "MacroBookInspector" macro by Walter F. Nickeson.
