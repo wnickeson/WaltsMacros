@@ -1,4 +1,4 @@
-'MacroName:MacroBookInspector.2017.01
+'MacroName:MacroBookInspector.2017.02
 'MacroDescription:Lists the macros in a macro book, along with their descriptions and
 ' other information. Save the list, or the text of an individual macro, to a text file.
 '
@@ -12,9 +12,9 @@
 ' responsibility for this macro is mine alone. Microsoft's specification for its Compound
 ' File Binary File Format, version v20160714, was retrieved from
 ' <https://winprotocoldoc.blob.core.windows.net/productionwindowsarchives/MS-CFB/[MS-CFB].pdf>
-' on 1 July 2017.
+' on 26 September 2017.
 '
-' Last updated: 1 July 2017.
+' Last updated: 26 September 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -31,7 +31,7 @@
 ' user tool number assigned to it. Its first 25 lines or 1K of source code can be
 ' displayed separately. The list of macro books and the list of macros in the selected
 ' macro book can be saved as tab-delimited text files. The text of the selected macro may
-' also be saved as a text file. The default save location can be set below on line 295.
+' also be saved as a text file. The default save location can be set below on line 293.
 ' The simple list of macros is placed on the Windows clipboard.
 '
 ' Some simple error checking is done as this macro gathers information: If the length of
@@ -351,7 +351,7 @@ SelectingMacros$ = SelectingMacros$ & " several seconds to gather information ab
 SelectingMacros$ = SelectingMacros$ & " with over about 600 lines)."
 
 Begin Dialog Dialog1Definition  342, 226, WaltsMacros$, .Dialog1ControlFunction
-  OkButton      268, 200,  64,  16
+  PushButton    268, 200,  64,  16, "Close",            .CloseButton
   PushButton     10, 174,  56,  14, "Save &list...",    .SaveList
   PushButton     82, 174,  56,  14, "Save &macro...",   .SaveMacro
   PushButton    168, 174,  56,  14, "&Preview",         .PreviewButton
@@ -2315,6 +2315,7 @@ Select Case Action%
 ' list.
 
   Case INITIALIZE
+
     DlgVisible          "Cancel",           INVISIBLE
     DlgVisible          "Clipboard",        INVISIBLE
     DlgVisible          "Description",      INVISIBLE
@@ -2341,6 +2342,7 @@ Select Case Action%
     DlgVisible          "TimeButton",       INVISIBLE
 
   Case CONTROL_CHANGE
+
     Select Case Id$
 
 ' When a macro book is selected, make the list of its macros, but stop there unless the
@@ -2352,6 +2354,7 @@ Select Case Action%
 ' appropriate.
 
       Case "ListOfMacroBooks"
+
         SelectedFile% = DlgValue( "ListOfMacroBooks" )
         If SelectedFile% > 0 Then
             SelectedMbkFile$ = MacroBooks( SelectedFile% )
@@ -2429,6 +2432,7 @@ Select Case Action%
 ' process. Set the default save option to be to save the whole list.
 
               Else
+
                 SelectedMacroName$ = ""
                 DlgVisible          "Clipboard",        VISIBLE
                 DlgVisible          "Description",      INVISIBLE
@@ -2453,6 +2457,7 @@ Select Case Action%
 ' the default save option to be to save the directory list.
 
           Else
+
             DlgListBoxArray     "ListOfMacros",     ListChoosing$()
             DlgFocus            "ListOfMacroBooks"
             DlgVisible          "Clipboard",        INVISIBLE
@@ -2475,11 +2480,13 @@ Select Case Action%
             DlgVisible          "SelectMacro",      INVISIBLE
             DlgVisible          "Shortcut",         INVISIBLE
             DlgVisible          "TimeButton",       INVISIBLE
+
         End If
 
 ' A macro is selected.
 
       Case "ListOfMacros"
+
         If DlgValue( "ListOfMacroBooks" ) = 0 Then   'No macrobook is selected: do nothing
             DlgFocus            "ListOfMacroBooks"
           Else
@@ -2539,19 +2546,22 @@ Select Case Action%
 ' desired.
 
       Case "SaveList"
+
         Call WriteFile( SAVE_LIST )
         Dialog1ControlFunction = KEEP_DLG_OPEN
-        DlgFocus            "OK"
+        DlgFocus            "CloseButton"
 
       Case "SaveMacro"
+
         Call WriteFile( SAVE_MACRO )
         Dialog1ControlFunction = KEEP_DLG_OPEN
-        DlgFocus            "OK"
+        DlgFocus            "CloseButton"
 
 ' If the "Preview" button is clicked, display the window showing the first bit of the
 ' macro.
 
       Case "PreviewButton"
+
         SelectedMacroIndex% = DlgValue( "ListOfMacros" )
         MacroInfo$          = MasterMacroArray( SelectedMacroIndex%, 0 )
         MaxPreview$         = GetField$( MacroInfo$, MACRO_INFO_PREVIEW, TabChar$ )
@@ -2569,16 +2579,17 @@ Select Case Action%
         Dialog Dialog4
 
         Dialog1ControlFunction = KEEP_DLG_OPEN
-        DlgFocus            "OK"
+        DlgFocus            "CloseButton"
 
 ' When the button showing the elapsed time is clicked, call the subprogram to display it.
 ' The text of the button doesn't change even when the time to assemble a macro is added
 ' to the dialog box.
 
       Case "TimeButton"
+
         Call ShowTimes
         Dialog1ControlFunction = KEEP_DLG_OPEN
-        DlgFocus            "OK"
+        DlgFocus            "CloseButton"
 
     End Select
 
@@ -2604,8 +2615,8 @@ Select Case Action%
 End Select
 
 End Function
-'2633116254
+'2644116358
 '
 'Macro name: MacroBookInspector
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 7/5/2017 9:33:45 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 9/26/2017 9:25:38 AM using "MacroBookInspector" macro by Walter F. Nickeson.
