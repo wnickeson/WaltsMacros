@@ -1,4 +1,4 @@
-'MacroName:Make773.2016.01
+'MacroName:Make773.2017.01
 'MacroDescription:Extracts information from a bibliographic record to construct a basic
 ' 773 field for an "in" analytic.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 22 April 2015.
+' Last updated: 26 April 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -78,6 +78,7 @@ Dim TitleProper$
 Dim TypeOfWindow2%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:Make773"
 
+Dim FoundField
 Dim SelfTest
 
 Dim i As Integer, p As Integer, q As Integer
@@ -240,10 +241,25 @@ End If
 
 Title$ = Delimiter$ & "t " & Title$
 
-' Deconstruct the 260 field. Find and remove the date, then remove the first subfield,
+' Deconstruct the 26X field. Find and remove the date, then remove the first subfield,
 ' then isolate the first publisher; finally, put it all back together.
 
-If CS.GetFieldUnicode( "260", 1, Imprint$ ) = TRUE Then
+i = 1
+Do
+  FoundField = CS.GetFieldUnicode( "26.", i, Imprint$ )
+  If FoundField Then
+      If Left$( Imprint$, 3 ) = "260" Then
+          Exit Do
+        Else
+          If Left$( Imprint$, 3 ) = "264" Then
+              If Mid$( Imprint$, 5, 1 ) = "1" Then Exit Do
+          End If
+      End If
+  End If
+  i = i + 1
+Loop Until FoundField = FALSE
+
+If Imprint$ <> "" Then
     Imprint$ = Mid$( Imprint$, 6 )
     p = InStr( Imprint$, DelimiterC$ )
     If p <> 0 Then
@@ -338,8 +354,8 @@ MsgBox "This macro could not find a bibliographic record to paste the 773 into!"
 Done:
 
 End Sub
-'36713349
+'38313695
 '
 'Macro name: Make773
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:15 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 9/26/2017 9:15:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.
