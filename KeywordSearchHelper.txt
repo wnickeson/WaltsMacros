@@ -1,4 +1,4 @@
-'MacroName:KeywordSearchHelper.2017.24
+'MacroName:KeywordSearchHelper.2017.25
 'MacroDescription:Helps construct a keyword search, including using a displayed
 ' record as a basis for the search terms.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 25 August 2017.
+' Last updated: 27 September 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -355,7 +355,7 @@ QUOTE                  = Chr$( 034 )
 SeriesComboBoxChange   = FALSE
 SubjectsComboBoxChange = FALSE
 TitlesComboBoxChange   = FALSE
-WaltsMacros$           = "[Walt's macros] Extras2:DeriveKeywordSearch"
+WaltsMacros$           = "[Walt's macros] Extras1:KeywordSearchHelper"
 
 ' To begin with, check to see if a bibliographic record is displayed. If one is
 ' displayed, determine if it contains non-Latin script characters. If it does, the macro
@@ -3047,8 +3047,8 @@ KeepDialogOpen:
 End Select
 
 End Function
-'3076122592
+'3076122595
 '
 'Macro name: KeywordSearchHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 9/25/2017 2:31:12 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 9/27/2017 2:20:38 PM using "MacroBookInspector" macro by Walter F. Nickeson.
