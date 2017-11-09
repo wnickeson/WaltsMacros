@@ -1,4 +1,4 @@
-'MacroName:RecordToText.2016.26
+'MacroName:RecordToText.2017.02
 'MacroDescription:Copies the displayed record, or a selection of fields in that record,
 ' to the Windows Clipboard in the classic layout.
 '
@@ -13,7 +13,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 9 November 2016.
+' Last updated: 9 November 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -22,13 +22,14 @@
 ' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
-' How it works: Run the macro with a bibliographic or authority record displayed. The
-' macro converts the record to a formatted text string and puts it on the Clipboard for
-' pasting--into a word processing program, for example, or into an e-mail. The formatting
-' presents the record in the classic OCLC record display, with the fixed field at the
-' top with its mnemonics, and proper spacing, if a monospaced font is used. The first
-' line of the copied text identifies the source of the record--WorldCat, Authority File,
-' save file (including the save file number), or Constant Data.
+' How it works: Run the macro with a bibliographic or authority record (including LC
+' superseded versions) displayed. The macro converts the record to a formatted text
+' string and puts it on the Clipboard for pasting--into a word processing program, for
+' example, or into an e-mail. The formatting presents the record in the classic OCLC
+' record display, with the fixed field at the top with its mnemonics, and proper spacing,
+' if a monospaced font is used. The first line of the copied text identifies the source
+' of the record--WorldCat, Authority File, save file (including the save file number), or
+' Constant Data.
 '
 ' If some contiguous fields have been selected, only those fields are copied. If the
 ' first or last field in the selection is not completely selected, the whole field is
@@ -84,6 +85,7 @@ Dim SaveNumber%
 Dim SelectedFields$
 Dim Start%
 Dim StringLength%
+Dim Timestamp$
 Dim VariableFieldString$
 Dim WaltsMacros$             : WaltsMacros$       = "[Walt's macros] Extras2:RecordToText"
 Dim WarningDiacritics$       : WarningDiacritics$ = "---- DIACRITICS HAVE BEEN REMOVED ----"
@@ -122,16 +124,28 @@ Dim Subj$,       SubjUse$,    SubTp$,      UpdStatus$
 ' bibliographic and authority records
 
 WindowType% = CS.ItemType
+
 Select Case WindowType%
 
 ' List windows are fatal.
 
-  Case -1, 5 To 13, 15 To 16, 21 To 25, 36
+  Case 5 To 13, 15 To 16, 21 To 25, 36
 
     MsgBox "Please display a bibliographic or authority record to save as text!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 
   Case Else
+
+' A superseded LC Authority record (whose Item Type is "Unidentified") has a "Timestamp"
+' element in the fixed field; that record can be printed as text. Other unidentified
+' items cause the macro to quit.
+
+    If WindowType% = -1 Then
+        If CS.GetFixedField( "Timestamp", Timestamp$ ) = "" Then
+            MsgBox "Please display a bibliographic or authority record to save as text!", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
 
 ' For record windows, deal first with those in which fields have been selected.
 
@@ -355,7 +369,8 @@ If Selection = FALSE Then
 ' With only one format, assembling the elements of the fixed field for an authority
 ' record is a simpler task than for a bibliographic record.
 
-        FixedFieldString$ = "ARN: " & ARN$ & CRLF$
+        If Timestamp$ <> "" Then Timestamp$ = "       " & "Timestamp:" & " " & Timestamp$
+        FixedFieldString$ = "ARN: " & ARN$ & Timestamp$ & CRLF$
         FixedFieldString$ = FixedFieldString$ & "Rec stat: " & RecStat$ & "        Entered: " & Entered$ & "        Replaced: " & Replaced$ & CRLF$
         FixedFieldString$ = FixedFieldString$ & "Type:     " & RecType$ & "        Upd status:  " & UpdStatus$ & "        Enc lvl:   " & ELvl$ & "        Source:   " & Source$ & CRLF$
         FixedFieldString$ = FixedFieldString$ & "Roman:    " & Roman$ & "        Ref status:  " & RefStatus$ & "        Mod rec:   " & MRec$ & "        Name use: " & NameUse$ & CRLF$
@@ -610,8 +625,8 @@ End If
 AdjustElementLength = TempString$
 
 End Function
-'63932350
+'65432988
 '
 'Macro name: RecordToText
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:28 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 11/9/2017 4:17:10 PM using "MacroBookInspector" macro by Walter F. Nickeson.
