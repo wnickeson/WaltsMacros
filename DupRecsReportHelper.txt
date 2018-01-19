@@ -1,4 +1,4 @@
-'MacroName:DupRecsReportHelper.2016.01
+'MacroName:DupRecsReportHelper.2018.01
 'MacroDescription:Gets the OCLC control numbers of all opened bibliographic records and
 ' writes them to a text file to help in reporting duplicate records to OCLC.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 12 August 2016.
+' Last updated: 19 January 2018.
 '
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
@@ -65,7 +65,7 @@ Dim DupFileName$             : DupFileName$ = "c:\DuplicateOCLCRecs.txt"
 Dim BibCount%
 Dim CountOfWindows%
 Dim DupReportForm$
-Dim FileNumber%              : FileNumber%  = FreeFile
+Dim FileNumber%
 Dim MessageA$
 Dim MessageB$
 Dim TypeOfWindow%
@@ -124,9 +124,10 @@ MsgBox MessageA$ & CRLF$ & CRLF$ & MessageB$, INFORMATION_MESSAGE, WaltsMacros$
 
 If Preferred = TRUE Then OCLCNumber$ = PreferredLine$ & OCLCNumber$
 
-Open DupFileName$ For Output As FileNumber%
-Print FileNumber%, DupReportForm$ ; OCLCNumber$
-Close FileNumber%
+FileNumber% = FreeFile
+Open DupFileName$ For Output As #FileNumber%
+Print #FileNumber%, DupReportForm$ ; OCLCNumber$
+Close #FileNumber%
 Reset
 
 Clipboard.Clear
@@ -176,8 +177,8 @@ RecordCount%   = RecordCount% + 1
 CompileNumbers = PrevString$
 
 End Function
-'2058825
+'2068814
 '
 'Macro name: DupRecsReportHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:35:57 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 1/19/2018 12:59:51 PM using "MacroBookInspector" macro by Walter F. Nickeson.
