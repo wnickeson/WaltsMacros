@@ -1,11 +1,12 @@
-'MacroName:OCLCCNQuickSearch.2017.01
-'MacroDescription:Searches WorldCat for the number string on the Windows Clipboard.
+'MacroName:OCLCCNQuickSearch.2018.02
+'MacroDescription:Searches WorldCat for the number string selected in a Connexion window
+' or copied to the Windows Clipboard.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 11 September 2017.
+' Last updated: 27 September 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -14,8 +15,10 @@
 ' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
-' How it works: Copy a number string onto the Windows Clipboard and run the macro. It
-' performs an OCLC control number search with that copied number.
+' How it works: Select an OCLC number in a Connexion window, or copy an OCLC number from
+' any source onto the Windows Clipboard, and run the macro to search WorldCat for that
+' control number. A little extra text following or preceding the number won't affect the
+' search as long as a valid number appears within the first 32 characters of the string.
 '****************************************************************************************
 
 Option Explicit
@@ -28,14 +31,17 @@ Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical mes
                                            ' a big "X") in a message box; used to report the macro quitting.
 Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
 Const MAX_LENGTH_OCLCCN   As Integer = 10  'The maximum length of an OCLC control number.
+Const MAX_LENGTH_INPUT_STRING   As Integer = 32  'The maximum length of a string containing an OCLC control number.
 
-Dim CS As Object
-Set CS = CreateObject("Connex.Client")
+Dim QUOTE As String*2    : QUOTE = Chr$( 034 )
 
+Dim CS As Object : Set CS = CreateObject("Connex.Client")
 Dim Message$
 Dim RawString$
 Dim Results%
+Dim Source$
 Dim SearchString$
+Dim SelectedText$
 Dim TestChar$
 Dim WaltsMacros$             : WaltsMacros$       = "[Walt's macros] Extras2:OCLCCNQuickSearch"
 
@@ -44,18 +50,40 @@ Dim NonDigitsFollowing       : NonDigitsFollowing = FALSE
 
 Dim i As Integer
 
+Dim SELECTION : SELECTION  = FALSE
+
 If CS.IsOnline = FALSE Then
     MsgBox "Please log on before searching!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End If
 
-' Test the contents of the Clipboard for valid input. First, there must be something on
-' the Clipboard.
+' First, see if any text has been selected.
 
-RawString$ = Trim$( Clipboard.GetText )
+If CS.GetSelectedText( SelectedText$ ) Then
+    RawString$ = Trim$( SelectedText$ )
+End If
+
+' If nothing in the Connexion window has been selected, see if the Clipboard has anything on it,
+' and if so, test it for valid input.
+
 If RawString$ = "" Then
-    MsgBox "There is no text on the Clipboard to search!", CRITICAL_MESSAGE, WaltsMacros$
-    Exit Sub
+    RawString$ = Trim$( Clipboard.GetText )
+    If RawString$ = "" Then
+        MsgBox "There is no number to search! Select or copy a number to search.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    SELECTION = TRUE
+End If
+
+If SELECTION = TRUE Then
+    Source$ = "Selection: "
+  Else
+    Source$ = "Text on Clipboard: "
+End If
+
+If Len( RawString$ ) > MAX_LENGTH_INPUT_STRING Then
+    RawString$ = Left$( RawString$, MAX_LENGTH_INPUT_STRING ) & " ..."
 End If
 
 ' Strip all non-digits from the string. Extra characters can be ignored except if they
@@ -65,8 +93,8 @@ For i = 1 To Len( RawString$ )
   TestChar$ = Mid$( RawString$, i, 1 )
   If TestChar$ Like "[0-9]" Then
       If NonDigitsFollowing = TRUE And DigitsFound = TRUE Then
-          Message$ = "The copied text mixes digits and other characters!" & Chr$( 013 )
-          Message$ = Message$ & "Text on Clipboard: " & RawString$
+          Message$ = "The string mixes digits and other characters!" & Chr$( 013 )
+          Message$ = Message$ & Source$ & QUOTE & RawString$ & QUOTE 
           MsgBox Message$, CRITICAL_MESSAGE, WaltsMacros$
           Exit Sub
         Else
@@ -94,12 +122,12 @@ Next i
 
 If Len( SearchString$ ) > MAX_LENGTH_OCLCCN Then
     Message$ = "The number string is too long!" & Chr$( 013 )
-    Message$ = Message$ & "Text on Clipboard: " & RawString$
+    Message$ = Message$ & Source$ & QUOTE & RawString$ & QUOTE
     MsgBox Message$, CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
   ElseIf SearchString$ = "" Then
-    Message$ = "There is no number on the Clipboard to search!" & Chr$( 013 )
-    Message$ = Message$ & "Text on Clipboard: " & RawString$
+    Message$ = "There is no number to search!" & Chr$( 013 )
+    Message$ = Message$ & Source$ & QUOTE & RawString$ & QUOTE
     MsgBox Message$, CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End If
@@ -107,12 +135,13 @@ End If
 ' If the string passes the input checks, search WorldCat for the record with that control
 ' number.
 
-Results% = CS.Search( "WC", "#" & SearchString$ )
-If Results% = 0 Then MsgBox "No record was found for this control number: #" & SearchString$, INFORMATION_MESSAGE, WaltsMacros$
+If CS.Search( "WC", "#" & SearchString$ ) = 0 Then
+    MsgBox "No record was found for this control number: #" & SearchString$, INFORMATION_MESSAGE, WaltsMacros$
+End If
 
 End Sub
-'1406106
+'1516475
 '
 'Macro name: OCLCCNQuickSearch
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 9/11/2017 11:16:24 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:13:04 AM using "MacroBookInspector" macro by Walter F. Nickeson.

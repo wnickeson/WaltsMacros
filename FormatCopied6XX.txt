@@ -1,4 +1,4 @@
-'MacroName:FormatCopied6XX
+'MacroName:FormatCopied6XX.2018.01
 'MacroDescription:Formats subject fields copied from outside Connexion, cnanging dashes
 ' to delimiters and adding some subfield codes.
 '
@@ -59,6 +59,7 @@ Dim Start%
 Dim SubfieldCode$
 Dim SubjectString$
 Dim Tag$
+Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:FormatCopied6XX"
 
 Dim Changed                  : Changed      = FALSE
@@ -66,16 +67,26 @@ Dim Dashes                   : Dashes       = FALSE
 
 Dim p As Integer
 
-' First, get the data in the row in which the cursor is placed, and check that the field
+Row% = CS.CursorRow
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then, get the data in the row in which the cursor is placed, and check that the field
 ' is tagged as a subject; this serves as a reminder to examine the tagging.
 
-Row% = CS.CursorRow
 If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
     Tag$ = Left$( FieldData$, 5 )
     If Left$( FieldData$, 1 ) = "6" Then
         SubjectString$ = Mid$( FieldData$, 6 )
       Else
-        MsgBox "This macro only works in fields tagged as subjects (6XX).", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox "This macro works only in fields tagged as subjects (6XX).", CRITICAL_MESSAGE, WaltsMacros$
         GoTo Done:
     End If
 End If
@@ -164,8 +175,8 @@ End If
 Done:
 
 End Sub
-'1937447
+'2047754
 '
 'Macro name: FormatCopied6XX
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:05 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:12:41 AM using "MacroBookInspector" macro by Walter F. Nickeson.

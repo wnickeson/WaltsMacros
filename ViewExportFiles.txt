@@ -1,4 +1,4 @@
-'MacroName:ViewExportFiles.2017.03
+'MacroName:ViewExportFiles.2018.05
 'MacroDescription:Shows the records in the defined export files and allows deletion of
 ' individual records or of the whole file being viewed.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 3 August 2017.
+' Last updated: 21 June 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -47,6 +47,8 @@
 
 Option Explicit
 
+Declare Sub DialogBoxControls( RecordNumber% )
+
 Declare Function MakeDisplayable( InputString$ ) As String
 Declare Function RecordArray    ( RecNo% )       As String
 
@@ -55,15 +57,23 @@ Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 Global Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                                ' a big "X") in a message box; used to report the macro quitting.
 
+Global Const DISABLED         As Integer = 0   'The value to make a dialog box control disabled.
+Global Const ENABLED          As Integer = 1   'The value to make a dialog box control enabled.
+Global Const INVISIBLE        As Integer = 0   'The value to make a dialog box control invisible.
+Global Const VISIBLE          As Integer = 1   'The value to make a dialog box control visible.
+
 Global CopiedData$
 Global CountOfFiles%
 Global CountOfRecords%
 Global Encoding$
 Global FileSelect%
 Global Problem$
-Global QUOTE As String*1
 Global RecordNumber%
 Global WaltsMacros$
+
+Global FIRST_RECORD As Integer
+Global LAST_RECORD  As Integer
+Global QUOTE        As String*1
 
 Global ExportDestinations() As String
 Global FileRecords       () As String
@@ -77,13 +87,13 @@ Const ANSWER_YES                  As Integer = 6      'The value returned by a m
 Const DIALOG_BUTTON_CANCEL        As Integer = 102    'The value returned by the dialog box when the "Cancel" button is
                                                       ' clicked.
 Const DIALOG_BUTTON_CLOSE         As Integer = 0      'The value returned by the dialog box when the "Close" button is clicked.
-Const DIALOG_BUTTON_COPY_DATA     As Integer = 6      'The value returned by the dialog box when the button to copy information
+Const DIALOG_BUTTON_COPY_DATA     As Integer = 8      'The value returned by the dialog box when the button to copy information
                                                       ' from the displayed record is clicked.
 Const DIALOG_BUTTON_DELETE_FILE   As Integer = 2      'The value returned by the dialog box when the button to delete the file
                                                       ' is clicked.
 Const DIALOG_BUTTON_DELETE_RECORD As Integer = 1      'The value returned by the dialog box when the button to delete the
                                                       ' displayed record is clicked.
-Const DIALOG_BUTTON_OPEN_FILE     As Integer = 5      'The value returned by the dialog box when the button to open a different
+Const DIALOG_BUTTON_OPEN_FILE     As Integer = 7      'The value returned by the dialog box when the button to open a different
                                                       ' export file is clicked.
 Const FILE_NOT_FOUND              As Integer = 53     'Error code in BASIC for the specified file not being found.
 Const INFORMATION_MESSAGE         As Integer = 64     'The value to display the "Information message" icon in a message box.
@@ -132,6 +142,7 @@ Dim ExportFilePaths() As String
 
 Dim i As Integer, p As Integer, q As Integer, y As Integer
 
+FIRST_RECORD = 0
 QUOTE        = Chr$( 034 )
 WaltsMacros$ = "[Walt's macros] Extras2:ViewExportFiles"
 
@@ -381,30 +392,33 @@ Loop Until RecordOffset& > Lof( FileNum )
 Close #FileNum%
 Reset
 
-JumpList$ = " " & Chr$( 009 )
-For i = 1 To CountOfRecords%
-  JumpList$ = JumpList$ & Trim$( Str$( i ) ) & Chr$( 009 )
+For i = 0 To CountOfRecords% - 1
+  JumpList$ = JumpList$ & Trim$( Str$( i + 1 ) ) & Chr$( 009 )
 Next i
 JumpList$ = Left$( JumpList$, Len( JumpList$ ) - 1 )
+
+LAST_RECORD = CountOfRecords% - 1
 
 ' Invoke the dialog box, which will display formatted records from the array of records
 ' as it runs. If there are 10 or more records in the file, a drop-down list is presented
 ' to jump to any record.
 
-Begin Dialog Dialog1Definition  392, 308, WaltsMacros$, .Dialog1ControlFunction
-  ButtonGroup .Choice
+Begin Dialog Dialog1Definition  389, 305, WaltsMacros, .Dialog1ControlFunction
+  ButtonGroup                                                          .Choice
    PushButton   314, 240,  64,  16, "&Close",                          .Close
-   PushButton    12, 240,  64,  16, "&Delete record"
+   PushButton    12, 240,  64,  16, "Delete &record"
    PushButton    84, 240,  64,  16, "Delete &file"
-   PushButton   122,  24,  70,  14, "<< &Previous record",             .Prev
-   PushButton   200,  24,  70,  14, "&Next record >>",                 .Next
+   PushButton   100,  24,  42,  14, "|< &First",                       .First
+   PushButton   150,  24,  42,  14, "<< &Previous",                    .Prev
+   PushButton   200,  24,  42,  14, "&Next >>",                        .Next
+   PushButton   250,  24,  42,  14, "&Last >|",                        .Last
    PushButton   264, 274,  64,  16, "&Open file",                      .ChangeFile
    PushButton   190, 240,  80,  16, "",                                .CopyData
   ListBox        12,  46, 368, 196, RecordFields(),                    .RecordDisplay
   Text           12,  24,  72,   8, "",                                .RecordCount
   Text           12,  33,  64,   8, "",                                .Encoding
-  Text          300,  28,  44,   8, "Go to record:",                   .JumpText
-  DropListBox   348,  26,  32,  96, JumpList$,                         .JumpList
+  Text          300,  27,  44,   8, "Go to record:",                   .JumpText
+  DropListBox   348,  26,  32,  96, JumpList,                          .JumpList
   Text           12,   8, 312,   8, "",                                .FileDisplay
   DropListBox    64, 276, 192,  64, ExportDestinations(),              .FileList
   GroupBox       54, 264, 284,  33, "Select a different export file:", .Outline
@@ -434,11 +448,12 @@ Select Case Dialog1.Choice
 ' jumps to the "FileDelete" section, which displays a confirmation message and also
 ' terminates the macro after deletion.
 
-
   Case DIALOG_BUTTON_CLOSE
+
     Exit Sub
 
   Case DIALOG_BUTTON_DELETE_RECORD
+
     If CountOfRecords% > 1 Then
         If MsgBox( "Delete record " & Trim$( Str$( RecordNumber% + 1 ) ) & " from export file?", WARNING_QUERY + SECOND_BUTTON + YES_NO, WaltsMacros$ ) = ANSWER_YES Then
             On Error Resume Next
@@ -504,9 +519,11 @@ FileDelete:
     Exit Sub
 
   Case DIALOG_BUTTON_OPEN_FILE     'To view a different export file.
+
     GoTo ReShow:
 
   Case DIALOG_BUTTON_COPY_DATA
+
     MsgBox "The string " & QUOTE & CopiedData$ & QUOTE & " from record " & Trim$( Str$( RecordNumber% + 1 ) ) & " was copied to the Clipboard.", INFORMATION_MESSAGE, WaltsMacros$
     Exit Sub
 
@@ -548,6 +565,48 @@ If MsgBox( NonMARCMessage$, WARNING_QUERY + SECOND_BUTTON + YES_NO, WaltsMacros$
   Else
     MsgBox "File not deleted!", WARNING_MESSAGE, WaltsMacros$
 End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub DialogBoxControls( RecordNumber% )
+
+Problem$ = RecordArray( RecordNumber% )
+If Problem$ <> "" Then
+    MsgBox Problem$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+DlgListBoxArray "RecordDisplay", RecordFields
+
+Select Case RecordNumber%
+
+  Case FIRST_RECORD
+    DlgEnable       "First",         DISABLED
+    DlgEnable       "Prev",          DISABLED
+    DlgEnable       "Next",          ENABLED
+    DlgEnable       "Last",          ENABLED
+
+  Case LAST_RECORD
+    DlgEnable       "First",         ENABLED
+    DlgEnable       "Prev",          ENABLED
+    DlgEnable       "Next",          DISABLED
+    DlgEnable       "Last",          DISABLED
+
+  Case Else
+    DlgEnable       "First",         ENABLED
+    DlgEnable       "Prev",          ENABLED
+    DlgEnable       "Next",          ENABLED
+    DlgEnable       "Last",          ENABLED
+
+End Select
+
+DlgVisible      "CopyData",      INVISIBLE
+DlgText         "Encoding",      Encoding$
+DlgVisible      "Instructions",  VISIBLE
+DlgText         "Instructions",  "Click on a field to copy it."
+DlgValue        "JumpList",      RecordNumber%
+DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
 
 End Sub
 
@@ -1270,12 +1329,8 @@ Function Dialog1ControlFunction( Id$, Action%, SValue& )
 ' The function that controls the master dialog box.
 
 Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
-Const DISABLED       As Integer = 0   'The value to make a dialog box control disabled.
-Const ENABLED        As Integer = 1   'The value to make a dialog box control enabled.
 Const INITIALIZE     As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
-Const INVISIBLE      As Integer = 0   'The value to make a dialog box control invisible.
 Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog box function to keep a dialog box open.
-Const VISIBLE        As Integer = 1   'The value to make a dialog box control visible.
 
 Dim Delimiter$
 Dim FirstSubfield$
@@ -1323,21 +1378,11 @@ Select Case Action%
     If CountOfRecords% = 1 Then
         DlgVisible      "Prev",          INVISIBLE
         DlgVisible      "Next",          INVISIBLE
+        DlgVisible      "First",         INVISIBLE
+        DlgVisible      "Last",          INVISIBLE
         DlgText         "RecordCount",   "Only record in file."
       Else
-        DlgVisible      "Prev",          VISIBLE
-        DlgVisible      "Next",          VISIBLE
-        If RecordNumber% = 0 Then
-            DlgEnable       "Prev",          DISABLED
-          Else
-            DlgEnable       "Prev",          ENABLED
-        End If
-        If RecordNumber% = CountOfRecords% - 1 Then
-            DlgEnable       "Next",          DISABLED
-          Else
-            DlgEnable       "Next",          ENABLED
-        End If
-        DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
+        Call DialogBoxControls( FIRST_RECORD )
     End If
     If CountOfRecords% < 10 Then
         DlgVisible      "JumpList",      INVISIBLE
@@ -1360,59 +1405,31 @@ Select Case Action%
 ' "Copy" button was visible because a field was clicked, it is made invisible when a new
 ' record is displayed, to be seen again only if a field is clicked.
 
+      Case "First"
+        RecordNumber%          = FIRST_RECORD
+        Call DialogBoxControls( RecordNumber% )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
       Case "Prev"
-        If RecordNumber% > 0 Then
-            RecordNumber% = RecordNumber% - 1
-            Problem$      = RecordArray( RecordNumber% )
-            If Problem$ <> "" Then
-                MsgBox Problem$, CRITICAL_MESSAGE, WaltsMacros$
-                Exit Function
-            End If
-            DlgListBoxArray "RecordDisplay", RecordFields
-            DlgEnable       "Next",          ENABLED
-        End If
-        If RecordNumber% = 0 Then
-            DlgEnable       "Prev",          DISABLED
-          Else
-            DlgEnable       "Prev",          ENABLED
-        End If
-        DlgVisible      "CopyData",      INVISIBLE
-        DlgText         "Encoding",      Encoding$
-        DlgVisible      "Instructions",  VISIBLE
-        DlgText         "Instructions",  "Click on a field to copy it."
-        DlgValue        "JumpList",      0
-        DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
+        RecordNumber%          = RecordNumber% - 1
+        Call DialogBoxControls( RecordNumber% )
         Dialog1ControlFunction = KEEP_DLG_OPEN
 
       Case "Next"
-        If RecordNumber% < CountOfRecords% - 1 Then
-            RecordNumber% = RecordNumber% + 1
-            Problem$      = RecordArray( RecordNumber% )
-            If Problem$ <> "" Then
-                MsgBox Problem$, CRITICAL_MESSAGE, WaltsMacros$
-                Exit Function
-            End If
-            DlgListBoxArray "RecordDisplay", RecordFields
-            DlgEnable       "Prev",          ENABLED
-        End If
-        If RecordNumber% = CountOfRecords% - 1 Then
-            DlgEnable       "Next",          DISABLED
-          Else
-            DlgEnable       "Next",          ENABLED
-        End If
-        DlgVisible      "CopyData",      INVISIBLE
-        DlgText         "Encoding",      Encoding$
-        DlgVisible      "Instructions",  VISIBLE
-        DlgText         "Instructions",  "Click on a field to copy it."
-        DlgValue        "JumpList",      0
-        DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
+        RecordNumber%          = RecordNumber% + 1
+        Call DialogBoxControls( RecordNumber% )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Last"
+        RecordNumber%          = LAST_RECORD
+        Call DialogBoxControls( RecordNumber% )
         Dialog1ControlFunction = KEEP_DLG_OPEN
 
 ' If the drop-down list of record numbers is used, the number chosen triggers the
 ' analysis of that record in the file. The navigation buttons change to match.
 
       Case "JumpList"
-        RecordNumber% = DlgValue( "JumpList" ) - 1
+        RecordNumber% = DlgValue( "JumpList" )
         If RecordNumber% = -1 Then
             RecordNumber% = 0
         End If
@@ -1422,18 +1439,9 @@ Select Case Action%
             Exit Function
         End If
         DlgListBoxArray "RecordDisplay", RecordFields
-        If RecordNumber% = 0 Then
-            DlgEnable       "Prev",          DISABLED
-          Else
-            DlgEnable       "Prev",          ENABLED
-        End If
-        If RecordNumber% = CountOfRecords% - 1 Then
-            DlgEnable       "Next",          DISABLED
-          Else
-            DlgEnable       "Next",          ENABLED
-        End If
+        Call DialogBoxControls( RecordNumber% )
         DlgText         "Encoding",      Encoding$
-        DlgValue        "JumpList",      0
+        DlgValue        "JumpList",      RecordNumber%
         DlgText         "RecordCount",   "Record " & Trim$( Str$( RecordNumber% + 1 ) ) & " of " & Trim$( Str$( CountOfRecords% ) )
         Dialog1ControlFunction = KEEP_DLG_OPEN
 
@@ -1567,8 +1575,8 @@ Select Case Action%
 End Select
 
 End Function
-'159670175
+'160469681
 '
 'Macro name: ViewExportFiles
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 8/15/2017 11:03:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:13:29 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,4 +1,4 @@
-'MacroName:CollationCheck.2016.13
+'MacroName:CollationCheck.2018.10
 'MacroDescription:Compares leaf and page counts in the statement of extent (300 subfield
 ' $a) and a standard signature statement.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 5 July 2016.
+' Last updated: 20 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -85,7 +85,6 @@ Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
 Global CS As Object
 
-Global DELIMITER As String*1
 Global DisplayExtentPieces$
 Global ExtentLeafCount%
 Global ExtentPageCount%
@@ -94,14 +93,16 @@ Global MultiplierString$
 Global PageCountFromLeafCount%
 Global PaginationError$
 Global SignatureError$
-Global TAB_CHAR As String*1
 Global TotalLeafCount%
+
+Global DELIMITER As String*1
+Global TAB_CHAR  As String*1
 
 Global ExtentTermSupplied
 
-Global PagePieces()      As String
-Global SigErrors()       As String
-Global SigPieces()       As String
+Global PagePieces() As String
+Global SigErrors()  As String
+Global SigPieces()  As String
 
 '****************************************************************************************
 
@@ -140,7 +141,7 @@ ExtentLeafCount%   = 0
 TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
   Case -1, 3 To 16, 18, 20 To 36
-    MsgBox "This macro only works in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -166,7 +167,7 @@ If PosFF% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
 
 If CS.GetFixedField( "Type", RecType$ ) Then
     If RecType$ Like "[!acdt]" Then
-        MsgBox "Sorry, this macro only works in records for printed language material!", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox "Sorry, this macro works only in records for printed language material!", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
 End If
@@ -669,8 +670,6 @@ Dim Adjustment%
 Dim AlternateCountLeft$
 Dim AlternateCountRight$
 Dim CharA%
-Dim CharMiddleDot$           : CharMiddleDot$       = Chr$( 183 )
-Dim CharMultiply$            : CharMultiply$        = Chr$( 215 )
 Dim CharNext%
 Dim CharPrev%
 Dim Distance%
@@ -684,7 +683,6 @@ Dim LeafCountString$
 Dim LeafMinus%
 Dim LeafPlus%
 Dim Parenthetical$
-Dim Quote$                   : Quote$               = Chr$( 034 )
 Dim RunningCount%
 Dim SignatureLoopCount%
 Dim SignaturePiece$
@@ -695,6 +693,10 @@ Dim TempString$
 Dim xHyphen%
 Dim xLeftParen%
 Dim xPlus%
+
+Dim DOUBLE_QUOTE             : DOUBLE_QUOTE         = Chr$( 034 )
+Dim MIDDLE_DOT               : MIDDLE_DOT           = Chr$( 183 )
+Dim MULTIPLY                 : MULTIPLY             = Chr$( 215 )
 
 Dim Alternate                : Alternate            = FALSE
 Dim GatheringComplete        : GatheringComplete    = FALSE
@@ -923,8 +925,10 @@ For i = 1 To Len( SignatureString$ )
 ' piece is complete.
 
   Select Case CharA%
+
     Case 223 To 252
       TempString$ = TempString$ & ""
+
     Case 32, 44, 59
       TempString$ = TempString$ & " "
       If InStr( TempString$, "pi" ) <> 0 And InStr( TempString$, "1" ) <> 0 And LeftParen = FALSE Then
@@ -942,8 +946,10 @@ For i = 1 To Len( SignatureString$ )
           LeftBracket       = FALSE
           RightBracket      = FALSE
       End If
+
     Case Else
       TempString$ = TempString$ & Chr$( CharA% )
+
   End Select
 
 ' A complete piece of an extent statement is added to the array for the next step in the
@@ -1039,7 +1045,7 @@ For SignatureLoopCount% = 0 To UBound( SignaturePieces )
             CharA%      = 128
           Case 47, 168
             Alternate  = TRUE
-            LeafCountString$ = CharMiddleDot$ & LeafCountString$
+            LeafCountString$ = MIDDLE_DOT & LeafCountString$
           Case Else
 
 ' If no superscript characters are found at the end of the piece, and the rightmost
@@ -1057,7 +1063,7 @@ For SignatureLoopCount% = 0 To UBound( SignaturePieces )
 
         If i = 0 Then
             SignaturePiece$  = "?" & SignaturePiece$
-            SignatureError$  = "Leaf count " & Quote$ & LeafCountString$ & Quote$ & " does not follow a signed gathering."
+            SignatureError$  = "Leaf count " & DOUBLE_QUOTE & LeafCountString$ & DOUBLE_QUOTE & " does not follow a signed gathering."
             LeafCountString$ = ""
             LeafCountNumber% = 0
             i = 2
@@ -1071,7 +1077,7 @@ For SignatureLoopCount% = 0 To UBound( SignaturePieces )
 ' requiring further analysis that the macro can't do.
 
       If Alternate = TRUE Then
-          p = InStr( LeafCountString$, CharMiddleDot$ )
+          p = InStr( LeafCountString$, MIDDLE_DOT )
           If p <> 0 Then
               AlternateCountLeft$  = Left$( LeafCountString$, p - 1 )
               AlternateCountRight$ = Mid$( LeafCountString$, p + 1 )
@@ -1108,7 +1114,7 @@ For SignatureLoopCount% = 0 To UBound( SignaturePieces )
 
           If Distance% < 1 Then
               Distance%       = 0
-              SignatureError$ = "There is a problem with the range, possibly a missing " & Quote$ & MultiplierString$ & Quote$ & " in the end gathering."
+              SignatureError$ = "There is a problem with the range, possibly a missing " & DOUBLE_QUOTE & MultiplierString$ & DOUBLE_QUOTE & " in the end gathering."
           End If
           SubCount% = Distance% * LeafCountNumber%
       End If
@@ -1197,7 +1203,7 @@ For SignatureLoopCount% = 0 To UBound( SignaturePieces )
 ' distance multiplied by the leaf count, and then the total.
 
         Else
-          SignaturePiece$ = SignaturePiece$ & " ^" & LeafCountString$ & " = " & Trim$( Str$( Distance% ) ) & " " & CharMultiply$ & " "
+          SignaturePiece$ = SignaturePiece$ & " ^" & LeafCountString$ & " = " & Trim$( Str$( Distance% ) ) & " " & MULTIPLY & " "
           SignaturePiece$ = SignaturePiece$ & LeafCountString$ & " = " & Trim$( Str$( SubCount% ) )
           SubCount%       = SubCount% + Adjustment%
 
@@ -1230,7 +1236,7 @@ For SignatureLoopCount% = 0 To UBound( SignaturePieces )
               SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
             ElseIf LeafCountNumber% > 1 And LeafCountNumber% Mod 2 = 1 Then
               SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
-              SignatureError$ = "The leaf count for this gathering, " & Quote$ & LeafCountString$ & Quote$ & ", is an odd number."
+              SignatureError$ = "The leaf count for this gathering, " & DOUBLE_QUOTE & LeafCountString$ & DOUBLE_QUOTE & ", is an odd number."
             ElseIf Adjustment% > 0 Then
               SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
               SignatureError$ = "One or more leaves have been added to this gathering total. Please verify the number of added leaves."
@@ -1704,6 +1710,7 @@ Select Case Action%
         z = DlgValue( "ListBox1" )
         DlgText    "PageWarning", PagePieces( z )
         DlgVisible "PageWarning", VISIBLE
+
       Case "ListBox2"
         z = DlgValue( "ListBox2" )
         DlgText    "SigWarning",  SigErrors( z )
@@ -1714,8 +1721,8 @@ Select Case Action%
 End Select
 
 End Function
-'174366999
+'175067032
 '
 'Macro name: CollationCheck
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:35:33 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:11:58 AM using "MacroBookInspector" macro by Walter F. Nickeson.

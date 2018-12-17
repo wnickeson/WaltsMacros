@@ -1,4 +1,4 @@
-'MacroName:GetHeadingMeta.2016.01
+'MacroName:GetHeadingMeta.2015.01
 'MacroDescription:Gets the authorized heading, the LCCN, and the cataloging agency from
 ' an authority record, and puts it in formatted form on the Clipboard for pasting.
 '
@@ -62,7 +62,7 @@ Dim i, p As Integer
 TypeOfWindow1% = CS.ItemType
 Select Case TypeOfWindow1%
   Case 0 To 2, 5 To 13, 15 To 17, 19, 21 To 36
-    MsgBox "This macro only works in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -133,8 +133,8 @@ Clipboard.SetText Heading$
 MsgBox Heading$, INFORMATION_MESSAGE, WaltsMacros$
 
 End Sub
-'1626491
+'1626498
 '
 'Macro name: GetHeadingMeta
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:12 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:12:50 AM using "MacroBookInspector" macro by Walter F. Nickeson.

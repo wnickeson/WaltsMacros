@@ -153,7 +153,7 @@ If PosFF% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
 
 If CS.GetFixedField( "Type", RecType$ ) Then
     If RecType$ <> "a" Then
-        MsgBox "Sorry, this macro only works in records for printed language material!", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox "Sorry, this macro works only in records for printed language material!", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
 End If
@@ -953,4 +953,4 @@ End Function
 '
 'Macro name: GetCitationForm
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 9/12/2017 4:04:06 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:12:45 AM using "MacroBookInspector" macro by Walter F. Nickeson.

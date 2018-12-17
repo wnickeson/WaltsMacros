@@ -1,0 +1,216 @@
+'MacroName:AddRelatorTo100.2018.19
+'MacroDescription:Automatically adds a relator term in subfield $e to the 100 field of a
+' bibliographic record, according to the Type of record.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 20 August 2018.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works. Run the macro in a bibliographic record (cursor position is irrelevant)
+' to instantly add a relator term to the 100 field. The term added is determined by the
+' type of record, as identified in the fixed field:
+'
+'  Language material (Type "a", "t", "i"): "author"
+'  Music (Type "j", "c", "d"): "composer"
+'  2D non-projected graphic (Type "k"): "artist"
+'  Cartographic material (Type "e", "f"): "cartographer"
+'
+' For any other type of material, or for any other heading field, the macro won't attempt
+' to add a relator term. The macro adds a term even when a different relator term is
+' already present in the 100 field. If the corresponding relator code in subfield $4 is
+' present, the macro asks if the code should be deleted when adding the term.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL As Integer = 0   'The value returned by the dialog box function when the "Cancel" button is clicked.
+Const DISPLAY_FF_AT_TOP    As Integer = 1   'The value to display the fixed field at the top of a record.
+Const KEEP_CODE            As Integer = 1   'The value to retain a relator code when adding the term.
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim EndOfData%
+Dim FieldData$
+Dim KeepOrDeleteCode%
+Dim PosFF%
+Dim RecType$
+Dim RelatorCode$
+Dim RelatorTerm$
+Dim Row%
+Dim TestChar$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:AddRelatorTo100"
+
+Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
+
+Dim i As Integer, p As Integer
+
+Dim ChangedFFView            : ChangedFFView = FALSE
+Dim CursorMove
+
+' First, make sure a bibliographic record is open.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case 0 To 2, 17, 19
+  Case Else
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+Row% = CS.CursorRow
+
+' Then get the value of the fixed field element "Type" to determine the relator term and
+' code.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+    End If
+    If CS.GetFixedField( "Type", RecType$ ) Then
+        Select Case RecType$
+          Case "a", "t", "i"
+            RelatorTerm$ = "author"
+            RelatorCode$ = "aut"
+          Case "e", "f"
+            RelatorTerm$ = "cartographer"
+            RelatorCode$ = "ctg"
+          Case "j", "c", "d"
+            RelatorTerm$ = "composer"
+            RelatorCode$ = "cmp"
+          Case "k"
+            RelatorTerm$ = "artist"
+            RelatorCode$ = "art"
+          Case Else
+            MsgBox "Sorry, this macro can't automatically add a term to this heading.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End Select
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Get the 100 field and check for the presence of relator terms and codes. If the
+' selected term is already in the field, the macro quits.
+
+If CS.GetField( "100", 1, FieldData$ ) Then
+    If FieldData$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro can't edit the 100 field.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+    p = InStr( FieldData$, DELIMITER & "e" )
+    If p > 0 Then
+        If InStr( p, FieldData$, RelatorTerm$, 1 ) Then
+            MsgBox "The relator term is already present in the field!", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+
+' If the corresponding code is present in subfield $4, ask whether to keep it when adding
+' the term. Its position determines where to cut the field or insert the term in subfield
+' $e.
+
+    p = InStr( FieldData$, DELIMITER & "4" )
+    If p = 0 Then
+        EndOfData% = Len( FieldData$ )
+      Else
+        If InStr( p, FieldData$, RelatorCode$, 1 ) Then
+            For i = p - 1 To 1 Step -1
+              TestChar$ = Mid$( FieldData$, i, 1 )
+              If TestChar$ <> " " Then
+                  EndOfData% = i
+                  Exit For
+              End If
+            Next i
+
+            Begin Dialog Dialog1Definition  232, 56, WaltsMacros$
+              PushButton     10,  30,  72, 16, "&Keep the code"
+              PushButton     90,  30,  72, 16, "&Delete the code"
+              CancelButton  170,  30,  52, 16
+              Text           10,   6, 202, 16, "The relator code corresponding to the term is already present. Choose whether to:"
+            End Dialog
+            Dim Dialog1 As Dialog1Definition
+            On Error Resume Next
+            KeepOrDeleteCode% = Dialog( Dialog1 )
+
+        End If
+
+        Select Case KeepOrDeleteCode%
+
+          Case DIALOG_BUTTON_CANCEL
+            Exit Sub
+
+' If the code is to be kept, find the previous non-space character.
+
+          Case KEEP_CODE
+            RelatorCode$ = Trim$( Mid$( FieldData$, p, p + 6 ) )
+            For i = p - 1 To 1 Step -1
+              If Mid$( FieldData$, i, 1 ) <> " " Then
+                  EndOfData% = i
+                  Exit For
+              End If
+            Next i
+
+        End Select
+
+    End If
+
+' Make a new field without a relator code and add a comma at the end if necessary.
+
+    If Mid$( FieldData$, EndOfData% - 1, 2 ) Like "[!A-Z]." Then
+        FieldData$ = Left$( FieldData$, EndOfData% - 1 ) & ","
+      Else
+        FieldData$ = FieldData$ & ","
+    End If
+
+' Add the relator term. If the relator code is being retained, add it back at the end of
+' the new field.
+
+    FieldData$ = FieldData$ & " " & DELIMITER & "e " & RelatorTerm$ & "."
+    If KeepOrDeleteCode% = KEEP_CODE Then
+        FieldData$ = FieldData$ & " " & RelatorCode$
+    End If
+
+' Delete the existing field and add the new one (because if the field is controlled, the
+' "SetField" command can't change the field).
+
+    If CS.DeleteField( "100", 1 ) = FALSE Then
+        MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        If CS.AddField( 1, FieldData$ ) = FALSE Then
+            MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+        End If
+    End If
+
+' Position the cursor in the 100 field for easy controlling.
+
+    CursorMove = CS.GetField( "100", 1, FieldData$ )
+
+  Else
+    MsgBox "Sorry, this macro works only with personal names in the 100 field.", CRITICAL_MESSAGE, WaltsMacros$
+
+End If
+
+End Sub
+'2389632
+'
+'Macro name: AddRelatorTo100
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
+'Saved: 12/17/2018 9:11:34 AM using "MacroBookInspector" macro by Walter F. Nickeson.

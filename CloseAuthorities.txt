@@ -66,4 +66,4 @@ End Sub
 '
 'Macro name: CloseAuthorities
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:35:28 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:11:52 AM using "MacroBookInspector" macro by Walter F. Nickeson.

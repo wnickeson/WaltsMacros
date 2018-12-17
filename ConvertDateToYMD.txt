@@ -1,11 +1,11 @@
-'MacroName:ConvertDateToYMD.2016.01
+'MacroName:ConvertDateToYMD.2018.02
 'MacroDescription:Converts a date or date range into the format "Year Month Day."
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 21 March 2016.
+' Last updated: 20 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -82,27 +82,37 @@ Set CS = CreateObject("Connex.Client")
 
 Dim CharT$
 Dim ConvertedDate$
-Dim Delimiter$               : Delimiter$   = Chr$( 223 )
+Dim DELIMITER As String*1    : DELIMITER   = Chr$( 223 )
 Dim FieldData$
 Dim Piece$
 Dim PieceCount%
 Dim SelectedText$
 Dim Start%                   : Start%       = 1
 Dim TermChars$
+Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:ConvertDateToYMD"
 Dim WorkString$
 
 Dim i As Integer, p As Integer
 
-' First, make sure the language of the record is English. If it isn't, names of months
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro only works in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then check that the language of the record is English. If it isn't, names of months
 ' won't match and the macro will exit with a warning, but there is no need to go that
 ' far in the macro. Just quit!
 
 If CS.GetField( "040", 1, FieldData$ ) Then
-    p = InStr( FieldData$, Delimiter$ & "b" )
+    p = InStr( FieldData$, DELIMITER & "b" )
     If p <> 0 Then
         If Mid$( FieldData$, p + 3, 3 ) <> "eng" Then
-            MsgBox "This macro works only in English-language records!", CRITICAL_MESSAGE, WaltsMacros$
+            MsgBox "Sorry, this macro works only in English-language records!", CRITICAL_MESSAGE, WaltsMacros$
             Exit Sub
         End If
     End If
@@ -443,8 +453,8 @@ If i < InStringLength% Then
 End If
 
 End Function
-'47216025
+'48216328
 '
 'Macro name: ConvertDateToYMD
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:35:47 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:12:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.

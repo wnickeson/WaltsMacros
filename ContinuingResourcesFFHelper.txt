@@ -1,13 +1,13 @@
-'MacroName:ContinuingResourcesFFHelper.2017.42
+'MacroName:ContinuingResourcesFFHelper.2018.03
 'MacroDescription:Helps with the fixed field on a record for continuing resources.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 18 July 2017.
+' Last updated: 7 August 2018.
 ' Check for the latest versions of this and my other macros at
-' https://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
@@ -42,7 +42,7 @@ Declare Function CheckDateFormat( InString$ ) As Integer
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Global Const ELEMENT        As Integer = 0
+Global Const ELEMENT_NAME   As Integer = 0
 Global Const FROM_DLG_BOX   As Integer = 2
 Global Const FROM_RECORD    As Integer = 1
 Global Const NOT_PRESENT    As Integer = 1
@@ -56,7 +56,7 @@ Global WaltsMacros$
 
 Global Changed
 
-Global FFValues( 2, 11 )    As String
+Global FFValues( 2, 13 )    As String
 
 Global Alphabet( 15 )       As String
 Global ConfPub( 2 )         As String
@@ -71,13 +71,9 @@ Global GovtPub( 11 )        As String
 Global Regularity( 4 )      As String
 Global TypeOfResource( 7 )  As String
 
-Declare Sub LogMacroUse
-
 '****************************************************************************************
 
 Sub Main
-
-'LogMacroUse
 
 Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                             ' a big "X") in a message box; used to report the macro quitting.
@@ -92,11 +88,12 @@ Set CS = CreateObject("Connex.Client")
 
 Dim BLvl$
 Dim FFVal$
-Dim FILL_CHAR As String*1    : FILL_CHAR    = Chr$( 252 )
 Dim PosFF%
 Dim RType$
 Dim TempString$
 Dim TypeOfWindow%
+
+Dim FILL_CHAR As String*1    : FILL_CHAR = Chr$( 252 )
 
 Dim ChangedFFView
 Dim GetFF
@@ -112,7 +109,7 @@ Changed      = FALSE
 TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
   Case -1, 3 To 16, 18, 20 To 36
-    MsgBox "This macro only works in bibliographic records.", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in a bibliographic record.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -128,28 +125,30 @@ GetFF = CS.GetFixedField( "Dates", Dates1$ )
 GetFF = CS.GetFixedField( ",", Dates2$ )
 
 If RType$ <> "a" Or Blvl$ Like "[!is]" Then
-    MsgBox "This macro only works in bibliographic records for serials.", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in a bibliographic records for a serial.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End If
 
 ' If the record is appropriate, fill the array with the current values. Change the OCLC
 ' fill character to the pipe or vertical bar for display purposes.
 
-FFValues( ELEMENT, 0  ) = "Alph"
-FFValues( ELEMENT, 1  ) = "Conf"
-FFValues( ELEMENT, 2  ) = "Cont"
-FFValues( ELEMENT, 3  ) = "EntW"
-FFValues( ELEMENT, 4  ) = "Form"
-FFValues( ELEMENT, 5  ) = "Freq"
-FFValues( ELEMENT, 6  ) = "GPub"
-FFValues( ELEMENT, 7  ) = "Orig"
-FFValues( ELEMENT, 8  ) = "Regl"
-FFValues( ELEMENT, 9  ) = "S/L"
-FFValues( ELEMENT, 10 ) = "SrTp"
-FFValues( ELEMENT, 11 ) = "DtSt"
+FFValues( ELEMENT_NAME, 0  ) = "Alph"
+FFValues( ELEMENT_NAME, 1  ) = "Conf"
+FFValues( ELEMENT_NAME, 2  ) = "Cont"
+FFValues( ELEMENT_NAME, 3  ) = "EntW"
+FFValues( ELEMENT_NAME, 4  ) = "Form"
+FFValues( ELEMENT_NAME, 5  ) = "Freq"
+FFValues( ELEMENT_NAME, 6  ) = "GPub"
+FFValues( ELEMENT_NAME, 7  ) = "Orig"
+FFValues( ELEMENT_NAME, 8  ) = "Regl"
+FFValues( ELEMENT_NAME, 9  ) = "S/L"
+FFValues( ELEMENT_NAME, 10 ) = "SrTp"
+FFValues( ELEMENT_NAME, 11 ) = "DtSt"
+FFValues( ELEMENT_NAME, 12 ) = "Dates"
+FFValues( ELEMENT_NAME, 13 ) = ","
 
-For i = 0 To 11
-  If CS.GetFixedField( FFValues( ELEMENT, i), FFVal$ ) Then
+For i = 0 To 13
+  If CS.GetFixedField( FFValues( ELEMENT_NAME, i), FFVal$ ) Then
       If FFVal$ = FILL_CHAR Then FFVal$ = "|"
       FFValues( FROM_RECORD, i ) = FFVal$
   End If
@@ -223,10 +222,10 @@ If Changed Then
         ChangedFFView         = TRUE
     End If
 
-    For i = 0 To 11
+    For i = 0 To 13
       TempString$ = FFValues( FROM_DLG_BOX, i )
       If FFValues( FROM_RECORD, i ) <> TempString$ Then
-          SetFF = CS.SetFixedField( FFValues( ELEMENT, i ), TempString$ )
+          SetFF = CS.SetFixedField( FFValues( ELEMENT_NAME, i ), TempString$ )
       End If
     Next i
 
@@ -474,6 +473,8 @@ Const CONT_1_ID           As Integer = 10  'The IDs of the "Cont" list box contr
 Const CONT_2_ID           As Integer = 13
 Const CONT_3_ID           As Integer = 16
 Const CURRENTLY_PUBLISHED As Integer = 0   'The index in the DateStatus array of the value "c - Continuing resource currently published".
+Const DATES_1             As Integer = 12  'The index in the FFValues array of Dates1.
+Const DATES_2             As Integer = 13  'The index in the FFValues array of Dates2.
 Const FF_CONT_1           As Integer = 2   'The index in the FFValues array of the "Nature of Contents" element (008/25-27).
 Const FREQ_UNKNOWN        As Integer = 16  'The index in the Regularity array of the value "u - Unknown".
 Const REGL_UNKNOWN        As Integer = 2   'The index in the Frequency array of the value "u - Unknown".
@@ -486,9 +487,9 @@ Dim Contents_1_Val$
 Dim Contents_2_Val$
 Dim Contents_3_Val$
 Dim ControlID%
+Dim DateToCheck$
 Dim DtSt%
 Dim ErrorMsg$
-Dim SendDate$
 Dim TempString1$
 Dim TempString2$
 Dim WhichDate$
@@ -500,7 +501,7 @@ Select Case Action%
   Case INITIALIZE
 
     ControlID% = 4
-    For i = 0 To 11
+    For i = 0 To 12
       TempString2$ = FFValues( FROM_RECORD, i )
       If TempString2$ = "" Then TempString2$ = "["
       If i = FF_CONT_1 Then
@@ -528,7 +529,6 @@ Select Case Action%
       End If
       ControlID% = ControlID% + 3
     Next i
-    DlgText  "TextBoxDates1", Dates1$
     DlgText  "TextBoxDates2", Dates2$
 
 
@@ -627,13 +627,13 @@ Select Case Action%
         Dates2$ = Trim$( DlgText( "TextBoxDates2" ) )
         For i = 1 To 2
           If i = 1 Then
-              SendDate$  = Dates1$
-              WhichDate$ = "Dates1"
+              DateToCheck$ = Dates1$
+              WhichDate$   = "Dates1"
             Else
-              SendDate$  = Dates2$
-              WhichDate$ = "Dates2"
+              DateToCheck$ = Dates2$
+              WhichDate$   = "Dates2"
           End If
-          CheckDate% = CheckDateFormat( SendDate$ )
+          CheckDate% = CheckDateFormat( DateToCheck$ )
           Select Case CheckDate%
             Case NOT_PRESENT
               ErrorMsg$ = "There is no date in " & WhichDate$ & "."
@@ -710,14 +710,21 @@ Select Case Action%
 ' the conclusion about changed values to the main routine for final disposition.
 
         ControlID% = 4
-        For i = 0 To 11
+        For i = 0 To 13
           If i = FF_CONT_1 Then
               TempString1$ = ContentsString$
               ControlID%   = CONT_3_ID
             Else
-              TempString1$ = Left( DlgText( ControlID% ), 1 )
+              Select Case i
+                Case Is < DATES_1
+                  TempString1$ = Left( DlgText( ControlID% ), 1 )
+                Case DATES_1
+                  TempString1$ = Trim$( DlgText( ControlID% ) )
+                Case DATES_2
+                  TempString1$ = Trim$( DlgText( 47 ) )
+              End Select
           End If
-          If TempString1$ = "[" Then TempString1$ = ""
+          If TempString1$ = "[" Then TempString1$ = " "
           FFValues( FROM_DLG_BOX, i ) = TempString1$
           If FFValues( FROM_RECORD, i ) <> TempString1$ Then
               Changed = TRUE
@@ -730,31 +737,8 @@ Select Case Action%
   End Select
 
 End Function
-'75734213
-
-'########################################################################################
-Sub LogMacroUse                                                                       '##
-Dim FileLog%                 : FileLog% = Freefile                                    '##
-Dim Path$, FileName$                                                                  '##
-Dim i As Integer             : i = 1                                                  '##
-Do                                                                                    '##
-  Path$ = Environ( i )                                                                '##
-  If Left$( Path$, 11 ) = "USERPROFILE" Then                                          '##
-      FileName$ = Mid$( Path$, 13 ) & "\Documents\MacroLog.txt"                       '##
-      Exit Do                                                                         '##
-  End If                                                                              '##
-  i = i + 1                                                                           '##
-Loop Until Environ( i ) = ""                                                          '##
-If FileName$ = "" Then Exit Sub                                                       '##
-On Error GoTo Problem:                                                                '##
-Open FileName$ For Append As #FileLog%                                                '##
-Print #FileLog%, "ContinuingResourcesFFHelper" & Chr$(9) & Date$ & " " & Time$        '##
-Close #FileLog%                                                                       '##
-Reset                                                                                 '##
-Problem:                                                                              '##
-End Sub                                                                               '##
-'########################################################################################
+'76834773
 '
 'Macro name: ContinuingResourcesFFHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 8/15/2017 11:05:10 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:12:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.

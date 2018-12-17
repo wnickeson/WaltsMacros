@@ -1,12 +1,17 @@
-'MacroName:DeriveBookFromAnyFormat.2016.17
+'MacroName:DeriveBookFromAnyFormat.2018.33
 'MacroDescription:Derives a new record for a book from a bibliographic record of any
-' format.
-
+' format, or changes the format of a record to describe a book. Fields not applicable to
+' a book are deleted, and default books workform values are supplied where appropriate
+' information is lacking.
+'
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 2 September 2016.
+' Thanks to Christine Riggle and her colleagues at Harvard Business School for helpful
+' suggestions and comments.
+'
+' Last updated: 24 September 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -14,86 +19,133 @@
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
 ' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 '
-'****************************************************************************************
-' How it works. Run the macro in a bibliographic record for something other than a book
-' (that is, something that is not monographic printed language material) to derive an
-' RDA (ISBD) record for a book manifestation of the work. Choose whether to derive a new
-' record from the existing one, or to keep and adapt the existing record. In either case,
-' the macro helps in editing by removing fields inappropriate or irrelevant for
-' describing books. Use this macro in those instances in which a record for a book is
-' required, and a record already exists in some other format (such as a microform, an
-' electronic resource, or a sound recording) that has so much relevant information that
-' it would be easier to tweak the record than to enter the data all over again.
+'****************************************************************************************!
+' How it works. Run the macro in a bibliographic record for something other than a book--
+' that is, something that is not monographic printed language material--to produce an RDA
+' (ISBD) record for a book manifestation. Choose to derive a new record or simply adapt
+' the original one. (From Bibliographic Formats and Standards: "A record cataloged on an
+' incorrect workform does not justify a new record. Edit the record for local use and
+' report Type code errors to OCLC so the master record can be changed.") Whether the
+' record is new or adapted, the macro helps in editing by removing fields inappropriate
+' or irrelevant for describing books. Use this macro when describing a book, and a record
+' already exists for another type of resource--such as a microform, a serial, an online
+' PDF, or the movie from which the book was made--that has so much relevant and useful
+' information that it would be easier to tweak the record than to enter the data all over
+' again.
 '
-' Bibliographic Formats and Standards addresses the issue of making a new record because
-' of disagreement with the record's format: "A record cataloged on an incorrect workform
-' does not justify a new record. Edit the record for local use and report Type code
-' errors to OCLC so the master record can be changed." This macro helps with editing the
-' record for local use, but also when creating a new record is justified.
+' The macro strips all fields with tags below 033, with two exceptions. An 010 field is
+' retained if the record is edited, but in a new record, its content is moved to 776
+' subfield $w. All ISBNs are retained in the 020 fields if the record is edited; if a new
+' record is created, invalid ISBNs are deleted, and valid ones moved to a 776 field. For
+' fields from 033 on up, the macro deletes those that are format-specific or don't apply,
+' such as 047 (Form of Musical Composition Code), 310 (Current Publication Frequency),
+' 346 (Video Characteristics), 382 (Medium of Performance), 538 (System Details Note),
+' etc. General notes (in 500 fields) are retained, but because they may not really be
+' appropriate for a book, they need to be carefully reviewed. Name headings containing
+' relator terms not applicable to printed language resources ("composer," "actor", etc.)
+' are removed. All subject headings containing a subfield $2 are deleted, as are all 6XX
+' fields on records for music materials. Also in the 6XX fields, some form subdivisions
+' indicating non-book materials, such as "Periodicals," "Maps," "Films for...", etc., are
+' removed, leaving the base subject heading intact. The macro discards all 7XX linking
+' fields except 776. Any field containing a subfield $5, denoting information applicable
+' to a specific institution, is deleted. All series fields are removed. The complete list
+' of fields to be retained is found below starting on line 363.
+
+' Subfield $e "rda" is added to the 040 field, as well as subfield $b "eng". In a record
+' that is to be edited, any other codes for description conventions are retained.
 '
-' The macro strips all fields with tags below 033, removes a GMD from the 245 field, and
-' deletes 7XX linking fields. It deletes incorrect format-specific fields, such as 047
-' (Form of Musical Composition Code), 310 (Current Publication Frequency), 346 (Video
-' Characteristics), 382 (Medium of Performance), 538 (System Details Note), etc. General
-' notes (in 500 fields) are retained, but because they may be completely inappropriate
-' for a book, they should be carefully reviewed. FAST subject headings are deleted, as
-' are some form subject subdivisions for non-book materials, such as "Periodicals,"
-' "Maps," and "Scores" and "Parts." An 856 field for an internet resource has its second
-' indicator changed to "1" for "Version of resource." Some edits are made to the fixed
-' field in addition to changing "Type"--for example, "Form" is always made blank. The 33X
-' fields for an unmediated textual resource whose carrier is "volume" are added (with a
-' fill character in the 338 field as a reminder to verify the type of carrier--the macro
-' can't tell, for example, if "sheet" is actually the correct term). If information is
-' lacking in the original record (such as the fixed field codes for illustrations,
-' irrelevant for a sound recording, for example), the default books workform values will
-' appear. A books 006 field will be deleted, but mined for fixed field information.
+' Some edits are made to the fixed field in addition to changing "Type"--for example,
+' "Form" is always made blank. A new record will always have "s" for the value of "DtSt",
+' and only the first date in "Dates" is retained; an edited record retains the original
+' values for the date elements. If fixed field information is lacking in the original
+' record (for example, codes for illustrations, which would be irrelevant for a sound
+' recording), the default values for a books workform will appear. A books 006 field will
+' be deleted, but information may be extracted from it for the fixed field.
+'
+' The new or edited record's 33X fields will describe an unmediated textual resource
+' whose carrier is either "volume", "sheet", or "card". The corresponding code is used
+' along with the term in each of the three fields. A fill character is used as the first
+' indicator in the 338 field as a reminder to verify the type of carrier, as the macro
+' can't be sure if the term it supplies is actually correct.
+'
+' A 776 field will only be created when deriving a new record from an original that
+' also describes language material--so, for example, no 776 field will be added when
+' deriving a new record from one for visual material. An added 776 field begins with
+' text in subfield $i: "Reproduced as (manifestation):" for a record describing a
+' microform (on the assumption that the print resource is original and the microform a
+' reproduction of it), or "Online version:" for a record describing an online resource
+' (whose relation with the original may be indeterminable). If the original record
+' includes a 533 field to describe the resource as a reproduction, that field forms the
+' basis for a 776 field; otherwise, and also to add information not found in the 533
+' field, the macro copies appropriate information (when present) from fields 010, 020
+' (only valid ISBNs), 1XX, 240, 245, and 250, and formats it for the corresponding
+' subfields in the 776 field. The final piece of data in the field is the OCLC control
+' number of the original record, placed in subfield $w. If no 533 field is present in the
+' original record, the 776 field will contain only information from the 1XX-2XX fields
+' and the OCLC control number; a fill character in the field acts as a warning that some
+' information may need to be entered manually. If the original record is to be kept, its
+' 533 field is deleted.
+'
+' As always, non-standard punctuation in the original record will probably remain non-
+' standard in the resulting record.
 '
 ' If a record is simply to be edited, the macro uses the "ChangeRecordType" command to
 ' change the value of "Type", unless the record is already for printed material, such as
-' a serial, or microform. Irrelevant fields are deleted. If a new record is required, the
-' macro opens a books workform and pastes into it relevant fields copied from the
-' existing record. While the macro command "DeriveNewRecord" may seem to be a more
-' appropriate tool, what variable fields it copies depends upon the user's settings
-' (under the menu hierarchy "Tools > Options"). This macro's operation bypasses those
-' settings. For example, the default settings for deriving a record only transfers
-' fields 1XX-8XX. But the original record may have important or useful information in
-' some 0XX fields that should be in the new record, such as that in 043 and 050. If the
-' default settings for deriving a record have never been changed, that information would
-' have to be re-entered.
+' a serial, or microform. If a new record is required, the macro opens a books workform
+' and pastes into it relevant fields copied from the existing record. While the macro
+' command "DeriveNewRecord" may seem to be a more appropriate tool in this case, the
+' variable fields it copies depends upon the user's settings, found in the menu hierarchy
+' "Tools > Options". By copying fields and pasting them into a workform, this macro
+' escapes the limitations of those settings. For example, the default settings for
+' deriving a record only transfers fields 1XX-8XX. But the original record may have
+' important or useful information in some 0XX fields that should be in the new record,
+' such as that in 043 and 050. If the default settings for deriving a record have never
+' been changed, that information would have to be re-entered.
 '****************************************************************************************
 
 Option Explicit
 Option Compare Text
 
+Declare Sub FillArrays
+
+Declare Function DeleteSubfieldCodes( FieldString$, Tag$, ValidSubfields$ ) As String
+Declare Function Get776Data( Tag$ ) As String
+
+Global DELIMITER As String*1
+
+Global Fields      ()     As String
+Global RelatorTerms( 62 ) As String
+Global Subdivisions( 21 ) As String
+
 '****************************************************************************************
 
 Sub Main
 
-Const BOOK_RECORD_TYPE                As Integer = 0   'The value in the "ChangeRecordType" command to change the record's format to Books.
-Const CRITICAL_MESSAGE                As Integer = 16  'The value to display a "Critical message" (which includes the red button with
-                                                       ' a big "X") in a message box; used to report the macro quitting.
-Const DISPLAY_FF_AT_TOP               As Integer = 1   'The value to display the fixed field at the top of a record.
-Const MSGBOX_RETURN_CANCEL            As Integer = 2   'The value returned by a message box when the "Cancel" button is clicked.
-Const MSGBOX_RETURN_YES               As Integer = 6   'The value returned by a message box when the "Yes" button is clicked.
-Const MSGBOX_SETBUTTONS_YES_NO_CANCEL As Integer = 3   'The value to set three buttons, "Yes," "No," and "Cancel," in a message box.
-Const WARNING_MESSAGE                 As Integer = 48  'The value to display the "Warning message" icon in a message box.
-Const WARNING_QUERY                   As Integer = 32  'The value to display the "Warning query" icon in a message box.
+Const BOOK_RECORD_TYPE_a          As Integer = 0   'The value in the "ChangeRecordType" command to change the record's format to Books.
+Const CRITICAL_MESSAGE          As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                                 ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL      As Integer = 0   'The value returned by the dialog box function when the "Cancel" button is clicked.
+Const DIALOG_BUTTON_EDIT_RECORD As Integer = 2   'The value returned by the dialog box function when the "Edit record" button is clicked.
+Const DIALOG_BUTTON_NEW_RECORD  As Integer = 1   'The value returned by the dialog box function when the "Derive new record" button is clicked.
+Const DISPLAY_FF_AT_TOP         As Integer = 1   'The value to display the fixed field at the top of a record.
+Const WARNING_MESSAGE           As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+DELIMITER = Chr$( 223 )
 
 Dim CS As Object
 Set CS = CreateObject("Connex.Client")
 
-Dim DELIMITER                : DELIMITER     = Chr$( 223 )
-Dim FILL_CHAR                : FILL_CHAR     = Chr$( 252 )
+Dim FILL_CHAR As String*1    : FILL_CHAR           = Chr$( 252 )
+Dim NO_DATE   As String*4    : NO_DATE             = FILL_CHAR & FILL_CHAR & FILL_CHAR & FILL_CHAR
 
-Dim Answer%
 Dim Audn$
 Dim Biog$
 Dim BLvl$
-Dim CarrierType$             : CarrierType$  = "338" &  FILL_CHAR & " volume " & DELIMITER & "b nc " & DELIMITER & "2 rdacarrier"
+Dim CarrierType$
 Dim CharT$
 Dim Conf$
 Dim Cont$
-Dim ContentType$             : ContentType$  = "336  text " & DELIMITER & "b txt " & DELIMITER & "2 rdacontent"
+Dim ContentType$             : ContentType$        = "336  text " & DELIMITER & "b txt " & DELIMITER & "2 rdacontent"
 Dim CopiedFieldCount%
 Dim Ctrl$
 Dim Ctry$
@@ -104,14 +156,19 @@ Dim Extent$
 Dim Fest$
 Dim FieldData$
 Dim Form$
+Dim FormSubdivision$
 Dim GPub$
 Dim Ills$
 Dim Indx$
+Dim ISBN$
 Dim Lang$
+Dim LCCN$
+Dim LenSubdivision%
 Dim LineNumber%
 Dim LitF$
-Dim MediaType$               : MediaType$    = "337  unmediated " & DELIMITER & "b n " & DELIMITER & "2 rdamedia"
+Dim MediaType$               : MediaType$          = "337  unmediated " & DELIMITER & "b n " & DELIMITER & "2 rdamedia"
 Dim MRec$
+Dim New776$
 Dim NewAudn$
 Dim NewBiog$
 Dim NewConf$
@@ -128,35 +185,43 @@ Dim NewIndx$
 Dim NewLang$
 Dim NewLitF$
 Dim NewMRec$
+Dim OCLC$
 Dim PosFF%
 Dim PosSubfC%
+Dim RelatorTerm$
+Dim Subfield$
+Dim SubfieldCode$
 Dim Tag%
+Dim TempString$
+Dim Transformed533$
 Dim TypeOfRecord$
 Dim TypeOfWindow%
-Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:DeriveBookFromAnyFormat"
+Dim WaltsMacros$             : WaltsMacros$        = "[Walt's macros] Extras2:DeriveBookFromAnyFormat"
 Dim [006Code] As String
 
-Dim AddProblem               : AddProblem    = FALSE
-Dim Book33X                  : Book33X       = FALSE
+Dim Add776                   : Add776              = FALSE
+Dim AddProblem               : AddProblem          = FALSE
+Dim Book33X                  : Book33X             = FALSE
 Dim ChangedFFView
-Dim DeleteProblem            : DeleteProblem = FALSE
+Dim DeleteProblem            : DeleteProblem       = FALSE
 Dim FFGet
 Dim FFSet
-Dim FoundField               : FoundField    = TRUE
+Dim FoundField               : FoundField          = TRUE
+Dim InstitutionSpecific      : InstitutionSpecific = FALSE
 Dim KeepField
 Dim NewRecord
 Dim VFSet
 
 Dim i As Integer, p As Integer, q As Integer
 
-Dim Fields() As String
+Dim Field533( 4 ) As String
 
 ' First, make sure that a bibliographic record is open.
 
 TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
   Case -1, 3 To 16, 18, 20 To 36
-    MsgBox "This macro only works in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in bibliographic records.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -171,28 +236,32 @@ End If
 FFGet = CS.GetFixedField( "BLvl", BLvl$ )
 FFGet = CS.GetFixedField( "Form", Form$ )
 FFGet = CS.GetFixedField( "Type", TypeOfRecord$ )
+FFGet = CS.GetFixedField( "OCLC", OCLC$ )
 
 ' If the record already describes a book, exit the macro. If it describes non-book
 ' printed material (e.g., a serial, or a microform), get the fixed field values
 ' applicable to monographs to copy to the new record.
 
-If TypeOfRecord$ = "a" And BLvl$ = "m" And Form$ = "" Then
-    MsgBox "This record already describes a book!", CRITICAL_MESSAGE, WaltsMacros$
-    Exit Sub
+If TypeOfRecord$ = "a" Then
+    If BLvl$ = "m" And Form$ = "" Then
+        MsgBox "This record already describes a book!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        Add776 = TRUE
+    End If
+  Else
+    Add776 = FALSE
 End If
 
 ' Get the rest of the fixed field values, if any. If unavailable, set the values as
 ' workform defaults.
 
-FFGet = CS.GetFixedField( ",",     Dates2$ )
 FFGet = CS.GetFixedField( "Audn",  Audn$ )
 FFGet = CS.GetFixedField( "Biog",  Biog$ )
 FFGet = CS.GetFixedField( "Conf",  Conf$ )   : If Conf$   = "" Then Conf$   = "0"
 FFGet = CS.GetFixedField( "Cont",  Cont$ )
 FFGet = CS.GetFixedField( "Ctrl",  Ctrl$ )
 FFGet = CS.GetFixedField( "Ctry",  Ctry$ )   : If Ctry$   = "" Then Ctry$   = FILL_CHAR & FILL_CHAR & FILL_CHAR
-FFGet = CS.GetFixedField( "Dates", Dates1$ ) : If Dates1$ = "" Then Dates1$ = FILL_CHAR & FILL_CHAR & FILL_CHAR & FILL_CHAR
-FFGet = CS.GetFixedField( "DtSt",  DtSt$ )   : If DtSt$   = "" Then DtSt$   = FILL_CHAR
 FFGet = CS.GetFixedField( "Fest",  Fest$ )   : If Fest$   = "" Then Fest$   = "0"
 FFGet = CS.GetFixedField( "GPub",  GPub$ )
 FFGet = CS.GetFixedField( "Ills",  Ills$ )
@@ -200,92 +269,145 @@ FFGet = CS.GetFixedField( "Indx",  Indx$ )   : If Indx$   = "" Then Indx$   = "0
 FFGet = CS.GetFixedField( "Lang",  Lang$ )   : If Lang$   = "" Then Lang$   = FILL_CHAR & FILL_CHAR & FILL_CHAR
 FFGet = CS.GetFixedField( "LitF",  LitF$ )   : If LitF$   = "" Then LitF$   = "0"
 FFGet = CS.GetFixedField( "MRec",  MRec$ )
+FFGet = CS.GetFixedField( ",", Dates2$ )
+
+FFGet = CS.GetFixedField( "Dates", Dates1$ )
+If Dates1$ = "" Or Dates1$ = "uuuu" Then
+    Dates1$ = NO_DATE
+End If
+
+' Depending on the Type of Date, the dates may be omitted or edited.
+
+FFGet = CS.GetFixedField( "DtSt",  DtSt$ )
+Select Case DtSt$
+'  Case "q", "r", "s", "t": No change made to this element or the dates.
+  Case "b", "n"
+    DtSt$   = FILL_CHAR
+    Dates1$ = NO_DATE
+  Case "c", "d", "p"
+    DtSt$   = "s"
+    Dates2$ = ""
+  Case "e"
+    DtSt$   = "s"
+  Case "i", "k"
+    DtSt$   = "m"
+    Dates2$ = ""
+  Case "u"
+    DtSt$   = "s"
+    Dates1$ = NO_DATE
+End Select
 
 If ChangedFFView Then CS.FixedFieldPosition = PosFF%
 
 ' Finally, determine whether to make a new record, as opposed to simply changing the
 ' format for local use.
 
-Answer% = MsgBox( "Derive new record in books format?", MSGBOX_SETBUTTONS_YES_NO_CANCEL + WARNING_QUERY, WaltsMacros$ )
+Begin Dialog Dialog1Definition  268,  46, WaltsMacros$
+  PushButton     10,  20,  88,  16, "&Yes, derive new record"
+  PushButton    108,  20,  88,  16, "&No, edit this record"
+  CancelButton  206,  20,  52,  16
+  Text           10,   6, 112,   8, "Derive new record in books format?"
+End Dialog
 
-Select Case Answer%
+Dim Dialog1 As Dialog1Definition
 
-  Case MSGBOX_RETURN_CANCEL
+Select Case Dialog( Dialog1 )
 
+  Case DIALOG_BUTTON_CANCEL
     Exit Sub
 
-  Case Else
+  Case DIALOG_BUTTON_NEW_RECORD
+    NewRecord = TRUE
 
-    If Answer% = MSGBOX_RETURN_YES Then
-        NewRecord = TRUE
-      Else
-        NewRecord = FALSE
+  Case DIALOG_BUTTON_EDIT_RECORD
+    NewRecord = FALSE
 
 ' If a new record is not desired, use the macro command to change the Type of record.
 ' Otherwise, the Workform command will be used later to create a blank record into which
 ' to paste relevant fields.
 
-        If CS.ChangeRecordType( BOOK_RECORD_TYPE ) = FALSE Then
-            MsgBox "Sorry, couldn't change format of record.", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
-        End If
+    If CS.ChangeRecordType( BOOK_RECORD_TYPE_a ) = FALSE Then
+        MsgBox "Sorry, couldn't change format of record.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
     End If
 
 End Select
 
 ' Go through the record, field by field, evaluating each one for relevancy for books.
+' Some fields to keep will require editing. Some fields which will not be kept can still
+' supply important information.
+
+FillArrays
 
 LineNumber%       = 1
 CopiedFieldCount% = 0
+
 Do
+
   FoundField = CS.GetFieldLineUnicode( LineNumber%, FieldData$ )
   If FoundField Then
       Tag% = Val( Left$( FieldData$, 3 ) )
+      If InStr( FieldData$, DELIMITER & "5" ) Then
+          InstitutionSpecific = TRUE
+      End If
 
-      Select Case Tag% 'These are the fields to keep.
+      Select Case Tag%
 
-        Case 6, 33, 41, 43 To 46, 50, 66, 80, 82, 89, 90, _ 'These are the tags to keep.
+'#####  THESE ARE THE FIELDS TO KEEP (SOME MAY BE DELETED IF A NEW RECORD IS CREATED)  ##
+
+        Case 010, 020, 033, 041, 040, 043 To 046, 049 To 050, 052, 060, 066, 080 To 082, 089 To 090, _
              100 To 130, _
              240 To 250, 260, 264 To 270, _
              300, 336 To 338, 340, 377, 380 To 381, 385 To 386, _
-             490, _
-             500 To 506, 510, 513, 520 To 521, 525 To 526, 530, 534 To 536, 540, 542, 544 To 546, 550, 556, 563, 565, 567, 585, 586, _
-             600 To 699, _
-             752, 754, _
-             800 To 830, 856
+             500 To 505, 510, 513, 520 To 521, 524 To 526, 535 To 536, 545 To 546, 550, 556, 563, 565, 567, 581, 585 To 586, _
+             600 To 654, 656 To 699, _
+             700 To 752, 754, 776
 
-           KeepField = TRUE
+'########################################################################################
+
+          If InstitutionSpecific = FALSE Then KeepField = TRUE
 
 ' Some fields require special treatment.
 
           Select Case Tag%
 
-' From the 245 field, remove a GMD in subfield $h.
+            Case 10     'If an LCCN is present, discard it from a new record after copying it for a 776 field.
 
-            Case 6
-              If Mid$( FieldData$, 6, 1 ) = "a" Then
-                  [006Code] = Mid$( FieldData$, 7, 4 )
-                  If Trim$( [006Code] ) <> "" Then Ills$ = [006Code]
-                  [006Code] = Trim$( Mid$( FieldData$, 11, 1 ) )
-                  If [006Code] <> "" Then Audn$ = [006Code]
-                  [006Code] = Mid$( FieldData$, 13, 4 )
-                  If Trim$( [006Code] ) <> "" Then Cont$ = [006Code]
-                  [006Code] = Trim$( Mid$( FieldData$, 17, 1 ) )
-                  If [006Code] <> "" Then GPub$ = [006Code]
-                  [006Code] = Trim$( Mid$( FieldData$, 18, 1 ) )
-                  If [006Code] <> "" Then Conf$ = [006Code]
-                  [006Code] = Trim$( Mid$( FieldData$, 19, 1 ) )
-                  If [006Code] <> "" Then Fest$ = [006Code]
-                  [006Code] = Trim$( Mid$( FieldData$, 20, 1 ) )
-                  If [006Code] <> "" Then Indx$ = [006Code]
-                  [006Code] = Trim$( Mid$( FieldData$, 22, 1 ) )
-                  If [006Code] <> "" Then LitF$ = [006Code]
-                  [006Code] = Trim$( Mid$( FieldData$, 23, 1 ) )
-                  If [006Code] <> "" Then Biog$ = [006Code]
+              If NewRecord Then
+                  p = InStr( FieldData$, DELIMITER )
+                  If p > 0 Then
+                      LCCN$ = RTrim$( Mid$( FieldData$, 6, p - 6 ) )
+                    Else
+                      LCCN$ = RTrim$( Mid$( FieldData$, 6 ) )
+                  End If
+                  KeepField = FALSE
               End If
-              KeepField = FALSE
 
-            Case 245
+            Case 20     'For a new record, capture only valid ISBNs for a 776 field.
+
+              If NewRecord Then
+                  If Trim$( Mid$( FieldData$, 6, 2 ) ) <> DELIMITER & "z" Then
+                      p = InStr( FieldData$, DELIMITER )
+                      If p > 9 Then
+                          TempString$ = Trim$( Mid$( FieldData$, 6, p - 6 ) )
+                        Else
+                          TempString$ = Trim$( Mid$( FieldData$, 6 ) )
+                      End If
+                      ISBN$ = ISBN$ & DELIMITER & "z " & TempString$ & " "
+                  End If
+                  KeepField = FALSE
+              End If
+
+            Case 40, 49 'These two fields are not retained for a new record, because the workform already contains new,
+                        ' appropriate ones, but neither are they deleted from an edited record.
+
+              If NewRecord  Then
+                  KeepField = FALSE
+              End If
+
+            Case 245    'From the 245 field, remove a GMD in subfield $h (by now probably no records contain a GMD, so this may
+                        ' be a legacy construct).
+
               p = InStr( FieldData$, DELIMITER & "h" )
               If p <> 0 Then
                   q = InStr( p + 1, FieldData$, DELIMITER )
@@ -303,53 +425,82 @@ Do
                   End If
               End If
 
-' Change a 260 field to a 264 field and add a fill character in the second indicator
-' position so it gets corrected.
+            Case 260    'Change a 260 field to a 264 field and add a fill character in the second indicator position so the
+                        ' "Function of entity" gets confirmed.
 
-            Case 260
               FieldData$ = "264 " & FILL_CHAR & Mid$( FieldData$, 6 )
 
-' An extent statement for something other than books will of course not be appropriate
-' for a record for a book, so if such is found, substitute a warning. An extent statement
-' for a book, but described as an online resource, will be modified somewhat and the
-' warning to supply dimensions added. A warning is accompanied by a fill character in the
-' first indicator position, which won't validate, thus requiring correction.
+            Case 300    'An extent statement for something other than books will of course not be appropriate for a record for
+                        ' a book, so if such is found, substitute a warning that pagination, volume count, etc., must be
+                        ' supplied. An extent statement for a book, but described as an online resource, will be modified
+                        ' somewhat and the warning to supply dimensions added. A warning is accompanied by a fill character in
+                        ' the first indicator position, which prevents validation, thus requiring attention and correction.
 
-            Case 300
               If TypeOfRecord$ <> "a" Then
                   p = InStr( 7, FieldData$, DELIMITER )
-                  If p <> 0 Then
+                  If p > 0 Then
                       Extent$ = Mid$( FieldData$, 7, p - 7 )
-                      If InStr( Extent$, "p." )     = 0 And _
-                         InStr( Extent$, "pages" )  = 0 And _
-                         InStr( Extent$, "v." )     = 0 And _
-                         InStr( Extent$, "vol." )   = 0 And _
-                         InStr( Extent$, "volume" ) = 0 Then
-                          FieldData$ = "300" & FILL_CHAR & " ADD EXTENT AND DIMENSIONS"
-                      End If
+                    Else
+                      Extent$ = Mid$( FieldData$, 6 )
+                  End If
+                  If InStr( Extent$, "p." )     = 0 And _
+                     InStr( Extent$, "pages" )  = 0 And _
+                     InStr( Extent$, "v." )     = 0 And _
+                     InStr( Extent$, "vol." )   = 0 And _
+                     InStr( Extent$, "volume" ) = 0 Then
+                      FieldData$ = "300" & FILL_CHAR & " ADD EXTENT AND DIMENSIONS"
                   End If
                 Else
                   If Form$ <> "" Then
                       If Mid$( FieldData$, 6, 19 ) = "1 online resource (" Then
                           FieldData$ = Left$( FieldData$, 5 ) & Mid$( FieldData$, 25 )
+                          p = InStr( FieldData$, DELIMITER & "b" )
+                          If p > 0 Then
+                              For i = p - 1 To 1 Step -1
+                                CharT$ = Mid$( FieldData$, i, 1 )
+                                If CharT$ = ")" Then
+                                    FieldData$ = Left$( FieldData$, i - 1 ) & Mid$( FieldData$, i + 1 )
+                                    Exit For
+                                  ElseIf CharT$ Like "[!- .,:;]" Then
+                                    Exit For
+                                End If
+                              Next i
+                              If Right$( Trim$( FieldData$ ), 1 ) = "." Then
+                                  FieldData$ = Left$( FieldData$, Len( FieldData$ ) - 1 ) & " ;"
+                                ElseIf Right$( Trim$( FieldData$ ), 1 ) <> ";" Then
+                                  FieldData$ = FieldData$ & " ;"
+                              End If
+                            Else
+                              If Right$( FieldData$, 1 ) = ")" Then
+                                  FieldData$ = Trim$( Left$( FieldData$, Len( FieldData$ ) - 1 ) )
+                              End If
+                          End If
+                        ElseIf Right$( FieldData$, 17 ) = "1 online resource" Or Right$( FieldData$, 17 ) = "1 online resource." Then
+                          FieldData$ = "300" & FILL_CHAR & " " & "ADD EXTENT"
                       End If
                       If InStr( FieldData$, DELIMITER & "c" ) = FALSE Then
-                          FieldData$ = "300" & FILL_CHAR & " " & Mid$( FieldData$, 6 ) & " " & DELIMITER & "c " & "ADD DIMENSIONS"
+                          FieldData$ = "300" & FILL_CHAR & " " & Mid$( FieldData$, 6 ) & " ; " & DELIMITER & "c " & "ADD DIMENSIONS"
                       End If
                   End If
               End If
 
-' An internet resource needs the second indicator in an 856 changed to that for a version
-' of the resource.
+' If the extent describes something like a book, set the text of the carrier type now. If
+' the strings "sheet" or "card" are found in the 300 field, they become the carrier type.
+' Otherwise, "volume" acts as the default, covering everything else. Since the 338 field
+' can be any of several values, use a fill character to indicate attention is needed for
+' verification.
 
-            Case 856
-              If Mid$( FieldData$, 5, 1 ) = "0" Then
-                  Mid$( FieldData$, 5, 1 ) = "1"
+              If InStr( FieldData$, "sheet" ) Or InStr( FieldData$, "broads" ) Then
+                  CarrierType$ = "sheet " & DELIMITER & "b nb "
+                ElseIf InStr( FieldData$, "card" ) Then
+                  CarrierType$ = "card " & DELIMITER & "b no "
+                Else
+                  CarrierType$ = "volume " & DELIMITER & "b nc "
               End If
+              CarrierType$ = "338" & FILL_CHAR & " " & CarrierType$ & DELIMITER & "2 rdacarrier"
 
 ' If the 33X fields are appropriate, keep them; if not, add them, including both terms
-' and codes. Since the 338 field can be any of several values, use a fill character to
-' indicate attention is needed.
+' and codes.
 
             Case 336
               If InStr( FieldData$, "text" ) Or InStr( FieldData$, "txt" ) Then
@@ -371,39 +522,69 @@ Do
                   FieldData$ = CarrierType$
               End If
 
-' Omit some subdivisions or whole subject fields.
-
             Case 600 To 655
 
-' Don't add FAST headings.
+' Remove any subject field with a source defined in subfield $2.
 
-              If InStr( FieldData$, "2 fast" ) Then
+              p = InStr( FieldData$, DELIMITER & "2" )
+              If p > 0 Then
                   KeepField = FALSE
-                Else
+              End If
 
-' Remove the format subdivisions "--Periodicals" and "--Maps" from 6XX fields.
+' Remove all subject fields from records for scores or sound recordings.
 
-                  p = InStr( FieldData$, "periodicals" )
-                  If p <> 0 Then
-                      If Mid$( FieldData$, p - 3, 1 ) = DELIMITER Then
-                          FieldData$ = Left$( FieldData$, p - 5 ) & Mid$( FieldData$, p + 11 )
-                      End If
+              If TypeOfRecord$ Like "[cdij]" Then
+                  KeepField = FALSE
+              End If
+
+' Remove some visual materials subject headings.
+
+              If Mid$( FieldData$, 6, 9 ) = "Films for" Or _
+                 Mid$( FieldData$, 6, 20 ) = "Video recordings for" Then
+                  KeepField = FALSE
+              End If
+
+' Remove certain format subdivisions.
+
+              p = InStr( FieldData$, DELIMITER & "v" )
+              If p > 0 Then
+                  q = InStr( p + 2, FieldData$, DELIMITER )
+                  If q > 0 Then
+                      FormSubdivision$ = Trim$( Mid$( FieldData$, p + 2, q - p - 1 ) )
+                    Else
+                      FormSubdivision$ = Trim$( Mid$( FieldData$, p + 2 ) )
                   End If
-
-                  p = InStr( FieldData$, "maps" )
-                  If p <> 0 Then
-                      If Mid$( FieldData$, p - 3, 1 ) = DELIMITER Then
-                          FieldData$ = Left$( FieldData$, p - 5 ) & Mid$( FieldData$, p + 4 )
-                      End If
+                  If Right$( FormSubdivision$, 1 ) = "." Then
+                      FormSubdivision$ = Left$( FormSubdivision$, Len( FormSubdivision$ ) - 1 )
                   End If
+                  LenSubdivision% = Len( FormSubdivision$ )
+                  For i = 0 To UBound( Subdivisions )
+                    If Left$( Subdivisions( i ), LenSubdivision% ) = FormSubdivision$ Then
+                        FieldData$ = Trim$( Left$( FieldData$, p - 1 ) )
+                        If Right$( FieldData$, 1 ) Like "[!-)]" Then
+                            FieldData$ = FieldData$ & "."
+                        End If
+                    End If
+                  Next i
+              End If
 
-' Don't add subject fields specific to records for scores.
+            Case 100 To 130, 700 To 730    ' Remove fields whose relation to the resource is inappropriate for a book.
 
-                  If TypeOfRecord$ = "c" Then
-                      If InStr( FieldData$, "scores" ) Or InStr( FieldData$, "parts" ) Then
-                          KeepField = FALSE
-                      End If
+              p = InStr( FieldData$, DELIMITER & "e" )
+              If p > 0 Then
+                  q = InStr( p + 2, FieldData$, DELIMITER )
+                  If q > 0 Then
+                      RelatorTerm$ = Trim$( Mid$( FieldData$, p + 2, q - p - 1 ) )
+                    Else
+                      RelatorTerm$ = Trim$( Mid$( FieldData$, p + 2 ) )
                   End If
+                  For i = 0 To UBound( RelatorTerms )
+                    TempString$ = RelatorTerms( i )
+                    If InStr( RelatorTerm$, TempString$ ) Then
+                        KeepField = FALSE
+                        Exit For
+                    End If
+                  Next i
               End If
 
           End Select
@@ -432,23 +613,114 @@ Do
               End If
           End If
 
-        Case Else
+' The following fields will be discarded after getting information from them.
 
-' The two fields 040 and 049 are not retained for a new record, because the workform
-' already contains new, appropriate ones, but neither are they deleted from an edited
-' record.
+        Case 6, 533
 
-          If Tag% <> 40 And Tag <> 49 Then
-              If NewRecord = FALSE Then
-                  If CS.DeleteFieldLine( LineNumber% ) = FALSE Then
-                      DeleteProblem = TRUE
-                    Else
-                      LineNumber%   = LineNumber% - 1
+          Select Case Tag%
+
+            Case 006
+
+              If Mid$( FieldData$, 6, 1 ) = "a" Then
+                  [006Code] = Mid$( FieldData$, 7, 4 )
+                  If Trim$( [006Code] ) <> "" Then Ills$ = [006Code]
+                  [006Code] = Trim$( Mid$( FieldData$, 11, 1 ) )
+                  If [006Code] <> "" Then Audn$ = [006Code]
+                  [006Code] = Mid$( FieldData$, 13, 4 )
+                  If Trim$( [006Code] ) <> "" Then Cont$ = [006Code]
+                  [006Code] = Trim$( Mid$( FieldData$, 17, 1 ) )
+                  If [006Code] <> "" Then GPub$ = [006Code]
+                  [006Code] = Trim$( Mid$( FieldData$, 18, 1 ) )
+                  If [006Code] <> "" Then Conf$ = [006Code]
+                  [006Code] = Trim$( Mid$( FieldData$, 19, 1 ) )
+                  If [006Code] <> "" Then Fest$ = [006Code]
+                  [006Code] = Trim$( Mid$( FieldData$, 20, 1 ) )
+                  If [006Code] <> "" Then Indx$ = [006Code]
+                  [006Code] = Trim$( Mid$( FieldData$, 22, 1 ) )
+                  If [006Code] <> "" Then LitF$ = [006Code]
+                  [006Code] = Trim$( Mid$( FieldData$, 23, 1 ) )
+                  If [006Code] <> "" Then Biog$ = [006Code]
+              End If
+
+            Case 533    'If the original record describes a reproduction and follows LC practice, the original resource is
+                        ' described in the body of the record and the reproduction in field 533. Data in this field becomes
+                        ' data in a 776 field.
+
+              TempString$ = Mid$( FieldData$, 6 )
+              Do
+                p = InStr( TempString$, DELIMITER )
+                If p = 1 Then
+                    q = InStr( p + 2, TempString$, DELIMITER )
+                    If q > 0 Then
+                        Subfield$ = Trim$( Mid$( TempString$, p, ( q - p ) - 1 ) )
+                      Else
+                        Subfield$ = Trim$( TempString$ )
+                    End If
+                  ElseIf p > 1 Then
+                    q = InStr( p + 2, TempString$, DELIMITER )
+                    If q > 0 Then
+                        Subfield$ = Trim$( Mid$( TempString$, p, ( q - p ) - 1 ) )
+                      Else
+                        Subfield$ = Trim$( Mid$( TempString$, p ) )
+                    End If
+                End If
+                SubfieldCode$ = Mid$( Subfield$, 2, 1 )
+                For i = Len( Subfield$ ) To 1 Step -1
+                  CharT$ = Mid$( Subfield$, i, 1 )
+                  If CharT$ Like "[!- .,:;]" Then
+                      Subfield$ = Left$( Subfield$, i )
+                      Exit For
                   End If
+                Next i
+                Subfield$ = Trim$( Mid$( Subfield$, 3 ) )
+                Select Case SubfieldCode$
+                  Case "b"
+                    Field533( 0 ) = Subfield$
+                  Case "c"
+                    Field533( 1 ) = Subfield$
+                  Case "d"
+                    Field533( 2 ) = Subfield$
+                  Case "e"
+                    Field533( 3 ) = Subfield$
+                  Case "f"
+                    Field533( 4 ) = Subfield$
+                End Select
+                If q > 0 Then
+                    TempString$ = Mid$( TempString$, q )
+                  Else
+                    Exit Do
+                End If
+              Loop Until p = 0
+              Transformed533$ = DELIMITER & "d " & Field533( 0 ) & " : " & Field533( 1 ) & ", " & Field533( 2 )
+              If Right$( Transformed533$, 1 ) <> "." Then
+                  Transformed533$ = Transformed533$ & "."
+              End If
+              If Field533( 3 ) <> "" Then
+                  Transformed533$ = Transformed533$ & " " & DELIMITER & "h " & Field533( 3 ) & "."
+              End If
+              If Field533( 4 ) <> "" Then
+                  Transformed533$ = Transformed533$ & " " & DELIMITER & "k " & Field533( 4 ) & "."
+              End If
+
+          End Select
+
+          GoTo DeleteLine:
+
+        Case Else       'Fields not on the retention list are deleted.
+
+          If NewRecord = FALSE Then
+
+DeleteLine:
+
+              If CS.DeleteFieldLine( LineNumber% ) = FALSE Then
+                  DeleteProblem = TRUE
+                Else
+                  LineNumber%   = LineNumber% - 1
               End If
           End If
 
       End Select
+
     Else
       If LineNumber% = 1 Then
           MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
@@ -458,15 +730,54 @@ Do
       End If
   End If
   LineNumber% = LineNumber% + 1
+
 Loop Until FoundField = FALSE
 
 If NewRecord Then
 
+' Construct the 776 field if appropriate.
+
+    If Add776 Then
+        If Form$ Like "[abc]" Then
+            New776$ = "77608" & DELIMITER & "i Reproduced as (manifestation):"
+          ElseIf Form$ Like "[oqs]" Then
+            New776$ = "77608" & DELIMITER & "i Online version:"
+        End If
+        For i = 1 To 4
+          SubfieldCode$ = Mid$( "astb", i, 1 )
+          TempString$   = Get776Data( SubfieldCode$ )
+          New776$       = New776$ & " " & TempString$
+        Next i
+        If Transformed533$ <> "" Then
+            TempString$ = Transformed533$
+          Else
+            TempString$ = ""
+            Mid$( New776$, 4, 2 ) = FILL_CHAR & " "
+        End If
+        New776$ = New776$ & " " & TempString$
+        If ISBN$ <> "" Then
+            New776$ = New776$ & " " & RTrim$( ISBN$ )
+        End If
+        Do
+          p = InStr( New776$, "  " )
+          If p > 0 Then
+              New776$ = Left$( New776$, p ) & Mid$( New776$, p + 2 )
+          End If
+        Loop Until p = 0
+        If LCCN$ <> "" Then
+            New776$ = Trim$( New776$ ) & " " & DELIMITER & "w (DLC)" & LCCN$
+        End If
+        New776$ = New776$ & " " & DELIMITER & "w (OCoLC)" & OCLC$
+
+        ReDim Preserve Fields( UBound( Fields ) + 1 )
+        Fields( UBound( Fields ) ) = New776$
+
+    End If
+
 ' Open a books workform and immediately reformat it to eliminate all but the 040 and 049
 ' fields. An edited record already has its appropriate variable fields.
 
-    If CS.OpenWorkform( "bks" ) Then
-      Else
+    If CS.OpenWorkform( "bks" ) = FALSE Then
         MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
@@ -477,12 +788,29 @@ If NewRecord Then
 ' Add the stored variable fields.
 
     For i = 0 To UBound( Fields )
-      If CS.SetFieldLine( i + 3, Fields( i ) ) = FALSE Then
-          MsgBox "Sorry, the macro failed", CRITICAL_MESSAGE, WaltsMacros$
-          Exit Sub
+      TempString$ = Fields( i )
+      If TempString$ <> "" Then
+          If CS.SetFieldLine( i + 3, Fields( i ) ) = FALSE Then
+              MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+              Exit Sub
+          End If
       End If
     Next i
 
+End If
+
+' Check for missing 264, 300, and 338.
+
+If CS.GetField( "264", 1, FieldData$ ) = FALSE Then
+    VFSet = CS.AddField( 1, "264" & " " & FILL_CHAR & "ADD IMPRINT INFORMATION" )
+End If
+
+If CS.GetField( "300", 1, FieldData$ ) = FALSE Then
+    VFSet = CS.AddField( 1, "300" & FILL_CHAR & " ADD EXTENT AND DIMENSIONS" )
+End If
+
+If CarrierType$ = "" Then
+    CarrierType$ = "338" & FILL_CHAR & " volume " & DELIMITER & "2 rdacarrier"
 End If
 
 ' Set up or restore the fixed field. For a workform, all values must be added, if
@@ -502,7 +830,7 @@ FFSet = CS.SetFixedField( "Elvl", "I" )
 FFSet = CS.SetFixedField( "Srce", "d" )
 
 If NewRecord Then
-    FFSet = CS.SetFixedField( ",",     Dates2$ )
+    FFSet = CS.SetFixedField( ",",     "" )
     FFSet = CS.SetFixedField( "Audn",  Audn$ )
     FFSet = CS.SetFixedField( "Biog",  Biog$ )
     FFSet = CS.SetFixedField( "Conf",  Conf$ )
@@ -510,7 +838,7 @@ If NewRecord Then
     FFSet = CS.SetFixedField( "Ctrl",  Ctrl$ )
     FFSet = CS.SetFixedField( "Ctry",  Ctry$ )
     FFSet = CS.SetFixedField( "Dates", Dates1$ )
-    FFSet = CS.SetFixedField( "DtSt",  DtSt$ )
+    FFSet = CS.SetFixedField( "DtSt",  "s" )
     FFSet = CS.SetFixedField( "Fest",  Fest$ )
     FFSet = CS.SetFixedField( "Ills",  Ills$ )
     FFSet = CS.SetFixedField( "Indx",  Indx$ )
@@ -652,8 +980,237 @@ If AddProblem And DeleteProblem Then
 End If
 
 End Sub
-'68128021
+
+'****************************************************************************************
+
+Function Get776Data( SubfieldCode$ ) As String
+
+' This function works in conjunction with "DeleteSubfieldCodes" to format fields for use
+' in the 776 field.
+
+Dim FilingIndicator%
+Dim Tag$
+Dim TempString$
+
+Dim i As Integer
+
+Select Case SubfieldCode$
+  Case "a"
+    Tag$ = "1"
+  Case "s"
+    Tag$ = "240"
+  Case "t"
+    Tag$ = "245"
+  Case "b"
+    Tag$ = "250"
+End Select
+
+For i = 0 To UBound( Fields )
+  If Tag$ = Left$( Fields( i ), Len( Tag$ ) ) Then
+      TempString$      = Fields( i )
+      Tag$             = Left$( TempString$, 3 )
+      FilingIndicator% = Val( Mid$( TempString$, 5, 1 ) )
+      TempString$      = Mid$( TempString$, 6 )
+
+      Select Case Tag$
+        Case "100"
+          TempString$ = DeleteSubfieldCodes( TempString$, Tag$, "abcdq" )
+        Case "110"
+          TempString$ = DeleteSubfieldCodes( TempString$, Tag$, "abcd" )
+        Case "111"
+          TempString$ = DeleteSubfieldCodes( TempString$, Tag$, "acde" )
+        Case "130"
+          TempString$ = DeleteSubfieldCodes( TempString$, Tag$, "afgknp" )
+        Case "240"
+          TempString$ = DeleteSubfieldCodes( TempString$, Tag$, "adfklmnoprs" )
+        Case "245"
+          TempString$ = Trim$( Mid$( TempString$, 1 + FilingIndicator% ) )
+          Mid$( TempString$, 1, 1 ) = UCase$( Left$( TempString$, 1 ) )
+          TempString$ = DeleteSubfieldCodes( TempString$, Tag$, "afgknp" )
+        Case "250"
+          TempString$ = DeleteSubfieldCodes( TempString$, Tag$, "a" )
+      End Select
+
+      Exit For
+  End If
+Next i
+
+If TempString$ = "" Then
+    Get776Data = ""
+  Else
+    Get776Data = DELIMITER & SubfieldCode$ & " " & TempString$
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function DeleteSubfieldCodes( FieldString$, Tag$, ValidSubfields$ ) As String
+
+' This function removes subfield codes from those fields to be added to the 776 field.
+
+Dim FieldWithoutCodes$
+Dim InputString$
+Dim Remainder$
+Dim Start%
+Dim SubfieldCode$
+Dim TempString1$
+
+Dim p As Integer, q As Integer
+
+InputString$ = FieldString$
+If Left$( InputString$, 2 ) <> DELIMITER & "a" Then
+    InputString$ = DELIMITER & "a " & InputString$
+End If
+
+Start% = 1
+Do
+  p = InStr( Start%, InputString$, DELIMITER )
+  If p > 0 Then
+      SubfieldCode$ = Mid$( InputString$, p + 1, 1 )
+      q = InStr( p + 1, InputString$, DELIMITER )
+      If InStr( ValidSubfields$, SubfieldCode$ ) Then
+          If q > 0 Then
+              TempString1$ = Trim$( Mid$( InputString$, p + 2, ( q - p ) - 2 ) )
+            Else
+              TempString1$ = Trim$( Mid$( InputString$, p + 2 ) )
+          End If
+        Else
+      End If
+  End If
+
+' Attempt to add ISBD punctuation to a 245 field.
+
+  If Tag$ = "245" Then
+      If SubfieldCode$ = "a" Then
+          If Right$( TempString1$, 2 ) Like " ?" Then
+              TempString1$ = Trim$( Left$( TempString1$, Len( TempString1$ ) - 2 ) ) & "."
+            ElseIf Right$( TempString1$, 1 ) Like "[,:;]" Then
+              TempString1$ = Trim$( Left$( TempString1$, Len( TempString1$ ) - 1 ) ) & "."
+          End If
+      End If
+  End If
+
+  FieldWithoutCodes$ = FieldWithoutCodes$ & " " & TempString1$
+  If q = 0 Then
+      Exit Do
+    Else
+      Start%       = q
+      TempString1$ = ""
+  End If
+Loop Until p = 0
+
+FieldWithoutCodes$ = Trim$( FieldWithoutCodes$ )
+
+If Right$( FieldWithoutCodes$, 1 ) = "," Then
+    FieldWithoutCodes$ = Left$( FieldWithoutCodes$, Len( FieldWithoutCodes$ ) - 1 ) & "."
+  ElseIf Right$( FieldWithoutCodes$, 1 ) Like "[!.)]" Then
+    FieldWithoutCodes$ = FieldWithoutCodes$ & "."
+End If
+
+DeleteSubfieldCodes = FieldWithoutCodes$
+
+End Function
+
+'****************************************************************************************
+
+Sub FillArrays
+
+' These two arrays contain terms used in modifying or deleting fields. "Subdivisions"
+' contains form/genre subject heading subdivisions that will be discarded. "RelatorTerms"
+' contains relator terms that indicate a type of relationship to the resource that
+' doesn't apply to printed language material.
+
+Subdivisions( 0  ) = "aerial photographs"
+Subdivisions( 1  ) = "aerial views"
+Subdivisions( 2  ) = "atlases"
+Subdivisions( 3  ) = "computer games"
+Subdivisions( 4  ) = "databases"
+Subdivisions( 5  ) = "designs and plans"
+Subdivisions( 6  ) = "film and video adaptations"
+Subdivisions( 7  ) = "films for"
+Subdivisions( 8  ) = "index maps"
+Subdivisions( 9  ) = "interactive multimedia"
+Subdivisions( 10 ) = "juvenile films"
+Subdivisions( 11 ) = "juvenile software"
+Subdivisions( 12 ) = "juvenile sound recordings"
+Subdivisions( 13 ) = "maps"
+Subdivisions( 14 ) = "newspapers"
+Subdivisions( 15 ) = "periodicals"
+Subdivisions( 16 ) = "posters"
+Subdivisions( 17 ) = "relief models"
+Subdivisions( 18 ) = "remote-sensing"
+Subdivisions( 19 ) = "slides"
+Subdivisions( 20 ) = "software"
+Subdivisions( 21 ) = "video recordings"
+
+RelatorTerms( 0  ) = "actor"
+RelatorTerms( 1  ) = "animator"
+RelatorTerms( 2  ) = "architect"
+RelatorTerms( 3  ) = "arranger"
+RelatorTerms( 4  ) = "art copyist"
+RelatorTerms( 5  ) = "art director"
+RelatorTerms( 6  ) = "artistic director"
+RelatorTerms( 7  ) = "auctioneer"
+RelatorTerms( 8  ) = "broadcaster"
+RelatorTerms( 9  ) = "caster"
+RelatorTerms( 10 ) = "choreographer"
+RelatorTerms( 11 ) = "cinematographer"
+RelatorTerms( 12 ) = "composer"
+RelatorTerms( 13 ) = "conductor"
+RelatorTerms( 14 ) = "costume designer"
+RelatorTerms( 15 ) = "dancer"
+RelatorTerms( 16 ) = "director"
+RelatorTerms( 17 ) = "editor of moving image work"
+RelatorTerms( 18 ) = "electrician"
+RelatorTerms( 19 ) = "engineer"
+RelatorTerms( 20 ) = "film director"
+RelatorTerms( 21 ) = "film distributor"
+RelatorTerms( 22 ) = "film editor"
+RelatorTerms( 23 ) = "film producer"
+RelatorTerms( 24 ) = "filmmaker"
+RelatorTerms( 25 ) = "instrumentalist"
+RelatorTerms( 26 ) = "landscape architect"
+RelatorTerms( 27 ) = "lighting designer"
+RelatorTerms( 28 ) = "musical director"
+RelatorTerms( 29 ) = "musician"
+RelatorTerms( 30 ) = "narrator"
+RelatorTerms( 31 ) = "onscreen presenter"
+RelatorTerms( 32 ) = "panelist"
+RelatorTerms( 33 ) = "performer"
+RelatorTerms( 34 ) = "presenter"
+RelatorTerms( 35 ) = "producer"
+RelatorTerms( 36 ) = "production company"
+RelatorTerms( 37 ) = "production designer"
+RelatorTerms( 38 ) = "production manager"
+RelatorTerms( 39 ) = "production personnel"
+RelatorTerms( 40 ) = "programmer"
+RelatorTerms( 41 ) = "puppeteer"
+RelatorTerms( 42 ) = "radio director"
+RelatorTerms( 43 ) = "radio producer"
+RelatorTerms( 44 ) = "recording engineer"
+RelatorTerms( 45 ) = "recordist"
+RelatorTerms( 46 ) = "restager"
+RelatorTerms( 47 ) = "scenarist"
+RelatorTerms( 48 ) = "screenwriter"
+RelatorTerms( 49 ) = "sculptor"
+RelatorTerms( 50 ) = "set designer"
+RelatorTerms( 51 ) = "singer"
+RelatorTerms( 52 ) = "sound designer"
+RelatorTerms( 53 ) = "speaker"
+RelatorTerms( 54 ) = "stage director"
+RelatorTerms( 55 ) = "stage manager"
+RelatorTerms( 56 ) = "storyteller"
+RelatorTerms( 57 ) = "supporting host"
+RelatorTerms( 58 ) = "technical director"
+RelatorTerms( 59 ) = "television director"
+RelatorTerms( 60 ) = "television producer"
+RelatorTerms( 61 ) = "videographer"
+RelatorTerms( 62 ) = "voice actor"
+
+End Sub
+'124049924
 '
 'Macro name: DeriveBookFromAnyFormat
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/29/2017 9:13:28 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:12:23 AM using "MacroBookInspector" macro by Walter F. Nickeson.

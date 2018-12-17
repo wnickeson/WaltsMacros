@@ -1,4 +1,4 @@
-'MacroName:ShowHeadingUse.2016.01
+'MacroName:ShowHeadingUse.2018.04
 'MacroDescription:Shows what the fixed field codes governing heading use in an authority
 ' record are.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 25 May 2015.
+' Last updated: 25 April 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -23,6 +23,7 @@ Option Explicit
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
+Global NameUse$
 Global SeriesUse$
 Global SubjUse$
 
@@ -42,7 +43,6 @@ Dim CatSource$
 Dim GeoSubd$
 Dim Juvenile$
 Dim LCCN$
-Dim NameUse$
 Dim PersonalName$
 Dim Prefix$
 Dim Rules$
@@ -57,7 +57,7 @@ TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
   Case 3 To 4, 14, 18, 20
   Case Else
-    MsgBox "This macro only works in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in an authority record.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -75,11 +75,11 @@ End If
 If CS.GetFixedField( "Name", PersonalName$ ) Then
     Select Case PersonalName$
       Case "a"
-        PersonalName$ = "Differentiated personal name"
+        PersonalName$ = "Differentiated personal name."
       Case "b"
-        PersonalName$ = ">> UNDIFFERENTIATED PERSONAL NAME"
+        PersonalName$ = "Undifferentiated personal name."
       Case "n"
-        PersonalName$ = "Not a personal name"
+        PersonalName$ = "Not a personal name."
     End Select
   Else
     MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
@@ -111,11 +111,11 @@ If CS.GetFixedField( "Geo subd", GeoSubd$ ) = TRUE Then
       Case "d", "i"
         GeoSubd$ = "YES"
       Case "n"
-        GeoSubd$ = "Not applicable"
-      Case " "
+        GeoSubd$ = "[Not applicable]"
+      Case ""
         GeoSubd$ = " NO"
       Case Chr$( 252 )
-        GeoSubd$ = "No attempt to code"
+        GeoSubd$ = "[No attempt to code]"
     End Select
   Else
     MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
@@ -141,7 +141,7 @@ If CS.GetFixedField( "Series", Series$ ) = TRUE Then
       Case "c"
         Series$ = "Series-like phrase"
       Case "n"
-        Series$ = "Not applicable"
+        Series$ = "[Not applicable]"
     End Select
   Else
     MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
@@ -156,7 +156,7 @@ If CS.GetFixedField( "Ser num", SerNum$ ) = TRUE Then
       Case "c"
         SerNum$ = "Numbering varies"
       Case "n"
-        SerNum$ = "Not applicable"
+        SerNum$ = "[Not applicable]"
     End Select
   Else
     MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
@@ -196,7 +196,7 @@ If CS.GetFixedField( "Rules", Rules$ ) = TRUE Then
       Case "d"
         Rules$ = "Descriptive cataloging rules: AACR2 compatible"
       Case "n"
-        Rules$ = "Descriptive cataloging rules: Not applicable"
+        Rules$ = "Descriptive cataloging rules: [Not applicable]"
       Case "z"
         If CS.GetField( "040", 1, CatSource$ ) Then
             If InStr( CatSource$, "rda" ) Then
@@ -210,27 +210,27 @@ If CS.GetFixedField( "Rules", Rules$ ) = TRUE Then
     MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
 End If
 
-Begin Dialog Dialog1Definition  208, 194, WaltsMacros$, .Dialog1ControlFunction
-  OkButton       88, 172,  52,  14
-  CancelButton  148, 172,  52,  14
-  Text            8,   6, 180,   8, AuthRef$
-  Text            8,  16, 180,  18, Rules$
-  GroupBox        8,  30, 192,  37, "Name/title use"
-  Text           20,  41, 144,   8, "Appropriate for use as a main or added entry?"
-  Text          170,  41,  16,   8, NameUse$
-  Text           20,  51, 156,   8, PersonalName$
-  GroupBox        8,  74, 192,  37, "Subject use"
-  Text           20,  85, 144,   8, "Appropriate for use as a subject added entry?"
-  Text          170,  85,  16,   8, SubjUse$
-  Text           28,  95, 112,   8, "Subdividable geographically?", .Geog1
-  Text          124,  95,  64,   8, GeoSubd$,                       .Geog2
-  GroupBox        8, 118, 192,  47, "Series use"
-  Text           20, 129, 144,   8, "Appropriate for use as a series added entry?"
-  Text          170, 129,  16,   8, SeriesUse$
-  Text           28, 139,  56,   8, "Type of series:",              .Series1
-  Text           90, 139,  56,   8, Series$,                        .Series2
-  Text           28, 149,  56,   8, "Series numbering:",            .Series3
-  Text           90, 149,  56,   8, SerNum$,                        .Series4
+Begin Dialog Dialog1Definition  216, 196, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      152, 172,  52,  14
+  CancelButton  152, 172,  52,  14
+  Text           12,   6, 180,   8, AuthRef$
+  Text           12,  16, 180,  18, Rules$
+  Text           24,  41, 144,   8, "Appropriate for use as a main or added entry?"
+  Text          174,  41,  16,   8, NameUse$
+  Text           32,  51, 156,   8, PersonalName$,                                   .PersName
+  Text           24,  85, 144,   8, "Appropriate for use as a subject added entry?"
+  Text          174,  85,  16,   8, SubjUse$
+  Text           32,  95, 112,   8, "Subdividable geographically?",                  .Geog1
+  Text          128,  95,  68,   8, GeoSubd$,                                        .Geog2
+  Text           24, 129, 144,   8, "Appropriate for use as a series added entry?"
+  Text          174, 129,  16,   8, SeriesUse$
+  Text           32, 139,  56,   8, "Type of series:",                               .Series1
+  Text           94, 139,  56,   8, Series$,                                         .Series2
+  Text           32, 149,  56,   8, "Series numbering:",                             .Series3
+  Text           94, 149,  56,   8, SerNum$,                                         .Series4
+  GroupBox       12,  30, 192,  37, "Name/title use"
+  GroupBox       12,  74, 192,  37, "Subject use"
+  GroupBox       12, 118, 192,  47, "Series use"
 End Dialog
 
 Dim Dialog1 As Dialog1Definition
@@ -246,26 +246,33 @@ Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
 Const DISABLED   As Integer = 0   'The value to make a dialog box control disabled.
 Const INITIALIZE As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE  As Integer = 0   'The value to make a dialog box control invisible.
 
 If Action% = INITIALIZE Then
 
-    If SeriesUse = "NO" Then
-        DlgEnable "Series1", DISABLED
-        DlgEnable "Series2", DISABLED
-        DlgEnable "Series3", DISABLED
-        DlgEnable "Series4", DISABLED
+    DlgVisible "Cancel",   INVISIBLE
+
+    If NameUse$ = " NO" Then
+        DlgEnable  "PersName", DISABLED
     End If
 
-    If SubjUse$ = "NO" Then
-        DlgEnable "Geog1",   DISABLED
-        DlgEnable "Geog2",   DISABLED
+    If SeriesUse$ = " NO" Then
+        DlgEnable  "Series1",  DISABLED
+        DlgEnable  "Series2",  DISABLED
+        DlgEnable  "Series3",  DISABLED
+        DlgEnable  "Series4",  DISABLED
+    End If
+
+    If SubjUse$ = " NO" Then
+        DlgEnable  "Geog1",    DISABLED
+        DlgEnable  "Geog2",    DISABLED
     End If
 
 End If
 
 End Function
-'29310314
+'30010708
 '
 'Macro name: ShowHeadingUse
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:34 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:13:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.

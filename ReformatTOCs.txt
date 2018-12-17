@@ -1,4 +1,4 @@
-'MacroName:ReformatTOCs.2016.01
+'MacroName:ReformatTOCs.2018.01
 'MacroDescription:Performs some simple reformatting of contents notes.
 '
 ' This macro was written by Walter F. Nickeson,
@@ -10,8 +10,8 @@
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 2.51 and Windows 7 Pro & Windows 10 Pro,
+' but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: This macro will do some simple, mechanical reformatting of contents notes
@@ -35,7 +35,7 @@
 ' 3  Necessitation and Law in Ancient Accounts of Cause and Explanation   45
 ' 4  Stoic Embarrassment over Necessity.....70
 '
-' would be formatted by the macro "DeformatClipboard" into this:
+' would be formatted by the macro "PasteUnformattedPlus" into this:
 '
 ' 1 Do Coincidences have Causes? 3 -- 2 Is Cause related to Necessitation or to
 ' Explanation? 26 -- 3 Necessitation and Law in Ancient Accounts of Cause and Explanation
@@ -58,9 +58,9 @@ Option Explicit
 
 Sub Main
 
+Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
 Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                             ' a big "X") in a message box; used to report the macro quitting.
-Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
 Const INFORMATION_MESSAGE  As Integer = 64  'The value to display the "Information message" icon in a message box.
 
 Dim CS As Object
@@ -394,8 +394,8 @@ If CS.AddFieldLine( Row% + 1, NewField$ ) = FALSE Then
 End If
 
 End Sub
-'42315352
+'42315334
 '
 'Macro name: ReformatTOCs
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:31 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:13:13 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,14 +1,16 @@
-'MacroName:CalcScale.2017.09
-'MacroDescription:Calculates the representative fraction from the scale ratio on a map.
+'MacroName:CalcScale.2018.35
+'MacroDescription:Calculates the representative fraction from the scale ratio on a map,
+' and optionally adds that information in fields 034 and 255 in a bibliographic record
+' for a cartographic resource.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Design partly inspired by Terry Reese's "Scale Calculator" at
+' Initial design partly inspired by Terry Reese's "Scale Calculator" at
 ' http://reeset.net/scale-calculator/
 '
-' Last updated: 26 June 2017.
+' Last updated: 14 December 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -17,40 +19,111 @@
 ' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
-' How it works: Run the macro to open a dialog box in which to enter the two numbers of a
-' scale ratio (including decimals or fractions--use the slash / (solidus or stroke) to
-' enter a fraction) and their corresponding units of length. It then calculates and
-' displays the ratio or representative fraction, putting the denominator on the
-' Clipboard so it can be pasted into the 034 field if desired. (The displayed number
-' includes commas for readability, but the pasted number doesn't.)
+' How it works: Run the macro (you do not have to be logged on) to open a dialog box in
+' which to enter the two numbers whose ratio is the scale of a map. The macro will
+' calculate a simple fraction from those numbers, and optionally add an 034 and a 255
+' field containing that information.
 '
-' As this macro is designed to be used for scales on maps, the unit of length of the
-' first number is only inches or centimeters; it is not a general-purpose unit converter.
+' The numbers entered can include decimals or fractions. To enter a fraction, use the
+' slash "/" (solidus or stroke) to separate the numerator and denominator, without any
+' spaces between. For each number entered, select the appropriate unit of length from the
+' drop-down lists. The choices on the left side are "inches" and "centimeters"; the
+' choices on the right side are "miles", "yards", "feet", "kilometers", "meters",
+' "chains", and "rods". The units can be mixed, such as relating centimeters to miles.
+' The resulting calculation is given as a list of numbers in a drop-down box, in which
+' each successive entry in the list may be understood as containing one fewer significant
+' digits than the entry preceding it. This is an attempt to reflect in the calculated
+' ratio any imprecision of the inputted values. The first entry in the list is the exact
+' ratio of the two entered numbers; the rest of the entries in the list represent greater
+' degrees of uncertainty, and so all are qualified by "approximately". The ratio selected
+' should reflect the level of confidence in the measurement, and ought to contain only as
+' many significant digits as are present in the least certain of the numbers used in the
+' calculation. The selected ratio is placed on the Windows Clipboard for copying.
 '
-' You do not need to be logged on to use this macro.
+' If a bibliographic record is displayed, the selected ratio can be added to it as a
+' formatted 255 field, and the denominator of that fraction as a formatted 034 field. The
+' macro will offer to add those fields unless they are already present in exactly the
+' same form. The formatted fields look like this, for a stated scale of "4 in. to 1
+' mile":
+'
+'   034 1# $a a $b 15840
+'   255 ## $a Scale 1:15,840.
+'
+' If the ratio were calculated from measuring a bar on a map, and the scale appeared to
+' be about 1 5/8 inches equal 20 miles, the macro will calculate the scale ratio as
+' "1:779,815." But if this number seems too precise for the measurement, a different
+' answer from the list, containing fewer significant digits, could be selected, such as
+' 779,800, or even 780,000. Selecting a less precise calculation could result in the two
+' fields looking like this:
+'
+'   034 1# $a a $b 780000
+'   255 ## $a Scale approximately 1:780,000.
+'
+' As this macro is designed to be used only for calculating scales on maps, the unit of
+' length of the first number is only inches or centimeters; it is not a general-purpose
+' unit converter.
 '****************************************************************************************
 
 Option Explicit
 
-Declare Function CheckInput     ( StrInput$ )          As Integer
-Declare Function ConvertStrToNum( CandidateString$ )   As Double
-Declare Function Roundup        ( NumInput As Double ) As Double
+Declare Sub SetFields( ListSelection% )
+
+Declare Function AddCommas      ( Instring$ )           As String
+Declare Function CheckInput     ( StrInput$ )           As Integer
+Declare Function ConvertStrToNum( CandidateString$ )    As Double
+Declare Function RemoveCommas   ( InString$ )           As String
+Declare Function RoundUp        ( NumInput As Variant ) As Variant
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
-Global WaltsMacros$
+Const CHECKED   As Integer = 1   'The value of a checkbox when it is checked.
+Const DISABLED  As Integer = 0   'The value to make a dialog box control disabled.
+Const ENABLED   As Integer = 1   'The value to make a dialog box control enabled.
+Const UNCHECKED As Integer = 0   'The value of a checkbox when it is not checked.
 
-Global UnitsList1( 1 ) As String
-Global UnitsList2( 4 ) As String
+Const INPUT_BAD_CHARACTERS      As Integer = 1
+Const INPUT_BAD_FRACTION_FORMAT As Integer = 3
+Const INPUT_NO_INPUT            As Integer = 0
+Const INPUT_GOOD                As Integer = 2
+
+Dim DELIMITER As String*1
+
+Dim Field034$
+Dim Field255$
+Dim NewField034$
+Dim NewField255$
+Dim WaltsMacros$
+
+Dim BibRecord
+
+Dim ScaleStatements()    As String
+Dim UnitsList1     ( 1 ) As String
+Dim UnitsList2     ( 6 ) As String
 
 '****************************************************************************************
 
 Sub Main
 
-Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box function when the "Cancel" button is clicked.
+Const CRITICAL_MESSAGE         As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                                ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_ADD_FIELDS As Integer = 2   'The value returned by the dialog box function when the "Add fields" button
+                                                ' is clicked.
+Const DIALOG_BUTTON_CANCEL     As Integer = 0   'The value returned by the dialog box function when the "Cancel" button is
+                                                ' clicked.
+Const DISPLAY_FF_AT_TOP        As Integer = 1   'The value to display the fixed field at the top of a record.
 
-Dim CS As Object
-Set CS = CreateObject("Connex.Client")
+DELIMITER = Chr$( 223 )
+
+Dim AddFailure%
+Dim CS As Object             : Set CS        = CreateObject("Connex.Client")
+Dim DialogBoxResult%
+Dim Instructions$            : Instructions$       = "Enter numbers (including decimals or fractions):"
+Dim PosFF%
+Dim TypeOfRecord$
+Dim TypeOfWindow%
+
+Dim ChangedFFView            : ChangedFFView = FALSE
+Dim GetFF
 
 UnitsList1( 0 ) = "inches"
 UnitsList1( 1 ) = "centimeters"
@@ -60,40 +133,184 @@ UnitsList2( 1 ) = "yards"
 UnitsList2( 2 ) = "feet"
 UnitsList2( 3 ) = "kilometers"
 UnitsList2( 4 ) = "meters"
+UnitsList2( 5 ) = "chains"
+UnitsList2( 6 ) = "rods"
 
+Field034$    = ""
+Field255$    = ""
+NewField034$ = ""
+NewField255$ = ""
 WaltsMacros$ = "[Walt's macros] Extras2:CalcScale"
 
-Begin Dialog Dialog1Definition  224, 114, "WaltsMacros", .Dialog1ControlFunction
-  PushButton      8,  48, 208,  16, "&Calculate",                                        .Calc
-  CancelButton   16,  18,   1,   1
-  PushButton    104,  92,  52,  14, "Clea&r",                                            .Clear
-  PushButton    164,  92,  52,  14, "Cl&ose",                                            .Close
-  TextBox        16,  18,  32,  12,                                                      .TextBox1
-  DropListBox    54,  18,  52,  32, UnitsList1(),                                        .Units1
-  TextBox       116,  18,  32,  12,                                                      .TextBox2
-  DropListBox   156,  18,  52,  64, UnitsList2(),                                        .Units2
-  Text          108,  20,   4,   8, "="
-  TextBox        34,  72,  88,  12,                                                      .Answer
-  GroupBox        8,   4, 208,  36, "Enter numbers (including decimals and fractions):"
-  Text          128,  70,  80,  16, "Denominator also copied to Clipboard.",             .CopyDenominator
-  Text            8,  74,  24,   8, "Result:"
+' First, determine if a bibliographic record is displayed; if it is, then the option to
+' add the scale in new 034 and 255 fields will be available.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case 0 To 1, 17
+    BibRecord = TRUE
+    PosFF% = CS.FixedFieldPosition
+    If PosFF% <> DISPLAY_FF_AT_TOP Then
+        CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+        ChangedFFView         = TRUE
+    End If
+    BibRecord = TRUE
+    GetFF     = CS.GetField( "034", 1, Field034$ )
+    GetFF     = CS.GetField( "255", 1, Field255$ )
+    If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+  Case Else
+    BibRecord = FALSE
+End Select
+
+' Then run the dialog box to calculate the scale with the input.
+
+Begin Dialog Dialog1Definition  256,  94, WaltsMacros$, .Dialog1ControlFunction
+  TextBox        20,  18,  40,  12,                    .TextBox1
+  DropListBox    66,  18,  54,  32, UnitsList1(),      .Units1
+  TextBox       136,  18,  40,  12,                    .TextBox2
+  DropListBox   182,  18,  54,  72, UnitsList2(),      .Units2
+  PushButton     20,  39,  52,  14, "&Calculate",      .CalcButton
+  DropListBox    78,  40, 114,  64, ScaleStatements(), .ResultDropListBox
+  PushButton    114,  70,  52,  14, "",                .AddFieldsButton
+  PushButton    196,  40,  40,  12, "Clea&r",          .ClearButton
+  CancelButton  194,  70,  52,  14
+  CheckBox       52,  72,  24,  12, "&034",            .CheckBox034
+  CheckBox       84,  72,  24,  12, "&255",            .CheckBox255
+  Text          125,  20,   6,   8, "="
+  Text           10,  73,  40,   8, "Add field(s):",   .AddFieldsText
+  GroupBox       10,   4, 236,  58, Instructions$
 End Dialog
 
 Dim Dialog1 As Dialog1Definition
-On Error Resume Next
-Dialog Dialog1
-If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+DialogBoxResult% = Dialog( Dialog1 )
+
+Select Case DialogBoxResult%
+
+  Case DIALOG_BUTTON_CANCEL
+    Exit Sub
+
+  Case DIALOG_BUTTON_ADD_FIELDS
+    If Dialog1.CheckBox034 = CHECKED Then
+        If CS.AddField( 1, NewField034$ ) = FALSE Then
+            AddFailure% = AddFailure% + 1
+        End If
+    End If
+    If Dialog1.CheckBox255 = CHECKED Then
+        If CS.AddField( 1, NewField255$ ) = FALSE Then
+            AddFailure% = AddFailure% + 2
+        End If
+    End If
+
+End Select
+
+' Display an error message, if necessary.
+
+Select Case AddFailure%
+  Case 1
+    MsgBox "Sorry, could not add the 034 field.", CRITICAL_MESSAGE, WaltsMacros$
+  Case 2
+    MsgBox "Sorry, could not add the scale statement.", CRITICAL_MESSAGE, WaltsMacros$
+  Case 3
+    MsgBox "Sorry, could not add the 034 and 255 fields.", CRITICAL_MESSAGE, WaltsMacros$
+End Select
 
 End Sub
+
+'****************************************************************************************
+
+Sub SetFields( ListSelection% )
+
+' Given the value selected in the drop-down list of scale statements, construct the 034
+' and 255 fields. Compare them with any existing fields to determine how to set the
+' checkboxes and button text in the dialog box.
+
+Dim SelectedScale$
+Dim SetAddButtonText%
+Dim TempString$
+
+If BibRecord Then
+    SelectedScale$ = ScaleStatements( ListSelection% )
+    TempString$    = Mid$( SelectedScale$, 17 )
+    NewField034$   = "0341 a " & DELIMITER  & "b " & RemoveCommas( TempString$ )
+    If NewField034$ <> Field034$ Then
+        DlgEnable       "CheckBox034",       ENABLED
+        DlgValue        "CheckBox034",       CHECKED
+        SetAddButtonText% = SetAddButtonText% + 1
+      Else
+        DlgValue        "CheckBox034",       UNCHECKED
+        DlgEnable       "CheckBox034",       DISABLED
+    End If
+    NewField255$ = "255  Scale " & SelectedScale$ & "."
+    If NewField255$ <> Field255$ Then
+        DlgEnable       "CheckBox255",       ENABLED
+        DlgValue        "CheckBox255",       CHECKED
+        SetAddButtonText% = SetAddButtonText% + 2
+      Else
+        DlgValue        "CheckBox255",       UNCHECKED
+        DlgEnable       "CheckBox255",       DISABLED
+    End If
+    DlgEnable       "AddFieldsButton",   ENABLED
+
+    Select Case SetAddButtonText%
+      Case 0
+        DlgText         "AddFieldsButton",   "&Add fields"
+      Case 1,2
+        DlgText         "AddFieldsButton",   "&Add field"
+      Case 3
+        DlgText         "AddFieldsButton",   "&Add fields"
+    End Select
+
+    DlgEnable       "AddFieldsText",     ENABLED
+    DlgFocus        "ResultDropListBox"
+End If
+DlgEnable       "ClearButton",       ENABLED
+
+End Sub
+
+'****************************************************************************************
+
+Function AddCommas( Instring$ ) As String
+
+' This function adds commas between thousands for the scale statement in field 255.
+
+Dim CommaPos%
+Dim CommaString$
+Dim LenString%
+Dim TempString$
+
+TempString$ = Instring$
+
+LenString% = Len( TempString$ )
+If LenString% > 3 Then
+    CommaPos% = LenString% Mod 3
+    If CommaPos% > 0 Then
+        CommaString$ = Left$( TempString$, CommaPos% )
+        TempString$  = Mid$( TempString$, CommaPos% + 1 )
+    End If
+    Do
+      CommaString$ = CommaString$ & "," & Left$( TempString$, 3 )
+      TempString$  = Mid$( TempString$, 4 )
+    Loop Until TempString$ = ""
+  Else
+    CommaString$ = InString$
+End If
+
+If Left$( CommaString$, 1 ) = "," Then
+    CommaString$ = Mid$( CommaString$, 2 )
+End If
+
+AddCommas = CommaString$
+
+End Function
 
 '****************************************************************************************
 
 Function CheckInput( StrInput$ ) As Integer
 
 ' This function checks the input for existence (SOMETHING needs to be entered) and
-' validity (only numbers and a decimal point are acceptable).
+' validity (only numbers and a decimal point or slash are acceptable).
 
-Dim DecimalEquivalent!
+Dim DecimalEquivalent
 Dim Denominator%
 Dim Numerator%
 Dim SlashCount%
@@ -105,7 +322,7 @@ Dim WholeNum$
 Dim i As Integer
 
 If StrInput$ = "" Then
-    CheckInput = 0
+    CheckInput = INPUT_NO_INPUT
     Exit Function
   Else
     For i = 1 To Len( StrInput$ )
@@ -119,30 +336,30 @@ If StrInput$ = "" Then
         Case " "
           SpaceCount% = SpaceCount% + 1
           If SpaceCount% > 1 Or SlashCount% > 0 Then     'Can't have a space after the slash.
-              CheckInput = 3
+              CheckInput  = INPUT_BAD_FRACTION_FORMAT
               Exit Function
             Else
-              WholeNum$ = TempString$      'Space found: Whole number complete.
+              WholeNum$   = TempString$    'Space found: Whole number complete.
               TempString$ = ""             'Empty string to start numerator.
           End If
 
         Case "/"
           If SlashCount% = 0 Then
               If TempString$ = "" Then     'Nothing for numerator: Problem.
-                  CheckInput = 3
+                  CheckInput  = INPUT_BAD_FRACTION_FORMAT
                   Exit Function
                 Else
-                  Numerator% = Val( TempString$ )
+                  Numerator%  = Val( TempString$ )
                   TempString$ = ""         'Empty string to start denominator.
                   SlashCount% = SlashCount% + 1
               End If
             Else
-              CheckInput = 3
+              CheckInput = INPUT_BAD_FRACTION_FORMAT
               Exit Function
           End If
 
         Case Else
-          CheckInput = 1
+          CheckInput = INPUT_BAD_CHARACTERS
           Exit Function
 
       End Select
@@ -153,22 +370,22 @@ End If
 If SlashCount% = 1 Then
     Denominator% = Val( TempString$ )
   Else
-    WholeNum$ = TempString$
+    WholeNum$    = TempString$
 End If
 
 If Numerator% = 0 And Denominator% = 0 Then
-    DecimalEquivalent! = 0
+    DecimalEquivalent = 0
   Else
-    DecimalEquivalent! = Numerator% / Denominator%
+    DecimalEquivalent = Numerator% / Denominator%
 End If
 
-If DecimalEquivalent! = 0 Then
+If DecimalEquivalent = 0 Then
     StrInput$ = WholeNum$
   Else
-    StrInput$ = WholeNum$ & Trim$( Str$( DecimalEquivalent! ) )
+    StrInput$ = WholeNum$ & Trim$( Str$( DecimalEquivalent ) )
 End If
 
-CheckInput = 2
+CheckInput = INPUT_GOOD
 
 End Function
 
@@ -178,9 +395,9 @@ Function ConvertStrToNum( CandidateString$ ) As Double
 
 ' Converts a string to a number, preserving a decimal.
 
-Dim DecPart#
+Dim DecPart
 Dim InputString$
-Dim IntPart#
+Dim IntPart
 Dim NumString$
 Dim TempChar$
 
@@ -195,25 +412,49 @@ For i = 1 To Len( InputString$ )
   If TempChar$ Like "[0-9]" Then
       NumString$ = NumString$ & TempChar$
     ElseIf TempChar$ = "." Then
-      IntPart#   = Val( NumString$ )
+      IntPart    = Val( NumString$ )
       Decimal    = TRUE
       NumString$ = ""
   End If
 Next i
 
 If Decimal = FALSE Then
-    IntPart# = Val( NumString$ )
+    IntPart = Val( NumString$ )
   Else
-    DecPart# = Val( NumString$ )/(10 ^ Len( NumString$ ) )
+    DecPart = Val( NumString$ )/(10 ^ Len( NumString$ ) )
 End If
 
-ConvertStrToNum = IntPart# + DecPart#
+ConvertStrToNum = IntPart + DecPart
 
 End Function
 
 '****************************************************************************************
 
-Function Roundup( NumInput As Double ) As Double
+Function RemoveCommas( InString$ ) As String
+
+' This function removes commas from the scale statement to produce a string for the 034
+' field.
+
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = InString$
+
+Do
+  p = InStr( TempString$, "," )
+  If p > 0 Then
+      TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
+  End If
+Loop Until p = 0
+
+RemoveCommas = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function RoundUp( NumInput As Variant ) As Variant
 
 ' Rounds up numbers.
 
@@ -222,17 +463,12 @@ Const MAX_INTEGER As Integer = 32767
 Dim DecimalPart$
 Dim RoundUpChar$
 Dim StringNum$
-Dim TempNum As Double
+Dim TempNum
 
 Dim p As Integer
 
 If NumInput > MAX_INTEGER Then
     StringNum$ = CStr( NumInput )
-    p = InStr( StringNum$, "E" )
-    If p > 0 Then
-        Roundup = -5
-        Exit Function
-    End If
     p = InStr( StringNum$, "." )
     If p > 0 Then
         DecimalPart$ = Mid$( StringNum$, p + 1, 1 )
@@ -252,7 +488,7 @@ If NumInput > MAX_INTEGER Then
     If NumInput - TempNum > .5 Then TempNum = TempNum + 1
 End If
 
-Roundup = TempNum
+RoundUp = TempNum
 
 End Function
 
@@ -260,164 +496,229 @@ End Function
 
 Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
-' Calculate the ratio.
+' Get input and calculate the ratio.
 
-Const CONTROL_CHANGE  As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
-Const FOCUS_CHANGE    As Integer = 4   'The value of the dialog box function parameter "Action%" when the control focus changes.
-Const INITIALIZE      As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
-Const INVISIBLE       As Integer = 0   'The value to make a dialog box control invisible.
-Const KEEP_DLG_OPEN   As Integer = -1  'The value of the dialog box function to keep a dialog box open.
-Const VISIBLE         As Integer = 1   'The value to make a dialog box control visible.
-Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+Const COMBO_BOX_CHANGE As Integer = 3   'The value for the state of a dialog box when a control changes.
+Const CONTROL_CHANGE   As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const INITIALIZE       As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE        As Integer = 0   'The value to make a dialog box control invisible.
+Const KEEP_DLG_OPEN    As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+Const VISIBLE          As Integer = 1   'The value to make a dialog box control visible.
+Const WARNING_MESSAGE  As Integer = 48  'The value to display the "Warning message" icon in a message box.
 
-Dim Answer$
-Dim Calc#
-Dim Denominator#
+Const CENTIMETERS      As Integer = 1
+Const CHAINS           As Integer = 5
+Const FEET             As Integer = 2
+Const INCHES           As Integer = 0
+Const KILOMETERS       As Integer = 3
+Const METERS           As Integer = 4
+Const MILES            As Integer = 0
+Const RODS             As Integer = 6
+Const YARDS            As Integer = 1
+
 Dim InputString1$
 Dim InputString2$
-Dim LengthAnswer%
-Dim Numerator#
 Dim TempString$
-Dim ThreeDigits$
 Dim UnitsList1Selection%
 Dim UnitsList2Selection%
 Dim ValidityCheck%
 
-Dim i As Integer, x As Integer
+' These variables are declared as variants so they can hold whatever type of number is
+' appropriate (integer, long, or double) in the calculation.
+
+Dim Calculation
+Dim Denominator
+Dim MultiplierAndDivider
+Dim NumberToRound
+Dim Numerator
+Dim RoundedNumber
+
+Static InitialState
+
+Dim i As Integer, j As Integer, x As Integer
+
+Dim RoundedCalculations() As Variant
 
 Select Case Action%
 
   Case INITIALIZE
 
-    DlgVisible "CopyDenominator", INVISIBLE
-    DlgFocus   "TextBox1"
+    DlgText         "AddFieldsButton",   "&Add field(s)"
+    DlgEnable       "AddFieldsButton",   DISABLED
+    DlgEnable       "AddFieldsText",     DISABLED
+    DlgValue        "CheckBox034",       CHECKED
+    DlgEnable       "CheckBox034",       DISABLED
+    DlgValue        "CheckBox255",       CHECKED
+    DlgEnable       "CheckBox255",       DISABLED
+    DlgEnable       "ClearButton",       DISABLED
+    DlgFocus        "TextBox1"
+    InitialState = TRUE
 
   Case CONTROL_CHANGE
 
     Select Case Id$
 
-      Case "Calc"
+      Case "CalcButton"
+
         InputString1$  = Trim$( DlgText( "TextBox1" ) )
         InputString2$  = Trim$( DlgText( "TextBox2" ) )
         ValidityCheck% = CheckInput( InputString1$ ) * CheckInput( InputString2$ )
 
 'If the input strings are valid, proceed with the calculation.
 
-        If ValidityCheck% = 4 Then
+        If ValidityCheck% = INPUT_GOOD * INPUT_GOOD Then
 
-            Numerator#           = ConvertStrToNum( InputString1$ )
-            Denominator#         = ConvertStrToNum( InputString2$ )
+            InitialState         = FALSE
+            Numerator            = ConvertStrToNum( InputString1$ )
+            Denominator          = ConvertStrToNum( InputString2$ )
             UnitsList1Selection% = DlgValue( "Units1" )
             UnitsList2Selection% = DlgValue( "Units2" )
 
             Select Case UnitsList1Selection%
 
-              Case 0
+              Case INCHES
 
                 Select Case UnitsList2Selection%
-                  Case 0          'miles
-                    Calc# = Roundup( ( Denominator# * 63360 ) / Numerator# )
-                  Case 1          'yards
-                    Calc# = Roundup( ( Denominator# * 36 ) / Numerator# )
-                  Case 2          'feet
-                    Calc# = Roundup( ( Denominator# * 12 ) / Numerator# )
-                  Case 3          'Kilometers
-                    Calc# = Roundup( ( Denominator# * 39370 ) / Numerator# )
-                  Case 4          'meters
-                    Calc# = Roundup( ( Denominator# * 39.37 ) / Numerator# )
+
+                  Case MILES
+                    Calculation = RoundUp( ( Denominator * 63360 ) / Numerator )
+                  Case YARDS
+                    Calculation = RoundUp( ( Denominator * 36 ) / Numerator )
+                  Case FEET
+                    Calculation = RoundUp( ( Denominator * 12 ) / Numerator )
+                  Case KILOMETERS
+                    Calculation = RoundUp( ( Denominator * 39370 ) / Numerator )
+                  Case METERS
+                    Calculation = RoundUp( ( Denominator * 39.37 ) / Numerator )
+                  Case CHAINS
+                    Calculation = RoundUp( ( Denominator * 792 ) / Numerator )
+                  Case RODS
+                    Calculation = RoundUp( ( Denominator * 198 ) / Numerator )
+
                 End Select
 
-              Case 1
+              Case CENTIMETERS
 
                 Select Case UnitsList2Selection%
-                  Case 0          'miles
-                    Calc# = Roundup( ( Denominator# * 160934.4 ) / Numerator# )
-                  Case 1          'yards
-                    Calc# = Roundup( ( Denominator# * 40233.6 ) / Numerator# )
-                  Case 2          'feet
-                    Calc# = Roundup( ( Denominator# * 30.48 ) / Numerator# )
-                  Case 3          'Kilometers
-                    Calc# = Roundup( ( Denominator# * 100000 ) / Numerator# )
-                  Case 4          'meters
-                    Calc# = Roundup( ( Denominator# * 100 ) / Numerator# )
+
+                  Case MILES
+                    Calculation = RoundUp( ( Denominator * 160934.4 ) / Numerator )
+                  Case YARDS
+                    Calculation = RoundUp( ( Denominator * 40233.6 ) / Numerator )
+                  Case FEET
+                    Calculation = RoundUp( ( Denominator * 30.48 ) / Numerator )
+                  Case KILOMETERS
+                    Calculation = RoundUp( ( Denominator * 100000 ) / Numerator )
+                  Case METERS
+                    Calculation = RoundUp( ( Denominator * 100 ) / Numerator )
+                  Case CHAINS
+                    Calculation = RoundUp( ( Denominator * 2011.68 ) / Numerator )
+                  Case RODS
+                    Calculation = RoundUp( ( Denominator * 502.92 ) / Numerator )
 
                 End Select
 
             End Select
 
-          If Calc# = -5 Then
-              MsgBox "Sorry, the results are numbers too big for this macro.", WARNING_MESSAGE, WaltsMacros$
-              DlgEnd 0
-            Else
-              Answer$ = Cstr( Calc# )
-          End If
+' Put the result in the first row of an array. Add additional rows, each one storing the
+' result with one fewer significant numbers. This is done by dividing the number in the
+' previous row by a multiple of 10 to get a decimal number that can be rounded to a whole
+' number, then multiplying the number by the same multiple of 10 to return the it to its
+' original magnitude. Stop with a number of one or two significant digits.
 
-' Add commas as thousands separators for legibility.
+            ReDim RoundedCalculations( 0 )
+            RoundedCalculations( 0 ) = Calculation
 
-            LengthAnswer% = Len( Answer$ )
-            i = 2
-            Do
-              ThreeDigits$ = Mid$( Answer$, LengthAnswer% - i, 3 )
-              If i = 2 Then
-                  TempString$ = ThreeDigits$
-                Else
-                  TempString$ = ThreeDigits$ & "," & TempString$
-              End If
-              i = i + 3
-            Loop Until i >= LengthAnswer%
-            x = i - LengthAnswer%
-            Select Case x
-              Case 0
-                TempString$ = Left$( Answer$, 2 ) & "," & TempString$
-              Case 1
-                TempString$ = Left$( Answer$, 1 ) & "," & TempString$
-            End Select
+                i = 1
+                Do
+                  MultiplierAndDivider     = 10 ^ i
+                  ReDim Preserve RoundedCalculations( i )
+                  NumberToRound            = RoundedCalculations( i - 1 ) / MultiplierAndDivider
+                  RoundedNumber            = RoundUp( NumberToRound ) * MultiplierAndDivider
+                  RoundedCalculations( i ) = RoundedNumber
+                  i = i + 1
+                Loop Until NumberToRound < 100
 
-            Clipboard.Clear
-            Clipboard.SetText Answer$
 
-            DlgText    "Answer", "1:" & TempString$
-            DlgVisible "CopyDenominator", VISIBLE
-            Dialog1ControlFunction = KEEP_DLG_OPEN
-            DlgFocus   "Cancel"
+' Convert each row of the number array to a string for the string array; omit duplicate
+' rows. In each string, add commas as thousands separators, and prefix the string with
+' the ratio indicator "1:". All rows after the first are "approximate" ratios. Put the
+' first row of the array on the Clipboard.
+
+            If Calculation > 10 Then
+                ReDim ScaleStatements( 0 )
+                TempString$          = Trim$( Str$( RoundedCalculations( 0 ) ) )
+                ScaleStatements( 0 ) = "1:" & AddCommas( TempString$ )
+                j = 1
+                For i = 1 To UBound( RoundedCalculations )
+                  If RoundedCalculations( i ) <> RoundedCalculations( i - 1 ) Then
+                      ReDim Preserve ScaleStatements( j )
+                      TempString$          = Trim$( Str$( RoundedCalculations( i ) ) )
+                      TempString$          = AddCommas( TempString$ )
+                      ScaleStatements( j ) = "approximately 1:" & TempString$
+                      j = j + 1
+                  End If
+                Next i
+                DlgListBoxArray "ResultDropListBox", ScaleStatements()
+                DlgValue        "ResultDropListBox", 0
+                Clipboard.Clear
+                Clipboard.SetText DlgText( "ResultDropListBox" )
+                SetFields( 0 )
+            End If
 
           Else
 
-            If ValidityCheck% = 0 Then
+            If ValidityCheck% = INPUT_NO_INPUT Then
                 MsgBox "Please enter values to calculate!", WARNING_MESSAGE, WaltsMacros$
-              ElseIf ValidityCheck% Mod 3 = 0 Then
+              ElseIf ValidityCheck% Mod INPUT_BAD_FRACTION_FORMAT = 0 Then
                 MsgBox "Please check formatting of the fraction!", WARNING_MESSAGE, WaltsMacros$
               Else
                 MsgBox "Please enter only numbers!", WARNING_MESSAGE, WaltsMacros$
             End If
-            Dialog1ControlFunction = KEEP_DLG_OPEN
-            DlgFocus   "TextBox1"
+            DlgFocus        "TextBox1"
         End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
 
-      Case "Close"
-        DlgEnd 0
+      Case "ResultDropListBox"
 
-      Case "Clear"
-        DlgText    "Answer",          ""
-        DlgVisible "CopyDenominator", INVISIBLE
-        DlgFocus   "TextBox1"
-        DlgText    "TextBox1",        ""
-        DlgText    "TextBox2",        ""
+' Always copy the result displayed in the droplist box to the Clipboard.
+
+        SetFields( DlgValue( "ResultDropListBox" ) )
+        Clipboard.Clear
+        Clipboard.SetText DlgText( "ResultDropListBox" )
+
+      Case "ClearButton"
+
+        ReDim RoundedCalculations( 0 )
+        ReDim ScaleStatements( 0 )
+        DlgEnable       "AddFieldsButton",   DISABLED
+        DlgEnable       "AddFieldsText",     DISABLED
+        DlgValue        "CheckBox034",       CHECKED
+        DlgEnable       "CheckBox034",       DISABLED
+        DlgValue        "CheckBox255",       CHECKED
+        DlgEnable       "CheckBox255",       DISABLED
+        DlgEnable       "ClearButton",       DISABLED
+        DlgListBoxArray "ResultDropListBox", ScaleStatements()
+        DlgText         "TextBox1",          ""
+        DlgText         "TextBox2",          ""
+        InitialState = TRUE
+        Clipboard.Clear
+        DlgFocus        "TextBox1"
         Dialog1ControlFunction = KEEP_DLG_OPEN
 
     End Select
 
-  Case FOCUS_CHANGE
+  Case COMBO_BOX_CHANGE
 
-    If Id$ = "Answer" Then
-        DlgFocus   "Close"
+    If Id$ = "TextBox1" Or Id$ = "TextBox2" Then
+        DlgEnable       "ClearButton",       ENABLED
     End If
 
 End Select
 
 End Function
-'44515660
+'74627726
 '
 'Macro name: CalcScale
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:35:16 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:11:40 AM using "MacroBookInspector" macro by Walter F. Nickeson.

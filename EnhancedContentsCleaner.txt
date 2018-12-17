@@ -1,11 +1,11 @@
-'MacroName:EnhancedContentsCleaner.2016.01
+'MacroName:EnhancedContentsCleaner.2018.01
 'MacroDescription:Allows enhanced contents notes to be unenhanced or improved.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 1 May 2015.
+' Last updated: 20 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -80,15 +80,11 @@ Const WARNING_MESSAGE      As Integer = 48  'The value to display the "Warning m
 Dim CS As Object
 Set CS = CreateObject("Connex.Client")
 
-Dim ArticleA$                : ArticleA$     = "A " & Chr$( 223 ) & "t"
-Dim ArticleAn$               : ArticleAn$    = "An " & Chr$( 223 ) & "t"
 Dim ArticleTest1%
 Dim ArticleTest2%
 Dim ArticleTest3%
-Dim ArticleThe$              : ArticleThe$   = "The " & Chr$( 223 ) & "t"
 Dim ButtonMessage$
 Dim ContinueMessage$
-Dim Delimiter$               : Delimiter$    = Chr$( 223 )
 Dim Difference%
 Dim EngTest$
 Dim FieldData$
@@ -97,16 +93,31 @@ Dim Instruction$
 Dim ModifiedContents$
 Dim PosFF%
 Dim Row%
-Dim Start%                   : Start%        = 2
+Dim Start%
+Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:EnhancedContentsCleaner"
 Dim WorkingContents$
+
+Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
+Dim ARTICLE_A As String*4    : ARTICLE_A     = "A " & DELIMITER & "t"
+Dim ARTICLE_AN As String*5   : ARTICLE_AN    = "An " & DELIMITER & "t"
+Dim ARTICLE_THE As String*6  : ARTICLE_THE   = "The " & DELIMITER & "t"
 
 Dim Cleanup
 Dim SecondTime               : SecondTime    = FALSE
 
 Dim i As Integer
 
-' First, check that the field is tagged as an enhanced contents note (505 X0).
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro only works in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then, check that the field is tagged as an enhanced contents note (505 X0).
 
 Row% = CS.CursorRow
 If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
@@ -164,16 +175,16 @@ If PosFF% <> 1 Then CS.FixedFieldPosition = 1
 If CS.GetFixedField( "Lang", EngTest$ ) = TRUE Then
     If EngTest$ = "eng" Then
         Do
-          ArticleTest1% = InStr( WorkingContents$, ArticleA$ )
-          If ArticleTest1% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest1% - 1 ) & Delimiter$ & "t A " & Mid$( WorkingContents$, ArticleTest1% + 5 )
+          ArticleTest1% = InStr( WorkingContents$, ARTICLE_A )
+          If ArticleTest1% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest1% - 1 ) & DELIMITER & "t A " & Mid$( WorkingContents$, ArticleTest1% + 5 )
         Loop Until ArticleTest1% = 0
         Do
-          ArticleTest2% = InStr( WorkingContents$, ArticleAn$ )
-          If ArticleTest2% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest2% - 1 ) & Delimiter$ & "t An " & Mid$( WorkingContents$, ArticleTest2% + 6 )
+          ArticleTest2% = InStr( WorkingContents$, ARTICLE_AN )
+          If ArticleTest2% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest2% - 1 ) & DELIMITER & "t An " & Mid$( WorkingContents$, ArticleTest2% + 6 )
         Loop Until ArticleTest2% = 0
         Do
-          ArticleTest3% = InStr( WorkingContents$, ArticleThe$ )
-          If ArticleTest3% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest3% - 1 ) & Delimiter$ & "t The " & Mid$( WorkingContents$, ArticleTest3% + 7 )
+          ArticleTest3% = InStr( WorkingContents$, ARTICLE_THE )
+          If ArticleTest3% <> 0 Then WorkingContents$ = Left$( WorkingContents$, ArticleTest3% - 1 ) & DELIMITER & "t The " & Mid$( WorkingContents$, ArticleTest3% + 7 )
         Loop Until ArticleTest3% = 0
     End If
 End If
@@ -185,8 +196,9 @@ CS.FixedFieldPosition = PosFF%
 ' empty subfield (usually a subfield $g which contained an article that was removed) is
 ' ignored.
 
+Start%  = 2
 Do
-  i = InStr( Start%, WorkingContents$, Delimiter$ )
+  i = InStr( Start%, WorkingContents$, DELIMITER )
   SubfieldCount% = SubfieldCount% + 1
   ReDim Preserve Subfields( SubfieldCount% )
   If i <> 0 Then
@@ -391,69 +403,69 @@ If Dialog2.Direction = 1 Then GoTo Done:
 ' is retained.
 
 If Cleanup = TRUE Then
-    If SecondTime = FALSE Then ModifiedContents$ = "505" & Ind1$ & "0" & Delimiter$
-    If Dialog2.CheckBox0  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 0 ), 1 )
-    If Dialog2.CheckBox1  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 1 ), 1 )
-    If Dialog2.CheckBox2  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 2 ), 1 )
-    If Dialog2.CheckBox3  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 3 ), 1 )
-    If Dialog2.CheckBox4  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 4 ), 1 )
-    If Dialog2.CheckBox5  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 5 ), 1 )
-    If Dialog2.CheckBox6  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 6 ), 1 )
-    If Dialog2.CheckBox7  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 7 ), 1 )
-    If Dialog2.CheckBox8  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 8 ), 1 )
-    If Dialog2.CheckBox9  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 9 ), 1 )
-    If Dialog2.CheckBox10 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 10 ), 1 )
-    If Dialog2.CheckBox11 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 11 ), 1 )
-    If Dialog2.CheckBox12 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 12 ), 1 )
-    If Dialog2.CheckBox13 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 13 ), 1 )
-    If Dialog2.CheckBox14 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 14 ), 1 )
-    If Dialog2.CheckBox15 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 15 ), 1 )
-    If Dialog2.CheckBox16 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 16 ), 1 )
-    If Dialog2.CheckBox17 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 17 ), 1 )
-    If Dialog2.CheckBox18 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 18 ), 1 )
-    If Dialog2.CheckBox19 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 19 ), 1 )
-    If Dialog2.CheckBox20 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 20 ), 1 )
-    If Dialog2.CheckBox21 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 21 ), 1 )
-    If Dialog2.CheckBox22 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 22 ), 1 )
-    If Dialog2.CheckBox23 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 23 ), 1 )
-    If Dialog2.CheckBox24 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 24 ), 1 )
-    If Dialog2.CheckBox25 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 25 ), 1 )
-    If Dialog2.CheckBox26 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 26 ), 1 )
-    If Dialog2.CheckBox27 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 27 ), 1 )
-    If Dialog2.CheckBox28 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 28 ), 1 )
-    If Dialog2.CheckBox29 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 29 ), 1 )
-    If Dialog2.CheckBox30 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 30 ), 1 )
-    If Dialog2.CheckBox31 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 31 ), 1 )
-    If Dialog2.CheckBox32 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 32 ), 1 )
-    If Dialog2.CheckBox33 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 33 ), 1 )
-    If Dialog2.CheckBox34 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 34 ), 1 )
-    If Dialog2.CheckBox35 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 35 ), 1 )
-    If Dialog2.CheckBox36 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 36 ), 1 )
-    If Dialog2.CheckBox37 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 37 ), 1 )
-    If Dialog2.CheckBox38 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 38 ), 1 )
-    If Dialog2.CheckBox39 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 39 ), 1 )
-    If Dialog2.CheckBox40 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 40 ), 1 )
-    If Dialog2.CheckBox41 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 41 ), 1 )
-    If Dialog2.CheckBox42 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 42 ), 1 )
-    If Dialog2.CheckBox43 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 43 ), 1 )
-    If Dialog2.CheckBox44 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 44 ), 1 )
-    If Dialog2.CheckBox45 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 45 ), 1 )
-    If Dialog2.CheckBox46 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 46 ), 1 )
-    If Dialog2.CheckBox47 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 47 ), 1 )
-    If Dialog2.CheckBox48 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 48 ), 1 )
-    If Dialog2.CheckBox49 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 49 ), 1 )
-    If Dialog2.CheckBox50 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 50 ), 1 )
-    If Dialog2.CheckBox51 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 51 ), 1 )
-    If Dialog2.CheckBox52 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 52 ), 1 )
-    If Dialog2.CheckBox53 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 53 ), 1 )
-    If Dialog2.CheckBox54 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 54 ), 1 )
-    If Dialog2.CheckBox55 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 55 ), 1 )
-    If Dialog2.CheckBox56 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 56 ), 1 )
-    If Dialog2.CheckBox57 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 57 ), 1 )
-    If Dialog2.CheckBox58 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 58 ), 1 )
-    If Dialog2.CheckBox59 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & Delimiter$ & Mid$( Subfields( 59 ), 1 )
+    If SecondTime = FALSE Then ModifiedContents$ = "505" & Ind1$ & "0" & DELIMITER
+    If Dialog2.CheckBox0  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 0 ), 1 )
+    If Dialog2.CheckBox1  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 1 ), 1 )
+    If Dialog2.CheckBox2  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 2 ), 1 )
+    If Dialog2.CheckBox3  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 3 ), 1 )
+    If Dialog2.CheckBox4  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 4 ), 1 )
+    If Dialog2.CheckBox5  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 5 ), 1 )
+    If Dialog2.CheckBox6  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 6 ), 1 )
+    If Dialog2.CheckBox7  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 7 ), 1 )
+    If Dialog2.CheckBox8  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 8 ), 1 )
+    If Dialog2.CheckBox9  = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 9 ), 1 )
+    If Dialog2.CheckBox10 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 10 ), 1 )
+    If Dialog2.CheckBox11 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 11 ), 1 )
+    If Dialog2.CheckBox12 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 12 ), 1 )
+    If Dialog2.CheckBox13 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 13 ), 1 )
+    If Dialog2.CheckBox14 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 14 ), 1 )
+    If Dialog2.CheckBox15 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 15 ), 1 )
+    If Dialog2.CheckBox16 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 16 ), 1 )
+    If Dialog2.CheckBox17 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 17 ), 1 )
+    If Dialog2.CheckBox18 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 18 ), 1 )
+    If Dialog2.CheckBox19 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 19 ), 1 )
+    If Dialog2.CheckBox20 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 20 ), 1 )
+    If Dialog2.CheckBox21 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 21 ), 1 )
+    If Dialog2.CheckBox22 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 22 ), 1 )
+    If Dialog2.CheckBox23 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 23 ), 1 )
+    If Dialog2.CheckBox24 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 24 ), 1 )
+    If Dialog2.CheckBox25 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 25 ), 1 )
+    If Dialog2.CheckBox26 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 26 ), 1 )
+    If Dialog2.CheckBox27 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 27 ), 1 )
+    If Dialog2.CheckBox28 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 28 ), 1 )
+    If Dialog2.CheckBox29 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 29 ), 1 )
+    If Dialog2.CheckBox30 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 30 ), 1 )
+    If Dialog2.CheckBox31 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 31 ), 1 )
+    If Dialog2.CheckBox32 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 32 ), 1 )
+    If Dialog2.CheckBox33 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 33 ), 1 )
+    If Dialog2.CheckBox34 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 34 ), 1 )
+    If Dialog2.CheckBox35 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 35 ), 1 )
+    If Dialog2.CheckBox36 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 36 ), 1 )
+    If Dialog2.CheckBox37 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 37 ), 1 )
+    If Dialog2.CheckBox38 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 38 ), 1 )
+    If Dialog2.CheckBox39 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 39 ), 1 )
+    If Dialog2.CheckBox40 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 40 ), 1 )
+    If Dialog2.CheckBox41 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 41 ), 1 )
+    If Dialog2.CheckBox42 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 42 ), 1 )
+    If Dialog2.CheckBox43 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 43 ), 1 )
+    If Dialog2.CheckBox44 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 44 ), 1 )
+    If Dialog2.CheckBox45 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 45 ), 1 )
+    If Dialog2.CheckBox46 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 46 ), 1 )
+    If Dialog2.CheckBox47 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 47 ), 1 )
+    If Dialog2.CheckBox48 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 48 ), 1 )
+    If Dialog2.CheckBox49 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 49 ), 1 )
+    If Dialog2.CheckBox50 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 50 ), 1 )
+    If Dialog2.CheckBox51 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 51 ), 1 )
+    If Dialog2.CheckBox52 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 52 ), 1 )
+    If Dialog2.CheckBox53 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 53 ), 1 )
+    If Dialog2.CheckBox54 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 54 ), 1 )
+    If Dialog2.CheckBox55 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 55 ), 1 )
+    If Dialog2.CheckBox56 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 56 ), 1 )
+    If Dialog2.CheckBox57 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 57 ), 1 )
+    If Dialog2.CheckBox58 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 58 ), 1 )
+    If Dialog2.CheckBox59 = 1 Then ModifiedContents$ = ModifiedContents$ & " " & DELIMITER & Mid$( Subfields( 59 ), 1 )
   Else
-    If SecondTime = FALSE Then ModifiedContents$ = "505" & Ind1$ & " " & Delimiter$
+    If SecondTime = FALSE Then ModifiedContents$ = "505" & Ind1$ & " " & DELIMITER
     If Dialog2.CheckBox0  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 0 ), 2 )
     If Dialog2.CheckBox1  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 1 ), 2 )
     If Dialog2.CheckBox2  = 1 Then ModifiedContents$ = ModifiedContents$ & Mid$( Subfields( 2 ), 2 )
@@ -525,7 +537,7 @@ If SubfieldCount% > 60 Then
     Next i
     SubfieldCount% = SubfieldCount% - 60
     SecondTime = TRUE
-    If Right$( ModifiedContents$, 1 ) = Delimiter$ Then ModifiedContents$ = Mid$( ModifiedContents$, 1, Len( ModifiedContents$ ) - 2 )
+    If Right$( ModifiedContents$, 1 ) = DELIMITER Then ModifiedContents$ = Mid$( ModifiedContents$, 1, Len( ModifiedContents$ ) - 2 )
     GoTo Recycle:
 End If
 
@@ -535,7 +547,7 @@ End If
 If Right$( ModifiedContents$, 3 ) = " --" Then
     ModifiedContents$ = Mid$( ModifiedContents$, 1, Len( ModifiedContents$ ) - 3 ) & "."
 End If
-If Mid$( ModifiedContents$, 6, 2 ) = ( Delimiter$ & " " ) Then
+If Mid$( ModifiedContents$, 6, 2 ) = ( DELIMITER & " " ) Then
     ModifiedContents$ = Left$( ModifiedContents$, 5 ) & Mid$( ModifiedContents$, 8 )
 End If
 
@@ -816,8 +828,8 @@ End If
 SubfieldCheck = 1
 
 End Function
-'84547748
+'85747951
 '
 'Macro name: EnhancedContentsCleaner
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 6/28/2017 11:36:01 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:12:37 AM using "MacroBookInspector" macro by Walter F. Nickeson.
