@@ -1,4 +1,4 @@
-'MacroName:DialogBoxCodeStraightener.2017.31
+'MacroName:DialogBoxCodeStraightener.2018.02
 'MacroDescription:Aligns control coordinates in dialog box definitions and makes bulk
 ' changes in the coordinates of those controls.
 '
@@ -6,9 +6,9 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 1 June 2017.
+' Last updated: 15 December 2018.
 ' Check for the latest versions of this and my other macros at
-' https://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
@@ -157,22 +157,23 @@ Declare Sub SpaceSub( x As Integer, y As Integer, z As Integer )
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
 
-Global Const aCONTROL_COMMENT     As Integer = 7   'The column of the array that contains any comment at the end of the line (including numeric control IDs).
-Global Const aCONTROL_HEIGHT      As Integer = 4   'The column of the array that contains the height of the control in DLUs; or the name of the dialog box function.
-Global Const aCONTROL_HORIZ_COORD As Integer = 1   'The column of the array that contains the horizontal position of the control; or the width of the dialog box.
-Global Const aCONTROL_ID          As Integer = 6   'The column of the array that contains the ID of the control.
-Global Const aCONTROL_LABEL       As Integer = 5   'The column of the array that contains the text associated with the control; or the ID of the control, if there is no label.
-Global Const aCONTROL_NAME        As Integer = 0   'The column of the array that contains the name of the control; or the beginning of the dialog box definition.
-Global Const aCONTROL_VERT_COORD  As Integer = 2   'The column of the array that contains the vertical position of the control; or the height of the dialog box.
-Global Const aCONTROL_WIDTH       As Integer = 3   'The column of the array that contains the width of the control in DLUs; or the caption of the dialog box.
-Global Const aOPTIMIZED           As Integer = 8   'Whether the control has been optimized
+Const aCONTROL_COMMENT     As Integer = 7   'The column of the array that contains any comment at the end of the line (including numeric control IDs).
+Const aCONTROL_HEIGHT      As Integer = 4   'The column of the array that contains the height of the control in DLUs; or the name of the dialog box function.
+Const aCONTROL_HORIZ_COORD As Integer = 1   'The column of the array that contains the horizontal position of the control; or the width of the dialog box.
+Const aCONTROL_ID          As Integer = 6   'The column of the array that contains the ID of the control.
+Const aCONTROL_LABEL       As Integer = 5   'The column of the array that contains the text associated with the control; or the ID of the control, if there is no label.
+Const aCONTROL_NAME        As Integer = 0   'The column of the array that contains the name of the control; or the beginning of the dialog box definition.
+Const aCONTROL_VERT_COORD  As Integer = 2   'The column of the array that contains the vertical position of the control; or the height of the dialog box.
+Const aCONTROL_WIDTH       As Integer = 3   'The column of the array that contains the width of the control in DLUs; or the caption of the dialog box.
+Const aOPTIMIZED           As Integer = 8   'Whether the control has been optimized
 
-Global QUOTE As String*1
-Global WaltsMacros$
+Dim DOUBLE_QUOTE As String*1
 
-Global BadInput
+Dim WaltsMacros$
 
-Global CodeLines() As String
+Dim BadInput
+
+Dim CodeLines() As String
 
 '****************************************************************************************
 
@@ -185,6 +186,11 @@ Const INFORMATION_MESSAGE  As Integer = 64  'The value to display the "Informati
 Const OUT_OF_STRING_SPACE  As Integer = 14  'The value of a run-time error when more than about 32K bytes have been copied to the Clipboard.
 Const WARNING_MESSAGE      As Integer = 48  'The value to display the "Warning message" icon in a message box.
 
+Dim CRLF              As String*2 : CRLF              = Chr$( 013 ) & Chr$( 010 )
+Dim SEPARATOR         As String*1 : SEPARATOR         = ","
+Dim SINGLE_QUOTE      As String*1 : SINGLE_QUOTE      = Chr$( 039 )
+Dim LABEL_PLACEHOLDER As String*1 : LABEL_PLACEHOLDER = Chr$( 182 )
+
 Dim ArrayElement$
 Dim ChangeHorizontal%
 Dim ChangeVertical%
@@ -196,7 +202,6 @@ Dim CommentLength%
 Dim CommentOffset%
 Dim ControlID_Number%
 Dim ControlLabel$
-Dim CR As String*2           : CR                = Chr$( 013 ) & Chr$( 010 )
 Dim CurrentID%
 Dim DisplayString$
 Dim EndOfLine%
@@ -206,7 +211,6 @@ Dim IDDot%
 Dim IndentLine%
 Dim IndentWholeDialog$
 Dim InputString$
-Dim LabelPlaceholder$        : LabelPlaceholder$ = Chr$( 182 )
 Dim Legend$
 Dim LenInputOrig%
 Dim LenInputTrim%
@@ -218,8 +222,6 @@ Dim LowestID_Number%
 Dim OutputString$
 Dim PosComment%
 Dim QuoteCount%
-Dim Separator$               : Separator$        = ","
-Dim SingleQuote$             : SingleQuote$      = Chr$( 039 )
 Dim Start%
 Dim Subfield$
 Dim TempString$
@@ -227,7 +229,7 @@ Dim VerticalSpacing%
 Dim WholeBox%
 Dim WorkLine$
 
-Dim ControlGroup             : ControlGroup      = FALSE
+Dim ControlGroup             : ControlGroup = FALSE
 Dim Skip
 
 Dim i As Integer, j As Integer, p As Integer, q As Integer, z As Integer
@@ -262,12 +264,11 @@ SpinnerH( 14 ) = "14"
 SpinnerH( 15 ) = "15"
 SpinnerH( 16 ) = "16"
 
-QUOTE        = Chr$( 034 )
+DOUBLE_QUOTE = Chr$( 034 )
+
 WaltsMacros$ = "[Walt's macros] MacroTools:DialogBoxCodeStraightener"
 
 BadInput     = FALSE
-
-Erase CodeLines
 
 ' First, check input. If the string is too long, or if it's of zero length, it can't be
 ' processed.
@@ -300,7 +301,7 @@ DisplayString$     = InputString$
 
 LineCount% = 0
 Do
-  EndOfLine% = InStr( 1, InputString$, CR )
+  EndOfLine% = InStr( 1, InputString$, CRLF )
   If EndOfLine% = 0 Then
       WorkLine$    = InputString$
       InputString$ = ""
@@ -322,16 +323,16 @@ Do
 ' slip through.
 
   TempString$ = Left$( WorkLine$, 1 )
-  If TempString$ Like "[!BCDEGLOPST$]" And TempString$ <> SingleQuote$ Then
+  If TempString$ Like "[!BCDEGLOPST$]" And TempString$ <> SINGLE_QUOTE Then
       BadInput       = TRUE
       Legend$        = "Problem input:"
-      DisplayString$ = "This line doesn't seem as though it belongs in a dialog box definition:" & CR & CR & WorkLine$
+      DisplayString$ = "This line doesn't seem as though it belongs in a dialog box definition:" & CRLF & CRLF & WorkLine$
       GoTo DialogBox:
   End If
 
 ' A comment at the end of a line is removed for adding back later.
 
-  p = InStr( WorkLine$, SingleQuote$ )
+  p = InStr( WorkLine$, SINGLE_QUOTE )
   If p <> 0 Then
       Comment$  = Trim$( Mid$( WorkLine$, p ) )
       WorkLine$ = Trim$( Left$( WorkLine$, p - 1 ) )
@@ -347,12 +348,12 @@ Do
 ' name of the control and its horizontal position. These are separated by inserting a
 ' comma before the digits at the end of the subfield.
 
-  p = InStr( 1, WorkLine$, Separator$ )
+  p = InStr( 1, WorkLine$, SEPARATOR )
   If p <> 0 Then
       For i = p - 1 To 1 Step -1
         CharT$ = Mid$( WorkLine$, i, 1 )
         If CharT$ Like "[!0-9$]" Then
-            WorkLine$ = Trim$( Left$( WorkLine$, i ) ) & Separator$ & Trim$( Mid$( WorkLine$, i ) )
+            WorkLine$ = Trim$( Left$( WorkLine$, i ) ) & SEPARATOR & Trim$( Mid$( WorkLine$, i ) )
             Exit For
         End If
       Next i
@@ -378,7 +379,7 @@ Do
 ' signals the end of the label. No comma means there is no following element, which would
 ' be the control ID, a field name, or the dialog function name.
 
-  p = InStr( WorkLine$, QUOTE )
+  p = InStr( WorkLine$, DOUBLE_QUOTE )
   If p <> 0 Then
       QuoteCount% = 1
       For i = p + 1 To Len( WorkLine$ )
@@ -389,22 +390,22 @@ Do
                 q = i
                 Exit For
             End If
-          Case QUOTE
+          Case DOUBLE_QUOTE
             QuoteCount% = QuoteCount% + 1
         End Select
       Next i
       If QuoteCount% = 1 Then
           BadInput       = TRUE
           Legend$        = "Problem input:"
-          DisplayString$ = "There is a missing quotation mark in a control label in this line:" & CR & CR & WorkLine$
+          DisplayString$ = "There is a missing quotation mark in a control label in this line:" & CRLF & CRLF & WorkLine$
           GoTo DialogBox:
         Else
           If q = 0 Then
               ControlLabel$ = Mid$( WorkLine$, p )
-              WorkLine$     = Left$( WorkLine$, p - 1 ) & LabelPlaceholder$
+              WorkLine$     = Left$( WorkLine$, p - 1 ) & LABEL_PLACEHOLDER
             Else
               ControlLabel$ = Mid$( WorkLine$, p, q - p )
-              WorkLine$     = Left$( WorkLine$, p - 1 ) & LabelPlaceholder$ & Mid$( WorkLine$, q )
+              WorkLine$     = Left$( WorkLine$, p - 1 ) & LABEL_PLACEHOLDER & Mid$( WorkLine$, q )
           End If
       End If
       q = 0
@@ -416,23 +417,23 @@ Do
 
   Start% = 1
   Do
-    p = InStr( Start%, WorkLine$, Separator$ )
+    p = InStr( Start%, WorkLine$, SEPARATOR )
     If p <> 0 Then
         CommaCount% = CommaCount% + 1
         Start% = p + 1
     End If
   Loop Until p = 0
   If CommaCount% = 0 And Left$( WorkLine$, 1 ) Like "[!BCEO]" Then
-      If Right$( WorkLine$, 1 ) = SingleQuote$ Then
+      If Right$( WorkLine$, 1 ) = SINGLE_QUOTE Then
           WorkLine$ = WorkLine$ & Comment
       End If
-      p = InStr( WorkLine$, LabelPlaceholder$ )
+      p = InStr( WorkLine$, LABEL_PLACEHOLDER )
       If p <> 0 Then
           WorkLine$ = Left$( WorkLine$, p - 1 ) & ControlLabel$ & Mid$( WorkLine$, q + 1 )
       End If
       BadInput       = TRUE
       Legend$        = "Problem input:"
-      DisplayString$ = "One of the copied lines is missing at least one comma:" & CR & CR & WorkLine$
+      DisplayString$ = "One of the copied lines is missing at least one comma:" & CRLF & CRLF & WorkLine$
       GoTo DialogBox:
   End If
 
@@ -451,33 +452,33 @@ Do
 
   If Left$( WorkLine$, 12 ) = "Begin Dialog" Then
       WholeBox% = WholeBox% + 1
-      Subfield$ = Trim$( GetField$( WorkLine$, 4, Separator$ ) )
+      Subfield$ = Trim$( GetField$( WorkLine$, 4, SEPARATOR ) )
       If Subfield$ = "" Then       'Only box size given
-          CodeLines( aCONTROL_NAME, LineCount% )        = Trim$( GetField$( WorkLine$, 1, Separator$ ) )
-          CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 2, Separator$ ) )
-          CodeLines( aCONTROL_VERT_COORD, LineCount% )  = Trim$( GetField$( WorkLine$, 3, Separator$ ) )
+          CodeLines( aCONTROL_NAME, LineCount% )        = Trim$( GetField$( WorkLine$, 1, SEPARATOR ) )
+          CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 2, SEPARATOR ) )
+          CodeLines( aCONTROL_VERT_COORD, LineCount% )  = Trim$( GetField$( WorkLine$, 3, SEPARATOR ) )
         Else
           CharT$ = Left$( Subfield$, 1 )
           Select Case CharT$
             Case "0" To "9"        'Size of box: Box position given; put position in with label
-              CodeLines( aCONTROL_NAME,        LineCount% ) = GetField$( WorkLine$, 1, Separator$ ) & "   " & GetField$( WorkLine$, 2, Separator$ ) & "   " & GetField$( WorkLine$, 3, Separator$ )
-              CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 4, Separator$ ) )
-              CodeLines( aCONTROL_VERT_COORD,  LineCount% ) = Trim$( GetField$( WorkLine$, 5, Separator$ ) )
+              CodeLines( aCONTROL_NAME,        LineCount% ) = GetField$( WorkLine$, 1, SEPARATOR ) & "   " & GetField$( WorkLine$, 2, SEPARATOR ) & "   " & GetField$( WorkLine$, 3, SEPARATOR )
+              CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 4, SEPARATOR ) )
+              CodeLines( aCONTROL_VERT_COORD,  LineCount% ) = Trim$( GetField$( WorkLine$, 5, SEPARATOR ) )
             Case "."               'Dialog control function
-              CodeLines( aCONTROL_NAME,        LineCount% ) = Trim$( GetField$( WorkLine$, 1, Separator$ ) )
-              CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 2, Separator$ ) )
-              CodeLines( aCONTROL_VERT_COORD,  LineCount% ) = Trim$( GetField$( WorkLine$, 3, Separator$ ) )
-              CodeLines( aCONTROL_ID,          LineCount% ) = Trim$( GetField$( WorkLine$, 4, Separator$ ) )
+              CodeLines( aCONTROL_NAME,        LineCount% ) = Trim$( GetField$( WorkLine$, 1, SEPARATOR ) )
+              CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 2, SEPARATOR ) )
+              CodeLines( aCONTROL_VERT_COORD,  LineCount% ) = Trim$( GetField$( WorkLine$, 3, SEPARATOR ) )
+              CodeLines( aCONTROL_ID,          LineCount% ) = Trim$( GetField$( WorkLine$, 4, SEPARATOR ) )
             Case Else              'Dialog caption
-              CodeLines( aCONTROL_NAME,        LineCount% ) = Trim$( GetField$( WorkLine$, 1, Separator$ ) )
-              CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 2, Separator$ ) )
-              CodeLines( aCONTROL_VERT_COORD,  LineCount% ) = Trim$( GetField$( WorkLine$, 3, Separator$ ) )
-              If Trim$( GetField$( WorkLine$, 4, Separator$ ) ) = LabelPlaceholder$ Then
+              CodeLines( aCONTROL_NAME,        LineCount% ) = Trim$( GetField$( WorkLine$, 1, SEPARATOR ) )
+              CodeLines( aCONTROL_HORIZ_COORD, LineCount% ) = Trim$( GetField$( WorkLine$, 2, SEPARATOR ) )
+              CodeLines( aCONTROL_VERT_COORD,  LineCount% ) = Trim$( GetField$( WorkLine$, 3, SEPARATOR ) )
+              If Trim$( GetField$( WorkLine$, 4, SEPARATOR ) ) = LABEL_PLACEHOLDER Then
                   CodeLines( aCONTROL_LABEL, LineCount% ) = Trim$( ControlLabel$ )
                 Else
-                  CodeLines( aCONTROL_LABEL, LineCount% ) = Trim$( GetField$( WorkLine$, 4, Separator$ ) )
+                  CodeLines( aCONTROL_LABEL, LineCount% ) = Trim$( GetField$( WorkLine$, 4, SEPARATOR ) )
               End If
-              CodeLines( aCONTROL_ID,          LineCount% ) = Trim$( GetField$( WorkLine$, 5, Separator$ ) )
+              CodeLines( aCONTROL_ID,          LineCount% ) = Trim$( GetField$( WorkLine$, 5, SEPARATOR ) )
            End Select
       End If
 
@@ -485,7 +486,7 @@ Do
 ' spaces except for members of option groups, which get indented three spaces.
 
     Else
-      Subfield$   = Trim$( GetField$( WorkLine$, 1, Separator$ ) )
+      Subfield$   = Trim$( GetField$( WorkLine$, 1, SEPARATOR ) )
       TempString$ = Left$( Subfield$, 4 )
       Select Case TempString$
         Case "End "
@@ -518,17 +519,17 @@ Do
 ' required for all controls except grouping commands.
 
       For i = aCONTROL_HORIZ_COORD To aCONTROL_HEIGHT
-        CodeLines( i, LineCount% ) = Trim$( GetField$( WorkLine$, i + 1, Separator$ ) )
+        CodeLines( i, LineCount% ) = Trim$( GetField$( WorkLine$, i + 1, SEPARATOR ) )
       Next i
 
 ' The remainder of the non-empty subfields go into the slots of the array depending on
 ' the value of their first character.
 
       For i = aCONTROL_LABEL To CommaCount%
-        Subfield$ = ( Trim$( GetField$( WorkLine$, i + 1, Separator$ ) ) )
+        Subfield$ = ( Trim$( GetField$( WorkLine$, i + 1, SEPARATOR ) ) )
         If Subfield$ <> "" Then
             If Subfield$ = "0" Or Subfield$ = "3" Then     'Values unique to the Picture control
-                CodeLines( aCONTROL_LABEL, LineCount% ) = CodeLines( aCONTROL_LABEL, LineCount% ) & Separator$ & "   " & Subfield$
+                CodeLines( aCONTROL_LABEL, LineCount% ) = CodeLines( aCONTROL_LABEL, LineCount% ) & SEPARATOR & "   " & Subfield$
               Else
                 CharA% = Asc( Left$( Subfield$, 1 ) )
                 Select Case CharA%
@@ -584,7 +585,7 @@ Legend$ = "Beginning of copied text:"
 
 DialogBox:
 
-Begin Dialog Dialog1Definition  332, 254, "WaltsMacros", .Dialog1ControlFunction
+Begin Dialog Dialog1Definition  332, 254, WaltsMacros$, .Dialog1ControlFunction
   OkButton       210, 230,  52,  14
   CancelButton   270, 230,  52,  14
   TextBox        130,  18,  24,  12,                                              .TextBoxHoriz
@@ -794,7 +795,7 @@ For LineCount% = 0 To UBound( CodeLines, 2 )
     ArrayElement$ = CodeLines( i, LineCount% )
     If ArrayElement$ <> "" Then
         z         = Len( ArrayElement$ )
-        WorkLine$ = WorkLine$ & Separator$ & Space$( 4 - z ) & ArrayElement$
+        WorkLine$ = WorkLine$ & SEPARATOR & Space$( 4 - z ) & ArrayElement$
     End If
   Next i
 
@@ -813,7 +814,7 @@ For LineCount% = 0 To UBound( CodeLines, 2 )
   ArrayElement$ = CodeLines( aCONTROL_ID, LineCount% )
   If ArrayElement$ <> "" Then
       If Left$( WorkLine$, 5 ) = "Begin" Then
-          WorkLine$ = WorkLine$ & Separator$ & " " & ArrayElement$
+          WorkLine$ = WorkLine$ & SEPARATOR & " " & ArrayElement$
         Else
           z = IDDot% - Len( WorkLine$ )
           If z = 0 Then
@@ -822,7 +823,7 @@ For LineCount% = 0 To UBound( CodeLines, 2 )
           If InStr( WorkLine$, "onGro" ) Then
               WorkLine$ = WorkLine$ & Space$( z + 1 ) & ArrayElement$
             Else
-              WorkLine$ = WorkLine$ & Separator$ & Space$( z ) & ArrayElement$
+              WorkLine$ = WorkLine$ & SEPARATOR & Space$( z ) & ArrayElement$
           End If
       End If
   End If
@@ -838,14 +839,14 @@ For LineCount% = 0 To UBound( CodeLines, 2 )
   If WorkLine$ = "$" Then
       WorkLine$ = ""
     Else
-      If Right$( WorkLine$, 1 ) = Separator$ Then
+      If Right$( WorkLine$, 1 ) = SEPARATOR Then
           WorkLine$ = Left$( WorkLine$, Len( WorkLine$ ) - 1 )
       End If
   End If
 
 ' Add back the indent, if any, of the whole dialog box.
 
-  OutputString$ = OutputString$ & IndentWholeDialog$ & WorkLine$ & CR
+  OutputString$ = OutputString$ & IndentWholeDialog$ & WorkLine$ & CRLF
 
 ' Clear the workline for the next line of the array.
 
@@ -1187,7 +1188,7 @@ Dim SpaceHelp$
 AlignHelp$    = "Leave both boxes empty to simply align control coordinates in the copied lines of code. "
 AlignHelp$    = AlignHelp$ & "Enter a number in the first box to move controls right by that amount. "
 AlignHelp$    = AlignHelp$ & "Enter a number in the second box to move controls down. Negative numbers "
-AlignHelp$    = AlignHelp$ & "move controls left, or up. Include the " & QUOTE & "Begin Dialog" & QUOTE
+AlignHelp$    = AlignHelp$ & "move controls left, or up. Include the " & DOUBLE_QUOTE & "Begin Dialog" & DOUBLE_QUOTE
 AlignHelp$    = AlignHelp$ & "line to expand the whole dialog box; however, entering negative numbers "
 AlignHelp$    = AlignHelp$ & "will not make the dialog box shrink."
 
@@ -1432,8 +1433,8 @@ Select Case Action%
 End Select
 
 End Function
-'143967818
+'146267737
 '
 'Macro name: DialogBoxCodeStraightener
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 6/28/2017 11:37:13 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:14:36 AM using "MacroBookInspector" macro by Walter F. Nickeson.

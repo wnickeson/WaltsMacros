@@ -1,4 +1,4 @@
-'MacroName:MacroIndex.2017.01
+'MacroName:MacroIndex.2018.03
 'MacroDescription:Lists all the macros and their descriptions in all the macro books in
 ' the default folder "Macros". Also lists the macros in individual macro books. Search
 ' for text in macro names and descriptions. Save all lists as text files.
@@ -9,21 +9,17 @@
 '
 ' Thanks to Joel Hahn for pointing out that macro books are instances of Microsoft's
 ' Compound File Binary File Format, the specification for which was last retrieved from
-' <http://msdn.microsoft.com/en-us/library/dd942138.aspx> on 8 August 2014 (version
-' v20140502).
+' <https://msdn.microsoft.com/en-us/library/dd942138.aspx> on 21 September 2018 (version
+' v20180912).
 '
-' The "Quicksort" sorting algorithm is adapted from the example of the same name at IBM
-' Cognos Series 7 information center, Quicksort Program Example, <http://www-01.ibm.com/
-' support/knowledgecenter/SSTQPQ_7.5.0/com.ibm.swg.im.cognos.cgspmac.7.5.0.doc/
-' cgspmac_id24986Quicksort.html%23Quicksort>, last retrieved on 1 August 2016. IBM's
-' CognosScript Language appears to be almost identical to OCLC's Macro Language: compare
-' the documentation in "Macros and the IBM CognosScript Language 7.5.0"
-' <http://www-01.ibm.com/support/knowledgecenter/SSTQPQ_7.5.0/com.ibm.swg.im.cognos.
-' cgspmac.7.5.0.doc/cgspmac.html> to OCLC's OML help files.
+' The "Quicksort" sorting algorithm is adapted from the example of the same name in
+' chapter 6 of the documentation for IBM's CognosScript Language, which appears to be
+' almost identical to OCLC's Macro Language: http://public.dhe.ibm.com/software/data/
+' cognos/documentation/docs/en/scripteditor/7.4/cgspmac.pdf, viewed 18 August 2018.
 '
-' Last updated: 1 August 2016.
+' Last updated: 21 August 2018.
 ' Check for the latest versions of this and my other macros at
-' http://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
@@ -86,6 +82,7 @@ Declare Function Dialog2ControlFunction( Id$, Action%, SuppVal& )
 Global Const ALL_MACROS           As Integer = 1      'The state of the dialog box when all the macros are shown.
 Global Const BOOK_MACROS          As Integer = 2      'The state of the dialog box when the contents of a macro book are shown.
 Global Const CONTROL_CHANGE       As Integer = 2      'The value of the dialog box function parameter "Action%" when a control changes.
+Global Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box statement when the "Cancel" button is clicked.
 Global Const DWORD                As Integer = 4      'A double word (4 bytes); the length of sector IDs and some other values.
 Global Const END_OF_CHAIN         As Integer = -2     'Hex FFFFFFFE, marks the end of a chain of sectors in the FAT.
 Global Const INFORMATION_MESSAGE  As Integer = 64     'The value to display the "Information message" icon in a message box.
@@ -104,7 +101,6 @@ Global Const STRING_OFFSET        As Integer = 1      'The number to make up the
 Global BaseBookBlock%
 Global BookBlockOffset%
 Global Description$
-Global DoubleQuote$
 Global ErrorMessage$
 Global FATString$
 Global FileName$
@@ -117,6 +113,8 @@ Global SearchTerm$
 Global State%
 Global TotalMacroCount%
 Global WaltsMacros$
+
+Global DOUBLE_QUOTE As String*1
 
 Global FileSections()       As String     'Storage for the 32K pieces of the files.
 Global LinkMatchToMaster()  As Integer    'Links the search results array to the master macro list array.
@@ -134,15 +132,13 @@ Global SearchMatches()      As Container  'All the macros found by a search.
 
 Sub Main
 
-Const CANCEL As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
-
 Dim Instructions$
 Dim MacroBookCount$
 Dim SelectedMacroBook$
 
 Dim i As Integer, x As Integer
 
-DoubleQuote$  = Chr$( 034 )
+DOUBLE_QUOTE  = Chr$( 034 )
 WaltsMacros$  = "[Walt's macros] MacroTools:MacroIndex"
 
 ReDim MasterList( 0 )
@@ -214,7 +210,7 @@ End Dialog
 Dim Dialog1 as Dialog1Definition
 On Error Resume Next
 Dialog Dialog1
-If Err = CANCEL Then Exit Sub
+If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
 
 End Sub
 
@@ -223,7 +219,7 @@ End Sub
 Sub CopyList( State% )
 
 
-Dim CR$                      : CR$         = Chr$( 013 ) & Chr$( 010 )
+Dim CR$                      : CR$ = Chr$( 013 ) & Chr$( 010 )
 Dim TempString$
 
 Dim i as Integer
@@ -335,14 +331,15 @@ Const FILE_EXTENSION As Integer = 4   'The length of string "dot + filename exte
 
 Dim FileCounter%
 Dim FileNumber%
-Dim First8Bytes As String * 8
 Dim HeaderSignature$
 Dim MacroBookFile$
 Dim MacroBookName$
 Dim MacroDirectoryFiles$
 Dim Possibility$
 
-HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 17 ) & Chr$( 224 ) & Chr$( 161 ) & Chr$( 177 ) & Chr$( 26 ) & Chr$( 225 )
+Dim FIRST_8_BYTES As String*8
+
+HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 017 ) & Chr$( 224 ) & Chr$( 161 ) & Chr$( 177 ) & Chr$( 026 ) & Chr$( 225 )
 
 ' Find the path to OCLC's "Macros" folder and make an array of the macro books it
 ' contains.
@@ -360,10 +357,10 @@ Do While MacroBookFile$ <> ""
   Possibility$ = MacroDirectoryPath$ & MacroBookFile$
   FileNumber%  = Freefile
   Open Possibility$ For Binary As #FileNumber%
-  Get #FileNumber%, , First8Bytes
+  Get #FileNumber%, , FIRST_8_BYTES
   Close #FileNumber%
   Reset
-  If First8Bytes = HeaderSignature$ Then
+  If FIRST_8_BYTES = HeaderSignature$ Then
       MacroBookName$                 = Left$( MacroBookFile$, Len( MacroBookFile$ ) - FILE_EXTENSION% )
       ReDim Preserve MacroBooksList( FileCounter% )
       MacroBooksList( FileCounter% ) = MacroBookName$
@@ -429,6 +426,7 @@ FATSectorListInHeader$ = Mid$( FileHeader$, OFFSET_DIFAT_START, LENGTH_DIFAT )
 TotalSectorsInFAT%     = CInt( HexVal( Mid$( FileHeader$, OFFSET_FAT_SECTORS_COUNT, DWORD ) ) )
 TotalSectorsInMiniFAT% = CInt( HexVal( Mid$( FileHeader$, OFFSET_MINIFAT_SECTORS_COUNT, DWORD ) ) )
 FirstSectorOfMiniFAT%  = CInt( HexVal( Mid$( FileHeader$, MINIFAT_START, DWORD ) ) )
+If FirstSectorOfMiniFAT% = END_OF_CHAIN Then Exit Sub
 
 ' Make a single string of the sector contents from the list of FAT sector IDs. This
 ' string contains the complete FAT array and is an index to the contents of the file.
@@ -461,6 +459,7 @@ Next i
 ' miniFAT also, although it seems unlikely this limit would ever be reached.
 
 NextSector&    = FirstSectorOfMiniFAT%
+
 MiniFATString$ = GetSectorData( NextSector& )
 
 Do Until NextSector& = END_OF_CHAIN
@@ -564,8 +563,8 @@ Dim IncomingMacroName$
 
 Dim i As Integer, j As Integer, z As Integer
 
-IncomingMacroName$   = MacroInfo.Name
-CurrBookID% = MacroInfo.Index
+IncomingMacroName$ = MacroInfo.Name
+CurrBookID%        = MacroInfo.Index
 If MasterList( 0 ).Name = "" Then
     z = 0
   Else
@@ -621,12 +620,13 @@ Dim CountFileSections%
 Dim FileDivider&
 Dim FileEnd$
 Dim FileNumber%
-Dim FileSectionRead As String * MAX_STRING_LENGTH
 Dim FileSize&
 Dim MacroBookFile$
 Dim MacroBookName$
 Dim Remainder%
 Dim TotalFileSections%
+
+Dim FILE_SECTION_READ As String*MAX_STRING_LENGTH
 
 MacroBookName$ = SelectedMacroBook$
 MacroBookFile$ = MacroDirectoryPath$ & MacroBookName$ & ".mbk"
@@ -651,15 +651,15 @@ CountFileSections% = 0
 
 If TotalFileSections% > 0 Then
     For CountFileSections% = 1 To TotalFileSections%
-      Get #FileNumber%, FileDivider&, FileSectionRead
+      Get #FileNumber%, FileDivider&, FILE_SECTION_READ
       ReDim Preserve FileSections( CountFileSections% - 1 )
-      FileSections( CountFileSections% - 1 ) = FileSectionRead
+      FileSections( CountFileSections% - 1 ) = FILE_SECTION_READ
       FileDivider& = FileDivider& + MAX_STRING_LENGTH
     Next CountFileSections%
 End If
 If Remainder% > 0 Then
-    Get #FileNumber%, FileDivider&, FileSectionRead
-    FileEnd$ = Left$( FileSectionRead, Remainder% )
+    Get #FileNumber%, FileDivider&, FILE_SECTION_READ
+    FileEnd$ = Left$( FILE_SECTION_READ, Remainder% )
     If CountFileSections% > 0 Then
         CountFileSections% = CountFileSections% - 1
     End If
@@ -743,11 +743,11 @@ Dim FileWrite%
 Dim Legend$
 Dim MacroBookName$
 Dim Scope$
-Dim TabChar$                 : TabChar$ = Chr$( 009 )
+Dim TAB_CHAR As String*1     : TAB_CHAR = Chr$( 009 )
 
 Dim i as Integer
 
-Credit$ = " using " & DoubleQuote$ & "MacroIndex" & DoubleQuote$ & " macro by Walter F. Nickeson."
+Credit$ = " using " & DOUBLE_QUOTE & "MacroIndex" & DOUBLE_QUOTE & " macro by Walter F. Nickeson."
 
 Select Case State%
 
@@ -757,7 +757,7 @@ Select Case State%
 
   Case BOOK_MACROS
     Scope$  = MacroBooksList( Selection% )
-    Legend$ = "Save list of macros in macro book " & DoubleQuote$ & Scope$ & DoubleQuote$ & " as:"
+    Legend$ = "Save list of macros in macro book " & DOUBLE_QUOTE & Scope$ & DOUBLE_QUOTE & " as:"
 
   Case SEARCH_RESULTS
     Scope$  = "SelectedMacros"
@@ -779,7 +779,7 @@ End Dialog
 Dim Dialog2 As Dialog2Definition
 On Error Resume Next
 Dialog Dialog2
-If Err = 102 Then Exit Sub
+If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
 
 FileName$            = Dialog2.ComboBox
 
@@ -826,21 +826,21 @@ Select Case State%
     Print #FileWrite%,
     Print #FileWrite%, Trim$( Str$( UBound( MasterList ) ) ) & " macros in all:"
     Print #FileWrite%,
-    Print #FileWrite%, "Macro name" & TabChar$ & "Macro book" & TabChar$ & "Macro description"
+    Print #FileWrite%, "Macro name" & TAB_CHAR & "Macro book" & TAB_CHAR & "Macro description"
     For i = 1 To UBound( MasterList )
-      Print #FileWrite%, MasterList( i ).Name & TabChar$ & Trim$( Str$( MacroBooksList( MasterList( i ).Index ) ) ) & TabChar$ & MasterList( i ).Desc
+      Print #FileWrite%, MasterList( i ).Name & TAB_CHAR & Trim$( Str$( MacroBooksList( MasterList( i ).Index ) ) ) & TAB_CHAR & MasterList( i ).Desc
     Next i
 
   Case BOOK_MACROS
-    Print #FileWrite%, "Macros in macro book " & DoubleQuote$ & MacroBookName$ & DoubleQuote$ & "."
+    Print #FileWrite%, "Macros in macro book " & DOUBLE_QUOTE & MacroBookName$ & DOUBLE_QUOTE & "."
     Print #FileWrite%,
     Print #FileWrite%, "List created " & DateString$ & Credit$
     Print #FileWrite%,
-    Print #FileWrite%, Trim$( Str$( UBound( MacroBookMacros ) + 1 ) ) & " macros in " & DoubleQuote$ & MacroBookName$ & DoubleQuote$ & ":"
+    Print #FileWrite%, Trim$( Str$( UBound( MacroBookMacros ) + 1 ) ) & " macros in " & DOUBLE_QUOTE & MacroBookName$ & DOUBLE_QUOTE & ":"
     Print #FileWrite%,
-    Print #FileWrite%, "Macro name" & TabChar$ & "Macro description"
+    Print #FileWrite%, "Macro name" & TAB_CHAR & "Macro description"
     For i = 0 To UBound( MacroBookMacros )
-      Print #FileWrite%, MacroBookMacros( i ).Name & TabChar$ & MacroBookMacros( i ).Desc
+      Print #FileWrite%, MacroBookMacros( i ).Name & TAB_CHAR & MacroBookMacros( i ).Desc
     Next i
 
   Case SEARCH_RESULTS
@@ -848,11 +848,11 @@ Select Case State%
     Print #FileWrite%,
     Print #FileWrite%, "List created " & DateString$ & Credit$
     Print #FileWrite%,
-    Print #FileWrite%, Trim$( Str$( UBound( SearchMatchDisplay ) + 1 ) ) & " macros matching search term " & DoubleQuote$ & SearchTerm$ & DoubleQuote$ & ":"
+    Print #FileWrite%, Trim$( Str$( UBound( SearchMatchDisplay ) + 1 ) ) & " macros matching search term " & DOUBLE_QUOTE & SearchTerm$ & DOUBLE_QUOTE & ":"
     Print #FileWrite%,
-    Print #FileWrite%, "Macro name" & TabChar$ & "Macro book" & TabChar$ & "Macro description"
+    Print #FileWrite%, "Macro name" & TAB_CHAR & "Macro book" & TAB_CHAR & "Macro description"
     For i = 0 To UBound( SearchMatchDisplay )
-      Print #FileWrite%, SearchMatches( i ).Name & TabChar$ & MacroBooksList( SearchMatches( i ).Index ) & TabChar$ & SearchMatches( i ).Desc
+      Print #FileWrite%, SearchMatches( i ).Name & TAB_CHAR & MacroBooksList( SearchMatches( i ).Index ) & TAB_CHAR & SearchMatches( i ).Desc
     Next i
 
 End Select
@@ -1027,6 +1027,7 @@ Select Case Action%
 ' list box, and the description of the macro replaces the instructions.
 
       Case "ListOfMacros"
+
         DlgVisible      "Desc",             VISIBLE
         DlgVisible      "DescBox",          VISIBLE
         DlgVisible      "Instruct",         INVISIBLE
@@ -1053,6 +1054,7 @@ Select Case Action%
 ' of macros in the macro list window. Also enable the button to show all the macros.
 
       Case "ListOfMacroBooks"
+
         State%           = BOOK_MACROS
         Selection%       = DlgValue( "ListOfMacroBooks" )
         Call FillMacroBookMacros( Selection% )
@@ -1063,9 +1065,9 @@ Select Case Action%
         MacroBookName$   = MacroBooksList( Selection% )
         TotalMacroCount% = UBound( MacroBookMacros ) + 1
         If TotalMacroCount% = 1 Then
-            MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macro in " & DoubleQuote$ & MacroBookName$ & DoubleQuote$ & ":"
+            MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macro in " & DOUBLE_QUOTE & MacroBookName$ & DOUBLE_QUOTE & ":"
           Else
-            MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macros in " & DoubleQuote$ & MacroBookName$ & DoubleQuote$ & ":"
+            MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macros in " & DOUBLE_QUOTE & MacroBookName$ & DOUBLE_QUOTE & ":"
         End If
         DlgVisible      "BookCount",        INVISIBLE
         DlgText         "Desc",             MasterListByBooks( BookBlockOffset% ).Desc
@@ -1083,6 +1085,7 @@ Select Case Action%
 ' between the list of all macros and the list of an individual macro book.
 
       Case "ViewButton"
+
         If State%           = ALL_MACROS Then
             State%           = BOOK_MACROS
             Selection%       = DlgValue( "ListOfMacroBooks" )
@@ -1094,9 +1097,9 @@ Select Case Action%
             MacroBookName$   = MacroBooksList( Selection% )
             TotalMacroCount% = UBound( MacroBookMacros ) + 1
             If TotalMacroCount% = 1 Then
-                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macro in " & DoubleQuote$ & MacroBookName$ & DoubleQuote$ & ":"
+                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macro in " & DOUBLE_QUOTE & MacroBookName$ & DOUBLE_QUOTE & ":"
               Else
-                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macros in " & DoubleQuote$ & MacroBookName$ & DoubleQuote$ & ":"
+                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macros in " & DOUBLE_QUOTE & MacroBookName$ & DOUBLE_QUOTE & ":"
             End If
             DlgVisible      "BookCount",        INVISIBLE
             DlgText         "Desc",             MasterListByBooks( BookBlockOffset% ).Desc
@@ -1131,6 +1134,7 @@ Select Case Action%
         End If
 
       Case "Save"
+
         DlgVisible      "Instruct",         INVISIBLE
         If State% = ALL_MACROS Or State% = SEARCH_RESULTS Then
             Selection% = -1
@@ -1141,11 +1145,13 @@ Select Case Action%
         Dialog1ControlFunction      = KEEP_DLG_OPEN
 
       Case "Copy"
+
         DlgVisible      "Instruct",         INVISIBLE
         Call CopyList( State% )
         Dialog1ControlFunction      = KEEP_DLG_OPEN
 
       Case "Search"
+
         DlgVisible      "Instruct",         INVISIBLE
         SearchTerm$ = ""
 
@@ -1161,7 +1167,7 @@ Select Case Action%
         Dim Dialog3 As Dialog3Definition
         On Error Resume Next
         Dialog Dialog3
-        If Err = 102 Then GoTo CloseSearch:
+        If Err = DIALOG_BUTTON_CANCEL Then GoTo CloseSearch:
 
         SearchTerm$ = Trim$( Dialog3.TextBox )
         If SearchTerm$ = "" Then
@@ -1202,9 +1208,9 @@ Select Case Action%
             State%           = SEARCH_RESULTS
             TotalMacroCount% = UBound( SearchMatchDisplay ) + 1
             If TotalMacroCount% = 1 Then
-                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macro matching search term " & DoubleQuote$ & SearchTerm$ & DoubleQuote$ & ":"
+                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macro matching search term " & DOUBLE_QUOTE & SearchTerm$ & DOUBLE_QUOTE & ":"
               Else
-                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macros matching search term " & DoubleQuote$ & SearchTerm$ & DoubleQuote$ & ":"
+                MacroCountLegend$ = Trim$( Str$( TotalMacroCount% ) ) & " macros matching search term " & DOUBLE_QUOTE & SearchTerm$ & DOUBLE_QUOTE & ":"
             End If
             DlgText         "Desc",             MasterList( LinkMatchToMaster( 0 ) ).Desc
             DlgVisible      "Desc",             VISIBLE
@@ -1216,6 +1222,7 @@ Select Case Action%
         End If
 
 CloseSearch:
+
         Dialog1ControlFunction = KEEP_DLG_OPEN
 
     End Select
@@ -1235,6 +1242,7 @@ Dim EntryName$
 Select Case Action%
 
   Case INITIALIZE
+
     DlgText         "ComboBox",         PrevSearchPaths( 0 )
 
   Case CONTROL_CHANGE
@@ -1264,8 +1272,8 @@ Select Case Action%
 End Select
 
 End Function
-'127154199
+'130154041
 '
 'Macro name: MacroIndex
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 6/28/2017 11:37:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:15:04 AM using "MacroBookInspector" macro by Walter F. Nickeson.

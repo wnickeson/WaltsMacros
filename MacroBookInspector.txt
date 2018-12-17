@@ -1,6 +1,7 @@
-'MacroName:MacroBookInspector.2017.02
+'MacroName:MacroBookInspector.2018.04
 'MacroDescription:Lists the macros in a macro book, along with their descriptions and
-' other information. Save the list, or the text of an individual macro, to a text file.
+' other information, and allows saving the list, or the text of an individual macro, to a
+' text file.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
@@ -9,12 +10,15 @@
 ' Thanks to Joel Hahn for pointing out the file structure of macro books, and for
 ' instruction afforded by the macros he's shared, and to Harvey Hahn for some inspiration
 ' in the functionality of this macro with his earlier "MbkTool" macro, although all
-' responsibility for this macro is mine alone. Microsoft's specification for its Compound
-' File Binary File Format, version v20160714, was retrieved from
-' <https://winprotocoldoc.blob.core.windows.net/productionwindowsarchives/MS-CFB/[MS-CFB].pdf>
-' on 26 September 2017.
+' responsibility for this macro is mine alone. Thanks also to Bryan Baldus for feedback
+' which helped uncover and overcome a limitation of this macro on the size of macros it
+' can deal with.
 '
-' Last updated: 26 September 2017.
+' Microsoft's specification for its Compound File Binary File Format, version v20180316,
+' was retrieved from <https://msdn.microsoft.com/en-us/library/dd942138.aspx> on 5 June
+' 2018.
+'
+' Last updated: 14 December 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -31,7 +35,7 @@
 ' user tool number assigned to it. Its first 25 lines or 1K of source code can be
 ' displayed separately. The list of macro books and the list of macros in the selected
 ' macro book can be saved as tab-delimited text files. The text of the selected macro may
-' also be saved as a text file. The default save location can be set below on line 293.
+' also be saved as a text file. The default save location can be set below on line 301.
 ' The simple list of macros is placed on the Windows clipboard.
 '
 ' Some simple error checking is done as this macro gathers information: If the length of
@@ -58,61 +62,64 @@
 ' names of macros. In that same initial scan it also retrieves the macro descriptions,
 ' the size in bytes of each macro's source and compiled code, and the information
 ' required to assemble the macro from all the pieces in which it is stored within the
-' file. It then sorts the macros to display in alphabetical order. Depending on the
-' number and size of the macros in that macro book, it may take several seconds to
-' finish; the macro keeps track of this time. When a macro is selected, it is
-' reconstructed to produce the rest of the information to display: the number of lines in
-' the original source code, a possible date of last modification, and the first 1K bytes
-' of the source text. This macro attempts to find a revision date by searching within the
-' first 25 lines of the selected macro for a word like "revised" or "updated" and a
-' string of digits that might represent a date from 1998 on. This is not a very precise
-' method, but it works for my macros, in which I put revision dates in a standard form.
-' (OCLC has unfortunately chosen not to implement the provision in the file format for a
-' time stamp for date of creation or modification, an enhancement I believe would be
-' extremely useful.) During this pass through the macro text, this program matches "Sub"
-' and "End Sub" and "Function" and "End Function" statements. Unmatched statements may
-' indicate corruption, or loss of text, and a message box pops up carrying a warning when
-' such a problem is found. Because this part of the program can take several seconds for
-' a large macro, it is done only when a macro is actually selected, or when a macro book
-' contains only a single macro. The display of the description allows for six lines, at
-' approximately 60 characters per line. The first 25 lines or so of the selected macro's
-' source code can be displayed. (The limit is actually 1024 characters, the limit of the
-' contents of a text area in the dialog box, but this macro cuts off the display with a
-' complete line, so fewer than 25 lines may actually be given.) To get the keystroke
-' shortcut, the macro attempts to find the file "Custom.Keymap.xml" and the macro name in
-' that file. If both attempts are successful it extracts the keystrokes for display.
-' Otherwise, it attempts the same thing with the "Options.xml" file to get the user tool
-' assignment.
+' file. It then sorts the macros to display them in alphabetical order. Depending on the
+' number and size of the macros in that macro book, it may take several (or many) seconds
+' to finish; the macro keeps track of this time. Only when a macro is selected are its
+' pieces actually assembled to produce the rest of the information to display: the number
+' of lines in the original source code, a possible date of last modification, and the
+' first 1K bytes of the source text. This macro attempts to find a revision date by
+' searching within the first 25 lines of the selected macro for a word like "revised" or
+' "updated" and a string of digits that might represent a date from 1998 on. This is not
+' a very precise method, but it works for my macros, in which I put revision dates in a
+' standard form. (OCLC has unfortunately chosen not to implement the provision in the
+' file format for a time stamp for date of creation or modification, an enhancement I
+' believe would be extremely useful.) During this pass through the macro text, this
+' program matches "Sub" and "End Sub" and "Function" and "End Function" statements.
+' Unmatched statements may indicate corruption, or loss of text, and a message box pops
+' up carrying a warning when such a problem is found. Unfortunately, the macro produces
+' false positives, so the warning shouldn't cause immediate alarm. Because this part of
+' the program can take several seconds for a large macro, it is done only when a macro is
+' actually selected, or when a macro book contains only a single macro. The display of
+' the description allows for six lines, at approximately 60 characters per line. The
+' first 25 lines or so of the selected macro's source code can be displayed. (The limit
+' is actually 1024 characters, the limit of the contents of a text area in the dialog
+' box, but this macro cuts off the display with a complete line, so fewer than 25 lines
+' may actually be given.) To get the keystroke shortcut, the macro attempts to find the
+' file "Custom.Keymap.xml" and the macro name in that file. If both attempts are
+' successful it extracts the keystrokes for display. Otherwise, it attempts the same
+' thing with the "Options.xml" file to get the user tool assignment.
 '
 ' Connexion macro books are instances of the Windows Compound File Binary File Format.
 ' Files in this format contain data in a number of virtual streams. In the case of macro
 ' book files, each macro appears to be stored in three streams (with the actual data
 ' being dispersed throughout the file): the source, which is the text entered in the
-' editor; the macro description, as entered in the macro manager; and binary data, which
-' is (I think) the compiled code.
+' editor; the macro description, as entered in the macro manager (but which is taken from
+' the editor if first created there); and binary data, which is (I think) the compiled
+' code.
 '
 ' The file allocates storage space for all its contents in sectors of 512 bytes, with the
 ' first sector, the Header, containing data about locations within the file and other
 ' parameters. After opening the selected file, this macro analyzes the Header to extract
 ' relevant information with which to build the different streams. The first stream that
-' must be built is the FAT, Microsoft's term for an array which represents the sectors of
-' the file (although a better term for it might be "SAT," for "sector allocation table").
-' The FAT is the basis for constructing all the other streams, or chains of sectors. The
-' MiniFAT is another stream that, as an array, represents the minisectors in the file.
-' Minisectors are units of 64 bytes contained within the larger sectors; the complete
-' chain of minisectors forms the Ministream. Similarly, the directory is also a stream,
-' and contains other crucial location information. To extract macro names and
-' descriptions, the macro begins by building the FAT, which is then used to construct the
-' MiniFAT, the directory stream, and the Ministream. When these pieces are in place the
-' macro names are found in the directory stream, which is also where the locations of the
-' macro descriptions within the Ministream are stored. (It is also where date information
-' may be stored, but which OCLC has chosen not to do.) This macro sorts the unique macro
+' must be built is the FAT, the File Allocation Table, which is an array that represents
+' the sectors, or units of 512 bytes, that comprise the file. The FAT is the basis for
+' constructing all the other streams, a stream being a chain of sectors. The MiniFAT is
+' another stream that, as an array, represents the minisectors in the file. Minisectors
+' are units of 64 bytes contained within the larger sectors; the complete chain of
+' minisectors forms the Ministream. Similarly, the directory is also a stream, and
+' contains other crucial location information. To extract macro names and descriptions,
+' the macro begins by building the FAT, which is then used to construct the MiniFAT, the
+' directory stream, and the Ministream. When these pieces are in place the macro finds
+' the names in the directory stream, which is also where the locations of the macro
+' descriptions within the Ministream are stored. (It is also where date information may
+' be stored, but which OCLC has chosen not to do.) This macro sorts the unique macro
 ' names and attaches to each the appropriate description. When a macro is selected, its
-' source code is reconstructed by starting at the location where it begins (named in the
-' directory) and following the chain of sectors named in the FAT (or MiniFAT), assembling
-' the contents of those sectors until it is complete. In the construction of the macro
-' some kinds of corruption may be detected. This step is done only once for each macro;
-' the results are stored in an array for recall if the macro is selected again.
+' source code is reconstructed by starting at the location where it begins (identified in
+' the directory) and following the chain of sectors specified in the FAT (or MiniFAT),
+' assembling the contents of those sectors until it is complete. In the construction of
+' the macro some kinds of corruption may be detected. This step is done only once for
+' each macro; the results are stored in an array for recall if the macro is selected
+' again.
 '****************************************************************************************
 
 Option Compare Text  'Forces case-insensitive string comparison in "InStr" and "StrComp".
@@ -147,136 +154,136 @@ Declare Function MatchCalls      ( MacroLine$, LineCount& )     As String
 Declare Function Dialog1ControlFunction( Id$, Action%, SuppVal& )
 Declare Function Dialog3ControlFunction( Id$, Action%, SuppVal& )
 
-Global Const CONTROL_CHANGE       As Integer = 2      'The value of the dialog box function parameter "Action%" when a control changes.
-Global Const DATA_SUBSTRING_64    As Integer = 64     'The number of characters in some of the substrings of the master macro information string.
-Global Const DATA_SUBSTRING_8     As Integer = 8      'The number of characters in some of the substrings of the master macro information string.
-Global Const DIR_ENTRY_LENGTH     As Integer = 128    'The length in bytes of a directory entry.
-Global Const DWORD                As Integer = 4      'The length in bytes of sector numbers and some other values.
-Global Const END_OF_CHAIN         As Integer = -2     'Hex FFFFFFFE, marks the end of a chain of sectors in the FAT.
-Global Const FILE_DATA            As Integer = 1      'The switch to control processing of array to end elements with LF character.
-Global Const FILE_EXTENSION       As Integer = 4      'The length of string "dot + filename extension," e.g. ".mbk" = 4 characters.
-Global Const INITIALIZE           As Integer = 1      'The value of the dialog box function parameter "Action%" when the dialog box opens.
-Global Const KEEP_DLG_OPEN        As Integer = -1     'The value of the dialog box function to keep a dialog box open.
-Global Const MAIN_C               As Integer = 0      'The switch to access main data array or main FAT array.
-Global Const MAX_LEN_MACRO_NAME   As Integer = 28     'The maximum length in characters of a macro name, plus 1.
-Global Const MAX_SIZE_MINISTREAM  As Integer = 4096   'The maximum size in bytes of object stored in Ministream.
-Global Const MAX_STRING_LENGTH    As Integer = 31744  'The largest even multiple of 512 below 32767, OML's limit on string length.
-Global Const MINI_C               As Integer = 1      'The switch to access Ministream or miniFAT array.
-Global Const MINI_SECTOR_SIZE     As Integer = 64     'The size in bytes of minisectors.
-Global Const OFFSET_BIN_LENGTH    As Integer = 45     'The start of the substring in the macro name string containing the length of the data stream.
-Global Const OFFSET_DESC          As Integer = 53     'The start of the substring in the macro name string containing the macro description.
-Global Const OFFSET_FIRST_SECTOR  As Integer = 29     'The start of the substring in the macro name string containing the first sector of the data.
-Global Const OFFSET_SRC_LEN       As Integer = 37     'The start of the substring in the macro name string containing the length of the data stream.
-Global Const REV_WORDS            As Integer = 7      'The number of words indicating revision.
-Global Const SAVE_LIST            As Integer = 0      'The switch to save the list of macros to a file.
-Global Const SAVE_MACRO           As Integer = 1      'The switch to save the text of a macro to a file.
-Global Const SECTOR_SIZE          As Integer = 512    'The size in bytes of normal or regular sectors.
-Global Const STREAM_DATA          As Integer = 0      'The switch to control processing of array to end elements with LF character.
-Global Const STREAM_START         As Integer = 117    'The first sector location for a stream object. This offset is from the beginning of the
-                                                      ' directory sector.
-Global Const STRING1_EQUAL_TO     As Integer = 0      'The value of the "StrComp" function when strings 1 and 2 are the same.
-Global Const STRING1_GREATER_THAN As Integer = 1      'The value of the "StrComp" function when string 1 is greater than string 2.
-Global Const STRING1_LESS_THAN    As Integer = -1     'The value of the "StrComp" function when string 1 is less than string 2.
-Global Const STRING_OFFSET        As Integer = 1      'A number to make up the difference between 0-based (file offset) and 1-based
-                                                      ' (character positions in strings) counting.
-Global Const WARNING_MESSAGE      As Integer = 48     'The value to display the "Warning message" icon in a message box.
+Const CONTROL_CHANGE       As Integer = 2      'The value of the dialog box function parameter "Action%" when a control changes.
+Const DATA_SUBSTRING_64    As Integer = 64     'The number of characters in some of the substrings of the master macro information string.
+Const DATA_SUBSTRING_8     As Integer = 8      'The number of characters in some of the substrings of the master macro information string.
+Const DIR_ENTRY_LENGTH     As Integer = 128    'The length in bytes of a directory entry.
+Const DWORD                As Integer = 4      'The length in bytes of sector numbers and some other values.
+Const END_OF_CHAIN         As Integer = -2     'Hex FFFFFFFE, marks the end of a chain of sectors in the FAT.
+Const FILE_DATA            As Integer = 1      'The switch to control processing of array to end elements with LF character.
+Const FILE_EXTENSION       As Integer = 4      'The length of string "dot + filename extension," e.g. ".mbk" = 4 characters.
+Const INITIALIZE           As Integer = 1      'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const KEEP_DLG_OPEN        As Integer = -1     'The value of the dialog box function to keep a dialog box open.
+Const MAIN_C               As Integer = 0      'The switch to access main data array or main FAT array.
+Const MAX_LEN_MACRO_NAME   As Integer = 28     'The maximum length in characters of a macro name, plus 1.
+Const MAX_SIZE_MINISTREAM  As Integer = 4096   'The maximum size in bytes of object stored in Ministream.
+Const MAX_STRING_LENGTH    As Integer = 31744  'The largest even multiple of 512 below 32767, OML's limit on string length.
+Const MINI_C               As Integer = 1      'The switch to access Ministream or miniFAT array.
+Const MINI_SECTOR_SIZE     As Integer = 64     'The size in bytes of minisectors.
+Const OFFSET_BIN_LENGTH    As Integer = 45     'The start of the substring in the macro name string containing the length of the data stream.
+Const OFFSET_DESC          As Integer = 53     'The start of the substring in the macro name string containing the macro description.
+Const OFFSET_FIRST_SECTOR  As Integer = 29     'The start of the substring in the macro name string containing the first sector of the data.
+Const OFFSET_SRC_LEN       As Integer = 37     'The start of the substring in the macro name string containing the length of the data stream.
+Const REV_WORDS            As Integer = 7      'The number of words indicating revision.
+Const SAVE_LIST            As Integer = 0      'The switch to save the list of macros to a file.
+Const SAVE_MACRO           As Integer = 1      'The switch to save the text of a macro to a file.
+Const SECTOR_SIZE          As Integer = 512    'The size in bytes of normal or regular sectors.
+Const STREAM_DATA          As Integer = 0      'The switch to control processing of array to end elements with LF character.
+Const STREAM_START         As Integer = 117    'The first sector location for a stream object. This offset is from the beginning of the
+                                               ' directory sector.
+Const STRING1_EQUAL_TO     As Integer = 0      'The value of the "StrComp" function when strings 1 and 2 are the same.
+Const STRING1_GREATER_THAN As Integer = 1      'The value of the "StrComp" function when string 1 is greater than string 2.
+Const STRING1_LESS_THAN    As Integer = -1     'The value of the "StrComp" function when string 1 is less than string 2.
+Const STRING_OFFSET        As Integer = 1      'A number to make up the difference between 0-based (file offset) and 1-based
+                                               ' (character positions in strings) counting.
+Const WARNING_MESSAGE      As Integer = 48     'The value to display the "Warning message" icon in a message box.
 
-Global Const MACRO_INFO_BIN       As Integer = 7      'These are the numbers of the substrings in the string holding macro information.
-Global Const MACRO_INFO_BOOK      As Integer = 2
-Global Const MACRO_INFO_DATE      As Integer = 3
-Global Const MACRO_INFO_DESC      As Integer = 9
-Global Const MACRO_INFO_KEY       As Integer = 8
-Global Const MACRO_INFO_LINES     As Integer = 5
-Global Const MACRO_INFO_MATCH     As Integer = 11
-Global Const MACRO_INFO_NAME      As Integer = 1
-Global Const MACRO_INFO_PREVIEW   As Integer = 14
-Global Const MACRO_INFO_REV       As Integer = 4
-Global Const MACRO_INFO_SRC       As Integer = 6
-Global Const MACRO_INFO_TIME      As Integer = 10
-Global Const MACRO_INFO_XDESC     As Integer = 13
-Global Const MACRO_INFO_XNAME     As Integer = 12
+Const MACRO_INFO_BIN       As Integer = 7      'These are the numbers of the substrings in the string holding macro information.
+Const MACRO_INFO_BOOK      As Integer = 2
+Const MACRO_INFO_DATE      As Integer = 3
+Const MACRO_INFO_DESC      As Integer = 9
+Const MACRO_INFO_KEY       As Integer = 8
+Const MACRO_INFO_LINES     As Integer = 5
+Const MACRO_INFO_MATCH     As Integer = 11
+Const MACRO_INFO_NAME      As Integer = 1
+Const MACRO_INFO_PREVIEW   As Integer = 14
+Const MACRO_INFO_REV       As Integer = 4
+Const MACRO_INFO_SRC       As Integer = 6
+Const MACRO_INFO_TIME      As Integer = 10
+Const MACRO_INFO_XDESC     As Integer = 13
+Const MACRO_INFO_XNAME     As Integer = 12
 
-Global LineCountStr As String * DATA_SUBSTRING_64
-Global MacroSizeStr As String * DATA_SUBSTRING_64
+Dim CRLF         As String*2
+Dim DOUBLE_QUOTE As String*1
+Dim SINGLE_QUOTE As String*1
+Dim TAB_CHAR     As String*1
 
-Global CR$
-Global DefaultSavePath$
-Global DoubleQuote$
-Global FATSectorListInHeader$
-Global FileInfo$
-Global FileSize&
-Global FileSizeKB%
-Global FileSizeKBStr$
-Global FirstSector&
-Global FullMacroName$
-Global LineCount&
-Global LineCountReport$
-Global MacroBookFile$
-Global MacroBookList$
-Global MacroBookName$
-Global MacroCount%
-Global MacroDesc$
-Global MacroDirectoryPath$
-Global MacroRevisionDate$
-Global MatchCache$
-Global MatchWarning$
-Global PreviewLines$
-Global PreviousEntry%
-Global ProgramFilesPath$
-Global SaveCount%
-Global SaveFileName$
-Global SelectedMacroIndex%
-Global SelectedMacroName$
-Global SingleQuote$
-Global SourceName$
-Global StreamSize&
-Global SummaryMacroCount$
-Global TabChar$
-Global TestString$
-Global TotalMacroCount%
-Global UserProfile$
-Global WaltsMacros$
-Global WhichFAT%
+Dim DefaultSavePath$
+Dim FATSectorListInHeader$
+Dim FileInfo$
+Dim FileSize&
+Dim FileSizeKB%
+Dim FileSizeKBStr$
+Dim FirstSector&
+Dim FullMacroName$
+Dim LineCount&
+Dim LineCountReport$
+Dim LineCountStr As String*DATA_SUBSTRING_64
+Dim MacroBookFile$
+Dim MacroBookList$
+Dim MacroBookName$
+Dim MacroCount%
+Dim MacroDesc$
+Dim MacroDirectoryPath$
+Dim MacroRevisionDate$
+Dim MacroSizeStr As String*DATA_SUBSTRING_64
+Dim MatchCache$
+Dim MatchWarning$
+Dim PreviewLines$
+Dim PreviousEntry%
+Dim ProgramFilesPath$
+Dim SaveCount%
+Dim SaveFileName$
+Dim SelectedMacroIndex%
+Dim SelectedMacroName$
+Dim SourceName$
+Dim StreamSize&
+Dim SummaryMacroCount$
+Dim TestString$
+Dim TotalMacroCount%
+Dim UserProfile$
+Dim WaltsMacros$
+Dim WhichFAT%
 
-Global DataStream()             As String
-Global DirectoryEntries()       As String
-Global EndWithLF()              As String
-Global FAT()                    As Long
-Global FileSections()           As String
-Global FileSectors()            As String
-Global MacroBooks()             As String
-Global MacroListNames()         As String
-Global MacroListPlus()          As String
-Global MasterMacroArray()       As String
-Global MiniFAT()                As Long
-Global MinistreamSectors()      As String
-Global PreviousSaves()          As String
-Global UpdateClues( REV_WORDS ) As String
-Global UpdateDate()             As String
+Dim DataStream()             As String
+Dim DirectoryEntries()       As String
+Dim EndWithLF()              As String
+Dim FAT()                    As Long
+Dim FileSections()           As String
+Dim FileSectors()            As String
+Dim MacroBooks()             As String
+Dim MacroListNames()         As String
+Dim MacroListPlus()          As String
+Dim MasterMacroArray()       As String
+Dim MiniFAT()                As Long
+Dim MinistreamSectors()      As String
+Dim PreviousSaves()          As String
+Dim UpdateClues( REV_WORDS ) As String
+Dim UpdateDate()             As String
 
-Global DifferentDesc
-Global InvalidFileLength
+Dim DifferentDesc
+Dim InvalidFileLength
 
 ' Timing variables to calculate speed of macro TimeButton.
 
-Global BeginBF#   'Elapsed time to build the FAT
-Global FinishBF#  ' (Build FAT)
-Global TimeBF$
-Global BeginBMF#  'Elapsed time to build the MiniFAT
-Global FinishBMF# ' (Build Mini FAT)
-Global TimeBMF$
-Global BeginBMS#  'Elapsed time to build the Ministream
-Global FinishBMS# ' (Build Mini Stream)
-Global TimeBMS$
-Global BeginDS#   'Elapsed time to extract and sort the list of names
-Global FinishDS#  ' (Directory Sort)
-Global TimeDS$
-Global BeginGMI#  'Elapsed time to get information about a single macro
-Global FinishGMI# ' (Get Macro Information)
-Global TimeGMI$
-Global BeginMML#  'Total elapsed time to build the macro list
-Global FinishMML# ' (Make Macro List)
-Global TimeMML$
+Dim BeginBF#   'Elapsed time to build the FAT
+Dim FinishBF#  ' (Build FAT)
+Dim TimeBF$
+Dim BeginBMF#  'Elapsed time to build the MiniFAT
+Dim FinishBMF# ' (Build Mini FAT)
+Dim TimeBMF$
+Dim BeginBMS#  'Elapsed time to build the Ministream
+Dim FinishBMS# ' (Build Mini Stream)
+Dim TimeBMS$
+Dim BeginDS#   'Elapsed time to extract and sort the list of names
+Dim FinishDS#  ' (Directory Sort)
+Dim TimeDS$
+Dim BeginGMI#  'Elapsed time to get information about a single macro
+Dim FinishGMI# ' (Get Macro Information)
+Dim TimeGMI$
+Dim BeginMML#  'Total elapsed time to build the macro list
+Dim FinishMML# ' (Make Macro List)
+Dim TimeMML$
 
 '****************************************************************************************
 
@@ -299,12 +306,13 @@ Dim i As Integer
 
 ' Initialize some global variables.
 
-CR$                   = Chr$( 013 ) & Chr$( 010 )
-DoubleQuote$          = Chr$( 034 )
-MacroDirectoryPath$   = "\OCLC\Connexion\Program\Macros\"
-SingleQuote$          = Chr$( 039 )
-TabChar$              = Chr$( 009 )
-WaltsMacros$          = "[Walt's macros] MacroTools:MacroBookInspector"
+CRLF                 = Chr$( 013 ) & Chr$( 010 )
+DOUBLE_QUOTE         = Chr$( 034 )
+SINGLE_QUOTE         = Chr$( 039 )
+TAB_CHAR             = Chr$( 009 )
+
+MacroDirectoryPath$  = "\OCLC\Connexion\Program\Macros\"
+WaltsMacros$         = "[Walt's macros] MacroTools:MacroBookInspector"
 ReDim PreviousSaves( 0 )
 
 ' The catalog of words indicating revision; "updated" is first because that's the term I
@@ -417,28 +425,28 @@ Loop Until p = 0
 ' gets some of the information that is assembled into the master string that contains
 ' everything necessary to display.
 
-BeginGMI#       = Timer
+BeginGMI#      = Timer
 Call GetMacroInfo( MacroListSelection$ )
-FinishGMI#      = Timer
-TimeGMI$        = FormatDuration( BeginGMI#, FinishGMI# )
+FinishGMI#     = Timer
+TimeGMI$       = FormatDuration( BeginGMI#, FinishGMI# )
 
 ' Build the string containing macro information.
 
-MacroInfo$      = DisplayMacroName$
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_BOOK,    MacroBookName$,                                                            TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_DATE,    Mid$( FileInfo$, 20 ),                                                     TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_REV,     MacroRevisionDate$,                                                        TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_LINES,   Trim$( Str$( LineCount& ) ),                                               TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_SRC,     Trim$( Mid$( MacroListSelection$, OFFSET_SRC_LEN, DATA_SUBSTRING_8 ) ),    TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_BIN,     Trim$( Mid$( MacroListSelection$, OFFSET_BIN_LENGTH, DATA_SUBSTRING_8 ) ), TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_DESC,    Trim$( Mid$( MacroListSelection$, OFFSET_DESC ) ),                         TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_TIME,    TimeGMI$,                                                                  TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_MATCH,   MatchWarning$,                                                             TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_XNAME,   SourceName$,                                                               TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_XDESC,   DifferentDesc,                                                             TabChar$ )
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_PREVIEW, PreviewLines$,                                                             TabChar$ )
-FullMacroName$  = MacroBookName$ & "!" & SelectedMacroName$
-MacroInfo$      = SetField$( MacroInfo$, MACRO_INFO_KEY,     GetKeyAssignment( FullMacroName$ ),                                        TabChar$ )
+MacroInfo$     = DisplayMacroName$
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_BOOK,    MacroBookName$,                                                            TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_DATE,    Mid$( FileInfo$, 20 ),                                                     TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_REV,     MacroRevisionDate$,                                                        TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_LINES,   Trim$( Str$( LineCount& ) ),                                               TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_SRC,     Trim$( Mid$( MacroListSelection$, OFFSET_SRC_LEN, DATA_SUBSTRING_8 ) ),    TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_BIN,     Trim$( Mid$( MacroListSelection$, OFFSET_BIN_LENGTH, DATA_SUBSTRING_8 ) ), TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_DESC,    Trim$( Mid$( MacroListSelection$, OFFSET_DESC ) ),                         TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_TIME,    TimeGMI$,                                                                  TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_MATCH,   MatchWarning$,                                                             TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_XNAME,   SourceName$,                                                               TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_XDESC,   DifferentDesc,                                                             TAB_CHAR )
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_PREVIEW, PreviewLines$,                                                             TAB_CHAR )
+FullMacroName$ = MacroBookName$ & "!" & SelectedMacroName$
+MacroInfo$     = SetField$( MacroInfo$, MACRO_INFO_KEY,     GetKeyAssignment( FullMacroName$ ),                                        TAB_CHAR )
 
 ' The first dimension of the master array is the index number of the macro list. The
 ' second dimension holds the string containing macro information in the first element,
@@ -540,10 +548,10 @@ Loop Until NextSector& = END_OF_CHAIN Or SectorsRead% > ExpectedSectorCount%
 ' expected size of the data does not match the actual size read.
 
 If SectorsRead% <> ExpectedSectorCount% Then
-    MsgBox "The macro is corrupt!" & CR$ & _
-           "StreamSize& = " & Str$(StreamSize&) &  CR$ & _
+    MsgBox "The macro is corrupt!" & CRLF & _
+           "StreamSize& = " & Str$(StreamSize&) &  CRLF & _
            "ExpectedSectorCount% = " & Str$( ExpectedSectorCount% ) & ", SectorsRead% = " & _
-           Str$( SectorsRead% ) & CR$ & Left( DataStream(0), 256 ), WARNING_MESSAGE, WaltsMacros$
+           Str$( SectorsRead% ) & CRLF & Left( DataStream(0), 256 ), WARNING_MESSAGE, WaltsMacros$
 End If
 
 End Sub
@@ -574,7 +582,7 @@ Sub BuildFAT( TotalSectorsInFAT% )
 '   -2 (hex FFFFFFFE) : the end of a stream (the last data in the stream was in the previous sector)
 '   -1 (hex FFFFFFFF) : an empty, or free, sector.
 
-Dim Break%                   : Break%           = 1
+Dim Break%                   : Break% = 1
 Dim FATSectorsCount%
 Dim FATSectorString$
 Dim Index%
@@ -888,7 +896,7 @@ Dim Possibility$
 
 ' Test that the file is really a macrobook file, no matter its extension.
 
-HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 17 ) & Chr$( 224 ) & Chr$( 161 ) & Chr$( 177 ) & Chr$( 26 ) & Chr$( 225 )
+HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 017 ) & Chr$( 224 ) & Chr$( 161 ) & Chr$( 177 ) & Chr$( 026 ) & Chr$( 225 )
 
 ' Find the path to OCLC's "Macros" folder and make an array of the macro books it
 ' contains to display in a drop list box in the dialog box. Also build a string of macro
@@ -914,7 +922,7 @@ Do While MacroBookFile$ <> ""
       MacroBookName$             = Left$( MacroBookFile$, Len( MacroBookFile$ ) - FILE_EXTENSION% )
       ReDim Preserve MacroBooks( FileCounter% )
       MacroBooks( FileCounter% ) = MacroBookName$
-      MacroBookList$             = MacroBookList$ & MacroBookName$ & TabChar$ & FileDateTime( Possibility$ ) & CR$
+      MacroBookList$             = MacroBookList$ & MacroBookName$ & TAB_CHAR & FileDateTime( Possibility$ ) & CRLF
       FileCounter%               = FileCounter% + 1
   End If
   MacroBookFile$ = Dir
@@ -935,7 +943,7 @@ Sub GetMacroInfo( MacroDirectoryInfo$ )
 Dim LineBegin$
 Dim LineFound%
 Dim LinesShown$
-Dim MacroChunks%
+Dim MacroChunks&
 Dim MacroLine$
 Dim MacroLineLength%
 Dim Start%
@@ -944,9 +952,10 @@ Dim TestDesc$
 Dim TextDesc$
 Dim TextName$
 
-Dim MaxPreview               : MaxPreview  = FALSE
+Dim MaxPreview               : MaxPreview = FALSE
 
-Dim i As Integer, p As Integer, x As Integer
+Dim p As Integer, x As Integer
+Dim n As Long
 
 LineCount&         = 0
 MacroRevisionDate$ = ""
@@ -985,12 +994,12 @@ Call StoreWithTerminator( STREAM_DATA% )
 '  4) throughout, for matching subroutine openings and closings.
 ' Store the first 25 lines, or 1024 bytes (whichever comes first), for display.
 
-MacroChunks% = UBound( EndWithLF)
-For i = 0 To MacroChunks%
-  StringToCheck$ = EndWithLF( i )
+MacroChunks& = UBound( EndWithLF)
+For n = 0 To MacroChunks&
+  StringToCheck$ = EndWithLF( n )
   Start% = 1
   Do
-    LineFound% = InStr( Start%, StringToCheck$, CR$ )
+    LineFound% = InStr( Start%, StringToCheck$, CRLF )
     If LineFound% <> 0 Then
         LineCount& = LineCount& + 1
         MacroLine$ = Mid$( StringToCheck$, Start%, LineFound% - Start% )
@@ -998,7 +1007,7 @@ For i = 0 To MacroChunks%
         If LineCount& < 26 Then
             If MaxPreview = FALSE Then
                 If Len( PreviewLines$ ) + MacroLineLength% < 1024 Then
-                    PreviewLines$ = PreviewLines$ & MacroLine$ & CR$
+                    PreviewLines$ = PreviewLines$ & MacroLine$ & CRLF
                     LinesShown$   = Trim$( Str$( LineCount& ) )
                   Else
                     PreviewLines$ = Left$( PreviewLines$, Len( PreviewLines$ ) - 1 )
@@ -1007,7 +1016,7 @@ For i = 0 To MacroChunks%
             End If
         End If
         If MacroLineLength% > 0 Then
-            If Left$( MacroLine$, 1 ) = SingleQuote$ Then
+            If Left$( MacroLine$, 1 ) = SINGLE_QUOTE Then
                 If LineCount& < 26 Then
                     If TextName = "" Then
 
@@ -1093,7 +1102,7 @@ For i = 0 To MacroChunks%
     End If
     Start% = LineFound% + 2
   Loop While LineFound% > 0
-Next i
+Next n
 
 ' Format a message to state how many lines of the macro are being displayed in the
 ' preview box.
@@ -1114,16 +1123,16 @@ MacroSizeStr = "Size of macro source/binary: " & Trim$( Str$( StreamSize& ) ) & 
 If MacroRevisionDate$ = "" Then
     MacroRevisionDate$ = "[No revision date found]"
   Else
-    MacroRevisionDate$ = DoubleQuote$ & MacroRevisionDate$ & DoubleQuote$
+    MacroRevisionDate$ = DOUBLE_QUOTE & MacroRevisionDate$ & DOUBLE_QUOTE
 End If
 
 ' If the last called "Sub" or "Function" was not closed:
 
 Select Case Left$( MatchCache$, 1 )
   Case "S"
-    MatchWarning$ = DoubleQuote$ & "Sub" & DoubleQuote$ & " called on line " & Mid$( MatchCache$, 2 ) & ", but no " & DoubleQuote$ & "End Sub" & DoubleQuote$ & " was found."
+    MatchWarning$ = DOUBLE_QUOTE & "Sub" & DOUBLE_QUOTE & " called on line " & Mid$( MatchCache$, 2 ) & ", but no " & DOUBLE_QUOTE & "End Sub" & DOUBLE_QUOTE & " was found."
   Case "F"
-    MatchWarning$ = DoubleQuote$ & "Function" & DoubleQuote$ & " called on line " & Mid$( MatchCache$, 2 ) & ", but no " & DoubleQuote$ & "End Function" & DoubleQuote$ & " was found."
+    MatchWarning$ = DOUBLE_QUOTE & "Function" & DOUBLE_QUOTE & " called on line " & Mid$( MatchCache$, 2 ) & ", but no " & DOUBLE_QUOTE & "End Function" & DOUBLE_QUOTE & " was found."
 End Select
 
 If MatchWarning$ <> "" Then
@@ -1350,9 +1359,9 @@ TimeDS$   = FormatDuration( BeginDS#, FinishDS# )
 
 ' Place the list on the clipboard.
 
-MacroListString$ = "Macro book name: " & MacroBookName$ & CR$
+MacroListString$ = "Macro book name: " & MacroBookName$ & CRLF
 For i = 0 To TotalMacroCount%
-  MacroListString$ = MacroListString$ & MacroListNames( i ) & CR$
+  MacroListString$ = MacroListString$ & MacroListNames( i ) & CRLF
 Next i
 MacroListString$ = Left$( MacroListString$, Len( MacroListString$ ) - 2 )
 Clipboard.Clear
@@ -1601,12 +1610,18 @@ Sub StoreWithTerminator( WhichArray% )
 ' finding line terminators, this subprogram adjusts the elements of the storage array so
 ' each one ends with ASCII 10, the line feed character.
 
+Const LINE_FEED As Integer = 10
+
 Dim CurrString$
+Dim CurrStringLen%
 Dim PrevString$
+Dim PrevStringLen%
 Dim TempString$
 Dim TestChar%
+Dim TwoStrings&
 
-Dim i As Integer, j As Integer, n As Integer, x As Integer, y As Integer, z As Integer
+Dim j As Integer, z As Integer
+Dim i As Long, n As Long
 
 Dim TempStorage() As String
 
@@ -1622,17 +1637,19 @@ If WhichArray% = 0 Then      'DataStream
     Next i
 End If
 
-i = 0 : n = 0
+i = 0
+n = 0
 
 Do
-  CurrString$ = TempStorage( i )
-  x = Len( CurrString$ )
-  y = Len( PrevString$ )
-  If x + y >= MAX_STRING_LENGTH Then
-      z = MAX_STRING_LENGTH - y
+  CurrString$    = TempStorage( i )
+  CurrStringLen% = Len( CurrString$ )
+  PrevStringLen% = Len( PrevString$ )
+  TwoStrings&    = CurrStringLen% + PrevStringLen%
+  If TwoStrings& >= MAX_STRING_LENGTH Then
+      z = MAX_STRING_LENGTH - PrevStringLen%
       For j = z To 1 Step -1
         TestChar% = Asc( Mid$( CurrString$, j, 1 ) )
-        If TestChar% = 10 Then
+        If TestChar% = LINE_FEED Then
             Exit For
         End If
       Next j
@@ -1651,7 +1668,7 @@ Do
   EndWithLF( n ) = TempString$
   n = n + 1
   i = i + 1
-Loop Until i > UBound(TempStorage)
+Loop Until i > UBound( TempStorage )
 
 End Sub
 
@@ -1684,7 +1701,7 @@ Dim TempString$
 
 Dim i as Integer, p As Integer
 
-Credit$ = " using " & DoubleQuote$ & "MacroBookInspector" & DoubleQuote$ & " macro by Walter F. Nickeson."
+Credit$ = " using " & DOUBLE_QUOTE & "MacroBookInspector" & DOUBLE_QUOTE & " macro by Walter F. Nickeson."
 
 ' Since OML can't present a typical Save dialog, the next best thing is to offer a string
 ' that might need no, or only a little, editing to specify the file location. The first
@@ -1766,7 +1783,7 @@ Select Case Err
           NewDir$ = Left$( SaveFileName$, i - 1 )
           Attributes% = GetAttr( NewDir$ )
           If Attributes% <> 16 Then
-              Answer% = MsgBox( "The path " & DoubleQuote$ & NewDir$ & DoubleQuote$ & " does not exist! Create new directories?", 35, WaltsMacros$ )
+              Answer% = MsgBox( "The path " & DOUBLE_QUOTE & NewDir$ & DOUBLE_QUOTE & " does not exist! Create new directories?", 35, WaltsMacros$ )
               Select Case Answer
                 Case 2
                   Exit Sub
@@ -1840,10 +1857,10 @@ If SaveType% = SAVE_LIST Then
     Print #FileWrite%,
     Print #FileWrite%, "List created " & DateString$ & Credit$
     Print #FileWrite%,
-    Print #FileWrite%, SummaryMacroCount$
+    Print #FileWrite%, Left$( SummaryMacroCount$, Len( SummaryMacroCount$ ) - 1 ) & " (" & FileSizeKBStr$ & " KB):"
     For i = 0 To UBound( MacroListPlus )
       TempString$ = MacroListPlus( i )
-      Print #FileWrite%, Trim$( Left$( TempString$, MAX_LEN_MACRO_NAME ) ) & TabChar$ & Trim$( Mid$( TempString$, OFFSET_DESC ) )
+      Print #FileWrite%, Trim$( Left$( TempString$, MAX_LEN_MACRO_NAME ) ) & TAB_CHAR & Trim$( Mid$( TempString$, OFFSET_DESC ) )
     Next i
   Else
     For i = 1 To UBound( MasterMacroArray, 2 )
@@ -1852,10 +1869,10 @@ If SaveType% = SAVE_LIST Then
           Print #FileWrite%, TempString$;
       End If
     Next i
-    Print #FileWrite%, SingleQuote$
-    Print #FileWrite%, SingleQuote$ & "Macro name: " & SelectedMacroName$
-    Print #FileWrite%, SingleQuote$ & "Macro book: " & MacroBookFile$
-    Print #FileWrite%, SingleQuote$ & "Saved: " & DateString$ & Credit$
+    Print #FileWrite%, SINGLE_QUOTE
+    Print #FileWrite%, SINGLE_QUOTE & "Macro name: " & SelectedMacroName$
+    Print #FileWrite%, SINGLE_QUOTE & "Macro book: " & MacroBookFile$
+    Print #FileWrite%, SINGLE_QUOTE & "Saved: " & DateString$ & Credit$
 End If
 
 Close FileWrite%
@@ -2136,7 +2153,7 @@ If Attributes% = 0 Or Attributes% = 32 Then
 
             If Mid$( KeyString$, p - 21, 5 ) = "Tool " Then
                 TempString$ = Mid$( KeyString$, p - 21, 7 )
-                If Right$( TempString$, 1 ) = DoubleQuote$ Then
+                If Right$( TempString$, 1 ) = DOUBLE_QUOTE Then
                     TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
                 End If
                 TempString$ = "User tool: " & TempString$
@@ -2238,9 +2255,9 @@ CurrentLine$ = Trim$( Str$( LineCount& ) )
 
 If Left$( TestString, 4 ) = "sub " Or TestString = "private sub " Or Left$( TestString, 11 ) = "static sub " Then
     If Left$( MatchCache$, 1 ) = "S" Then
-        Warning$ = "Closing " & DoubleQuote$ & "End Sub" & DoubleQuote$ & " lacking."
+        Warning$ = "Closing " & DOUBLE_QUOTE & "End Sub" & DOUBLE_QUOTE & " lacking."
       ElseIf Left$( MatchCache$, 1 ) = "F" Then
-        Warning$ = "Closing " & DoubleQuote$ & "End Function" & DoubleQuote$ & " lacking."
+        Warning$ = "Closing " & DOUBLE_QUOTE & "End Function" & DOUBLE_QUOTE & " lacking."
       Else
         MatchCache$ = "S" & CurrentLine$
     End If
@@ -2249,9 +2266,9 @@ If Left$( TestString, 4 ) = "sub " Or TestString = "private sub " Or Left$( Test
 
   ElseIf Left$( TestString, 9 ) = "function " Or TestString = "private func" Or TestString = "static funct" Then
     If Left$( MatchCache$, 1 ) = "S" Then
-        Warning$ = "Closing " & DoubleQuote$ & "End Sub" & DoubleQuote$ & " lacking."
+        Warning$ = "Closing " & DOUBLE_QUOTE & "End Sub" & DOUBLE_QUOTE & " lacking."
       ElseIf Left$( MatchCache$, 1 ) = "F" Then
-        Warning$ = "Closing " & DoubleQuote$ & "End Function" & DoubleQuote$ & " lacking."
+        Warning$ = "Closing " & DOUBLE_QUOTE & "End Function" & DOUBLE_QUOTE & " lacking."
       Else
         MatchCache$ = "F" & CurrentLine$
     End If
@@ -2264,7 +2281,7 @@ If Left$( TestString, 4 ) = "sub " Or TestString = "private sub " Or Left$( Test
     If Left$( MatchCache$, 1 ) = "S" Then
         MatchCache$ = " "
       Else
-        Warning$ = "Unexpected " & DoubleQuote$ & "End Sub" & DoubleQuote$ & " found on line " & CurrentLine$ & "."
+        Warning$ = "Unexpected " & DOUBLE_QUOTE & "End Sub" & DOUBLE_QUOTE & " found on line " & CurrentLine$ & "."
     End If
 
 ' Similarly for a function:
@@ -2273,7 +2290,7 @@ If Left$( TestString, 4 ) = "sub " Or TestString = "private sub " Or Left$( Test
     If Left$( MatchCache$, 1 ) = "F" Then
         MatchCache$ = " "
       Else
-        Warning$ = "Unexpected " & DoubleQuote$ & "End Function" & DoubleQuote$ & " found on line " & CurrentLine$ & "."
+        Warning$ = "Unexpected " & DOUBLE_QUOTE & "End Function" & DOUBLE_QUOTE & " found on line " & CurrentLine$ & "."
     End If
 End If
 
@@ -2386,45 +2403,46 @@ Select Case Action%
                 SelectedMacroIndex% = DlgValue( "ListOfMacros" )
                 Call AssembleMacroInfo( SelectedMacroIndex% )
                 MacroInfo$          = MasterMacroArray( SelectedMacroIndex%, 0 )
-                InfoBoxLegend$      = "Information about " & DoubleQuote$ & GetField$( MacroInfo$, MACRO_INFO_NAME, TabChar$ ) & DoubleQuote$
+                InfoBoxLegend$      = "Information about " & DOUBLE_QUOTE & GetField$( MacroInfo$, MACRO_INFO_NAME, TAB_CHAR ) & DOUBLE_QUOTE
                 DlgVisible          "Clipboard",        INVISIBLE
-                MacroDesc$          = GetField$( MacroInfo$, MACRO_INFO_DESC, TabChar$ )
+                MacroDesc$          = GetField$( MacroInfo$, MACRO_INFO_DESC, TAB_CHAR )
                 DlgText             "Description",      MacroDesc$
                 DlgVisible          "Description",      VISIBLE
                 DlgText             "FileInfo",         FileInfo$
                 DlgFocus            "ListOfMacros"
-                DlgText             "MacroLines",       "Number of lines in macro: " & GetField$( MacroInfo$, MACRO_INFO_LINES, TabChar$ )
+                DlgText             "MacroLines",       "Number of lines in macro: " & GetField$( MacroInfo$, MACRO_INFO_LINES, TAB_CHAR )
                 DlgVisible          "MacroLines",       VISIBLE
-                DlgText             "MacroSize",        "Size of macro source/binary: " & GetField$( MacroInfo$, MACRO_INFO_SRC, TabChar$ ) & "/" & GetField$( MacroInfo$, MACRO_INFO_BIN, TabChar$ )
+                DlgText             "MacroSize",        "Size of macro source/binary: " & GetField$( MacroInfo$, MACRO_INFO_SRC, TAB_CHAR ) & "/" & GetField$( MacroInfo$, MACRO_INFO_BIN, TAB_CHAR )
                 DlgVisible          "MacroSize",        VISIBLE
-                If GetField$( MacroInfo$, MACRO_INFO_XDESC, TabChar$ ) = "0" Then
+                If GetField$( MacroInfo$, MACRO_INFO_XDESC, TAB_CHAR ) = "0" Then
                     DlgText             "OutlineDesc",      "Description:"
                   Else
                     DlgText             "OutlineDesc",      "Description (differs in source):"
                 End If
                 DlgVisible          "OutlineDesc",      VISIBLE
-                SrcName$            = GetField$( MacroInfo$, MACRO_INFO_XNAME, TabChar$ )
+                SrcName$            = GetField$( MacroInfo$, MACRO_INFO_XNAME, TAB_CHAR )
+                DlgVisible          "OutlineInfo",      VISIBLE
                 If SrcName$ = "" Then
                     DlgText             "OutlineInfo",      InfoBoxLegend$ & ": "
-                    DlgVisible          "OutlineInfo",      VISIBLE
                     DlgVisible          "NameDiffers",      INVISIBLE
                     DlgVisible          "NameDiffersBox",   INVISIBLE
                   Else
                     DlgText             "OutlineInfo",      InfoBoxLegend$ & "*: "
-                    DlgText             "NameDiffers",      " *Name in source: " & DoubleQuote$ & SrcName$ & DoubleQuote$
+                    DlgText             "NameDiffers",      " *Name in source: " & DOUBLE_QUOTE & SrcName$ & DOUBLE_QUOTE
                     DlgVisible          "NameDiffers",      VISIBLE
                     DlgVisible          "NameDiffersBox",   VISIBLE
                 End If
                 DlgVisible          "PreviewButton",    VISIBLE
                 DlgVisible          "PreviewText",      VISIBLE
-                DlgText             "RevDate",          GetField$( MacroInfo$, MACRO_INFO_REV, TabChar$ )
+                DlgText             "RevDate",          GetField$( MacroInfo$, MACRO_INFO_REV, TAB_CHAR )
                 DlgVisible          "RevDate",          VISIBLE
                 DlgEnable           "SaveList",         ENABLED
                 DlgEnable           "SaveMacro",        ENABLED
+                DlgVisible          "SelectBooks",      INVISIBLE
                 DlgVisible          "SelectMacro",      INVISIBLE
-                DlgText             "Shortcut",         GetField$( MacroInfo$, MACRO_INFO_KEY, TabChar$ )
+                DlgText             "Shortcut",         GetField$( MacroInfo$, MACRO_INFO_KEY, TAB_CHAR )
                 DlgVisible          "Shortcut",         VISIBLE
-                If GetField$( MacroInfo$, MACRO_INFO_MATCH, TabChar$ ) <> "" Then
+                If GetField$( MacroInfo$, MACRO_INFO_MATCH, TAB_CHAR ) <> "" Then
                     MsgBox MatchWarning$, WARNING_MESSAGE, WaltsMacros$
                 End If
 
@@ -2498,45 +2516,45 @@ Select Case Action%
 ' Whenever a macro is selected, show its information.
 
             MacroInfo$     = MasterMacroArray( SelectedMacroIndex%, 0 )
-            InfoBoxLegend$ = "Information about " & DoubleQuote$ & GetField$( MacroInfo$, MACRO_INFO_NAME, TabChar$ ) & DoubleQuote$
+            InfoBoxLegend$ = "Information about " & DOUBLE_QUOTE & GetField$( MacroInfo$, MACRO_INFO_NAME, TAB_CHAR ) & DOUBLE_QUOTE
             DlgVisible          "Clipboard",        INVISIBLE
             DlgVisible          "Description",      VISIBLE
-            MacroDesc$     = GetField$( MacroInfo$, MACRO_INFO_DESC, TabChar$ )
+            MacroDesc$     = GetField$( MacroInfo$, MACRO_INFO_DESC, TAB_CHAR )
             DlgText             "Description",      MacroDesc$
             DlgText             "FileInfo",         FileInfo$
             DlgFocus            "ListOfMacros"
-            DlgText             "MacroLines",       "Number of lines in macro: " & GetField$( MacroInfo$, MACRO_INFO_LINES, TabChar$ )
+            DlgText             "MacroLines",       "Number of lines in macro: " & GetField$( MacroInfo$, MACRO_INFO_LINES, TAB_CHAR )
             DlgVisible          "MacroLines",       VISIBLE
-            DlgText             "MacroSize",        "Size of macro source/binary: " & GetField$( MacroInfo$, MACRO_INFO_SRC, TabChar$ ) & "/" & GetField$( MacroInfo$, MACRO_INFO_BIN, TabChar$ )
+            DlgText             "MacroSize",        "Size of macro source/binary: " & GetField$( MacroInfo$, MACRO_INFO_SRC, TAB_CHAR ) & "/" & GetField$( MacroInfo$, MACRO_INFO_BIN, TAB_CHAR )
             DlgVisible          "MacroSize",        VISIBLE
-            If GetField$( MacroInfo$, MACRO_INFO_XDESC, TabChar$ ) = "0" Then
+            If GetField$( MacroInfo$, MACRO_INFO_XDESC, TAB_CHAR ) = "0" Then
                 DlgText             "OutlineDesc",      "Description:"
               Else
                 DlgText             "OutlineDesc",      "Description (differs in source):"
             End If
             DlgVisible          "OutlineDesc",      VISIBLE
-            SrcName$       = GetField$( MacroInfo$, MACRO_INFO_XNAME, TabChar$ )
+            SrcName$       = GetField$( MacroInfo$, MACRO_INFO_XNAME, TAB_CHAR )
             If SrcName$ = "" Then
                 DlgText             "OutlineInfo",      InfoBoxLegend$ & ": "
                 DlgVisible          "NameDiffers",      INVISIBLE
                 DlgVisible          "NameDiffersBox",   INVISIBLE
               Else
                 DlgText             "OutlineInfo",      InfoBoxLegend$ & "*: "
-                DlgText             "NameDiffers",      " *Name in source: " & DoubleQuote$ & SrcName$ & DoubleQuote$
+                DlgText             "NameDiffers",      " *Name in source: " & DOUBLE_QUOTE & SrcName$ & DOUBLE_QUOTE
                 DlgVisible          "NameDiffers",      VISIBLE
                 DlgVisible          "NameDiffersBox",   VISIBLE
             End If
             DlgVisible          "OutlineInfo",      VISIBLE
             DlgVisible          "PreviewButton",    VISIBLE
             DlgVisible          "PreviewText",      VISIBLE
-            DlgText             "RevDate",          GetField$( MacroInfo$, MACRO_INFO_REV, TabChar$ )
+            DlgText             "RevDate",          GetField$( MacroInfo$, MACRO_INFO_REV, TAB_CHAR )
             DlgVisible          "RevDate",          VISIBLE
             DlgEnable           "SaveList",         ENABLED
             DlgEnable           "SaveMacro",        ENABLED
             DlgVisible          "SelectMacro",      INVISIBLE
-            DlgText             "Shortcut",         GetField$( MacroInfo$, MACRO_INFO_KEY, TabChar$ )
+            DlgText             "Shortcut",         GetField$( MacroInfo$, MACRO_INFO_KEY, TAB_CHAR )
             DlgVisible          "Shortcut",         VISIBLE
-            If GetField$( MacroInfo$, MACRO_INFO_MATCH, TabChar$ ) <> "" Then
+            If GetField$( MacroInfo$, MACRO_INFO_MATCH, TAB_CHAR ) <> "" Then
                 MsgBox MatchWarning$, WARNING_MESSAGE, WaltsMacros$
             End If
         End If
@@ -2564,7 +2582,7 @@ Select Case Action%
 
         SelectedMacroIndex% = DlgValue( "ListOfMacros" )
         MacroInfo$          = MasterMacroArray( SelectedMacroIndex%, 0 )
-        MaxPreview$         = GetField$( MacroInfo$, MACRO_INFO_PREVIEW, TabChar$ )
+        MaxPreview$         = GetField$( MacroInfo$, MACRO_INFO_PREVIEW, TAB_CHAR )
         Header$             = LineCountReport$ & " " & FullMacroName$
 
         Begin Dialog Dialog4Definition 400, 262, WaltsMacros$
@@ -2615,8 +2633,8 @@ Select Case Action%
 End Select
 
 End Function
-'2644116358
+'2662116464
 '
 'Macro name: MacroBookInspector
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 9/26/2017 9:25:38 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:14:53 AM using "MacroBookInspector" macro by Walter F. Nickeson.

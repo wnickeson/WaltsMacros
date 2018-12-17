@@ -1,4 +1,4 @@
-'MacroName:FieldCount.2016.11
+'MacroName:FieldCount.2018.01
 'MacroDescription:Shows all fields in a record with their individual and total count, as
 ' well as the subject thesauri used in 6XX fields. Allows for filtering fields display by
 ' tag groups.
@@ -7,9 +7,9 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 6 December 2016.
+' Last updated: 14 December 2018.
 ' Check for the latest versions of this and my other macros at
-' http://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
@@ -46,38 +46,39 @@ Declare Function ValidateInput( InString$, RangeEnd% ) As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
-Global Const AUTHORITY     As Integer = 1
-Global Const BIBLIOGRAPHIC As Integer = 0
-Global Const RANGE_BEGIN   As Integer = 0
-Global Const RANGE_END     As Integer = 1
+Const AUTHORITY              As Integer = 1
+Const BIBLIOGRAPHIC          As Integer = 0
+Const RANGE_BEGIN            As Integer = 0
+Const RANGE_END              As Integer = 1
+Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9   'The Error value returned when the upper bound of an uninitialized array is requested.
 
-Global CountOfFields%
-Global ErrorMessage$
-Global FieldsExcludedFromExport$
-Global MatchPattern$
-Global SINGLE_QUOTE As String*1
-Global TypeOfRecord%
-Global WaltsMacros$
+Dim SINGLE_QUOTE As String*1
 
-Global ExportDelete
+Dim CountOfFields%
+Dim ErrorMessage$
+Dim FieldsExcludedFromExport$
+Dim MatchPattern$
+Dim TypeOfRecord%
+Dim WaltsMacros$
 
-Global AllFields () As String
-Global DelField  () As String
-Global SubjFields() As String
+Dim ExportDelete
+
+Dim AllFields () As String
+Dim DelField  () As String
+Dim SubjFields() As String
 
 '****************************************************************************************
 
 Sub Main
 
-Const CANCEL           As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
-Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
-                                        ' a big "X") in a message box; used to report the macro quitting.
-Const SPACES           As Integer = 5   'A separator to help dialog boxes look OK.
-
-Dim CS As Object
-Set CS = CreateObject("Connex.Client")
+Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                            ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL As Integer = 102 'The value returned by the dialog box statement when the "Cancel" button is clicked.
+Const SPACES               As Integer = 5   'A separator to help dialog boxes look OK.
 
 Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
+
+Dim CS As Object             : Set CS    = CreateObject("Connex.Client")
 Dim FieldCount$
 Dim FieldData$
 Dim Instances%
@@ -95,11 +96,12 @@ Dim FoundField
 Dim i As Integer, j As Integer, p As Integer
 
 SINGLE_QUOTE  = Chr$( 039 )
+
 Instructions$ = "Use " & SINGLE_QUOTE & "x" & SINGLE_QUOTE & " as a wildcard. Use a hyphen for a range of fields."
 NotExported$  = "*Fields marked with an asterisk will be deleted upon export."
 Spacer$       = Space$( SPACES )
-
 WaltsMacros$  = "[Walt's macros] MacroTools:FieldCount"
+
 ExportDelete  = FALSE
 
 ' Make sure this macro is running in a record, as opposed to a list.
@@ -115,7 +117,7 @@ Select Case TypeOfWindow%
     TypeOfRecord% = AUTHORITY
 
   Case Else
-    MsgBox "This macro only works in bibliographic or authority records!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in bibliographic or authority records!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 
 End Select
@@ -204,7 +206,7 @@ End Dialog
 Dim CountFields As Dialog1Definition
 On Error Resume Next
 Dialog CountFields
-If Err = CANCEL Then Exit Sub
+If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
 
 End Sub
 
@@ -215,7 +217,7 @@ Sub Build6XXArray( InString$ )
 ' This function builds an array of the thesauri used in the 6XX fields, as identified by
 ' the second indicator and the value in subfield $2 of each subject field.
 
-Const SPACES As Integer = 10  'A separator to help dialog boxes look OK.
+Const SPACES                 As Integer = 10  'A separator to help dialog boxes look OK.
 
 Dim CompareString$
 Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
@@ -290,7 +292,7 @@ Spacer$ = Space$( SPACES - Len( Thesaurus$ ) )
 
 On Error Resume Next
 UB6XX% = UBound( SubjFields )
-If Err = 9 Then
+If Err = SUBSCRIPT_OUT_OF_RANGE Then
     ReDim SubjFields( 0 )
     SubjFields( 0 ) = Thesaurus$ & Spacer$ & "1"
     Exit Sub
@@ -330,6 +332,8 @@ Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'The maximum number of reads of env
 Const NORMAL_FILE          As Integer = 0    'Attribute of a normal file.
 Const NORMAL_FILE_ARCHIVE  As Integer = 32   'Attribute of a normal file with archive bit set?
 
+Dim DOUBLE_QUOTE As String*1        : DOUBLE_QUOTE = Chr$( 034 )
+
 Dim AppData$
 Dim Attributes%
 Dim CountOfDelFields%
@@ -341,7 +345,6 @@ Dim LengthDeleteString%
 Dim LineRead$
 Dim LowerEnd$
 Dim OptionsXmlPath$
-Dim DOUBLE_QUOTE As String*1        : DOUBLE_QUOTE = Chr$( 034 )
 Dim Range%
 Dim Tag$
 Dim TempString$
@@ -605,7 +608,7 @@ ReShow:
       Else
         On Error Resume Next
         i = UBound( SubjFields )
-        If Err = 9 Then
+        If Err = SUBSCRIPT_OUT_OF_RANGE Then
             DlgVisible      "ListBox6XXThesauri", INVISIBLE
             DlgVisible      "ListBox6XXLegend",   INVISIBLE
         End If
@@ -765,8 +768,8 @@ KeepOpen:
 End Select
 
 End Function
-'77227896
+'79728101
 '
 'Macro name: FieldCount
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 6/28/2017 11:37:20 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:14:40 AM using "MacroBookInspector" macro by Walter F. Nickeson.

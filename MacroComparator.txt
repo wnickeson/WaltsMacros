@@ -8,7 +8,7 @@
 '
 ' Last updated: 26 May 2015.
 ' Check for the latest versions of this and my other macros at
-' http://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
 ' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
@@ -1513,8 +1513,8 @@ Select Case Action%
   End Select
 
 End Function
-'152060790
+'154260759
 '
 'Macro name: MacroComparator
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\MacroTools.mbk
-'Saved: 6/28/2017 11:37:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:14:59 AM using "MacroBookInspector" macro by Walter F. Nickeson.
