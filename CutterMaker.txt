@@ -1,4 +1,4 @@
-'MacroName:CutterMaker.2015.01
+'MacroName:CutterMaker.2018.01
 'MacroDescription:Creates a Cutter for the selected text, with options including fitting
 ' a number into a range.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 30 April 2015.
+' Last updated: 31 May 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -99,9 +99,10 @@ Dim CutterChar3%
 Dim CutterChar4%
 Dim FirstChar$
 Dim HowTo$
-Dim Quote$                   : Quote$   = Chr$( 34 )
 Dim Selection$
 Dim Text$
+
+Dim QUOTE As String*1        : QUOTE    = Chr$( 034 )
 
 Dim i As Integer
 
@@ -131,7 +132,7 @@ Text$ = Trim$( UCase$( Selection$ ) )
 i = 1
 
 Do
-  CharT$      = Mid$( Text$, i, 1 )
+  CharT$ = Mid$( Text$, i, 1 )
   CharA% = Asc( CharT$ )
   Select Case CharA%
 
@@ -399,8 +400,8 @@ Finish:
 Cutter$         = Left$( Cutter$, 4 )
 FirstCutter$    = Cutter$
 HowTo$          = "* A number in the upper range box of fewer than four digits will be padded with 9s; so e.g. entering an upper range"
-HowTo$          = HowTo$ & " of " & Quote$ & "4" & Quote$ & " will allow a Cutter of up to 4999. Enter " & Quote$ & "4000" & Quote$
-HowTo$          = HowTo$ & " to make " & Quote$ & "4" & Quote$ & " the actual upper limit."
+HowTo$          = HowTo$ & " of " & QUOTE & "4" & QUOTE & " will allow a Cutter of up to 4999. Enter " & QUOTE & "4000" & QUOTE
+HowTo$          = HowTo$ & " to make " & QUOTE & "4" & QUOTE & " the actual upper limit."
 
 Clipboard.Clear
 
@@ -1020,8 +1021,8 @@ BeginAgain:
 End Select
 
 End Function
-'104938929
+'105038919
 '
 'Macro name: CutterMaker
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/28/2017 11:27:49 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:01:19 AM using "MacroBookInspector" macro by Walter F. Nickeson.

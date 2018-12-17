@@ -1,4 +1,4 @@
-'MacroName:GetAuthority.2016.03
+'MacroName:GetAuthority.2018.01
 'MacroDescription:Gets the authorized heading (the 1XX field) from an authority record,
 ' returns to the bibliographic record, and pastes in the heading at the user's choice of
 ' tag, or a subdivision at an appropriate place in a subject heading. Also copies other
@@ -14,7 +14,7 @@
 ' 2004. My development of his code and the resulting performance of this macro are my
 ' responsibility alone.
 '
-' Last updated: 30 September 2016.
+' Last updated: 11 April 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -327,7 +327,7 @@ TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
   Case 3 To 4, 14, 18, 20
   Case Else
-    MsgBox "This macro only works in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -345,9 +345,9 @@ End If
 
 If CS.GetField( "1..", 1, FieldData$ ) Then
     AuthTag                     = Left$( FieldData$, 3 )
-    AuthorityData.HeadingType    = Mid$( FieldData$, 2, 2 )
-    AuthorityData.Indicators     = Mid$( FieldData$, 4, 2 )
-    AuthorityData.CopiedHeading  = Mid$( FieldData$, 6 )
+    AuthorityData.HeadingType   = Mid$( FieldData$, 2, 2 )
+    AuthorityData.Indicators    = Mid$( FieldData$, 4, 2 )
+    AuthorityData.CopiedHeading = Mid$( FieldData$, 6 )
 
 ' If the established heading is a genre term, grab the "thesaurus convention" from
 ' subfield $f in the 040 field, if possible, in order to correctly code the field when
@@ -1334,12 +1334,13 @@ If AddOrReplace = REPLACE Then
             PushButton1Text$       = "&" & TAG_GROUP_SUBJECT & AuthorityData.HeadingType
             PushButton2Text$       = "&" & TAG_GROUP_ADDED_ENTRY & AuthorityData.HeadingType
             IdenticalHeadings      = FALSE
+            ActionPrompt$          = "Add copied heading as ..."
           Else
             PushButtonsVisible%    = 1
             If AllAdditions% = 1 Then
-                PushButton1Text$       = "&Add selected addition"
+                PushButton1Text$ = "&Add selected addition"
               Else
-                PushButton1Text$       = "&Add selected additions"
+                PushButton1Text$ = "&Add selected additions"
             End If
             NoteIdenticalHeadings$ = "The copied heading is the same as this " & BibTag & " field."
             ActionPrompt$          = "Add other information to record?"
@@ -1501,6 +1502,11 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
         End If
 
       Case ADD
+        If BibTag = "240" Then
+            AddOrReplace = ADD
+            Insert240 = FALSE
+            GoTo NewField:
+        End If
         If IdenticalHeadings Then GoTo Additions:
         AddOrReplace         = ADD
         AddInitialSubfields  = FALSE
@@ -2214,7 +2220,7 @@ Do
       TempString$ = Left$( TempString$, i - 1 ) & "i" & Mid$( TempString$, i + 1 )
 
     Case 167, 174, 176
-      TempString$ = Left$( TempString$, i - 1 ) & Chr$( 39 ) & Mid$( TempString$, i + 1 )
+      TempString$ = Left$( TempString$, i - 1 ) & Chr$( 039 ) & Mid$( TempString$, i + 1 )
 
   End Select
 
@@ -3132,8 +3138,8 @@ Select Case Action%
 End Select
 
 End Function
-'3161133480
+'3167133674
 '
 'Macro name: GetAuthority
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/28/2017 11:28:15 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:01:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.

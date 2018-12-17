@@ -1,4 +1,4 @@
-'MacroName:CopyToVoyager.2015.01
+'MacroName:CopyToVoyager.2018.01
 'MacroDescription:Fixes the delimiter and some other character issues when copying text
 ' from a Connexion record to Voyager.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 18 April 2015.
+' Last updated: 21 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -46,7 +46,6 @@ Set CS = CreateObject("Connex.Client")
 Dim Col%
 Dim Copied$
 Dim CurrentField$
-Dim Delimiter$               : Delimiter$   = Chr$( 135 )
 Dim Row%
 Dim SelectedText$
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:CopyToVoyager"
@@ -65,14 +64,12 @@ Selection = CS.GetSelectedText( SelectedText$ )
 Col% = CS.CursorColumn
 Row% = CS.CursorRow
 
-If Selection = TRUE Then
+If Selection Then
     If Col% < 6 Then
         Selection = FALSE
+      Else
+        Copied$ = Trim$( SelectedText$ )
     End If
-End If
-
-If Selection = TRUE Then
-    Copied$ = Trim$( SelectedText$ )
   Else
     If CS.GetFieldLine( Row%, CurrentField$ ) Then Copied$ = CurrentField$
     Copied$ = Mid$( Copied$, 6 )
@@ -92,7 +89,9 @@ Clipboard.Clear
 Clipboard.SetText( Copied$ )
 
 End Sub
+
 '****************************************************************************************
+
 Function Convert1252( InputString$ ) As String
 
 ' This function converts the MARC21 string to Windows-1252 for pasting into Voyager.
@@ -335,8 +334,8 @@ Next i
 Convert1252 = TempString$
 
 End Function
-'36413449
+'36313368
 '
 'Macro name: CopyToVoyager
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/28/2017 11:27:44 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:01:13 AM using "MacroBookInspector" macro by Walter F. Nickeson.

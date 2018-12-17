@@ -1,4 +1,4 @@
-'MacroName:KeywordSearchHelper.2017.25
+'MacroName:KeywordSearchHelper.2018.11
 'MacroDescription:Helps construct a keyword search, including using a displayed
 ' record as a basis for the search terms.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 27 September 2017.
+' Last updated: 18 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -17,13 +17,13 @@
 '***************************************************************************************#
 ' How it works: Use this macro to help construct a keyword search. Run the macro to
 ' display a form that contains text boxes in which to enter search terms, drop-down lists
-' for selecting index labels by which to search those terms, and various ways to qualify
-' the search. Enter data and select appropriate labels and qualifiers, and the macro
-' formats this information to construct and send a keyword search. This macro differs
-' from the standard OCLC "Search WorldCat" search box in that it offers more than three
-' text boxes in which to enter data, and the macro's text boxes are designed to search
-' for data in specific parts of a bibliographic record, so the search is more like a
-' guided or advanced search than what the Client offers.
+' from which to select index labels by which to search those terms, and various ways to
+' qualify the search. Enter data and select appropriate labels and qualifiers, and the
+' macro formats this information to construct and send a keyword search. This macro
+' differs from the standard OCLC "Search WorldCat" search box in that it offers more than
+' three text boxes in which to enter data, and the macro's text boxes are designed to
+' search for data in specific parts of a bibliographic record, so the search is more like
+' a guided or advanced search than what the Client offers.
 '
 ' The macro also differs from the OCLC search box in that it is able to use an existing
 ' record as the source of search data. If the macro is run with a bibliographic record
@@ -35,6 +35,11 @@
 ' and/or title heading (that is, the authorized access point) appearing. Of course, such
 ' a heading must almost always be added to, or qualified, to construct a meaningful
 ' search.
+'
+' If the user has sufficient permissions, the macro can save the previous seven searches.
+' If available, each saved search is presented as a single string of terms connected by
+' Boolean operators, and may be modified directly or with information in the text boxes,
+' if a record is displayed. See below for details.
 '
 ' If a bibliographic record is used as a basis for the search, that record must contain
 ' only Latin script characters. The presence of an 066 field will prevent the macro from
@@ -74,9 +79,9 @@
 '
 ' For all extracted information, diacritics are removed and some special characters
 ' substituted for nice display. Delimiters and subfield codes are displayed but ignored
-' when the search is executed; they are shown chiefly to help avoid combining two or more
-' subfields in a simple phrase search (although a phrase search on the 245 field always
-' includes both subfields $a and $b).
+' when the search is executed; they are shown chiefly to help avoid you combining two or
+' more subfields in a simple phrase search (although a phrase search on the 245 field
+' always includes both subfields $a and $b).
 '
 ' The text or combo boxes initially contain complete subfields from the bibliographic
 ' record (that is, the indexed subfields, as determined by the tag and the default search
@@ -193,23 +198,53 @@
 ' and refinement of the search. The submitted search string is also placed on the Windows
 ' Clipboard, and so may be copied into the standard Connexion search box for editing to
 ' construct a search with greater flexibility and control than that offered by this
-' macro. To always view the search string before it's sent, edit the code on lines 2693-
-' 2695 below, removing the comment character.
+' macro. To always view the search string before it's sent, change the global variable
+' VIEW_SEARCH_BEFORE_SENDING on line 227 below.
+'
+' Please also note when running the macro from an authority record for a name, the macro
+' executes a whole phrase search using the name. Bibliographic records that contain a
+' different form of the name, such as records from non-English speaking institutions,
+' won't be retrieved.
 '
 ' Complete documentation on keyword searching, including what fields are included in
 ' which indexes, and treatment of special characters, is available online at
 ' <http://www.oclc.org/support/help/SearchingWorldCatIndexes/Default.htm>.
+'
+' If the macro has permission to write to the user's "My Profile" folder (typically in
+' "[user's profile path]\OCLC\Connex\Profiles\", the last seven searches are stored, to
+' simplify re-execution of a previous search. They are retrieved in a combo box so they
+' can be edited before sending, either directly in the combo box, or by adding terms from
+' one of the text or combo boxes above in the main section of the dialog box. Selecting a
+' previous search clears those text boxes, but information from the displayed record (if
+' one is displayed) is still available to be added; or data can be entered directly in
+' the text boxes. The actual number of saved searches can be changed by editing the value
+' of the variable MAX_SAVED_SEARCHES on line 223, below.
 '****************************************************************************************
+
+'###### EDIT THESE VARIABLES TO CHANGE THE MACRO'S BEHAVIOR #############################
+
+'The maximum number of searches to save (if saving searches is possible):
+
+Global Const MAX_SAVED_SEARCHES         As Integer = 7
+
+'Whether to display the search string before sending it (TRUE shows it, FALSE does not):
+
+Global Const VIEW_SEARCH_BEFORE_SENDING As Variant = FALSE
+
+'########################################################################################
 
 Option Compare Text
 Option Explicit
 
 Declare Sub FillArrays
-Declare Sub GetInstitutionCode
+Declare Sub GetInstitutionCode( FilePath$ )
+Declare Sub GetSavedSearches( FilePath$ )
 Declare Sub Help
+Declare Sub SaveSearch( InString$ )
 Declare Sub SetQualifiers
 
 Declare Function CheckParens      ( InString$ )                        As String
+Declare Function GetAppDataPath
 Declare Function GetIndexLabel    ( InString$ )                        As String
 Declare Function MakeSearchElement( InString1$, InString2$, InValue% ) As String
 Declare Function Normalize        ( InString$, Tag$ )                  As String
@@ -217,10 +252,13 @@ Declare Function StripDollarSigns ( InString$ )                        As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SV& )
 
-Global Const DISABLED  As Integer = 0  'The value to make a dialog box control disabled.
-Global Const ENABLED   As Integer = 1  'The value to make a dialog box control enabled.
-Global Const INVISIBLE As Integer = 0  'The value to make a dialog box control invisible.
-Global Const UNCHECKED As Integer = 0  'The value of a checkbox when it is not checked.
+Global Const DISABLED               As Integer = 0   'The value to make a dialog box control disabled.
+Global Const ENABLED                As Integer = 1   'The value to make a dialog box control enabled.
+Global Const UNCHECKED              As Integer = 0   'The value of a checkbox when it is not checked.
+
+Global Const NORMAL_FILE            As Integer = 0   'Attribute of a normal file.
+Global Const NORMAL_FILE_ARCHIVE    As Integer = 32  'Attribute of a normal file with archive bit set?
+Global Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9   'The Error value returned when the upper bound of an uninitialized array is requested.
 
 ' Names for some dialog box checkbox controls:
 
@@ -230,60 +268,61 @@ Global Const SERIES_checkbox  As Integer = 23
 Global Const SUBJECT_checkbox As Integer = 20
 Global Const TITLE_checkbox   As Integer = 2
 
+Global DELIMITER As String*1
+Global QUOTE     As String*1
+
+Global CS As Object
+
+Global AppDataPath$
 Global CatalogingAgency$
 Global CatLang$
-Global CS As Object
 Global Ctry$
 Global DateString$
-Global DELIMITER As String*1
 Global Desc$
 Global InstitutionCode$
 Global Lang$
 Global NameCount%
 Global NotesCount%
-Global PreviousNamesSelection%
-Global PreviousNamesTag$
-Global PreviousNotesTag$
-Global PreviousSeriesTag$
-Global PreviousSubjectsTag$
-Global PreviousTitlesSelection%
-Global PreviousTitlesTag$
-Global QUOTE     As String*1
-Global SearchString$
+Global SavedSearchesFile$
 Global SeriesCount%
 Global SubjectCount%
 Global TitleCount%
 Global TypeOfRecord%
 Global WaltsMacros$
 
-Global AuthorityRecord
-Global BlankSlate
+Global AuthorityRecordDisplayed
 Global Internets
 Global Microform
 Global NamesComboBoxChange
-Global NotesComboBoxChange
+Global NoRecordDisplayed
 Global NotSearchable
+Global NotesComboBoxChange
+Global NumberedSeries
+Global SavedSearchesFileExists
 Global SeriesComboBoxChange
+Global SeriesHeading
 Global SubjectsComboBoxChange
 Global TitlesComboBoxChange
 
 Global DescriptionFields( 2 ) As String
 Global NameLabels       ( 9 ) As String
-Global NamesDisplay      ()   As String
-Global NamesRaw          ()   As String
-Global NotesDisplay      ()   As String
-Global NotesRaw          ()   As String
 Global PlaceLabels      ( 1 ) As String
 Global PublisherLabels  ( 2 ) As String
-Global SeriesDisplay     ()   As String
-Global SeriesLabels     ( 5 ) As String
-Global SeriesRaw         ()   As String
+Global SeriesLabels     ( 6 ) As String
 Global SubjectLabels    ( 9 ) As String
-Global SubjectsDisplay   ()   As String
-Global SubjectsRaw       ()   As String
 Global TitleLabels      ( 6 ) As String
-Global TitlesDisplay     ()   As String
-Global TitlesRaw         ()   As String
+
+Global NamesDisplay     ()    As String
+Global NamesRaw         ()    As String
+Global NotesDisplay     ()    As String
+Global NotesRaw         ()    As String
+Global SavedSearches    ()    As String
+Global SeriesDisplay    ()    As String
+Global SeriesRaw        ()    As String
+Global SubjectsDisplay  ()    As String
+Global SubjectsRaw      ()    As String
+Global TitlesDisplay    ()    As String
+Global TitlesRaw        ()    As String
 
 '****************************************************************************************
 
@@ -321,8 +360,11 @@ Dim TitleString$
 Dim TranscribingAgency$
 Dim TypeOfWindow%
 
-Dim ChangedFFView            : ChangedFFView    = FALSE
-Dim DuplicateHeading         : DuplicateHeading = FALSE
+Dim FILL_CHAR As String*1        : FILL_CHAR                    = Chr$( 252 )
+
+Dim BibliographicRecordDisplayed : BibliographicRecordDisplayed = FALSE
+Dim ChangedFFView                : ChangedFFView                = FALSE
+Dim DuplicateHeading             : DuplicateHeading             = FALSE
 Dim FoundField
 
 Dim i As Integer, p As Integer, q As Integer
@@ -330,39 +372,49 @@ Dim i As Integer, p As Integer, q As Integer
 Dim CountryPub   ( 1 )  As String
 Dim DescCon      ( 20 ) As String
 Dim Formats      ( 8 )  As String
-Dim Holdings      ()    As String
 Dim Inclusion    ( 2 )  As String
 Dim LangOfCatalog( 20 ) As String
 Dim Language     ( 20 ) As String
 Dim NotesLabels  ( 1 )  As String
-Dim Source        ()    As String
 
-NamesLabels$           = "&Names (100-111, 700-711, 245 statement of responsibility)"
-SearchAsSubfieldA$     = "No indexed subfields for this search label. Field will be treated as a single subfield $a."
-TabInstructions$       = "Press the [TAB] key or click with the mouse after making changes in the numbered boxes, or to qualifiers, to ensure the changes are applied."
-TitleLabel$            = "&Titles (245 excluding subfield $c, 700-711 subfield $t, 130, 240, 700-740)"
+Dim Holdings     ()     As String
+Dim Source       ()     As String
 
-AuthorityRecord        = FALSE
-BlankSlate             = FALSE
-DELIMITER              = Chr$( 223 )
-InstitutionCode$       = ""
-Internets              = FALSE
-Microform              = FALSE
-NamesComboBoxChange    = FALSE
-NotesComboBoxChange    = FALSE
-NotSearchable          = FALSE
-QUOTE                  = Chr$( 034 )
-SeriesComboBoxChange   = FALSE
-SubjectsComboBoxChange = FALSE
-TitlesComboBoxChange   = FALSE
-WaltsMacros$           = "[Walt's macros] Extras1:KeywordSearchHelper"
+NamesLabels$             = "&Names (100-111, 700-711, 245 statement of responsibility)"
+SearchAsSubfieldA$       = "No indexed subfields for this search label. Field will be treated as a single subfield $a."
+TabInstructions$         = "Press the [TAB] key or click with the mouse after making changes in the numbered boxes, or to qualifiers, to ensure the changes are applied."
+TitleLabel$              = "&Titles (245 excluding subfield $c, 700-711 subfield $t, 130, 240, 700-740)"
 
-' To begin with, check to see if a bibliographic record is displayed. If one is
-' displayed, determine if it contains non-Latin script characters. If it does, the macro
-' can't proceed. Otherwise, the macro continues by extracting information from it. If an
-' authority record is displayed, the only information to be extracted is the established
-' heading, if it is a name, title, or subject; if it is something else, the macro quits.
-' If no record is displayed, the next thing the macro does is show the dialog box.
+AuthorityRecordDisplayed = FALSE
+DELIMITER                = Chr$( 223 )
+InstitutionCode$         = ""
+Internets                = FALSE
+Microform                = FALSE
+NamesComboBoxChange      = FALSE
+NoRecordDisplayed        = FALSE
+NotesComboBoxChange      = FALSE
+NotSearchable            = FALSE
+QUOTE                    = Chr$( 034 )
+SeriesComboBoxChange     = FALSE
+SubjectsComboBoxChange   = FALSE
+TitlesComboBoxChange     = FALSE
+WaltsMacros$             = "[Walt's macros] Essentials:KeywordSearchHelper"
+
+' To begin with, check that you are online--otherwise, running the macro is pointless!
+
+If CS.IsOnline = FALSE Then
+    MsgBox "Please log on before running this macro!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' The next check is to see if what's on the screen. If a bibliographic record is
+' displayed, determine if it contains non-Latin script characters; if it does (indicated
+' by the presence of an 066 field), the macro can't proceed. Otherwise, the macro
+' continues by extracting information from the record. If an authority record is
+' displayed, the only information to be extracted is the established heading, if it is a
+' name, title, or subject; if it is something else, the macro quits. If no record is
+' displayed, the next thing the macro does is show the dialog box--there is no
+' information to extract.
 
 TypeOfWindow% = CS.ItemType
 
@@ -373,20 +425,21 @@ Select Case TypeOfWindow%
     If CS.GetField( "066", 1, FieldData$ ) Then
         MsgBox "Sorry, the macro can't derive keywords from this record because it contains non-Latin script.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
+      Else
+        BibliographicRecordDisplayed = TRUE
     End If
 
   Case 3 To 4, 18, 20
 
-    AuthorityRecord = TRUE
+    AuthorityRecordDisplayed         = TRUE
 
   Case Else
 
-    BlankSlate      = TRUE
+    NoRecordDisplayed                = TRUE
 
 End Select
 
-' If a suitable record is displayed, continue by filling (or starting to fill) the
-' arrays, starting with the globals.
+' Continue by filling (or starting to fill) the arrays, starting with the globals.
 
 FillArrays
 
@@ -476,9 +529,14 @@ NotesLabels( 0 )    = "Word (nt:)"
 NotesLabels( 1 )    = "Keyword (kw:)"
 
 ' Attempt to get the user's institution code. If it's available, add it to the qualifier
-' box list to limit searches to items held (or not held) by that institution.
+' box list to limit searches to items held (or not held) by that institution. At the same
+' time, attempt to retrieve the list of previous searches.
 
-GetInstitutionCode
+AppDataPath$ = GetAppDataPath
+If AppDataPath$ <> "" Then
+    Call GetInstitutionCode( AppDataPath$ )
+    Call GetSavedSearches  ( AppDataPath$ )
+End If
 
 If InstitutionCode$ <> "" Then
     ReDim Holdings( 2 )
@@ -490,11 +548,11 @@ If InstitutionCode$ <> "" Then
     Holdings( 0 ) = "Any"
 End If
 
-If BlankSlate = FALSE Or AuthorityRecord Then
+If BibliographicRecordDisplayed Then
 
-' If a bibliographic record is not displayed, then there is no information to add to the
-' search box. But if one is, start the process of analyzing it by getting information
-' from the fixed field, which may be used to qualify the search. Begin with the date(s).
+' If a bibliographic record is displayed, start the process of analyzing it by getting
+' information from the fixed field, which may be used to qualify the search. Begin with
+' the date(s).
 
     PosFF% = CS.FixedFieldPosition
     If PosFF% <> DISPLAY_FF_AT_TOP Then
@@ -549,7 +607,7 @@ If BlankSlate = FALSE Or AuthorityRecord Then
 
     Do
       p = InStr( TempString$, "u" )
-      If p <> 0 Then
+      If p > 0 Then
           TempString$ = Left$( TempString$, p - 1 ) & "?" & Mid$( TempString$, p + 1 )
       End If
     Loop Until p = 0
@@ -598,20 +656,28 @@ If BlankSlate = FALSE Or AuthorityRecord Then
 ' Set the default format qualifier. The numbers are the index of the array "Formats."
 
     Select Case RecType$
+
       Case "a", "t"
         TypeOfRecord% = 1
+
       Case "c", "d"
         TypeOfRecord% = 6
+
       Case "e", "f"
         TypeOfRecord% = 4
+
       Case "g", "k", "o", "r"
         TypeOfRecord% = 8
+
       Case "i", "j"
         TypeOfRecord% = 7
+
       Case "m"
         TypeOfRecord% = 2
+
       Case "p"
         TypeOfRecord% = 5
+
     End Select
 
 ' A serial type overrides other material types.
@@ -631,15 +697,15 @@ If BlankSlate = FALSE Or AuthorityRecord Then
 
     If CS.GetField( "040", 1, FieldData$ ) Then
         p = InStr( FieldData$, DELIMITER )
-        If p <> 0 Then
+        If p > 0 Then
             CatalogingAgency$ = Trim$( Mid$( FieldData$, 6, p - 6 ) )
           Else
             CatalogingAgency$ = Trim$( FieldData$ )
         End If
         p = InStr( FieldData$, DELIMITER & "c" )
-        If p <> 0 Then
+        If p > 0 Then
             q = InStr( p + 1, FieldData$, DELIMITER )
-            If q <> 0 Then
+            If q > 0 Then
                 TranscribingAgency$ = Trim$( Mid$( FieldData$, p + 3, q - p - 3 ) )
               Else
                 TranscribingAgency$ = Trim$( Mid$( FieldData$, p + 3 ) )
@@ -647,16 +713,16 @@ If BlankSlate = FALSE Or AuthorityRecord Then
         End If
 
         p = InStr( FieldData$, DELIMITER & "b" )
-        If p <> 0 Then
+        If p > 0 Then
             CatLang$ = Mid$( FieldData$, p + 3, 3 )
           Else
             CatLang$ = "eng"
         End If
 
         p = InStr( FieldData$, DELIMITER & "e" )
-        If p <> 0 Then
+        If p > 0 Then
             q = InStr( p + 1, FieldData$, DELIMITER )
-            If q <> 0 Then
+            If q > 0 Then
                 Desc$ = Trim$( Mid$( FieldData$, p + 3, q - p - 3 ) )
               Else
                 Desc$ = Trim$( Mid$( FieldData$, p + 3 ) )
@@ -674,9 +740,9 @@ If BlankSlate = FALSE Or AuthorityRecord Then
 
 ' For the record source, the choices offered in the drop-down list are no qualifier,
 ' Library of Congress and co-operative cataloging programs, the cataloging and
-' inputting agencies, if not LC, and the user's institution code, if available. Codes for
-' the cataloging and inputting agencies come from the 040 field; LC and associated codes
-' are supplied gratis, and the institution code comes from one of the Profile files.
+' inputting agencies (if not LC), and the user's institution code, if available. Codes
+' for the cataloging and inputting agencies come from the 040 field; the institution code
+' comes from the file "UserLogonInfo.xml" in the "MyProfile" folder.
 
     ReDim Source( 1 )
     Source( 0 ) = "Any"
@@ -696,9 +762,40 @@ If BlankSlate = FALSE Or AuthorityRecord Then
         ReDim Preserve Source( q + 1 )
         Source( q + 1 ) = InstitutionCode$
     End If
+
+' If an authority record is displayed, the heading's status as a series must be known.
+' Uniform titles and series titles are searched differently. Whether or not a series is
+' numbered also affects searching. Consider a series to be either numbered or not, so a
+' series whose numbering varies counts as numbered, as does a series whose numbering
+' characteristic has not been coded. Get this information from the fixed field.
+
+  ElseIf AuthorityRecordDisplayed Then
+
+    PosFF% = CS.FixedFieldPosition
+    If PosFF% <> DISPLAY_FF_AT_TOP Then
+        CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+        ChangedFFView         = TRUE
+    End If
+    If CS.GetFixedField( "Ser use", FFData$ ) Then
+        If FFData$ = "a" Then
+            SeriesHeading = TRUE
+          Else
+            SeriesHeading = FALSE
+        End If
+    End If
+    If CS.GetFixedField( "Ser num", FFData$ ) Then
+        Select Case FFData$
+          Case "a", "c", FILL_CHAR
+            NumberedSeries = TRUE
+          Case "b", "n"
+            NumberedSeries = FALSE
+        End Select
+    End If
+    If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
 End If
 
-If BlankSlate = FALSE Then
+If BibliographicRecordDisplayed Or AuthorityRecordDisplayed Then
 
 ' If extracting information from a record, get information from the record's indexed
 ' fields (for a bibliographic record, that is fields 100 to 830; for an authority record,
@@ -707,8 +804,9 @@ If BlankSlate = FALSE Then
 ' Note which headings are controlled; they trigger a whole phrase search (the entire
 ' heading, across all indexed subfields). For all but the description fields, data is
 ' stored in parallel arrays: One with the raw field data, the other with the data
-' transformed for proper display. Also with the heading fields, test each new heading to
-' avoid adding duplicates.
+' transformed for proper display. Compare headings to avoid adding duplicates (as could
+' happen if a record contained both a 100 field and the same name in a 700 author/title
+' field).
 
     Row% = 1
 
@@ -732,11 +830,12 @@ If BlankSlate = FALSE Then
 ' For the 245 field, copy subfield $c to put in the Names arrays.
 
                 Case "245"
+
                   FilingIndicator% = Val( Indicator2$ )
-                  TempString$ = Tag$ & DELIMITER & "a " & Mid$( FieldData$, FilingIndicator% + 3 )
+                  TempString$      = Tag$ & DELIMITER & "a " & Mid$( FieldData$, FilingIndicator% + 3 )
                   p = InStr( TempString$, DELIMITER & "c" )
-                  If p <> 0 Then
-                      SORString$   = Trim$( Mid$( TempString$, p ) )
+                  If p > 0 Then
+                      SORString$ = Trim$( Mid$( TempString$, p ) )
                   End If
                   DisplayString$ = MakeSearchElement( TempString$, "", TITLE_checkbox )
                   If DisplayString$ <> "" Then
@@ -752,6 +851,7 @@ If BlankSlate = FALSE Then
 ' the other to extract information about the publisher, etc.
 
                 Case "260", "264"
+
                   Tag$        = "260"
                   TempString$ = DescriptionFields( 0 )
                   If TempString$ = "" Then
@@ -765,6 +865,7 @@ If BlankSlate = FALSE Then
 ' The whole 300 field is captured even though only subfield $a is indexed.
 
                 Case "300"
+
                   TempString$ = FieldData$
                   DescriptionFields( 2 ) = Tag$ & TempString$
 
@@ -772,6 +873,7 @@ If BlankSlate = FALSE Then
 
                 Case "500", "501", "502", "504", "505", "506", "508", "511", "518", "520", _
                      "521", "530", "533", "534", "536", "538", "545", "546", "550", "586"
+
                   TempString$    = Tag$ & FieldData$
                   DisplayString$ = MakeSearchElement( TempString$, "", NOTE_checkbox )
                   If DisplayString$ <> "" Then
@@ -783,23 +885,26 @@ If BlankSlate = FALSE Then
                   End If
 
 ' Name heading fields: Remove title and associated subfields, and add them to the titles
-' arrays. Because a name/title heading is considered controlled even if the title portion
-' is not, all removed title strings must be flagged as uncontrolled--except that title
-' portions of name headings in authority records are controlled, and will be searched as
-' uniform titles (unless the search label is changed in the dialog box). After the
-' heading field has been found in an authority record, exit the Do Loop, because in that
-' case there are no other fields from which to take information.
+' arrays. Because a name/title heading in a bibliographic record is considered controlled
+' even if the title portion is not, all removed title strings must be flagged as
+' uncontrolled--except that title portions of name headings in authority records are
+' controlled, and will be searched either as uniform titles or as series, depending on
+' the value in the fixed field element "Ser use." After the heading field has been found
+' in an authority record, exit the Do Loop, because in that case there are no other
+' fields from which to take information.
 
                 Case "100", "110", "111", "700", "710", "711", "720", "770", "773", "780", "785", "787"
+
                   TempString$ = Tag$ & FieldData$
                   p           = InStr( TempString$, DELIMITER & "t" )
-                  If p <> 0 Then
-                      If AuthorityRecord Then
-                          TitleString$ = "130" & Mid$( TempString$, p )
+                  If p > 0 Then
+                      If SeriesHeading Then
+                          Tag$ = Trim$( Str$( Val( Tag$ ) + 700 ) )
+                          GoTo ThisIsSeries:
                         Else
-                          TitleString$ = Tag$ & Mid$( TempString$, p )
+                          TitleString$ = "130" & Mid$( TempString$, p )
+                          NameString$  = Trim$( Left$( TempString$, p - 1 ) )
                       End If
-                      NameString$  = Trim$( Left$( TempString$, p - 1 ) )
                     Else
                       NameString$ = TempString$
                   End If
@@ -834,11 +939,20 @@ If BlankSlate = FALSE Then
                           TitleCount%                  = TitleCount% + 1
                       End If
                   End If
-                  If AuthorityRecord Then Exit Do
+                  If AuthorityRecordDisplayed Then Exit Do
+
+' If a uniform title is coded as being appropriate for series use, pretend it's an 830
+' field and treat it as a series, rather than as a uniform title.
 
                 Case "130", "240", "730", "740"
-                  If CS.IsHeadingControlled ( Row% ) Then
-                      FieldData$ = FieldData$ & "%"
+
+                  If SeriesHeading Then
+                      Tag$ = "830"
+                      GoTo ThisIsSeries:
+                    Else
+                      If CS.IsHeadingControlled ( Row% ) Then
+                          FieldData$ = FieldData$ & "%"
+                      End If
                   End If
                   TempString$    = "130" & FieldData$
                   DisplayString$ = MakeSearchElement( TempString$, "", TITLE_checkbox )
@@ -859,9 +973,10 @@ If BlankSlate = FALSE Then
                           TitleCount%                  = TitleCount% + 1
                       End If
                   End If
-                  If AuthorityRecord Then Exit Do
+                  If AuthorityRecordDisplayed Then Exit Do
 
                 Case "150", "151", "600", "610", "611", "630", "650", "651"
+
                   If CS.IsHeadingControlled ( Row% ) Then
                       FieldData$ = FieldData$ & "%"
                   End If
@@ -884,11 +999,17 @@ If BlankSlate = FALSE Then
                           SubjectCount%                    = SubjectCount% + 1
                       End If
                   End If
-                  If AuthorityRecord Then Exit Do
+                  If AuthorityRecordDisplayed Then Exit Do
 
                 Case "490", "800", "810", "811", "830"
+
+' Include headings from authority records that are coded as being appropriate for use as
+' a series added entry.
+
+ThisIsSeries:
+
                   TempString$ = Tag$ & FieldData$
-                  If CS.IsHeadingControlled ( Row% ) Then
+                  If CS.IsHeadingControlled( Row% ) Or SeriesHeading Then
                         Controlled$ = "%"
                       Else
                         Controlled$ = ""
@@ -953,8 +1074,9 @@ If BlankSlate = FALSE Then
 
     CS.CursorRow = StartRow%
 
-  Else
+End If
 
+If AuthorityRecordDisplayed Or NoRecordDisplayed Then
     ReDim Source( 1 )
     Source( 0 ) = "Any"
     Source( 1 ) = "DLC"
@@ -962,14 +1084,13 @@ If BlankSlate = FALSE Then
         ReDim Preserve Source( 2 )
         Source( 2 ) = InstitutionCode$
     End If
-
 End If
 
 ' Finally, run the dialog box where it all comes together.
 
-Begin Dialog Dialog1Definition  468, 394, WaltsMacros$, .Dialog1ControlFunction                       'ID
-  OKButton      344, 368,  52,  14                                                                    '0
-  CancelButton  404, 368,  52,  14                                                                    '1
+Begin Dialog Dialog1Definition  468, 436, WaltsMacros$, .Dialog1ControlFunction                       'ID Const
+  OKButton      344, 412,  52,  14                                                                    '0
+  CancelButton  404, 412,  52,  14                                                                    '1
   CheckBox       12,  20, 320,  12, "Titles",                             .Titles_CheckBox            '2  TITLE_checkbox
   DropListBox    26,  34, 136, 144, TitleLabels(),                        .Titles_Labels_ListBox      '3  TITLE_listbox
   DropComboBox  168,  34, 288, 144, TitlesDisplay(),                      .Titles_TextBox             '4  TITLE_combobox
@@ -995,7 +1116,7 @@ Begin Dialog Dialog1Definition  468, 394, WaltsMacros$, .Dialog1ControlFunction 
   DropListBox    26, 226, 136, 144, SeriesLabels(),                       .Series_Labels_ListBox      '24 SERIES_listbox
   DropComboBox  168, 226, 288,  96, SeriesDisplay(),                      .Series_TextBox             '25 SERIES_combobox
   Text          100, 260,  48,   8, "&Format:"                                                        '26
-  DropListBox   126, 258,  84,  88, Formats(),                            .Format_DropListBox         '27 FORMAT_LIST
+  DropListBox   126, 258,  84,  88, Formats(),                            .Format_DropListBox         '27 FORMAT_listbox
   Text          172, 276,  40,   8, "microforms",                         .MicroformsInclusion        '28
   DropListBox   126, 275,  44,  48, Inclusion(),                          .Microforms                 '29
   Text          172, 294,  40,   8, "Internet",                           .InternetInclusion          '30
@@ -1008,36 +1129,41 @@ Begin Dialog Dialog1Definition  468, 394, WaltsMacros$, .Dialog1ControlFunction 
   DropComboBox  390, 278,  56, 144, Source(),                             .Source_DropComboBox        '37 SOURCE_combobox
   DropComboBox  390, 298,  56, 144, DescCon(),                            .DescCon_DropComboBox       '38 DESC_CON_combobox
   DropComboBox  390, 318,  56,  40, Holdings(),                           .Holdings_DropComboBox      '39 HOLDINGS_combobox
-  PushButton     12, 250,  72,  28, "",                                   .ControlQualifiers          '40 QUALIFIER_BUTTON
-  PushButton     12, 342,  72,  16, "&?",                                 .Help                       '41 HELP_BUTTON
-  Pushbutton     12, 320,  72,  16, "&Reset",                             .Reset                      '42 RESET_BUTTON
-  Text          230, 260,  40,   8, "*&Language:"                                                     '43
-  Text          238, 280,  32,   8, "*Countr&y:"                                                      '44
-  Text          338, 256,  40,   8, "**&Cataloging"                                                   '45
-  Text          354, 264,  36,   8, "language:"                                                       '46
-  Text          338, 276,  40,   8, "**Cataloging"                                                    '47
-  Text          362, 284,  28,   8, "so&urce:"                                                        '48
-  Text          338, 296,  44,   8, "**Description"                                                   '49
-  Text          344, 304,  40,   8, "con&ventions:"                                                   '50
-  Text          338, 316,  48,   8, "**Limit search"                                                  '51
-  Text          342, 324,  48,   8, "to holdings in:"                                                 '52
-  Text          230, 295,  80,   8, "*Words or codes may be"                                          '53
-  Text          234, 303,  88,   8, "used with these qualifiers."                                     '54
-  Text          338, 336, 108,   8, "**The prefix " & QUOTE & "not" & QUOTE & " may be added"         '55
-  Text          366, 344,  64,   8, "to these qualifiers."                                            '56
-  Text           10,   6, 444,   8, TabInstructions$                                                  '57
-  Text          450,  24,   8,   8, "1"                                                               '58
-  Text          450,  56,   8,   8, "2"                                                               '59
-  Text          266,  88,   8,   8, "3"                                                               '60
-  Text          266, 120,   8,   8, "4"                                                               '61
-  Text          450, 104,   8,   8, "5"                                                               '62
-  Text          450, 152,   8,   8, "6"                                                               '63
-  Text          450, 184,   8,   8, "7"                                                               '64
-  Text          450, 216,   8,   8, "8"                                                               '65
-  Text          168,  52, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Names        '66
-  Text          168, 180, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Subjects     '67
-  Text          168, 212, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Series       '68
-  GroupBox       92, 246, 364, 113, ""                                                                '69
+  PushButton     12, 250,  72,  28, "",                                   .ControlQualifiers          '40 QUALIFIER_button
+  PushButton     12, 342,  72,  16, "&?",                                 .Help_Button                '41 HELP_button
+  PushButton     12, 320,  72,  16, "&Reset",                             .Reset_Button               '42 RESET_button
+  PushButton    334, 379,  52,  14, "Clear entry",                        .PrevSrchClear_Button       '43 PREV_SRCH_CLEAR_button
+  PushButton    394, 379,  52,  14, "Delete entry",                       .PrevSrchDelete_Button      '44 PREV_SRCH_DELETE_button
+  DropComboBox   22, 380, 304,  88, SavedSearches(),                      .PrevSrch_DropComboBox      '45 PREV_SEARCH_combobox
+  Text          230, 260,  40,   8, "*&Language:"                                                     '46
+  Text          238, 280,  32,   8, "*Countr&y:"                                                      '47
+  Text          338, 256,  40,   8, "**&Cataloging"                                                   '48
+  Text          354, 264,  36,   8, "language:"                                                       '49
+  Text          338, 276,  40,   8, "**Cataloging"                                                    '50
+  Text          362, 284,  28,   8, "so&urce:"                                                        '51
+  Text          338, 296,  44,   8, "**Description"                                                   '52
+  Text          344, 304,  40,   8, "con&ventions:"                                                   '53
+  Text          338, 316,  48,   8, "**Limit search"                                                  '54
+  Text          342, 324,  48,   8, "to holdings in:"                                                 '55
+  Text          230, 295,  80,   8, "*Words or codes may be"                                          '56
+  Text          234, 303,  88,   8, "used with these qualifiers."                                     '57
+  Text          338, 336, 108,   8, "**The prefix " & QUOTE & "not" & QUOTE & " may be added"         '58
+  Text          366, 344,  64,   8, "to these qualifiers."                                            '59
+  Text           10,   6, 444,   8, TabInstructions$                                                  '60
+  Text          450,  24,   8,   8, "1"                                                               '61
+  Text          450,  56,   8,   8, "2"                                                               '62
+  Text          266,  88,   8,   8, "3"                                                               '63
+  Text          266, 120,   8,   8, "4"                                                               '64
+  Text          450, 104,   8,   8, "5"                                                               '65
+  Text          450, 152,   8,   8, "6"                                                               '66
+  Text          450, 184,   8,   8, "7"                                                               '67
+  Text          450, 216,   8,   8, "8"                                                               '68
+  Text          320, 371,   8,   8, "9"                                                               '69
+  Text          168,  52, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Names        '70
+  Text          168, 180, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Subjects     '71
+  Text          168, 212, 280,   8, SearchAsSubfieldA$,                   .SearchAsSubfA_Series       '72
+  GroupBox       92, 246, 364, 113, ""                                                                '73
+  GroupBox       12, 366, 444,  37, "Previous searches",                  .PrevSrch_GroupBox          '74
 End Dialog
 
 Dim Dialog1 As Dialog1Definition
@@ -1070,10 +1196,11 @@ PublisherLabels( 2 ) = "Keyword (kw:)"
 
 SeriesLabels( 0 )    = "Series word (se:)"
 SeriesLabels( 1 )    = "Series phrase (se=)"
-SeriesLabels( 2 )    = "Title word (ti:)"
-SeriesLabels( 3 )    = "Name word (au:)"
-SeriesLabels( 4 )    = "Name whole phrase (auw=)"
-SeriesLabels( 5 )    = "Keyword (kw:)"
+SeriesLabels( 2 )    = "Series whole phrase (sew=)"
+SeriesLabels( 3 )    = "Title word (ti:)"
+SeriesLabels( 4 )    = "Name word (au:)"
+SeriesLabels( 5 )    = "Name whole phrase (auw=)"
+SeriesLabels( 6 )    = "Keyword (kw:)"
 
 SubjectLabels( 0 )   = "Word (su:)"
 SubjectLabels( 1 )   = "Phrase (su=)"
@@ -1098,50 +1225,24 @@ End Sub
 
 '****************************************************************************************
 
-Sub GetInstitutionCode
+Sub GetInstitutionCode( Path$ )
 
-' The user's institution code is stored in "C:\Users\[UserName]\AppData\Roaming\OCLC\
-' Connex\Profiles\MyProfile\UserLogonInfo.xml". This code is used to qualify searches to
-' limit them to retrieve material cataloged by the user's institution or to material held
-' by the institution.
+' This sub tries to get the user's Institution Code from the file "C:\Users\[UserName]\
+' AppData\Roaming\OCLC\Connex\Profiles\MyProfile\UserLogonInfo.xml".
 
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'The maximum number of reads of environment strings to try to get the user profile path.
-Const NORMAL_FILE          As Integer = 0    'Attribute of a normal file.
-Const NORMAL_FILE_ARCHIVE  As Integer = 32   'Attribute of a normal file with archive bit set?
-
-Dim AppData$
 Dim Attributes%
-Dim EnvironmentString$
 Dim FileNum%
 Dim ItemKey$
 Dim SearchTerm$
 Dim SearchTermInst$          : SearchTermInst$ = QUOTE & "InstCode" & QUOTE
 Dim UserLogonInfo$
 
-Dim i As Integer, p As Integer
-
-' In order to find "UserLogonInfo.xml", first get the user profile path (which includes
-' the username) from the operating system's environment table. Do this by calling the
-' "Environ" function repeatedly, searching the resulting string settings for keywords,
-' until the keyword sought--"APPDATA"--is found. If it hasn't been found after 128
-' attempts, give up.
-
-i = 1
-Do
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppData$ = Mid$( EnvironmentString$, 9 )
-      Exit Do
-  End If
-  i = i + 1
-Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
-
-If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GoTo Problem:
+Dim p As Integer
 
 ' The complete path to the file is built by adding the information specified in the
 ' Connexion client documentation to the path to the user profile, obtained above.
 
-UserLogonInfo$ = AppData$ & "\OCLC\Connex\Profiles\MyProfile\UserLogonInfo.xml"
+UserLogonInfo$ = Path$ & "\OCLC\Connex\Profiles\MyProfile\UserLogonInfo.xml"
 
 On Error GoTo Problem:
 Attributes% = GetAttr( UserLogonInfo$ )
@@ -1154,31 +1255,88 @@ If Attributes% = NORMAL_FILE Or Attributes% = NORMAL_FILE_ARCHIVE Then
     FileNum% = FreeFile
     On Error GoTo Problem:
     Open UserLogonInfo$ For Input As #FileNum%
-      Do Until Eof( FileNum% )
-        Line Input #FileNum%, ItemKey$
-            p = InStr( ItemKey$, SearchTermInst$ )
-            If p <> 0 Then
-            p = InStr( ItemKey$, "value=" )
-            If p <> 0 Then
-                SearchTerm$ = Mid$( ItemKey$, p + 7 )
-                p = InStr( SearchTerm$, QUOTE )
-                If p <> 0 Then
-                    InstitutionCode$ = Left$( SearchTerm$, p - 1 )
-                    InstitutionCode$ = Trim$( InstitutionCode$ )
-                    Exit Do
-                End If
-              Else
-                GoTo Problem:
-            End If
-          Else
-        End If
-      Loop
+    Do Until Eof( FileNum% )
+      Line Input #FileNum%, ItemKey$
+      p = InStr( ItemKey$, SearchTermInst$ )
+      If p > 0 Then
+          p = InStr( ItemKey$, "value=" )
+          If p > 0 Then
+              SearchTerm$ = Mid$( ItemKey$, p + 7 )
+              p = InStr( SearchTerm$, QUOTE )
+              If p > 0 Then
+                  InstitutionCode$ = Left$( SearchTerm$, p - 1 )
+                  InstitutionCode$ = Trim$( InstitutionCode$ )
+                  Exit Do
+              End If
+            Else
+              GoTo Problem:
+          End If
+      End If
+    Loop
     Close #FileNum%
     Reset
     If p = 0 Then GoTo Problem:
 End If
 
 Problem:
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetSavedSearches( Path$ )
+
+' If the macro has access to the "C:\Users\[UserName]\AppData\Roaming\OCLC\Connex\
+' Profiles\MyProfile\" folder, it will create a file there in which to save previous
+' searches. This sub looks in "My Profiles" for the file
+' "KeywordSearchHelperSavedSearches.txt." If found, the macro reads the list of searches
+' in it to present in the dialog box.
+
+Dim Attributes%
+Dim FileNum%
+Dim PreviousSearchString$
+
+Dim i As Integer
+
+SavedSearchesFile$ = Path$ & "\OCLC\Connex\Profiles\MyProfile\KeywordSearchHelperSavedSearches.txt"
+
+If Attributes% = NORMAL_FILE Or Attributes% = NORMAL_FILE_ARCHIVE Then
+    FileNum% = FreeFile
+    On Error Resume Next
+    Open SavedSearchesFile$ For Input As #FileNum%
+    If Err = 0 Then
+
+' Read the file "KeywordSearchHelperSavedSearches.txt" a line at a time by calling "Line
+' Input" repeatedly. Put each line in the "SavedSearches" array. If the file was
+' successfully read--measured by an array row count greater than 0--exit the sub, setting
+' the flag that indicates the file is present. Any other kind of failure tells the macro
+' that the file doesn't exist.
+
+        i = 0
+        Do Until Eof( FileNum% )
+          Line Input #FileNum%, PreviousSearchString$
+          If PreviousSearchString$ <> "" Then
+              ReDim Preserve SavedSearches( i )
+              SavedSearches( i ) = PreviousSearchString$
+          End If
+          i = i + 1
+        Loop
+        Close #FileNum%
+        Reset
+        If i > 0 Then
+            SavedSearchesFileExists = TRUE
+            Exit Sub
+          Else
+
+' If the file is valid but the strings can't be read, erase the file and forget about any
+' saved searches.
+
+            Kill SavedSearchesFile$
+        End If
+    End If
+End If
+
+SavedSearchesFileExists = FALSE
 
 End Sub
 
@@ -1259,27 +1417,113 @@ End Sub
 
 '****************************************************************************************
 
+Sub SaveSearch( InString$ )
+
+' Given a changed set of search strings--either a new string has just been added, or one
+' has just been deleted--write it to the file "C:\Users\[UserName]\AppData\Roaming\OCLC\
+' Connex\Profiles\MyProfile\KeywordSearchHelperSavedSearches.txt".
+
+Dim FileWrite%
+Dim Start%
+Dim TempString$
+Dim UBSavedSearches%
+
+Dim i as Integer, j As Integer
+
+' First, if the file exists (the variable that indicates this was set when the macro was
+' invoked), delete it.
+
+If SavedSearchesFileExists Then
+    Kill SavedSearchesFile$
+End If
+
+If InString$ <> "One previous search deleted" Then
+
+' If one of the previous searches has been deleted, the array has already been adjusted,
+' and all that needs be done here is to write it to the file. Otherwise, this is where
+' the array is rearranged. If it doesn't yet exist (testing its upper bound results in
+' error 9, "Subscript out of range", which is the clue that it hasn't yet been
+' dimensioned), create it.
+
+    On Error Resume Next
+    UBSavedSearches% = UBound( SavedSearches )
+    If Err = SUBSCRIPT_OUT_OF_RANGE Then
+        UBSavedSearches%   = 1
+        ReDim SavedSearches( 0 )
+        SavedSearches( 0 ) = InString$
+
+' If the array already exists, its contents must be rearranged to add the newest term in
+' the lowest row, shoving previous searches up one. If the array is already full (only
+' the most recent five terms are retained), the highest or oldest entry must be removed.
+' But all this happens only if the most recent search is not already in the array.
+' However, a new search that matches an older search counts as a new term to be added to
+' the array.
+
+      Else
+        If InString$ <> SavedSearches( 0 ) Then
+            If UBSavedSearches% < MAX_SAVED_SEARCHES - 1 Then
+                ReDim Preserve SavedSearches( UBSavedSearches% + 1 )
+                Start% = UBSavedSearches% + 1
+              Else
+                Start% = 2
+            End If
+            For i = Start% To 1 Step -1
+              SavedSearches( i ) = SavedSearches( i - 1 )
+            Next i
+            SavedSearches( 0 ) = InString$
+        End If
+    End If
+
+End If
+
+' Write the array to the file, each previous search to a new line. If the file doesn't
+' yet exist, the "Open" command creates it. Any problem opening the file results in this
+' sub quitting with no action having taken place.
+
+FileWrite% = FreeFile
+On Error Resume Next
+Open SavedSearchesFile$ For Output As #FileWrite%
+If Err > 0 Then
+    SavedSearchesFileExists = FALSE
+    Exit Sub
+  Else
+    SavedSearchesFileExists = TRUE
+End If
+
+UBSavedSearches% = UBound( SavedSearches )
+For i = 0 To UBSavedSearches%
+  TempString$ = SavedSearches( i )
+  If TempString$ = "" Then Exit For
+  Print #FileWrite%, SavedSearches( i )
+Next i
+Close FileWrite%
+Reset
+
+End Sub
+
+'****************************************************************************************
+
 Sub SetQualifiers
 
-DlgText    "CountryPub_DropComboBox",    "Any"
-DlgText    "DescCon_DropComboBox",       "Any"
-DlgText    "Format_DropListBox",         "Any"
-DlgText    "Holdings_DropComboBox",      "Any"
-DlgValue   "Internet",                   0
-DlgText    "LangOfCatalog_DropComboBox", "Any"
-DlgText    "Language_DropComboBox",      "Any"
-DlgValue   "Microforms",                 0
-DlgEnable  "Microforms",                 ENABLED
-DlgEnable  "MicroformsInclusion",        ENABLED
-DlgText    "Source_DropComboBox",        "Any"
+DlgText         "CountryPub_DropComboBox",    "Any"
+DlgText         "DescCon_DropComboBox",       "Any"
+DlgText         "Format_DropListBox",         "Any"
+DlgText         "Holdings_DropComboBox",      "Any"
+DlgValue        "Internet",                   0
+DlgText         "LangOfCatalog_DropComboBox", "Any"
+DlgText         "Language_DropComboBox",      "Any"
+DlgValue        "Microforms",                 0
+DlgEnable       "Microforms",                 ENABLED
+DlgEnable       "MicroformsInclusion",        ENABLED
+DlgText         "Source_DropComboBox",        "Any"
 
-If BlankSlate Then
-    DlgEnable  "ControlQualifiers",          DISABLED
-    DlgText    "ControlQualifiers",          "Remove all &qualifiers"
+If NoRecordDisplayed Then
+    DlgEnable       "ControlQualifiers",          DISABLED
+    DlgText         "ControlQualifiers",          "Remove all &qualifiers"
   Else
-    DlgText    "ControlQualifiers",          "Add all &qualifiers"
-    DlgText    "Date_TextBox",               Trim$( DateString$ )
-    DlgValue   "Date_CheckBox",              UNCHECKED
+    DlgText         "ControlQualifiers",          "Add all &qualifiers"
+    DlgText         "Date_TextBox",               Trim$( DateString$ )
+    DlgValue        "Date_CheckBox",              UNCHECKED
 End If
 
 End Sub
@@ -1310,7 +1554,7 @@ TempString$ = InString$
 Start% = 1
 Do
   p = InStr( Start%, TempString$, "(" )
-  If p <> 0 Then
+  If p > 0 Then
       LeftTotal% = LeftTotal% + 1
       Start%     = p + 1
   End If
@@ -1323,11 +1567,11 @@ Loop Until p = 0
 Start% = 1
 Do
   p = InStr( Start%, TempString$, ")" )
-  If p <> 0 Then
+  If p > 0 Then
       RightTotal% = RightTotal% + 1
       Start%      = p + 1
       q = InStr$( Start%, TempString$, "(" )
-      If q <> 0 Then
+      If q > 0 Then
            TestString$ = Trim$( Mid$( TempString$, p + 1, q - p - 1 ) )
            TestString$ = LCase$( TestString$ )
            If TestString$ = "and" Or TestString$ = "near" Or TestString$ = "not" Or _
@@ -1358,6 +1602,42 @@ If LeftTotal% = RightTotal% Then
   Else
     CheckParens = "BAD"
 End If
+
+End Function
+
+'****************************************************************************************
+
+Function GetAppDataPath
+
+' The user's institution code and the file containing the previous five searches are
+' stored in the folder "C:\Users\[UserName]\AppData\Roaming\OCLC\Connex\Profiles\
+' MyProfile\". This function returns the "UserName" to construct a valid path to that
+' folder.
+
+Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'The maximum number of reads of environment strings to try to get the user profile path.
+
+Dim AppData$
+Dim EnvironmentString$
+
+Dim i As Integer
+
+' The user profile path (which includes the username) comes from the operating system's
+' environment table. Get this by calling the "Environ" function repeatedly, searching the
+' resulting string settings for keywords, until the keyword sought--"APPDATA"--is found.
+' If it hasn't been found after 128 attempts, give up.
+
+i = 1
+Do
+  EnvironmentString$ = Environ( i )
+  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
+      AppData$ = Mid$( EnvironmentString$, 9 )
+      GetAppDataPath = AppData$
+      Exit Function
+  End If
+  i = i + 1
+Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
+
+If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GetAppDataPath = ""
 
 End Function
 
@@ -1424,13 +1704,15 @@ If SearchLabel$ = "" Then
         Select Case Tag$
 
           Case "130", "240", "730"
-            If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecord Then
+
+            If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecordDisplayed Then
                 SearchLabel$ = "Uniform title whole phrase (utw=)"
               Else
                 SearchLabel$ = "Uniform title word (ut:)"
             End If
 
           Case Else
+
             SearchLabel$ = "Title word (ti:)"
 
         End Select
@@ -1440,20 +1722,23 @@ If SearchLabel$ = "" Then
         Select Case Right$( Tag$, 2 )
 
           Case "00"
-            If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecord Then
+
+            If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecordDisplayed Then
                 SearchLabel$ = "Personal name whole phrase (pnw=)"
               Else
                 SearchLabel$ = "Personal name (pn:)"
             End If
 
           Case "10", "11"
-            If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecord Then
+
+            If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecordDisplayed Then
                 SearchLabel$ = "Corp/Conf name whole phrase (cnw=)"
               Else
                 SearchLabel$ = "Corp/Conf name (cn:)"
             End If
 
           Case Else
+
             SearchLabel$ = "Name word (au:)"
 
         End Select
@@ -1476,7 +1761,7 @@ If SearchLabel$ = "" Then
 
       Case SUBJECT_checkbox
 
-        If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecord Then
+        If Right$( TextBoxInput$, 1 ) = "%" Or AuthorityRecordDisplayed Then
             SearchLabel$ = "Whole phrase (suw=)"
           Else
             SearchLabel$ = "Word (su:)"
@@ -1487,7 +1772,11 @@ If SearchLabel$ = "" Then
         If Right$( TextBoxInput$, 1 ) = "%" Then
             SearchLabel$ = "Series whole phrase (sew=)"
           Else
-            SearchLabel$ = "Series word (se:)"
+            If SeriesHeading Then
+                SearchLabel$ = "Series whole phrase (sew=)"
+              Else
+                SearchLabel$ = "Series word (se:)"
+            End If
         End If
 
     End Select
@@ -1505,6 +1794,7 @@ Select Case SearchLabel$
   Case "Name word (au:)"
 
     Select Case Tag$
+
       Case "100", "700"
         SubfieldString = "abcdjqu"
       Case "110"
@@ -1528,6 +1818,7 @@ Select Case SearchLabel$
   Case "Name phrase (au=)"
 
     Select Case Tag$
+
       Case "100", "700"
         SubfieldString = "abcdjq"
       Case "110", "710"
@@ -1543,6 +1834,7 @@ Select Case SearchLabel$
   Case "Name whole phrase (auw=)"
 
     Select Case Tag$
+
       Case "100", "700", "800"
         SubfieldString = "abcdjq"
       Case "110", "710", "810"
@@ -1556,6 +1848,7 @@ Select Case SearchLabel$
   Case "Corp/Conf name (cn:)"
 
     Select Case Tag$
+
       Case "110"
         SubfieldString = "abcdenu"
       Case "111"
@@ -1571,6 +1864,7 @@ Select Case SearchLabel$
   Case "Corp/Conf name phrase (cn=)"
 
     Select Case Tag$
+
       Case "110"
         SubfieldString = "abcdefghijklmn"
       Case "111"
@@ -1586,6 +1880,7 @@ Select Case SearchLabel$
   Case "Corp/Conf name whole phrase (cnw=)"
 
     Select Case Tag$
+
       Case "110", "710"
         SubfieldString = "abcdn"
       Case "111", "711"
@@ -1601,6 +1896,7 @@ Select Case SearchLabel$
   Case "nc:", "nc=", "ncw=", "Corp/Conf subject word (nc:)", "Corp/Conf subject phrase (nc=)", "Corp/Conf subject whole phrase (ncw=)"
 
     Select Case Tag$
+
       Case "610"
         SubfieldString = "abcdnp"
       Case "611"
@@ -1612,6 +1908,7 @@ Select Case SearchLabel$
   Case "nt:", "Word (nt:)"
 
     Select Case Tag$
+
       Case "500", "501", "504", "508", "511", "521", "538", "545", "550", "586"
         SubfieldString = "a"
       Case "502"
@@ -1671,6 +1968,7 @@ Select Case SearchLabel$
   Case "se:", "se=", "Series word (se:)", "Series phrase (se=)"
 
     Select Case Tag$
+
       Case "490"
         SubfieldString = "avx"
       Case "800"
@@ -1688,6 +1986,7 @@ Select Case SearchLabel$
   Case "sew=", "Series whole phrase (sew=)"
 
     Select Case Tag$
+
       Case "800"
         SubfieldString = "abcdegkmnopqrstvx"
       Case "810"
@@ -1699,10 +1998,16 @@ Select Case SearchLabel$
       Case Else
         SubfieldString = 0
     End Select
+    If SubfieldString <> 0 Then
+                  If NumberedSeries Then
+                      WorkString$  = WorkString$ & "*"
+                  End If
+    End If
 
   Case "su:", "Word (su:)"
 
     Select Case Tag$
+
       Case "600"
         SubfieldString = "abcdegjkmnopqrstvxyz"
       Case "610"
@@ -1722,6 +2027,7 @@ Select Case SearchLabel$
   Case "su=", "Phrase (su=)"
 
     Select Case Tag$
+
       Case "600"
         SubfieldString = "abcdegjkmnopqrstvxyz"
       Case "610"
@@ -1741,6 +2047,7 @@ Select Case SearchLabel$
   Case "suw=", "Whole phrase (suw=)"
 
     Select Case Tag$
+
       Case "600"
         SubfieldString = "abcdegjkmnopqrstvxyz"
       Case "610"
@@ -1760,6 +2067,7 @@ Select Case SearchLabel$
   Case "ti:", "Word (ti:)", "Title word (ti:)"
 
     Select Case Tag$
+
       Case "130", "730"
         SubfieldString = "adfgkmnoprst"
       Case "245"
@@ -1795,6 +2103,7 @@ Select Case SearchLabel$
   Case "ti=", "Phrase (ti=)", "Title phrase (ti=)"
 
     Select Case Tag$
+
       Case "130", "730"
         SubfieldString = "adfgkmnoprst"
       Case "245"
@@ -1808,6 +2117,7 @@ Select Case SearchLabel$
   Case "tiw=", "Whole phrase (tiw=)", "Title whole phrase (tiw=)"
 
     Select Case Tag$
+
       Case "130", "730"
         SubfieldString = "adfgkmnoprst"
       Case "245"
@@ -1821,6 +2131,7 @@ Select Case SearchLabel$
   Case "ut:", "Uniform title word (ut:)"
 
     Select Case Tag$
+
       Case "130", "730"
         SubfieldString = "adfgkmnoprst"
       Case "700"
@@ -1836,6 +2147,7 @@ Select Case SearchLabel$
   Case "ut=", "Uniform title phrase (ut=)"
 
     Select Case Tag$
+
       Case "130", "730"
         SubfieldString = "adfgkmnoprst"
       Case "700"
@@ -1851,6 +2163,7 @@ Select Case SearchLabel$
   Case "utw=", "Uniform title whole phrase (utw=)"
 
     Select Case Tag$
+
       Case "130", "730"
         SubfieldString = "adfgklmnoprst"
       Case "700"
@@ -1866,6 +2179,7 @@ Select Case SearchLabel$
   Case "kw:", "Keyword (kw:)"
 
     Select Case Tag$
+
       Case "100"
         SubfieldString = "abcdfgjkmnopqrstu"
       Case "110"
@@ -1949,7 +2263,8 @@ If SubfieldString = 0 Then
     Loop Until Subfield$ = ""
 End If
 
-' Remove the percent sign that identified a controlled heading.
+' Remove the percent sign that identified a controlled heading. This will be the last
+' character in the field, unless an asterisk has been added after it for truncation.
 
 If TempString$ = "" Then
     TempString$   = Mid$( WorkString$, 4 )
@@ -1957,6 +2272,8 @@ If TempString$ = "" Then
   Else
     If Right$( TempString$, 1 ) = "%" Then
         TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+      ElseIf Right$( TempString$, 2 ) = "%*" Then
+        TempString$ = Left$( TempString$, Len( TempString$ ) - 2 ) & "*"
     End If
     TempString$   = Normalize( TempString$, Tag$ )
 
@@ -1970,7 +2287,7 @@ If TempString$ = "" Then
 
     Do
       p = InStr( TempString$, DELIMITER )
-      If p <> 0 Then
+      If p > 0 Then
           If SubfieldString = 0 Then
               TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 2 )
             Else
@@ -1982,11 +2299,11 @@ If TempString$ = "" Then
 ' For a word search, omit the plus sign; for a phrase search, include it.
 
     p = InStr( SearchLabel$, ":" )
-    If p <> 0 Then
+    If p > 0 Then
         If Mid$( SearchLabel$, p - 1, 1 ) <> "=" Then
             Do
               q = InStr( TempString$, "+" )
-              If q <> 0 Then
+              If q > 0 Then
                   TempString$ = Left$( TempString$, q - 1 ) & Mid$( TempString$, q + 1 )
               End If
             Loop Until q = 0
@@ -1997,7 +2314,7 @@ If TempString$ = "" Then
 
     Do
       p = InStr( TempString$, "  " )
-      If p <> 0 Then
+      If p > 0 Then
           TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
       End If
     Loop Until p = 0
@@ -2063,6 +2380,7 @@ Do While Index% <= InStringLength%
 ' Numbers and text characters: Include as is.
 
     Case 48 to 57, 65 to 90, 97 To 122
+
       NormalizedString$ = NormalizedString$ & CharT$
       If SubfieldTrack = TRUE Then
           SubfieldCode$ = CharT$
@@ -2072,16 +2390,28 @@ Do While Index% <= InStringLength%
 ' Other characters to include:
 
     Case 32, 38, 40 To 41, 43
+
       NormalizedString$ = NormalizedString$ & CharT$
 
 ' Characters converted to space:
 
-    Case 33 To 34, 36 To 37, 42, 47, 58 To 64, 92, 140 To 141, 156 To 157, 160, 169 To 171, _
+    Case 33 To 34, 36 To 37, 47, 58 To 64, 92, 140 To 141, 156 To 157, 160, 169 To 171, _
          185, 204
+
       NormalizedString$ = NormalizedString$ & " "
 
 ' Characters simply omitted: 35, 39, 91, 93 To 96, 123, 125 To 126, 138 To 139, 154 To 155,
 '                            158, 167 To 168, 174, 176, 183, 200 To 203, 224 To 251, 254
+
+' Asterisk: Include in a series heading, as the truncation symbol to guard against having
+' to match a volume number.
+
+    Case 42
+      If NumberedSeries Then
+          NormalizedString$ = NormalizedString$ & CharT$
+        Else
+          NormalizedString$ = NormalizedString$ & " "
+      End If
 
 ' Comma: Include in a personal name search if it's in subfield $a, except that only the
 ' first comma should be included, so keep track of the commas in each field. Otherwise,
@@ -2089,6 +2419,7 @@ Do While Index% <= InStringLength%
 ' omit.
 
     Case 44
+
       If Right$( Tag$, 2 ) = "00" And SubfieldCode$ = "a" Then
           If CommaCount% = 0 Then
               CommaCount%       = 1
@@ -2103,6 +2434,7 @@ Do While Index% <= InStringLength%
 ' Hyphen: Include in personal name dates for a whole phrase browse.
 
     Case 45
+
       If Right$( Tag$, 2 ) = "00" And SubfieldCode$ = "d" Then
           NormalizedString$ = NormalizedString$ & CharT$
         Else
@@ -2113,6 +2445,7 @@ Do While Index% <= InStringLength%
 ' otherwise omit.
 
     Case 46
+
       If Index% < InStringLength% Then
           If Right$( NormalizedString$, 1 ) Like "[!0-9]" and Mid$( InString$, Index% + 1, 1 ) Like "[!0-9]" Then
               NormalizedString$ = NormalizedString$ & " "
@@ -2122,10 +2455,12 @@ Do While Index% <= InStringLength%
 ' Superscript, subscript numbers: Convert to normal.
 
     Case 128 to 137
+
       CharT$            = Chr$( CharA% - ASCII_DIFF_SUPERSCRIPT )
       NormalizedString$ = NormalizedString$ & CharT$
 
     Case 144 to 153
+
       CharT$            = Chr$( CharA% - ASCII_DIFF_SUBSCRIPT )
       NormalizedString$ = NormalizedString$ & CharT$
 
@@ -2171,7 +2506,7 @@ Do While Index% <= InStringLength%
 
     Case 223
       NormalizedString$ = NormalizedString$ & CharT$
-      SubfieldTrack = TRUE
+      SubfieldTrack     = TRUE
 
     Case Else
 '     If it's not listed above, don't add it.
@@ -2186,9 +2521,9 @@ Loop
 
 If Tag$ = "100" Or Tag$ = "700" Then
     p = InStr( NormalizedString$, "," )
-    If p <> 0 Then
+    If p > 0 Then
         q = InStr( p, NormalizedString$, DELIMITER )
-        If q <> 0 Then
+        If q > 0 Then
             TempString$ = Mid$( NormalizedString$, p + 1, ( q - 1 ) - p )
             If Trim$( TempString$ ) = "" Then
                 NormalizedString$ = Left$( NormalizedString$, p - 1 ) & Mid$( NormalizedString$, q - 1 )
@@ -2201,7 +2536,7 @@ End If
 
 Do
   p = InStr( NormalizedString$, "  " )
-  If p <> 0 Then
+  If p > 0 Then
       NormalizedString$ = Left$( NormalizedString$, p - 1 ) & Mid$( NormalizedString$, p + 1 )
   End If
 Loop Until p = 0
@@ -2215,9 +2550,9 @@ If Left$( Tag$, 2 ) = "26" Then
     Start%      = 2
     Do
       p = InStr( Start%, TempString$, DELIMITER )
-      If p <> 0 Then
+      If p > 0 Then
           q = InStr( p + 1, TempString$, DELIMITER )
-          If q <> 0 Then
+          If q > 0 Then
               Subfield$ = Trim$( Mid$( TempString$, p + 1, q - p - 1 ) )
             Else
               Subfield$ = Trim$( Mid$( TempString$, p + 1 ) )
@@ -2256,7 +2591,7 @@ TempString$ = InString$
 Start% = 1
 Do
   p = InStr( Start%, TempString$, "$" )
-  If p <> 0 Then
+  If p > 0 Then
       If Mid$( TempString$, p - 1, 1 ) = " " And Mid$( TempString$, p + 1, 2 ) Like "[0-9a-z] " Then
           TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 3 )
       End If
@@ -2279,8 +2614,8 @@ Const DATE_textbox                As Integer = 33  ' "Date" data entry text box.
 Const DESC_CON_combobox           As Integer = 38  ' "Descriptive Conventions" drop combo box.
 Const EXTENT_LABEL_textbox        As Integer = 15  ' "Extent" search label text box.
 Const EXTENT_textbox              As Integer = 16  ' "Extent" data entry text box.
-Const FORMAT_LIST                 As Integer = 27  ' "Format_DropListBox" drop list box.
-Const HELP_BUTTON                 As Integer = 41  ' "Help" button.
+Const FORMAT_listbox              As Integer = 27  ' "Format_DropListBox" drop list box.
+Const HELP_button                 As Integer = 41  ' "Help" button.
 Const HOLDINGS_combobox           As Integer = 39  ' "Holding Library" drop combo box.
 Const LANGUAGE_combobox           As Integer = 34  ' "Language" drop combo box.
 Const LANG_CAT_combobox           As Integer = 36  ' "Language of Cataloging" drop combo box.
@@ -2288,13 +2623,16 @@ Const NAME_combobox               As Integer = 7   ' "Names" drop combo box.
 Const NAME_listbox                As Integer = 6   ' "Names" search label drop list box.
 Const NOTE_combobox               As Integer = 19  ' "Notes" drop combo box.
 Const NOTE_listbox                As Integer = 18  ' "Notes" search label drop list box.
-Const OK_BUTTON                   As Integer = 0   ' "OK" button.
+Const OK_button                   As Integer = 0   ' "OK" button.
 Const PLACE_LABEL_listbox         As Integer = 9   ' "Place" search label list box.
 Const PLACE_textbox               As Integer = 10  ' "Place" data entry text box.
+Const PREV_SEARCH_combobox        As Integer = 45  ' Previous searches list box.
+Const PREV_SRCH_CLEAR_button      As Integer = 43  ' Previous searches "Clear entry" button.
+Const PREV_SRCH_DELETE_button     As Integer = 44  ' Previous searches "Delete search" button.
 Const PUBLISHER_LABEL_listbox     As Integer = 12  ' "Publisher" search label list box.
 Const PUBLISHER_textbox           As Integer = 13  ' "Publisher" data entry text box.
-Const QUALIFIER_BUTTON            As Integer = 40  ' "ControlQualifiers" button.
-Const RESET_BUTTON                As Integer = 42  ' "Reset" button, to reset all the data in the dialog box and start over.
+Const QUALIFIER_button            As Integer = 40  ' "ControlQualifiers" button.
+Const RESET_button                As Integer = 42  ' "Reset" button, to reset all the data in the dialog box and start over.
 Const SERIES_combobox             As Integer = 25  ' "Series" drop combo box.
 Const SERIES_listbox              As Integer = 24  ' "Series" search label drop list box.
 Const SOURCE_combobox             As Integer = 37  ' "Source" drop combo box.
@@ -2309,24 +2647,33 @@ Const CHECKED                     As Integer = 1   'The value of a checkbox when
 Const COMBO_BOX_CHANGE            As Integer = 3   'The value for the state of a dialog box when a control changes.
 Const CONTROL_CHANGE              As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
 Const DIALOG_BUTTON_CANCEL        As Integer = 102 'The value returned by the dialog function when the "Cancel" button is clicked.
+Const FILE_NOT_FOUND              As Integer = 53  'The value of the error in BASIC when a file is not found.
 Const FOCUS_CHANGE                As Integer = 4   'The value of the dialog function parameter "Action%" when the control focus changes.
 Const INFORMATION_MESSAGE         As Integer = 64  'The value to display the "Information message" icon in a message box.
 Const INITIALIZE                  As Integer = 1   'The value of the dialog function parameter "Action%" when the dialog box opens.
+Const INVISIBLE                   As Integer = 0   'The value to make a dialog box control invisible.
 Const KEEP_DLG_OPEN               As Integer = -1  'The value of the dialog function to keep a dialog box open.
+Const MSGBOX_RETURN_CANCEL        As Integer = 2   'The value returned by a message box when the "Cancel" button is clicked.
 Const MSGBOX_RETURN_OK            As Integer = 1   'The value returned by a message box when the "OK" button is clicked.
 Const MSGBOX_SETBUTTONS_OK_CANCEL As Integer = 1   'The value to set two buttons, "OK" and "Cancel," in a message box.
 Const VISIBLE                     As Integer = 1   'The value to make a dialog box control visible.
 Const WARNING_MESSAGE             As Integer = 48  'The value to display the "Warning message" icon in a message box.
+Const WARNING_QUERY               As Integer = 32  'The value to display the "Warning query" icon in a message box.
 
 Dim BoxesChecked%
 Dim CheckBoxControl%
 Dim ComboBoxControl%
 Dim ControlWithFocus%
+Dim CurrentSearchString$
 Dim DescriptionFieldsIndex%
 Dim DialogControlID%
+Dim FileNum%
 Dim InputTextBox%
 Dim MeaningOfZeroRecords$
 Dim NumberOfRecordsFound&
+Dim PreviousSearchHeader$
+Dim PreviousSearchSelection%
+Dim PreviousSearchString$
 Dim ProblemBox%
 Dim QualifierString$
 Dim QualifierText$
@@ -2337,6 +2684,16 @@ Dim Selection%
 Dim Start%
 Dim Tag$
 Dim TempString$
+Dim UBSavedSearches%
+
+Static CompleteSearchString$
+Static PreviousNamesSelection%
+Static PreviousNamesTag$
+Static PreviousNotesTag$
+Static PreviousSeriesTag$
+Static PreviousSubjectsTag$
+Static PreviousTitlesSelection%
+Static PreviousTitlesTag$
 
 Dim QualifierAdd             : QualifierAdd = TRUE
 
@@ -2346,8 +2703,13 @@ MeaningOfZeroRecords$ = "This may actually mean that no records were found, but 
 MeaningOfZeroRecords$ = MeaningOfZeroRecords$ & " were found. Click " & QUOTE & "OK" & QUOTE & " to return to the search box"
 MeaningOfZeroRecords$ = MeaningOfZeroRecords$ & " and refine your search. Click " & QUOTE & "Cancel" & QUOTE & " to exit the"
 MeaningOfZeroRecords$ = MeaningOfZeroRecords$ & " macro."
+PreviousSearchHeader$ = "Select a previous search to re-execute or modify:"
 
 Select Case Action%
+
+'########################################################################################
+
+' INITIALIZING THE DIALOG BOX
 
   Case INITIALIZE
 
@@ -2355,7 +2717,7 @@ ResetDialogBox:
 
 ' Set the dialog box controls. Start with the controls containing fields from the record.
 
-    If BlankSlate = FALSE Then
+    If NoRecordDisplayed = FALSE Then
 
         For CheckBoxControl% = TITLE_checkbox To SERIES_checkbox Step 3
 
@@ -2365,6 +2727,7 @@ ResetDialogBox:
           Select Case CheckBoxControl%
 
             Case NAME_checkbox
+
               If NameCount% = 0 Then
                   TempString$       = ""
                 Else
@@ -2373,6 +2736,7 @@ ResetDialogBox:
               End If
 
             Case NOTE_checkbox
+
               If NotesCount% = 0 Then
                   TempString$       = ""
                 Else
@@ -2381,81 +2745,105 @@ ResetDialogBox:
               End If
 
             Case SERIES_checkbox
+
               If SeriesCount% = 0 Then
-                  TempString$       = ""
+                  TempString$        = ""
                 Else
                   TempString$        = SeriesRaw( 0 )
                   PreviousSeriesTag$ = Left$( TempString$, 3 )
               End If
 
             Case SUBJECT_checkbox
+
               If SubjectCount% = 0 Then
-                  TempString$       = ""
+                  TempString$          = ""
                 Else
                   TempString$          = SubjectsRaw( 0 )
                   PreviousSubjectsTag$ = Left$( TempString$, 3 )
               End If
 
             Case TITLE_checkbox
+
               If TitleCount% = 0 Then
-                  TempString$       = ""
+                  TempString$        = ""
                 Else
                   TempString$        = TitlesRaw( 0 )
                   PreviousTitlesTag$ = Left$( TempString$, 3 )
               End If
 
-            Case 8, 11, 14
+            Case 8, 11, 14 'Place, publisher, and extent checkboxes
+
               DescriptionFieldsIndex% = ( CheckBoxControl% - 8 ) / 3
               TempString$             = DescriptionFields( DescriptionFieldsIndex% )
-              If TempString$ = "" Then
-                  If CheckBoxControl% = 14 Then
-                      DlgText    CheckBoxControl% + 1,         "Word (p3:)"
-                  End If
-              End If
 
           End Select
 
           SearchLabel$ = ""
           If TempString$ <> "" Then
               TempString$ = MakeSearchElement( TempString$, SearchLabel$, CheckBoxControl% )
-              DlgText    CheckBoxControl% + 1,         SearchLabel$
-              DlgText    CheckBoxControl% + 2,         TempString$
+              DlgText         CheckBoxControl% + 1,         SearchLabel$
+              DlgText         CheckBoxControl% + 2,         TempString$
           End If
-          DlgValue   CheckBoxControl%,             UNCHECKED
+          DlgValue        CheckBoxControl%,             UNCHECKED
 
         Next CheckBoxControl%
 
     End If
 
-    DlgVisible "SearchAsSubfA_Names",        INVISIBLE
-    DlgVisible "SearchAsSubfA_Series",       INVISIBLE
-    DlgVisible "SearchAsSubfA_Subjects",     INVISIBLE
+    DlgText         "Extent_LabelBox",            "Word (p3:)"
+
+    DlgVisible      "SearchAsSubfA_Names",        INVISIBLE
+    DlgVisible      "SearchAsSubfA_Series",       INVISIBLE
+    DlgVisible      "SearchAsSubfA_Subjects",     INVISIBLE
 
 ' Then set the qualifiers.
 
     SetQualifiers
 
-' If deriving a search from an authority record, go ahead and check the name and/or title
-' or subject checkboxes.
+' If deriving a search from an authority record, go ahead and check the appropriate
+' checkboxes.
 
-    If AuthorityRecord Then
+    If AuthorityRecordDisplayed Then
         If TitleCount% > 0 Then
-            DlgValue   "Titles_CheckBox",            CHECKED
+            DlgValue        "Titles_CheckBox",            CHECKED
         End If
         If NameCount% > 0 Then
-            DlgValue   "Names_CheckBox",             CHECKED
+            DlgValue        "Names_CheckBox",             CHECKED
         End If
         If SubjectCount% > 0 Then
-            DlgValue   "Subjects_CheckBox",          CHECKED
+            DlgValue        "Subjects_CheckBox",          CHECKED
+        End If
+        If SeriesCount% > 0 Then
+            DlgValue        "Series_CheckBox",            CHECKED
         End If
     End If
 
 
+' Show previous searches, if the file that contains them exists.
+
+    If SavedSearchesFileExists Then
+        DlgEnable       "PrevSrchClear_Button",       DISABLED
+        DlgEnable       "PrevSrchDelete_Button",      DISABLED
+        DlgText         "PrevSrch_DropComboBox",      PreviousSearchHeader$
+        DlgVisible      "PrevSrch_GroupBox",          VISIBLE
+      Else
+        DlgVisible      "PrevSrchClear_Button",       INVISIBLE
+        DlgVisible      "PrevSrchDelete_Button",      INVISIBLE
+        DlgVisible      "PrevSrch_DropComboBox",      INVISIBLE
+        DlgVisible      "PrevSrch_GroupBox",          INVISIBLE
+    End If
+
+'########################################################################################
+
+' A CHANGE IN A CONTROL IN THE DIALOG BOX
+
   Case CONTROL_CHANGE
 
-    If BlankSlate Then
-        If DlgEnable( "ControlQualifiers" ) = DISABLED Then
-            DlgEnable  "ControlQualifiers",          ENABLED
+    If NoRecordDisplayed Then
+        If DlgControlID( Id$ ) < HELP_button Then
+            If DlgEnable( "ControlQualifiers" ) = DISABLED Then
+                DlgEnable       "ControlQualifiers",          ENABLED
+            End If
         End If
     End If
 
@@ -2463,13 +2851,28 @@ ResetDialogBox:
 
     Select Case DialogControlID%
 
-      Case OK_BUTTON
+' If a previous search is selected, uncheck all the checkboxes above.
 
-' When the "OK" button is clicked or [ENTER] is pressed, go through all the check box
-' controls, and for each checked box, get whatever data are associated with them. Keep
-' the dialog box open for input if none of the checkboxes are checked. If a checked
-' dialog box is associated with no search label or no search term, clear the check and
-' don't count the box.
+      Case PREV_SEARCH_combobox
+
+        For CheckBoxControl% = TITLE_checkbox To SERIES_checkbox Step 3
+          DlgValue        CheckBoxControl%,             UNCHECKED
+        Next CheckBoxControl%
+
+      Case OK_button
+
+' When the "OK" button is clicked or [ENTER] is pressed, first check if there is any text
+' in the previous search combo box.
+
+        PreviousSearchString$ = DlgText( "PrevSrch_DropComboBox" )
+        If PreviousSearchString$ = PreviousSearchHeader$ Then
+            PreviousSearchString$ = ""
+        End If
+
+' Then go through all the check box controls. For each checked box, get whatever data are
+' associated with it. Keep the dialog box open for input if none of the checkboxes are
+' checked. If a checked dialog box is associated with no search label or no search term,
+' clear the check and don't count the box.
 
         For CheckBoxControl% = TITLE_checkbox To SERIES_checkbox Step 3
 
@@ -2478,26 +2881,27 @@ ResetDialogBox:
               SearchTerm$   = Trim$( DlgText( InputTextBox% ) )
               SearchLabel$  = DlgText( CheckBoxControl% + 1 )
               If SearchTerm$ = "" Or SearchLabel$ = "" Then
-                  DlgValue   CheckBoxControl%,             UNCHECKED
+                  DlgValue        CheckBoxControl%,             UNCHECKED
                 Else
 
 ' For each flagged trio of controls, test the input. The first test is to make sure a
 ' phrase search does not include a delimiter--except if the search text is the 245 field,
 ' because a phrase search on that field automatically includes both subfields $a and $b.
 
-                  If CheckBoxControl% > TITLE_checkbox Then
-                      p = InStr( SearchLabel$, "=" )
-                      If p <> 0 Then
-                          If Mid$( SearchLabel$, p - 1, 1 ) <> "w" Then
-                              If InStr( SearchTerm$, "$" ) Then
-                                  ProblemBox% = ( CheckBoxControl% + 1 ) / 3
-                                  MsgBox "Can't include delimiters in phrase search! Please check box " & Trim$( Str$( ProblemBox% ) ), WARNING_MESSAGE, WaltsMacros$
-                                  DlgFocus   InputTextBox%
-                                  GoTo KeepDialogOpen:
-                              End If
-                          End If
-                      End If
-                  End If
+' WHY DID I INCLUDE THIS SECTION CHECKING FOR A DELIMITER WHEN IT IS JUST REMOVED BELOW ANYWAY?
+'                 If CheckBoxControl% > TITLE_checkbox Then
+'                     p = InStr( SearchLabel$, "=" )
+'                     If p > 0 Then
+'                         If Mid$( SearchLabel$, p - 1, 1 ) <> "w" Then
+'                             If InStr( SearchTerm$, "$" ) Then
+'                                 ProblemBox% = ( CheckBoxControl% + 1 ) / 3
+'                                 MsgBox "Can't include delimiters in phrase search! Please check box " & Trim$( Str$( ProblemBox% ) ), WARNING_MESSAGE, WaltsMacros$
+'                                 DlgFocus        InputTextBox%
+'                                 GoTo KeepDialogOpen:
+'                             End If
+'                         End If
+'                     End If
+'                 End If
 
 ' The second test is to count parentheses. If present and in pairs, and are not used for
 ' grouping terms for Boolean word searches, the search string should be enclosed in
@@ -2506,14 +2910,16 @@ ResetDialogBox:
                   Select Case CheckParens( SearchTerm$ )
 
                     Case "OK"
+
                       If InStr( SearchLabel$, "=" ) Then
                           SearchTerm$ = QUOTE & SearchTerm$ & QUOTE
                       End If
 
                     Case "BAD"
+
                       ProblemBox% = ( CheckBoxControl% + 1 ) / 3
                       MsgBox "Please check the parentheses in box " & Trim$( Str$( ProblemBox% ) ) & "! There may be a problem.", WARNING_MESSAGE, WaltsMacros$
-                      DlgFocus   InputTextBox%
+                      DlgFocus        InputTextBox%
                       GoTo KeepDialogOpen:
 
                   End Select
@@ -2523,7 +2929,7 @@ ResetDialogBox:
                   Start% = 1
                   Do
                     p = InStr( Start%, SearchTerm$, QUOTE )
-                    If p <> 0 Then
+                    If p > 0 Then
                         QuoteCount% = QuoteCount% + 1
                         Start%      = p + 1
                     End If
@@ -2531,7 +2937,7 @@ ResetDialogBox:
                   If QuoteCount% Mod 2 = 1 Then
                       ProblemBox% = ( CheckBoxControl% + 1 ) / 3
                       MsgBox "Please check the quotation marks in box " & Trim$( Str$( ProblemBox% ) ) & "! There may be a problem.", WARNING_MESSAGE, WaltsMacros$
-                      DlgFocus   InputTextBox%
+                      DlgFocus        InputTextBox%
                       GoTo KeepDialogOpen:
                   End If
 
@@ -2540,7 +2946,7 @@ ResetDialogBox:
                   If InStr( SearchLabel$, ":" ) Then
                       Do
                         p = InStr( SearchTerm$, "&" )
-                        If p <> 0 Then
+                        If p > 0 Then
                             SearchTerm$ = Left$( SearchTerm$, p - 1 ) & Mid$( SearchTerm$, p + 1 )
                         End If
                       Loop Until p = 0
@@ -2550,10 +2956,10 @@ ResetDialogBox:
 
                   SearchTerm$  = StripDollarSigns( SearchTerm$ )
                   SearchLabel$ = GetIndexLabel( SearchLabel$ )
-                  If SearchString$ = "" Then
-                      SearchString$ = SearchLabel$ & SearchTerm$
+                  If CurrentSearchString$ = "" Then
+                      CurrentSearchString$ = SearchLabel$ & SearchTerm$
                     Else
-                      SearchString$ = SearchString$ & " AND " & SearchLabel$ & SearchTerm$
+                      CurrentSearchString$ = CurrentSearchString$ & " AND " & SearchLabel$ & SearchTerm$
                   End If
               End If
               BoxesChecked% = BoxesChecked% + 1
@@ -2561,14 +2967,14 @@ ResetDialogBox:
 
         Next CheckBoxControl%
 
-' If no checkboxes have been checked for inclusion, display a warning and keep the
-' dialog box open.
+' If no checkboxes have been checked for inclusion, and no previous search has been
+' selected, display a warning and keep the dialog box open.
 
-        If BoxesChecked% = 0 Then
+        If BoxesChecked% = 0 And PreviousSearchString$ = "" Then
             If MsgBox( "Please select some terms to search!", WARNING_MESSAGE + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_OK Then
                 GoTo KeepDialogOpen:
               Else
-                DlgEnd     0
+                DlgEnd          0
             End If
         End If
 
@@ -2578,7 +2984,7 @@ ResetDialogBox:
         If DlgValue( "Date_CheckBox" ) = CHECKED Then
             If DlgText( "Date_TextBox" ) <> "" Then
                 QualifierString$ = "yr:" & Trim$( DlgText( "Date_TextBox" ) )
-                SearchString$    = SearchString$ & " AND " & QualifierString$
+                CurrentSearchString$    = CurrentSearchString$ & " AND " & QualifierString$
             End If
         End If
 
@@ -2600,16 +3006,19 @@ ResetDialogBox:
               Select Case CheckBoxControl%
 
                 Case LANGUAGE_combobox
+
                   If QualifierText$ <> "und" Then
                       QualifierString$ = "la:" & QualifierText$
                   End If
 
                 Case COUNTRY_combobox
+
                   If QualifierText$ <> "xx" Then
                       QualifierString$ = "cp:" & QualifierText$
                   End If
 
                 Case LANG_CAT_combobox
+
                   If QualifierText$ = "english" Then
                       QualifierString$ = "ll:eng"
                     Else
@@ -2617,6 +3026,7 @@ ResetDialogBox:
                   End If
 
                 Case SOURCE_combobox
+
                   If QualifierText$ = "dlc" Then
                       QualifierString$ = "dl:y"
                     Else
@@ -2624,9 +3034,11 @@ ResetDialogBox:
                   End If
 
                 Case DESC_CON_combobox
+
                   QualifierString$ = "dx:" & QualifierText$
 
                 Case HOLDINGS_combobox
+
                   QualifierString$ = "li:" & QualifierText$
 
               End Select
@@ -2635,9 +3047,9 @@ ResetDialogBox:
 
           If QualifierString$ <> "" Then
               If QualifierAdd Then
-                  SearchString$ = SearchString$ & " AND " & QualifierString$
+                  CurrentSearchString$ = CurrentSearchString$ & " AND " & QualifierString$
                 Else
-                  SearchString$ = SearchString$ & " NOT " & QualifierString$
+                  CurrentSearchString$ = CurrentSearchString$ & " NOT " & QualifierString$
               End If
           End If
 
@@ -2665,33 +3077,61 @@ ResetDialogBox:
             QualifierText$ = "mt:rec"
           Case 8
             QualifierText$ = "mt:vis"
+
         End Select
 
         If QualifierText$ <> "" Then
-            SearchString$ = SearchString$ & " AND " & QualifierText$
+            CurrentSearchString$ = CurrentSearchString$ & " AND " & QualifierText$
         End If
 
         Select Case DlgValue( "Microforms" )
+
           Case 1
-            SearchString$  = SearchString$ & " AND mf:nmc"
+            CurrentSearchString$  = CurrentSearchString$ & " AND mf:nmc"
           Case 2
-            SearchString$  = SearchString$ & " AND mf:mic"
+            CurrentSearchString$  = CurrentSearchString$ & " AND mf:mic"
+
         End Select
 
         Select Case DlgValue( "Internet" )
+
           Case 1
-            SearchString$  = SearchString$ & " NOT mt:url"
+            CurrentSearchString$  = CurrentSearchString$ & " NOT mt:url"
           Case 2
-            SearchString$  = SearchString$ & " AND mt:url"
+            CurrentSearchString$  = CurrentSearchString$ & " AND mt:url"
+
         End Select
 
-' To see the search string before it's sent, un-comment these lines:
-'        If MsgBox( SearchString$, 33, WaltsMacros$ ) = 2 Then
-'            DlgEnd     0
-'        End If
+' If a previous search is included, add the current search string to it.
 
-        If Trim$( SearchString$ ) = "" Then
-            DlgEnd     0
+        If PreviousSearchString$ <> "" Then
+            PreviousSearchString$ = DlgText( "PrevSrch_DropComboBox" )
+            If CurrentSearchString$ = "" Then
+                CompleteSearchString$ = PreviousSearchString$
+              ElseIf Left$( CurrentSearchString$, 5 ) = " AND " Then
+                CompleteSearchString$ = PreviousSearchString$ & CurrentSearchString$
+              Else
+                CompleteSearchString$ = PreviousSearchString$ & " AND " & CurrentSearchString$
+            End If
+          Else
+            CompleteSearchString$ = CurrentSearchString$
+        End If
+
+' Review the search string before submitting it?
+
+        If VIEW_SEARCH_BEFORE_SENDING Then
+            If MsgBox( CompleteSearchString$, WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
+                DlgEnd          0
+            End If
+        End If
+
+' If the search string is empty, end the dialog. But if it's not, send the search to the
+' "SaveSearch" routine to add it to the array of previous searches (or to create the
+' array if it doesn't already exist). If the dialog box is still open, re-present (or
+' present for the first time) the array.
+
+        If Trim$( CompleteSearchString$ ) = "" Then
+            DlgEnd          0
           Else
 
 ' If the search returns a count of zero, display a message explaining that "no records
@@ -2700,8 +3140,9 @@ ResetDialogBox:
 ' and refine the search. The other option is to quit the macro.
 
             Clipboard.Clear
-            Clipboard.SetText SearchString$
-            NumberOfRecordsFound& = CS.Search( "WC", SearchString$ )
+            Clipboard.SetText CompleteSearchString$
+            NumberOfRecordsFound& = CS.Search( "WC", CompleteSearchString$ )
+            Call SaveSearch( CompleteSearchString$ )
             If NumberOfRecordsFound& = 1 Then
                 MsgBox "The system reports 1 record found, and this must be it!", INFORMATION_MESSAGE, WaltsMacros$
               ElseIf NumberOfRecordsFound& = 0 Then
@@ -2710,7 +3151,7 @@ ResetDialogBox:
                   OkButton      132, 104,  52, 14
                   CancelButton  192, 104,  52, 14
                   Text           12,   8, 232, 16, "The system reports no records found for this search string (which has been placed on the Windows Clipboard):"
-                  Text           16,  30, 224, 32, SearchString$
+                  Text           16,  30, 224, 32, CompleteSearchString$
                   Text           12,  68, 232, 24, MeaningOfZeroRecords$
                   GroupBox       12,  24, 232, 41, ""
                 End Dialog
@@ -2719,51 +3160,56 @@ ResetDialogBox:
                 Dialog Dialog2
                 If Err = DIALOG_BUTTON_CANCEL Then Exit Function
 
-                SearchString$ = ""
+                CompleteSearchString$ = ""
+                PreviousSearchString$ = ""
+                CurrentSearchString$  = ""
+
 KeepDialogOpen:
+
+                DlgVisible      "PrevSrch_GroupBox",          VISIBLE
                 Dialog1ControlFunction = KEEP_DLG_OPEN
             End If
         End If
 
-      Case QUALIFIER_BUTTON
+      Case QUALIFIER_button
 
 ' Clicking the qualifier button toggles between clearing all qualifiers and setting all
 ' qualifiers with data from the record.
 
         If Left$( DlgText( "ControlQualifiers" ), 3 ) = "Add" Then
-            DlgText    "ControlQualifiers",          "Remove all &qualifiers"
-            DlgText    "CountryPub_DropComboBox",    Ctry$
-            DlgValue   "Date_CheckBox",              CHECKED
-            DlgText    "Date_TextBox",               Trim$( DateString$ )
-            DlgText    "DescCon_DropComboBox",       Desc$
-            DlgValue   "Format_DropListBox",         TypeOfRecord%
-            DlgText    "Holdings_DropComboBox",      InstitutionCode$
+            DlgText         "ControlQualifiers",          "Remove all &qualifiers"
+            DlgText         "CountryPub_DropComboBox",    Ctry$
+            DlgValue        "Date_CheckBox",              CHECKED
+            DlgText         "Date_TextBox",               Trim$( DateString$ )
+            DlgText         "DescCon_DropComboBox",       Desc$
+            DlgValue        "Format_DropListBox",         TypeOfRecord%
+            DlgText         "Holdings_DropComboBox",      InstitutionCode$
             If Internets Then
-                DlgValue   "Internet",                   2
+                DlgValue        "Internet",                   2
               Else
-                DlgValue   "Internet",                   1
+                DlgValue        "Internet",                   1
             End If
-            DlgText    "LangOfCatalog_DropComboBox", CatLang$
-            DlgText    "Language_DropComboBox",      Lang$
+            DlgText         "LangOfCatalog_DropComboBox", CatLang$
+            DlgText         "Language_DropComboBox",      Lang$
             Selection% = DlgValue( "Format_DropListBox" )
             If Selection% = 2 Or Selection% = 7 Or Selection% = 8 Then  ' Non-microformable material
-                DlgEnable  "Microforms",                 DISABLED
-                DlgValue   "Microforms",                 1
-                DlgEnable  "MicroformsInclusion",        DISABLED
+                DlgEnable       "Microforms",                 DISABLED
+                DlgValue        "Microforms",                 1
+                DlgEnable       "MicroformsInclusion",        DISABLED
               Else
                 If Microform Then
-                    DlgValue   "Microforms",                 2
+                    DlgValue        "Microforms",                 2
                   Else
-                    DlgValue   "Microforms",                 1
+                    DlgValue        "Microforms",                 1
                 End If
             End If
-            DlgText    "Source_DropComboBox",        CatalogingAgency$
+            DlgText         "Source_DropComboBox",        CatalogingAgency$
           Else
             SetQualifiers
         End If
         Dialog1ControlFunction = KEEP_DLG_OPEN
 
-      Case HELP_BUTTON
+      Case HELP_button
 
         Call Help
         Dialog1ControlFunction = KEEP_DLG_OPEN
@@ -2772,18 +3218,18 @@ KeepDialogOpen:
 ' as a qualifier (such as for sound recordings), disable the microform drop box and its
 ' legend.
 
-      Case FORMAT_LIST
+      Case FORMAT_listbox
 
         Selection% = DlgValue( "Format_DropListBox" )
         If Selection% = 2 Or Selection% = 7 Or Selection% = 8 Then
-            DlgEnable  "Microforms",                 DISABLED
-            DlgEnable  "MicroformsInclusion",        DISABLED
+            DlgEnable       "Microforms",                 DISABLED
+            DlgEnable       "MicroformsInclusion",        DISABLED
           Else
-            DlgEnable  "Microforms",                 ENABLED
-            DlgEnable  "MicroformsInclusion",        ENABLED
+            DlgEnable       "Microforms",                 ENABLED
+            DlgEnable       "MicroformsInclusion",        ENABLED
         End If
 
-      Case RESET_BUTTON
+      Case RESET_button
 
         Dialog1ControlFunction = KEEP_DLG_OPEN
         GoTo ResetDialogBox:
@@ -2801,36 +3247,92 @@ KeepDialogOpen:
       Case TITLE_checkbox
 
         If DlgValue( "Titles_CheckBox" ) = UNCHECKED And TitlesComboBoxChange Then
-            DlgValue   "Titles_CheckBox",            CHECKED
+            DlgValue        "Titles_CheckBox",            CHECKED
             TitlesComboBoxChange = FALSE
         End If
 
       Case NAME_checkbox
 
         If DlgValue( "Names_CheckBox" ) = UNCHECKED And NamesComboBoxChange Then
-            DlgValue   "Names_CheckBox",             CHECKED
+            DlgValue        "Names_CheckBox",             CHECKED
             NamesComboBoxChange = FALSE
         End If
 
       Case NOTE_checkbox
 
         If DlgValue( "Notes_CheckBox" ) = UNCHECKED And NotesComboBoxChange Then
-            DlgValue   "Notes_CheckBox",             CHECKED
+            DlgValue        "Notes_CheckBox",             CHECKED
             NotesComboBoxChange= FALSE
         End If
 
       Case SUBJECT_checkbox
 
         If DlgValue( "Subjects_CheckBox" ) = UNCHECKED And SubjectsComboBoxChange Then
-            DlgValue   "Subjects_CheckBox",          CHECKED
+            DlgValue        "Subjects_CheckBox",          CHECKED
             SubjectsComboBoxChange= FALSE
         End If
 
       Case SERIES_checkbox
 
         If DlgValue( "Series_CheckBox" ) = UNCHECKED And SeriesComboBoxChange Then
-            DlgValue   "Series_CheckBox",            CHECKED
+            DlgValue        "Series_CheckBox",            CHECKED
             SeriesComboBoxChange= FALSE
+        End If
+
+      Case PREV_SRCH_CLEAR_button
+
+        DlgEnable       "PrevSrchClear_Button",       DISABLED
+        DlgEnable       "PrevSrchDelete_Button",      DISABLED
+        DlgText         "PrevSrch_DropComboBox",      PreviousSearchHeader$
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case PREV_SRCH_DELETE_button
+
+' When a previous search is deleted, the list of such searches must be adjusted. If what
+' is deleted is the only previous search, the whole file is deleted, and the dialog box
+' controls having to do with previous searches must be hidden. Otherwise, the array is
+' re-arranged and re-presented in the dialog box, with the first (most recent) search
+' selected by default. The job of saving the smaller array is done by the "SaveSearch"
+' sub; sending the string "One previous search deleted" is the clue that the array needs
+' nothing done to it, and that saving the array to disk is the only task necessary.
+
+        If DlgText( "PrevSrch_DropComboBox" ) <> PreviousSearchHeader$ Then
+            PreviousSearchSelection% = DlgValue( "PrevSrch_DropComboBox" )
+            UBSavedSearches%  = UBound( SavedSearches )
+            If UBSavedSearches% = 0 Then
+                Erase SavedSearches
+                Kill SavedSearchesFile$
+                FileNum% = FreeFile
+                On Error Resume Next
+                Open SavedSearchesFile$ For Input As #FileNum%
+                If Err <> FILE_NOT_FOUND Then
+                    MsgBox "Sorry, could not delete the saved searches file.", WARNING_MESSAGE, WaltsMacros$
+                End If
+                SavedSearchesFileExists = FALSE
+              Else
+                If PreviousSearchSelection% < UBSavedSearches% Then
+                    For i = PreviousSearchSelection% To UBSavedSearches% - 1
+                      SavedSearches( i ) = SavedSearches( i + 1 )
+                    Next i
+                End If
+                ReDim Preserve SavedSearches( UBSavedSearches% - 1 )
+                Call SaveSearch( "One previous search deleted" )
+                DlgListBoxArray "PrevSrch_DropComboBox",      SavedSearches()
+                DlgText         "PrevSrch_DropComboBox",      PreviousSearchHeader$
+            End If
+        End If
+        DlgEnable       "PrevSrchClear_Button",       DISABLED
+        DlgEnable       "PrevSrchDelete_Button",      DISABLED
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case PREV_SEARCH_combobox
+
+        If DlgText( "PrevSrch_DropComboBox" ) = PreviousSearchHeader$ Then
+            DlgEnable       "PrevSrchClear_Button",       DISABLED
+            DlgEnable       "PrevSrchDelete_Button",      DISABLED
+          Else
+            DlgEnable       "PrevSrchClear_Button",       ENABLED
+            DlgEnable       "PrevSrchDelete_Button",      ENABLED
         End If
 
 '########################################################################################
@@ -2843,7 +3345,7 @@ KeepDialogOpen:
 
       Case PLACE_LABEL_listbox, PUBLISHER_LABEL_listbox, EXTENT_LABEL_textbox
 
-        DlgValue   DialogControlID% - 1,         CHECKED
+        DlgValue        DialogControlID% - 1,         CHECKED
 
 ' When a search label is changed, use the current selection of its related combo box as
 ' an index to the array of raw data, and send that string to the "MakeSearchElement"
@@ -2858,54 +3360,70 @@ KeepDialogOpen:
 
       Case NAME_listbox, NOTE_listbox, SERIES_listbox, SUBJECT_listbox, TITLE_listbox
 
-        DlgValue   DialogControlID% - 1,         CHECKED
+        DlgValue        DialogControlID% - 1,         CHECKED
         TempString$ = DlgText( DialogControlID% + 1 )
         Selection%  = DlgValue( DialogControlID% + 1 )
+
+' If the "Raw" arrays were never initialized, then searching for an entry in them throws
+' error 9, "Subscript out of range". In that case, TempString$ will be empty.
+
+        On Error Resume Next
+
         Select Case DialogControlID%
 
           Case NAME_listbox
+
             If Selection% < 0 And NamesComboBoxChange = TRUE Then
                 Tag$                 = PreviousNamesTag$
                 TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = NamesRaw( PreviousNamesSelection% )
+                If Err = SUBSCRIPT_OUT_OF_RANGE Then TempString$ = ""
                 PreviousNamesTag$    = Left$( TempString$, 3 )
                 If Selection% >= 0 Then PreviousNamesSelection% = Selection%
             End If
 
           Case NOTE_listbox
+
             If Selection% < 0 And NotesComboBoxChange = TRUE Then
                 Tag$                 = PreviousNotesTag$
                 TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = NotesRaw( Selection% )
+                If Err = SUBSCRIPT_OUT_OF_RANGE Then TempString$ = ""
                 PreviousNotesTag$    = Left$( TempString$, 3 )
             End If
 
           Case SERIES_listbox
+
             If Selection% < 0 And SeriesComboBoxChange = TRUE Then
                 Tag$                 = PreviousSeriesTag$
                 TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = SeriesRaw( Selection% )
+                If Err = SUBSCRIPT_OUT_OF_RANGE Then TempString$ = ""
                 PreviousSeriesTag$   = Left$( TempString$, 3 )
             End If
 
           Case SUBJECT_listbox
+
             If Selection% < 0 And SubjectsComboBoxChange = TRUE Then
                 Tag$                 = PreviousNotesTag$
                 TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = SubjectsRaw( Selection% )
+                If Err = SUBSCRIPT_OUT_OF_RANGE Then TempString$ = ""
                 PreviousSubjectsTag$ = Left$( TempString$, 3 )
             End If
 
           Case TITLE_listbox
+
             If Selection% < 0 And TitlesComboBoxChange = TRUE Then
                 Tag$                 = PreviousTitlesTag$
                 TempString$          = Tag$ & DELIMITER & "a " & Trim$( DlgText( DialogControlID% + 1 ) )
               Else
                 TempString$          = TitlesRaw( PreviousTitlesSelection% )
+                If Err = SUBSCRIPT_OUT_OF_RANGE Then TempString$ = ""
                 PreviousTitlesTag$   = Left$( TempString$, 3 )
                 PreviousTitlesSelection% = Selection%
             End If
@@ -2924,19 +3442,22 @@ KeepDialogOpen:
           Select Case DialogControlID%
 
               Case NAME_listbox
-                DlgVisible "SearchAsSubfA_Names",        VISIBLE
+
+                DlgVisible      "SearchAsSubfA_Names",        VISIBLE
 
               Case SERIES_listbox
-                DlgVisible "SearchAsSubfA_Series",       VISIBLE
+
+                DlgVisible      "SearchAsSubfA_Series",       VISIBLE
 
               Case SUBJECT_listbox
-                DlgVisible "SearchAsSubfA_Subjects",     VISIBLE
+
+                DlgVisible      "SearchAsSubfA_Subjects",     VISIBLE
 
             End Select
 
           End If
-        DlgText    DialogControlID% + 1,         TempString$
-        DlgText    DialogControlID%,             SearchLabel$
+        DlgText         DialogControlID% + 1,         TempString$
+        DlgText         DialogControlID%,             SearchLabel$
 
 '########################################################################################
 
@@ -2958,19 +3479,29 @@ KeepDialogOpen:
     Select Case ComboBoxControl%
 
       Case NAME_combobox
+
         NamesComboBoxChange    = TRUE
 
       Case NOTE_combobox
+
         NotesComboBoxChange    = TRUE
 
       Case SERIES_combobox
+
         SeriesComboBoxChange   = TRUE
 
       Case SUBJECT_combobox
+
         SubjectsComboBoxChange = TRUE
 
       Case TITLE_combobox
+
         TitlesComboBoxChange   = TRUE
+
+      Case PREV_SEARCH_combobox
+
+        DlgEnable       "PrevSrchClear_Button",       ENABLED
+        DlgEnable       "PrevSrchDelete_Button",      ENABLED
 
     End Select
 
@@ -2978,7 +3509,7 @@ KeepDialogOpen:
 
       Case PLACE_textbox, 13, 16, NOTE_combobox
 
-        DlgValue   ComboBoxControl% - 2,         CHECKED
+        DlgValue        ComboBoxControl% - 2,         CHECKED
 
 ' A change in the content of a combo box may mean a change in the index label. If the
 ' change is simply the selection of another element of the array, the tag of that element
@@ -2988,29 +3519,33 @@ KeepDialogOpen:
 
       Case NAME_combobox, SERIES_combobox, SUBJECT_combobox, TITLE_combobox
 
-        DlgValue   ComboBoxControl% - 2,         CHECKED
+        DlgValue        ComboBoxControl% - 2,         CHECKED
         Selection% = DlgValue( ComboBoxControl% )
         If Selection% > -1 Then
 
             Select Case ComboBoxControl%
 
               Case NAME_combobox
+
                 TempString$ = NamesRaw( Selection% )
 
               Case SERIES_combobox
+
                 TempString$ = SeriesRaw( Selection% )
 
               Case SUBJECT_combobox
+
                 TempString$ = SubjectsRaw( Selection% )
 
               Case TITLE_combobox
+
                 TempString$ = TitlesRaw( Selection% )
 
             End Select
 
             SearchLabel$ = ""
             TempString$  = MakeSearchElement( TempString$, SearchLabel$, ComboBoxControl% - 2 )
-            DlgText    ComboBoxControl% - 1,         SearchLabel$
+            DlgText         ComboBoxControl% - 1,         SearchLabel$
         End If
 
     End Select
@@ -3033,22 +3568,25 @@ KeepDialogOpen:
     Select Case ControlWithFocus%
 
       Case PLACE_textbox, PUBLISHER_textbox, EXTENT_textbox   'The simple text boxes.
-        DlgValue   ControlWithFocus% - 2,        CHECKED
+
+        DlgValue        ControlWithFocus% - 2,        CHECKED
 
       Case EXTENT_LABEL_textbox
-        DlgValue   ControlWithFocus% - 1,        CHECKED
-        DlgFocus   "Extent_TextBox"
+
+        DlgValue        ControlWithFocus% - 1,        CHECKED
+        DlgFocus        "Extent_TextBox"
 
       Case DATE_textbox
-        DlgValue   ControlWithFocus% - 1,        CHECKED
+
+        DlgValue        ControlWithFocus% - 1,        CHECKED
 
     End Select
 
 End Select
 
 End Function
-'3076122595
+'3614142560
 '
 'Macro name: KeywordSearchHelper
-'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 9/27/2017 2:20:38 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
+'Saved: 12/17/2018 9:01:53 AM using "MacroBookInspector" macro by Walter F. Nickeson.

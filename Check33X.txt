@@ -1,11 +1,11 @@
-'MacroName:Check33X.2017.58
+'MacroName:Check33X.2018.04
 'MacroDescription:Adds/changes RDA 33X fields.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 21 June 2017.
+' Last updated: 13 June 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -120,7 +120,6 @@ Global Count336%
 Global Count337%
 Global Count338%
 Global Count33X%
-Global DELIMITER As String*1
 Global ExistingField As FieldInfo
 Global Field336Constructed$
 Global Field336Finished$
@@ -135,6 +134,8 @@ Global NewField1$
 Global NewField2$
 Global NewField3$
 Global WaltsMacros$
+
+Global DELIMITER As String*1
 
 Global CarrierAudio        (  8 ) As String
 Global CarrierComputer     (  9 ) As String
@@ -171,7 +172,6 @@ Const FIRST_FIELD          As Integer = 0
 Const LAST_FIELD           As Integer = 1
 
 Dim CarrierLine$
-Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
 Dim Field007$
 Dim FieldData$
 Dim FieldToAdd$
@@ -187,12 +187,14 @@ Dim MissingFields%
 Dim NotAdded$
 Dim PosFF%
 Dim ReplaceVal%
-Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE = Chr$( 039 )
 Dim Tag$
 Dim TagCount%
 Dim TempString$
 Dim UBaExisting33X%
 Dim Window%
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE = Chr$( 039 )
 
 Dim i As Integer, p As Integer
 
@@ -206,7 +208,7 @@ WaltsMacros$    = "[Walt's macros] Essentials:Check33X"
 Window% = CS.ItemType
 Select Case Window%
   Case -1, 3 To 16, 18, 20-36
-    MsgBox "This macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -215,7 +217,7 @@ End Select
 If CS.GetField( "040", 1, FieldData$ ) Then
     p = InStr( FieldData$, DELIMITER & "b" )
     If p <> 0 And Mid$( FieldData$, p + 3, 3 ) <> "eng" Then
-        MsgBox "Sorry, this macro only works in English-language records!", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox "Sorry, this macro works only in English-language records!", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
 End If
@@ -988,33 +990,35 @@ If Form007Mismatch$ <> "" Then
     MsgBox "Warning! " & Form007Mismatch$, WARNING_MESSAGE, WaltsMacros$
 End If
 
-Begin Dialog Dialog1Definition  336, 168, WaltsMacros$, .Dialog1ControlFunction
-  OKButton       212, 144,  52,  14
-  CancelButton   272, 144,  52,  14
-  DropListBox     62,  28, 160, 128, ContentTypes(),                    .Content
-  DropListBox     62,  48, 160, 108, MediaTypes(),                      .Media
-  DropListBox     62,  68, 160, 108, CarrierTypes(),                    .Carrier
-  CheckBox        20,  96,  12,  12, "",                                .Field_1_CheckBox
-  CheckBox        20, 108,  12,  12, "",                                .Field_2_CheckBox
-  CheckBox        20, 120,  12,  12, "",                                .Field_3_CheckBox
-  Text            32,  98, 280,  12, "",                                .Field_1_Text
-  Text            32, 110, 280,  12, "",                                .Field_2_Text
-  Text            32, 122, 280,  12, "",                                .Field_3_Text
-  TextBox        110,  10, 112,  12,                                    .Materials
-  OptionGroup                                                           .TermOrCodeChoice
-   OptionButton  242,  35,  70,  12, "Codes and terms",                 .OptionButton1
-   OptionButton  242,  49,  52,  12, "Terms only",                      .OptionButton2
-   OptionButton  242,  63,  52,  12, "Codes only",                      .OptionButton3
-   PushButton     12, 144,  64,  14, "&Update display",                 .Update
-  GroupBox       232,  24,  92,  57, "Codes or terms?"
-  Text            12,  10,  96,   8, "Materials specified (optional):"
-  Text            12,  30,  48,   8, "Content Type:"
-  Text            12,  50,  48,   8, "Media Type:"
-  Text            12,  70,  48,   8, "Carrier Type:"
-  Text            54,  50,   8,   8, "?",                               .Q337
-  Text            54,  70,   8,   8, "?",                               .Q338
-  Text            62,  86, 160,  24, "",                                .InfoMessage
-  GroupBox        12,  86, 312,  50, "",                                .FieldBox
+Begin Dialog Dialog1Definition  332, 168, WaltsMacros$, .Dialog1ControlFunction
+  OKButton       210, 144,  52,  14
+  CancelButton   270, 144,  52,  14
+  DropListBox     60,  28, 160, 128, ContentTypes(),                                       .Content
+  DropListBox     60,  48, 160, 108, MediaTypes(),                                         .Media
+  DropListBox     60,  68, 160, 108, CarrierTypes(),                                       .Carrier
+  CheckBox        18,  96,  12,  12, "",                                                   .Field_1_CheckBox
+  CheckBox        18, 108,  12,  12, "",                                                   .Field_2_CheckBox
+  CheckBox        18, 120,  12,  12, "",                                                   .Field_3_CheckBox
+  Text            30,  98, 280,  12, "",                                                   .Field_1_Text
+  Text            30, 110, 280,  12, "",                                                   .Field_2_Text
+  Text            30, 122, 280,  12, "",                                                   .Field_3_Text
+  TextBox        108,  10, 112,  12,                                                       .Materials
+  OptionGroup                                                                              .TermOrCodeChoice
+   OptionButton  240,  39,  70,  12, "Codes and terms",                                    .OptionButton1
+   OptionButton  240,  51,  52,  12, "Terms only",                                         .OptionButton2
+   OptionButton  240,  63,  52,  12, "Codes only",                                         .OptionButton3
+   PushButton    230,   8,  60,  14, "&Update display",                                    .Update
+  GroupBox       230,  28,  92,  52, "Codes or terms?"
+  Text            10,  10,  96,   8, "Materials specified (optional):"
+  Text            10,  30,  48,   8, "Content Type:"
+  Text            10,  50,  48,   8, "Media Type:"
+  Text            10,  70,  48,   8, "Carrier Type:"
+  Text            52,  50,   8,   8, "?",                                                  .Q337
+  Text            52,  70,   8,   8, "?",                                                  .Q338
+  Text            60,  86, 160,  24, "",                                                   .InfoMessage
+  GroupBox        10,  86, 312,  50, "",                                                   .FieldBox
+  Text            10, 140, 160,   8, "Mark a checkbox to replace the field (if present).", .CheckboxMark
+  Text            10, 148, 160,   8, "Clear the checkbox to add the field.",               .CheckboxClear
 End Dialog
 
 Dim Dialog1 as Dialog1Definition
@@ -1138,7 +1142,6 @@ Dim TempString$
 Dim FoundField               : FoundField = FALSE
 
 Dim i As Integer, j As Integer, p As Integer, q As Integer
-
 
 For i = 0 To UBound( aExisting33X )
   If aExisting33X( i ).Comparison = ABSENT Then Exit Sub
@@ -1375,6 +1378,7 @@ Sub SetDialogBoxControls
 
 Dim CompareVal%
 Dim ControlsSettings$
+Dim FieldAddOrReplace$
 Dim FieldCount$
 Dim New33XCount%
 Dim PrevControlsSettings$
@@ -1598,10 +1602,13 @@ Select Case New33XCount%
 
   Case 1
     FieldCount$ = "one field"
+    FieldAddOrReplace$ = "field"
   Case 2
     FieldCount$ = "two fields"
+    FieldAddOrReplace$ = "fields"
   Case 3
     FieldCount$ = "three fields"
+    FieldAddOrReplace$ = "fields"
 
 End Select
 
@@ -1643,6 +1650,8 @@ Next i
 '     be added; the remaining 33X field(s) are the same as the new field(s).
 
 If TextSettings% = 4 Then
+    DlgVisible      "CheckboxClear",    INVISIBLE
+    DlgVisible      "CheckboxMark",     INVISIBLE
     DlgVisible      "FieldBox",         INVISIBLE
     DlgText         "InfoMessage",      "Fields with these values are already in the record. Select different values to add new fields or to replace the existing fields."
     DlgVisible      "InfoMessage",      VISIBLE
@@ -1653,6 +1662,8 @@ If TextSettings% = 4 Then
         DlgVisible      "InfoMessage",      VISIBLE
         DlgEnable       "OK",               DISABLED
       Else
+        DlgVisible      "CheckboxClear",    VISIBLE
+        DlgVisible      "CheckboxMark",     VISIBLE
         DlgVisible      "FieldBox",         VISIBLE
         DlgVisible      "InfoMessage",      INVISIBLE
         DlgEnable       "OK",               ENABLED
@@ -1928,7 +1939,7 @@ Function ConstructField( InString$, ButtonChoice% ) As String
 ' only the term, or only the code. For display, the dollar sign is used for the subfield
 ' delimiter.
 
-Dim Materials$               : Materials$ = ""
+Dim Materials$
 Dim TempString$
 
 Dim p As Integer
@@ -2042,7 +2053,7 @@ Const INITIALIZE     As Integer = 1   'The value of the dialog box function para
 Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog box function to keep a dialog box open.
 Const TEXTBOX_CHANGE As Integer = 3   'The value of the dialog box function parameter "Action%" when a change is made to to a textbox.
 
-Dim Materials$               : Materials$ = ""
+Dim Materials$
 Dim Tag$
 Dim TempString$
 Dim TermsAndCodes%
@@ -2071,14 +2082,16 @@ Select Case Action%
         DlgVisible      "Q337",             VISIBLE
         DlgVisible      "Q338",             VISIBLE
     End If
+    DlgValue        "Carrier",          0
+    DlgVisible      "CheckboxClear",    INVISIBLE
+    DlgVisible      "CheckboxMark",     INVISIBLE
+    DlgValue        "Content",          ContentDefault%
     DlgVisible      "Field_1_CheckBox", INVISIBLE
     DlgVisible      "Field_1_Text",     INVISIBLE
     DlgVisible      "Field_2_CheckBox", INVISIBLE
     DlgVisible      "Field_2_Text",     INVISIBLE
     DlgVisible      "Field_3_CheckBox", INVISIBLE
     DlgVisible      "Field_3_Text",     INVISIBLE
-    DlgValue        "Content",          ContentDefault%
-    DlgValue        "Carrier",          0
     DlgValue        "Media",            MediaDefault%
 
 ' If information in the record allows some terms to be displayed as initial suggestions,
@@ -2364,8 +2377,8 @@ Select Case Action%
 End Select
 
 End Function
-'2393111247
+'2406112204
 '
 'Macro name: Check33X
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/28/2017 11:27:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:00:57 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,4 +1,4 @@
-'MacroName:BrowseAuthority.2017.04
+'MacroName:BrowseAuthority.2018.08
 'MacroDescription:Browses the Authority File using an existing heading or selected text
 ' within a field.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 5 July 2017.
+' Last updated: 20 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -27,12 +27,14 @@
 ' to efficiently add it to the bibliographic record.
 '
 ' In a bibliographic record, heading fields are 1XX, 490, 600-653 and 655, 700-730, and
-' 800-830. In an authority record, heading fields are 1XX, 4XX, and 5XX, excepting X62;
-' but if the cursor is in any other field, the macro browses on the heading in the 1XX,
-' ignoring extra subfields, such as subject subdivisions, subordinate units of a
-' corporate name, or a title following a name. When the cursor is not in a heading field
-' the macro offers, if available, the option to browse on headings referred to in 680 and
-' 681 fields, or in a 260 or 360 field.
+' 800-830. The macro language doesn't allow for searching genre headings, so the 655 may
+' be searched as a subject. In an authority record, heading fields are 1XX, 4XX, and 5XX,
+' with the exceptions of X47, X48, X55, and X62; but if the cursor is in any other field
+' in the record, the macro browses on the heading in the 1XX, ignoring extra subfields,
+' such as subject subdivisions, subordinate units of a corporate name, or a title
+' following a name. If the cursor is not in a heading field the macro offers, if
+' available, the option to browse on headings referred to in 680 and 681 fields, or in a
+' 260 or 360 field.
 '
 ' If the heading to be browsed consists of a simple name or title, or an undivided
 ' subject term, the macro executes the search immediately, choosing the index to browse in
@@ -136,7 +138,6 @@ Global Const TITLE_SELECT   As Integer = 6    'The value of the option button gr
 Global CS As Object
 
 Global BaseHeading$
-Global COMMA As String*1
 Global CountOfNames%
 Global CountOfSubdivisions%
 Global HeadingCount%
@@ -151,6 +152,8 @@ Global SubjectString$
 Global TitleHeading$
 Global WaltsMacros$
 
+Global COMMA As String*1
+
 Global ChangedFFView
 Global ProbableTitle
 Global Selection
@@ -160,13 +163,9 @@ Global Names()        As String
 Global Stopwords()    As String
 Global Subdivisions() As String
 
-Declare Sub LogMacroUse
-
 '****************************************************************************************
 
 Sub Main
-
-LogMacroUse
 
 Const CRITICAL_MESSAGE            As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                                    ' a big "X") in a message box; used to report the macro quitting.
@@ -178,7 +177,7 @@ Const ASCII_DIFF_SUPERSCRIPT      As Integer = 80  'The difference between ASCII
 Const FIELD_DATA_BEGINS           As Integer = 6   'The position in a field of the first character of the data (following tag and indicators).
 Const LCSH_INDICATOR              As String  = "0" 'The value indicating the subject heading conforms to forms established by LC.
 Const MAX_LEN_SEARCH_STRING       As Integer = 60  'The maximum length, in characters, of the browse string (Searching WorldCat Indexes,
-                                                   ' <http://www.oclc.org/support/help/SearchingWorldCatIndexes/default.htm#03_Getting_Started/Browsing.htm%3FTocPath%3DGetting%2520started|_____1>,
+                                                   ' <https://help.oclc.org/Librarian_Toolbox/Searching_WorldCat_Indexes/Get_started/Searching_WorldCat_indexes_guidelines_and_requirements>,
                                                    ' or page 15 of the 4/14/2014 PDF version).
 Const MSGBOX_RETURN_CANCEL        As Integer = 2   'The value returned by a message box when the "Cancel" button is clicked.
 Const MSGBOX_RETURN_NO            As Integer = 7   'The value returned by a message box when the "No" button is clicked.
@@ -201,11 +200,9 @@ Const UNIFORM_TITLE               As Integer = 4
 Set CS = CreateObject("Connex.Client")
 
 Dim AFIndex$
-Dim CR As String*1           : CR              = Chr$( 013 )
 Dim CharA%
 Dim CharT$
 Dim Col%
-Dim DELIMITER As String*1    : DELIMITER       = Chr$( 223 )
 Dim FieldCount%
 Dim FieldText$
 Dim FieldText240$
@@ -224,7 +221,6 @@ Dim OptionParam1$
 Dim OptionParam2$
 Dim OptionParam3$
 Dim PosFF%
-Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE    = Chr$( 034 )
 Dim RawString$
 Dim RawStringLength%
 Dim Remainder$
@@ -233,7 +229,6 @@ Dim SearchString$
 Dim SelectedText$
 Dim Start%
 Dim StartC%
-Dim ESC As String*1          : ESC             = Chr$( 027 )
 Dim SubdivSearchMsg$
 Dim Subfield$
 Dim SubfieldCode$
@@ -245,6 +240,11 @@ Dim TracingNote$
 Dim TypeOfHeading%
 Dim WindowType%
 Dim WorkString$
+
+Dim CR As String*1           : CR              = Chr$( 013 )
+Dim DELIMITER As String*1    : DELIMITER       = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE    = Chr$( 034 )
+Dim ESC As String*1          : ESC             = Chr$( 027 )
 
 Dim AuthorityRecord
 Dim FoundField
@@ -273,7 +273,7 @@ Selection     = FALSE
 Selection = CS.GetSelectedText( SelectedText$ )
 If Selection Then
     If SelectedText$ = "Data contains non-latin script" Then
-        MsgBox "The selected text is not searchable because it contains non-Latin script. This macro works only with characters in Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox "The selected text is not searchable because it contains non-Latin script. This macro only works with characters in Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
     Clipboard.Clear
@@ -291,7 +291,7 @@ Col% = CS.CursorColumn
 WindowType% = CS.ItemType
 Select Case WindowType%
   Case -1, 5 To 13, 15 To 16, 21 To 25, 36
-    MsgBox "This macro works only in bibliographic and authority records. Please open a bibliographic or authority record to select text or search on a heading.", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro only works in a bibliographic or authority record. Open a record to select text or search on a heading.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
   Case 3, 4, 18
     AuthorityRecord = TRUE
@@ -364,27 +364,31 @@ Select Case Tag$
 '#####  Index Term--Genre/Form   ########################################################
 
 ' It is not possible for a macro to browse genre terms, so they must be searched as
-' subjects. Search a genre term from LCSH as a subject; for all other terms, ask before
-' proceeding.
+' subjects. In a bibliographic record, search a genre term from LCSH as a subject; for
+' all other terms, and for headings in authority records, ask before proceeding.
 
-  Case "655"
+  Case "155", "555", "655"
     TypeOfHeading% = SUBJECT
     SubjectHeading = TRUE
-    If Right$( Indicators$, 1 ) <> LCSH_INDICATOR Then
-        If Right$( Indicators$, 1 ) = "7" Then
-            Start% = 6
-            Do
-              p = InStr( Start%, FieldText$, DELIMITER )
-              If p <> 0 Then
-                  SubfieldCode$ = Mid$( FieldText$, p + 1, 1 )
-                  If SubfieldCode$ = "2" Then
-                      If Mid$( FieldText$, p + 1, 6 ) <> "2 lcsh" Then
-                          LCSubject = FALSE
+    If AuthorityRecord Then
+        LCSubject = FALSE
+      Else
+        If Right$( Indicators$, 1 ) <> LCSH_INDICATOR Then
+            If Right$( Indicators$, 1 ) = "7" Then
+                Start% = 6
+                Do
+                  p = InStr( Start%, FieldText$, DELIMITER )
+                  If p <> 0 Then
+                      SubfieldCode$ = Mid$( FieldText$, p + 1, 1 )
+                      If SubfieldCode$ = "2" Then
+                          If Mid$( FieldText$, p + 1, 6 ) <> "2 lcsh" Then
+                              LCSubject = FALSE
+                          End If
                       End If
                   End If
-              End If
-              Start% = p + 1
-            Loop Until p = 0
+                  Start% = p + 1
+                Loop Until p = 0
+            End If
         End If
     End If
 
@@ -593,7 +597,7 @@ End If
 ' the second indicator). A non-LC heading requires confirmation before proceeding.
 
 If SubjectHeading = TRUE And LCSubject = FALSE Then
-    If Tag$ = "655" Then
+    If Tag$ = "655" Or Tag$ = "555" Then
         If MsgBox( "This genre heading must be searched as an LC subject. Continue?", WARNING_QUERY + MSGBOX_SETBUTTONS_YES_NO, WaltsMacros$ ) = MSGBOX_RETURN_NO Then
             GoTo Done:
         End If
@@ -897,7 +901,9 @@ Do
 ' Subfields marking a title field:
 
         Case "K", "T"
-          NameTitle    = TRUE
+          If TypeOfHeading% <> UNIFORM_TITLE Then
+              NameTitle    = TRUE
+          End If
           TitleString$ = TitleString$ & " " & Subfield$
 
 ' Subfields associated with a title heading:
@@ -1091,6 +1097,12 @@ If NotHeadingField Then
               Else
                 Remainder$    = Trim$( Mid$( SearchString$, p + 2 ) )
                 SearchString$ = Trim$( Left$( SearchString$, p - 1 ) )
+                Do
+                  p = InStr( Remainder$, "--" )
+                  If p > 0 Then
+                      Remainder$ = Left$( Remainder$, p - 1 ) & " " & Mid$( Remainder$, p + 2 )
+                  End If
+                Loop Until p = 0
                 If CS.BrowseAuthorityExpanded( "0", "su", SearchString$, Remainder$ ) = FALSE Then GoTo Failure:
             End If
             Exit Sub
@@ -1978,9 +1990,10 @@ Function FlatSharpFix( SomeString$, Switch% )
 ' the terms "-flat" or "-sharp", this function converts them to the appropriate character
 ' in order to properly execute the search.
 
-Dim MusicFlatSign$           : MusicFlatSign$  = Chr$( 169 )
-Dim MusicSharpSign$          : MusicSharpSign$ = Chr$( 204 )
 Dim TempString$
+
+Dim MUSIC_FLAT_SIGN  As String*1 : MUSIC_FLAT_SIGN  = Chr$( 169 )
+Dim MUSIC_SHARP_SIGN As String*1 : MUSIC_SHARP_SIGN = Chr$( 204 )
 
 Dim p As Integer
 
@@ -1991,7 +2004,7 @@ If Switch% = SIGN_TO_WORD Then
 ' Convert the music flat and sharp signs to words for the display.
 
     Do
-      p = InStr( TempString$, MusicFlatSign$ )
+      p = InStr( TempString$, MUSIC_FLAT_SIGN )
       If p <> 0 Then
           TempString$   = Left$( TempString$, p - 1 ) & "-FLAT" & Mid$( TempString$, p + 1 )
           ProbableTitle = TRUE
@@ -1999,7 +2012,7 @@ If Switch% = SIGN_TO_WORD Then
     Loop Until p = 0
 
     Do
-      p = InStr( 1, TempString$, MusicSharpSign$ )
+      p = InStr( 1, TempString$, MUSIC_SHARP_SIGN )
       If p <> 0 Then
           TempString$   = Left$( TempString$, p - 1 ) & "-SHARP" & Mid$( TempString$, p + 1 )
           ProbableTitle = TRUE
@@ -2024,7 +2037,7 @@ If Switch% = SIGN_TO_WORD Then
       p = InStr( TempString$, "-FLAT" )
       If p > 1 Then
           If Mid$( TempString$, p - 1, 1 ) Like "[A-Ga-g]" Then
-              TempString$ = Left$( TempString$, p - 1 ) & MusicFlatSign$ & Mid$( TempString$, p + 4 )
+              TempString$ = Left$( TempString$, p - 1 ) & MUSIC_FLAT_SIGN & Mid$( TempString$, p + 4 )
           End If
       End If
     Loop Until p = 0
@@ -2033,7 +2046,7 @@ If Switch% = SIGN_TO_WORD Then
       p = InStr( TempString$, "-SHARP" )
       If p > 1 Then
           If Mid$( TempString$, p - 1, 1 ) Like "[A-Ga-g]" Then
-              TempString$ = Left$( TempString$, p - 1 ) & MusicSharpSign$ & Mid$( TempString$, p + 6 )
+              TempString$ = Left$( TempString$, p - 1 ) & MUSIC_SHARP_SIGN & Mid$( TempString$, p + 6 )
           End If
       End If
     Loop Until p = 0
@@ -2533,7 +2546,9 @@ Select Case Action%
             DlgVisible "TextBox1",           VISIBLE
 
 ' More than one name (i.e., a corporate body with subordinate units): Option 1 is a drop
-' combo box, and the reminder to make a selection from the hierarchy is made visible.
+' combo box, and the reminder to make a selection from the hierarchy is made visible. If
+' TextBox1 has been filled, empty it, or it gets read as the search term when the commit
+' button is clicked.
 
           Case Else
             DlgText    "Attention1",         "[Select a level in the hierarchy]"
@@ -2542,6 +2557,7 @@ Select Case Action%
             DlgVisible "DropComboBox1",      VISIBLE
             DlgText    "OptionButton1",      "&" & SearchOption1$
             DlgVisible "TextBox1",           INVISIBLE
+            DlgText    "TextBox1",           ""
 
         End Select
 
@@ -2700,29 +2716,8 @@ Select Case Action%
 End Select
 
 End Function
-'2725108020
-
-'########################################################################################
-Sub LogMacroUse                                                                       '##
-Dim FileLog%                 : FileLog% = Freefile                                    '##
-Dim Path$, FileName$                                                                  '##
-Dim i As Integer             : i = 1                                                  '##
-Do                                                                                    '##
-  Path$ = Environ( i )                                                                '##
-  If Left$( Path$, 11 ) = "USERPROFILE" Then                                          '##
-      FileName$ = Mid$( Path$, 13 ) & "\Documents\MacroLog.txt"                       '##
-      Exit Do                                                                         '##
-  End If                                                                              '##
-  i = i + 1                                                                           '##
-Loop Until Environ( i ) = ""                                                          '##
-If FileName$ = "" Then Exit Sub                                                       '##
-Open FileName$ For Append As #FileLog%                                                '##
-Print #FileLog%, "BrowseAuthority" & Chr$(9) & Date$ & " " & Time$                    '##
-Close #FileLog%                                                                       '##
-Reset                                                                                 '##
-End Sub                                                                               '##
-'########################################################################################
+'2745108903
 '
 'Macro name: BrowseAuthority
-'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\EssentialsW.mbk
-'Saved: 7/6/2017 3:15:33 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
+'Saved: 12/17/2018 9:00:51 AM using "MacroBookInspector" macro by Walter F. Nickeson.

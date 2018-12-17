@@ -1,12 +1,12 @@
-'MacroName:RelatorHelper.2017.36
-'MacroDescription:Helps with verifying, adding, and replacing relator codes and terms,
-' singly and en masse.
+'MacroName:RelatorHelper.2018.04
+'MacroDescription:Helps with verifying, adding, replacing, and deleting relator codes and
+' terms, singly and en masse.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 25 March 2017.
+' Last updated: 14 December 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -22,7 +22,8 @@
 '  + Add terms to fields containing only codes (and vice versa);
 '  + Replace terms with codes (and vice versa);
 '  + Replace incorrect terms with their preferred forms;
-'  + Replace unknown terms with valid terms.
+'  + Replace unknown terms with valid terms;
+'  + Delete terms or codes.
 '
 ' If no fields are selected, and the cursor is not in a heading field when the macro is
 ' run, the macro shows the relator terms and codes present in subfields $e, $j, and $4 of
@@ -169,14 +170,15 @@ Const REPLACE_ONE_TERM     As Integer = 11  'Replace a term with its equivalent 
 Const UPDATE_TERM          As Integer = 12  'Replace an incorrect term with the preferred form, or an unknown term
                                             ' with one selected from the list.
 
-Dim CS As Object
-Set CS = CreateObject("Connex.Client")
+Dim END_OF_FIELD As String*2 : END_OF_FIELD   = Chr$( 013 ) & Chr$( 010 )
+Dim SUBFIELD_4 As String*3   : SUBFIELD_4     = DELIMITER & "4 "
 
 Dim BadSelectionMessage$
 Dim CodesString$
 Dim CountOfIncorrectTerms%
 Dim CountOfUnknownCodes%
 Dim CountOfUnknownTerms%
+Dim CS As Object : Set CS = CreateObject("Connex.Client")
 Dim CurrentCode$
 Dim CurrentColumn%
 Dim CurrentIndex%
@@ -184,8 +186,7 @@ Dim CurrentRow%
 Dim CurrentTerm$
 Dim Dialog1Value%
 Dim EndOfFieldCount%
-dim EndOfFieldFound%
-Dim END_OF_FIELD As String*2 : END_OF_FIELD   = Chr$( 013 ) & Chr$( 010 )
+Dim EndOfFieldFound%
 Dim FieldCount$
 Dim FieldData$
 Dim FieldsNotAddedToA$
@@ -218,7 +219,6 @@ Dim SelectedText$
 Dim Start%
 Dim StartPositionTerms%
 Dim Subfield$
-Dim Subfield4$               : Subfield4$     = DELIMITER & "4 "
 Dim SubfieldEJ$
 Dim Tag$
 Dim TempString$
@@ -781,9 +781,9 @@ Begin Dialog Dialog2Definition  378, 228, WaltsMacros$, .Dialog2ControlFunction
    OptionButton  192,  85,  56,  12, "",                                            .OptionButton_Delete1
    OptionButton  250,  85,  56,  12, "Delete code",                                 .OptionButton_Delete2
    OptionButton  192,  99, 160,  12, "Replace selected term with term from &list:", .OptionButton_Replace
-  Text           340,  62,  24,   8, "D&o for",                                     .CheckBoxText1
-  CheckBox       328,  71,  32,  12, "all",                                         .CheckBox
-  Text           340,  82,  24,   8, "",                                            .CheckBoxText2
+  Text           340,  62,  24,   8, "D&o for",                                     .CheckBoxDoAllText1
+  CheckBox       328,  71,  32,  12, "all",                                         .CheckBoxDoAll
+  Text           340,  82,  24,   8, "",                                            .CheckBoxDoAllText2
   GroupBox       182,  44, 184,  90, "",                                            .ActionLabel
   GroupBox        12,  44, 160,  42, "",                                            .FoundGroupBox
   GroupBox        12,  92, 160,  42, "",                                            .EquivGroupBox
@@ -831,13 +831,13 @@ Select Case OptionGroupValue%
   Case ADD
 
     If WhichRelator% = CODE Then
-        If Dialog2.CheckBox = UNCHECKED Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
             MacroAction% = ADD_ONE_TERM
           Else
             MacroAction% = ADD_ALL_TERMS
         End If
       Else
-        If Dialog2.CheckBox = UNCHECKED Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
             MacroAction% = ADD_ONE_CODE
           Else
             MacroAction% = ADD_ALL_CODES
@@ -847,13 +847,13 @@ Select Case OptionGroupValue%
   Case DELETE_OPTION_1, DELETE_OPTION_2
 
     If WhichRelator% = CODE Then
-        If Dialog2.CheckBox = UNCHECKED Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
             MacroAction% = DELETE_ONE_CODE
           Else
             MacroAction% = DELETE_ALL_CODES
         End If
       Else
-        If Dialog2.CheckBox = UNCHECKED Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
             MacroAction% = DELETE_ONE_TERM
           Else
             MacroAction% = DELETE_ALL_TERMS
@@ -863,13 +863,13 @@ Select Case OptionGroupValue%
   Case REPLACE_WITH_EQUIVALENT
 
     If WhichRelator% = CODE Then
-        If Dialog2.CheckBox = UNCHECKED Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
             MacroAction% = REPLACE_ONE_CODE
           Else
             MacroAction% = REPLACE_ALL_CODES
         End If
       Else
-        If Dialog2.CheckBox = UNCHECKED Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
             MacroAction% = REPLACE_ONE_TERM
           Else
             MacroAction% = REPLACE_ALL_TERMS
@@ -918,8 +918,8 @@ Do
 
           For i = 0 To UB_RelatorInfo%
             If InStr( Start%, FieldData$, SubfieldEJ$ & RelatorInfo( i ).Term ) Then
-                If InStr( FieldData$, Subfield4$ & SelectedCode$ ) = 0 Then
-                    CodesString$ = CodesString$ & " " & Subfield4$ & RelatorInfo( i ).Code
+                If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) = 0 Then
+                    CodesString$ = CodesString$ & " " & SUBFIELD_4 & RelatorInfo( i ).Code
                 End If
             End If
           Next i
@@ -946,7 +946,7 @@ Do
        Case ADD_ALL_TERMS, REPLACE_ALL_CODES
 
          For i = 0 To UB_RelatorInfo%
-           If InStr( Start%, FieldData$, Subfield4$ & RelatorInfo( i ).Code ) Then
+           If InStr( Start%, FieldData$, SUBFIELD_4 & RelatorInfo( i ).Code ) Then
                If InStr( FieldData$, SubfieldEJ$ & RelatorInfo( i ).Term ) = 0 Then
                    TermsString$ = TermsString$ & ", " & SubfieldEJ$ & RelatorInfo( i ).Term
                End If
@@ -999,8 +999,8 @@ Do
           If p = 0 Then
               GoTo SkipField:
             Else
-              If InStr( FieldData$, Subfield4$ & SelectedCode$ ) = 0 Then
-                  CodesString$ = " " & Subfield4$ & SelectedCode$
+              If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) = 0 Then
+                  CodesString$ = " " & SUBFIELD_4 & SelectedCode$
               End If
               ReplacementField$ = FieldData$ & CodesString$
               If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
@@ -1017,7 +1017,7 @@ Do
           If InStr( FieldData$, SubfieldEJ$ & SelectedTerm$ ) Then
               NotAddedCount% = NotAddedCount% + 1
             Else
-              If InStr( FieldData$, Subfield4$ & SelectedCode$ ) Or HeadingField Then
+              If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) Or HeadingField Then
                   p = FindLastOccurrence( FieldData$, SubfieldEJ$ )
                   If p = 0 Then
                       q = InStr( FieldData$, DELIMITER & "4" )
@@ -1154,7 +1154,7 @@ DeleteAllTerms:
 
 DeleteOneCode:
 
-          p = InStr( FieldData$, Subfield4$ & SelectedCode$ )
+          p = InStr( FieldData$, SUBFIELD_4 & SelectedCode$ )
           If p = 0 Then
               GoTo SkipField:
             Else
@@ -1203,7 +1203,7 @@ DeleteOneCode:
 
         Case REPLACE_ONE_CODE
 
-            p = InStr( Start%, FieldData$, Subfield4$ & SelectedCode$ )
+            p = InStr( Start%, FieldData$, SUBFIELD_4 & SelectedCode$ )
             If p = 0 Then
                 GoTo SkipField:
               Else
@@ -1244,8 +1244,8 @@ DeleteOneCode:
               If Right$( TempString$, 1 ) = "," Then
                   TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & FollowingPunctuation$
               End If
-              If InStr( FieldData$, Subfield4$ & SelectedCode$ ) = 0 Then
-                  CodesString$ = CodesString$ & " " & Subfield4$ & SelectedCode$
+              If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) = 0 Then
+                  CodesString$ = CodesString$ & " " & SUBFIELD_4 & SelectedCode$
               End If
               ReplacementField$ = TempString$ & CodesString$
               If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
@@ -1267,7 +1267,7 @@ DeleteOneCode:
 ' Check the field for the code corresponding to the replaced term. If present, add the replacement
 ' code, and delete the existing, incorrect code.
 
-          p = InStr( TempString$, Subfield4$ & SelectedCode$ )
+          p = InStr( TempString$, SUBFIELD_4 & SelectedCode$ )
           If p <> 0 Then
               For i = 0 To RELATOR_COUNT
                 If ReplacementTerm$ = RelatorTerm( i ) Then
@@ -1275,9 +1275,9 @@ DeleteOneCode:
                     Exit For
                 End If
               Next i
-              p = InStr( TempString$, Subfield4$ & ReplacementCode$ )
+              p = InStr( TempString$, SUBFIELD_4 & ReplacementCode$ )
               If p = 0 Then
-                  TempString$ = TempString$ & " " & Subfield4$ & ReplacementCode$
+                  TempString$ = TempString$ & " " & SUBFIELD_4 & ReplacementCode$
               End If
               FieldData$ = TempString$
               GoTo DeleteOneCode:
@@ -2082,10 +2082,10 @@ DlgEnable  "AllTerms",             ENABLED
 
 If CountOfTerms% > 0 And CountOfCodes% > 0 Then
     WhichRelator% = TERM
-    DlgEnable  "CheckBox",             DISABLED
-    DlgEnable  "CheckBoxText1",        DISABLED
-    DlgText    "CheckBoxText2",        "terms"
-    DlgEnable  "CheckBoxText2",        DISABLED
+    DlgEnable  "CheckBoxDoAll",        DISABLED
+    DlgEnable  "CheckBoxDoAllText1",   DISABLED
+    DlgText    "CheckBoxDoAllText2",   "terms"
+    DlgEnable  "CheckBoxDoAllText2",   DISABLED
     DlgText    "OptionButton_Add",     "Add term/code"
     DlgEnable  "OptionButton_Add",     DISABLED
     DlgText    "OptionButton_Delete1", "Delete term"
@@ -2101,18 +2101,18 @@ If CountOfTerms% > 0 And CountOfCodes% > 0 Then
     DlgEnable  "OptionButton_Swap",    ENABLED
     If FieldsWithRelators% > 1 Then
         If ProblemsPresent = FALSE And BothCodesAndTermsPresent = FALSE Then
-            DlgEnable  "CheckBox",             ENABLED
-            DlgEnable  "CheckBoxText1",        ENABLED
-            DlgEnable  "CheckBoxText2",        ENABLED
+            DlgEnable  "CheckBoxDoAll",        ENABLED
+            DlgEnable  "CheckBoxDoAllText1",   ENABLED
+            DlgEnable  "CheckBoxDoAllText2",   ENABLED
           Else
-            DlgEnable  "CheckBox",             DISABLED
-            DlgEnable  "CheckBoxText1",        DISABLED
-            DlgEnable  "CheckBoxText2",        DISABLED
+            DlgEnable  "CheckBoxDoAll",        DISABLED
+            DlgEnable  "CheckBoxDoAllText1",   DISABLED
+            DlgEnable  "CheckBoxDoAllText2",   DISABLED
         End If
       Else
-        DlgEnable  "CheckBox",             DISABLED
-        DlgEnable  "CheckBoxText1",        DISABLED
-        DlgEnable  "CheckBoxText2",        DISABLED
+        DlgEnable  "CheckBoxDoAll",        DISABLED
+        DlgEnable  "CheckBoxDoAllText1",   DISABLED
+        DlgEnable  "CheckBoxDoAllText2",   DISABLED
     End If
         DlgVisible "OptionButton_Delete2", INVISIBLE
     BothCodesAndTermsPresent = FALSE
@@ -2124,7 +2124,7 @@ Select Case CountOfTerms%
     WhichRelator% = CODE
     DlgText    "ActionLabel",          "For all occurrences of this code:"
     DlgEnable  "AllTerms",             DISABLED
-    DlgText    "CheckBoxText2",        "codes"
+    DlgText    "CheckBoxDoAllText2",   "codes"
     DlgText    "EquivGroupBox",        "Equivalent term"
     DlgText    "EquivOccurrence",      ""
     DlgText    "FoundGroupBox",        "Code found"
@@ -2142,7 +2142,7 @@ Select Case CountOfTerms%
   Case 1
     WhichRelator% = TERM
     DlgText    "ActionLabel",          "For all occurrences of this term:"
-    DlgText    "CheckBoxText2",        "terms"
+    DlgText    "CheckBoxDoAllText2",   "terms"
     If CountOfCodes% = 0 Then
         DlgEnable  "AllTerms",             ENABLED
         DlgText    "EquivGroupBox",        "Equivalent code"
@@ -2167,7 +2167,7 @@ Select Case CountOfTerms%
   Case Else
     WhichRelator% = TERM
     DlgText    "ActionLabel",          "For all occurrences of this term:"
-    DlgText    "CheckBoxText2",        "terms"
+    DlgText    "CheckBoxDoAllText2",   "terms"
     If CountOfCodes% = 0 Then
         DlgEnable  "AllTerms",             ENABLED
         DlgText    "EquivGroupBox",        "Equivalent code"
@@ -2518,13 +2518,13 @@ Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function para
 Const INITIALIZE     As Integer = 1   'The value of the dialog function parameter "Action%" when the dialog box opens.
 
 Dim Dialog1Instructions$
+Dim RelatorTermNote$
 Dim SelectedNote$
 Dim Selection%
 Dim Start%
 Dim TempString$
 Dim TruncatedString$
 Dim WordCount%
-Dim RelatorTermNote$
 
 Dim p As Integer
 
@@ -2650,9 +2650,9 @@ Reload:
         RelatorTermNote$ = RelatorNote( Selection% )
         DlgText    "Description",          UCase$( ReplacementTerm$ ) & CR & RelatorTermNote$
         DlgValue   "OptionGroup1",         REPLACE_WITH_CORRECT
-        DlgEnable  "CheckBox",             DISABLED
-        DlgEnable  "CheckBoxText1",        DISABLED
-        DlgEnable  "CheckBoxText2",        DISABLED
+        DlgEnable  "CheckBoxDoAll",        DISABLED
+        DlgEnable  "CheckBoxDoAllText1",   DISABLED
+        DlgEnable  "CheckBoxDoAllText2",   DISABLED
 
       Case "FoundList", "EquivList"
         If Id$ = "FoundList" Then
@@ -2690,8 +2690,8 @@ Reload:
 End Select
 
 End Function
-'2734155631
+'2719155400
 '
 'Macro name: RelatorHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/28/2017 11:28:27 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:02:17 AM using "MacroBookInspector" macro by Walter F. Nickeson.

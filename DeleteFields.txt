@@ -62,13 +62,14 @@ Set CS = CreateObject("Connex.Client")
 Dim BeginningRow%
 Dim CurrentRow%
 Dim Difference%
-Dim EndOfField$              : EndOfField$  = Chr$( 013 ) & Chr$( 010 )
 Dim EndOfFieldCount%
 Dim EndOfFieldFound%
 Dim SelectedText$
-Dim Start%                   : Start%       = 1
+Dim Start%
 Dim TextLength%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:DeleteFields"
+
+Dim END_OF_FIELD As String*2 : END_OF_FIELD = Chr$( 013 ) & Chr$( 010 )
 
 Dim SelectedUp               : SelectedUp   = FALSE
 
@@ -92,7 +93,7 @@ CurrentRow% = CS.CursorRow
 ' of-field marker (ASCII characters 013 + 010). In this case we must do some calculations
 ' to figure out in which row is the end of the selection.
 
-If Right$( SelectedText$, 2 ) = EndOfField$ Then SelectedUp = TRUE
+If Right$( SelectedText$, 2 ) = END_OF_FIELD Then SelectedUp = TRUE
 
 ' Then find the end-of-field markers within the selection to count how many fields have
 ' been included. No end-of-field markers will be found if the selection is made within a
@@ -102,8 +103,9 @@ If Right$( SelectedText$, 2 ) = EndOfField$ Then SelectedUp = TRUE
 ' digits and spaces. Thus the length of the selection can provide a clue as to how many
 ' fields are selected.
 
+Start% = 1
 Do
-  EndOfFieldFound% = InStr( Start%, SelectedText$, EndOfField$ )
+  EndOfFieldFound% = InStr( Start%, SelectedText$, END_OF_FIELD )
   If EndOfFieldFound% > 0 Then
       Start%           = EndOfFieldFound% + 1
       EndOfFieldCount% = EndOfFieldCount% + 1
@@ -157,8 +159,8 @@ For i = 0 To ( EndOfFieldCount% )
 Next i
 
 End Sub
-'1869449
+'1889428
 '
 'Macro name: DeleteFields
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/28/2017 11:27:58 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:01:29 AM using "MacroBookInspector" macro by Walter F. Nickeson.

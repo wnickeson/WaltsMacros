@@ -1,7 +1,7 @@
-'MacroName:CopyFields.2017.25
+'MacroName:CopyFields.2018.02
 'MacroDescription:Copies multiple fields from one bibliographic record and returns to
-' another to paste them in, either as a block of contiguous fields or as a collection of
-' separate, non-contiguous fields.
+' another to paste them in. The copied fields can be a block of contiguous fields or a
+' collection of separate, non-contiguous fields.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
@@ -11,7 +11,7 @@
 ' Library District, 2007, but all responsibility for the functionality of this macro is
 ' mine alone.
 '
-' Last updated: 29 June 2017.
+' Last updated: 10 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -25,32 +25,33 @@
 ' and run the macro to copy the whole block; or run the macro with nothing selected and
 ' use the dialog box to choose the fields to copy. Using the dialog box to select fields
 ' means the fields need not be contiguous. In both cases, the macro proceeds by showing
-' all open bibliographic records, one by one, asking for each of them confirmation that
-' the displayed record is indeed the one into which to paste the copied fields. Duplicate
-' fields are not copied.
+' all open bibliographic records, one by one, requesting confirmation that the displayed
+' record is indeed the one into which to paste the copied fields; except that if only a
+' single target record is open to paste the fields into, the copying is done immediately,
+' without a request for confirmation. Duplicate fields are not copied.
 '
-' Begin with both source and target records open. They may be tiled or pinned, and other
-' windows of records and lists may also be open, but the source record must be on top--
-' that is, the record being copied from must have the focus. If selecting fields before
-' running the macro, click and drag the mouse pointer anwhere in any field and drag up or
-' down to select multiple contiguous fields. (Controlled fields may be somewhat resistant
-' to being selected in that manner. Uncontrolling the fields is the best way to make them
-' easily selectable; the next best way is to use the [SHIFT] and up and down arrow keys;
-' the other way is to click in the tag cell to start the dragging operation, rather than
-' in the field data cell.) A field need be only partially selected to be included in the
-' group of fields. A single partially selected field will be copied by itself, in its
-' entirety. If the macro is run without anything having been selected, it displays a
-' dialog box with two windows, one showing the fields of the source record, the other--
-' initially empty--showing fields selected for copying. Click on a field in the source
-' window to move it to the copy window; click on a field in the copy window to move it
-' back to the source window. When selection of fields for copying is complete, click the
-' OK button.
+' Begin with both source and target record(s) open. They may be tiled or pinned, and
+' other windows of records and lists may also be open, but the source record must be on
+' top--that is, the record being copied from must have the focus. When selecting fields
+' before running the macro, click and drag the mouse pointer anwhere in any field and
+' drag up or down to select several contiguous fields. (Controlled fields may be somewhat
+' resistant to being selected in that manner. Uncontrolling the fields is the best way to
+' make them easily selectable; the next best way is to use the [SHIFT] and up and down
+' arrow keys; the other way is to click in the tag cell to start the dragging operation,
+' rather than in the field data cell.) A field need be only partially selected to be
+' included in the group of fields. A single partially selected field will be copied by
+' itself, in its entirety. If the macro is run without anything having been selected, it
+' displays a dialog box with two windows, one showing the fields of the source record,
+' the other--initially empty--showing fields selected for copying. Click on a field in
+' the source window to move it to the copy window; click on a field in the copy window to
+' move it back to the source window. When selection of fields for copying is complete,
+' click the OK button.
 '
-' No matter how the fields were selected, the macro continues by cycling through all the
-' open windows, presenting those containing bibliographic records. For each record
-' displayed, the macro asks if the copied fields should be pasted into it. When the
-' copied fields are pasted, each one is added as the last field in its tag group.
-' Duplicate fields are excluded from pasting.
+' No matter how the fields were chosen, the macro continues by either copying the fields
+' immediately into the single candidate record, or cycling through all the windows
+' containing bibliographic records. For each record displayed, the macro asks if the
+' copied fields should be pasted into it. When the copied fields are pasted, each one is
+' added as the last field in its tag group. Duplicate fields are excluded from pasting.
 '
 ' A new record (i.e., a workform) is always displayed before other candidate target
 ' records; the macro assumes that a new record is more likely to be filled with
@@ -83,20 +84,20 @@ Declare Function ConvertTo1252( InputString$ ) As String
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
 
-Global Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
-                                               ' a big "X") in a message box; used to report the macro quitting.
-Global Const INVISIBLE        As Integer = 0   'The value to make a dialog box control invisible.
+Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with a big
+                                        ' "X") in a message box; used to report the macro quitting.
+Const INVISIBLE        As Integer = 0   'The value to make a dialog box control invisible.
 
-Global CandidateCount%
-Global LastRemoved%
-Global WaltsMacros$
+Dim CandidateCount%
+Dim LastRemoved%
+Dim WaltsMacros$
 
-Global Unicode
+Dim Unicode
 
-Global FieldsAvailable() As String
-Global FieldsSelected()  As String
-Global LinesAvailable()  As Integer
-Global LinesSelected()   As Integer
+Dim FieldsAvailable() As String
+Dim FieldsSelected()  As String
+Dim LinesAvailable()  As Integer
+Dim LinesSelected()   As Integer
 
 '****************************************************************************************
 
@@ -112,19 +113,19 @@ Const WINDOW_ID            As Integer = 0
 Const WINDOW_OCLC_NO       As Integer = 2
 Const WINDOW_TITLE         As Integer = 1
 
-Dim CS As Object
-Set CS = CreateObject( "Connex.Client" )
+Dim END_OF_FIELD As String*1 : END_OF_FIELD = Chr$( 013 ) & Chr$( 010 )
 
 Dim BeginningRow%
 Dim CandidateOCLCCN$
 Dim CandidateReplaced$
 Dim CountOfCopiedFields%
 Dim CountOfWindows%
+Dim CS As Object             : Set CS       = CreateObject( "Connex.Client" )
 Dim CurrentColumn%
 Dim CurrentRow%
+Dim Dialog2Value%
 Dim Difference%
 Dim DuplicateCount%
-Dim EndOfField$              : EndOfField$ = Chr$( 013 ) & Chr$( 010 )
 Dim EndOfFieldCount%
 Dim EndOfFieldFound%
 Dim FieldData$
@@ -142,7 +143,7 @@ Dim SelectedText$
 Dim SetWindowID%
 Dim SourceOCLCCN$
 Dim SourceReplaced$
-Dim Start%                   : Start%      = 1
+Dim Start%
 Dim Tag$
 Dim TempString$
 Dim TypeOfWindow%
@@ -151,7 +152,7 @@ Dim WindowTitle$
 
 Dim Duplicate
 Dim FoundField
-Dim SelectedUp               : SelectedUp  = FALSE
+Dim SelectedUp               : SelectedUp = FALSE
 Dim Selection
 
 Dim FieldsCopied()   As String
@@ -162,8 +163,6 @@ Dim i As Integer, j As Integer, p As Integer
 
 Unicode      = FALSE
 WaltsMacros$ = "[Walt's macros] Essentials:CopyFields"
-
-LastRemoved%  = 0
 
 ' First, check to see that some text has been selected. If text has been selected we know
 ' we are in a record, as opposed to a list. And if text has been selected, keep track of
@@ -183,7 +182,7 @@ TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
 
   Case -1, 3 To 16, 18, 20 To 25, 36
-    MsgBox "This macro only works in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 
 ' If the active record is a bibliographic record, proceed by getting its OCLC number,
@@ -212,14 +211,15 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
 ' If the selection has been made by dragging upward, the last characters will be the end-
 ' of-field marker (ASCII characters 013 + 010).
 
-    If Right$( SelectedText$, 2 ) = EndOfField$ Then SelectedUp = TRUE
+    If Right$( SelectedText$, 2 ) = END_OF_FIELD Then SelectedUp = TRUE
 
 ' The number of end-of-field markers within the selection is the count of how many
 ' fields have been included. The macro will also work with a selection made within a
 ' field; in that case, it will copy the whole field.
 
+    Start% = 1
     Do
-      EndOfFieldFound% = InStr( Start%, SelectedText$, EndOfField$ )
+      EndOfFieldFound% = InStr( Start%, SelectedText$, END_OF_FIELD )
       If EndOfFieldFound% > 0 Then
           Start%           = EndOfFieldFound% + 1
           EndOfFieldCount% = EndOfFieldCount% + 1
@@ -481,32 +481,36 @@ For i = Start% To CandidateCount%
   CS.SetTopWindow( SetWindowID% )
   TypeOfWindow% = CS.ItemType
 
+  If CandidateCount% = 1 Then
+      Dialog2Value% = DIALOG_BUTTON_OK
+    Else
 ' Set the message in the paste dialog box.
 
-  WindowTitle$     = WindowIDs( WINDOW_TITLE, i )
-  CandidateOCLCCN$ = Trim$( WindowIDs( WINDOW_OCLC_NO, i ) )
-  If Left$( CandidateOCLCCN$, 1 ) Like "[0-9]" Then
-      CandidateOCLCCN$ = "#" & CandidateOCLCCN$
+      WindowTitle$     = WindowIDs( WINDOW_TITLE, i )
+      CandidateOCLCCN$ = Trim$( WindowIDs( WINDOW_OCLC_NO, i ) )
+      If Left$( CandidateOCLCCN$, 1 ) Like "[0-9]" Then
+            CandidateOCLCCN$ = "#" & CandidateOCLCCN$
+      End If
+      Query$           = CandidateOCLCCN$ & " : " & WindowTitle$
+      RecordCount$     = "Record " & Trim$( Str$( i + 1 ) ) & " of " & Trim$( Str$( CandidateCount% ) )
+
+      Begin Dialog Dialog2Definition  220,  90, WaltsMacros$, .Dialog2ControlFunction
+        Text           12,   6, 144,   8, "Paste copied " & FieldWord$ & " into this record?"
+        Text           12,  18, 196,  16, Query$
+        OkButton       12,  42,  60,  16
+        CancelButton  148,  42,  60,  16
+        PushButton     80,  42,  60,  16, "&Next record", .Button1
+        CheckBox       88,  60,  44,  12, "Also close",   .CheckBox
+        Text           99,  70,  44,   8, "this record.", .CheckBoxText
+        Text          164,   6,  48,   8, RecordCount$
+      End Dialog
+
+      Dim Dialog2 as Dialog2Definition
+      Dialog2Value% = Dialog( Dialog2 )
+
   End If
-  Query$           = CandidateOCLCCN$ & " : " & WindowTitle$
 
-  RecordCount$ = "Record " & Trim$( Str$( i + 1 ) ) & " of " & Trim$( Str$( CandidateCount% ) )
-
-Begin Dialog Dialog2Definition  220,  90, WaltsMacros$, .Dialog2ControlFunction
-    Text           12,   6, 144,   8, "Paste copied " & FieldWord$ & " into this record?"
-    Text           12,  18, 196,  16, Query$
-    OkButton       12,  42,  60,  16
-    CancelButton  148,  42,  60,  16
-    PushButton     80,  42,  60,  16, "&Next record", .Button1
-    CheckBox       88,  60,  44,  12, "Also close",   .CheckBox
-    Text           99,  70,  44,   8, "this record.", .CheckBoxText
-    Text          164,   6,  48,   8, RecordCount$
-  End Dialog
-
-  Dim Dialog2 as Dialog2Definition
-  On Error Resume Next
-
-  Select Case Dialog( Dialog2 )
+  Select Case Dialog2Value%
 
     Case DIALOG_BUTTON_OK
 
@@ -1048,8 +1052,8 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'107742914
+'108143260
 '
 'Macro name: CopyFields
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 6/29/2017 9:07:37 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:01:06 AM using "MacroBookInspector" macro by Walter F. Nickeson.
