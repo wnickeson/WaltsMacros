@@ -1,4 +1,4 @@
-'MacroName:PasteUnformattedPlus.2017.02
+'MacroName:PasteUnformattedPlus.2018.06
 'MacroDescription:Removes some formatting from text placed on the Clipboard for pasting
 ' into Connexion as a string or as a new field. Also converts extended ASCII characters
 ' to OCLC-MARC.
@@ -7,7 +7,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 9 June 2017.
+' Last updated: 19 July 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -61,16 +61,20 @@ Global Const FIELD_MIDDLE As Integer = 2
 Global Const FIXED_FIELD  As Integer = 0
 
 Global CursorPosition%
+Global Tag$
+Global TempStringDash$
+Global TempStringSpace$
+Global WaltsMacros$
+Global DisplayString$
+
+
 Global DELIMITER_OCLC As String*1
 Global FILL_CHAR      As String*1
 Global INDICATOR_1    As String*1
 Global INDICATOR_2    As String*1
 Global QUOTE          As String*1
-Global Tag$
-Global TempStringDash$
-Global TempStringSpace$
-Global WaltsMacros$
 
+Global AddFieldDefault
 Global CRFound
 Global DelimFound
 
@@ -81,6 +85,7 @@ Sub Main
 Const CANCEL           As Integer = 102 'The value returned by the dialog box when the "Cancel" button is clicked.
 Const CRITICAL_MESSAGE As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                         ' a big "X") in a message box; used to report the macro quitting.
+Const DELIMITER_ASCI   As Integer = 135
 
 Dim CS As Object
 Set CS = CreateObject("Connex.Client")
@@ -89,34 +94,35 @@ Dim CharA%
 Dim Character$
 Dim CharT$
 Dim Col%
-Dim CR$                      : CR$              = Chr$( 013 )
-Dim CRSpaceAfter$            : CRSpaceAfter$    = CR$ & " "
-Dim CRSpaceBefore$           : CRSpaceBefore$   = " " & CR$
 Dim CurrentField$
 Dim CurrentFieldLength%
-Dim DELIMITER_ASCI           : DELIMITER_ASCI   = 135
-Dim DELIMITER_CLIP As String*1
-Dim EMPTY_TAG      As String*3
 Dim RawString$
 Dim Row%
 Dim StringPaste$
 Dim TempString$
 Dim TypeOfWindow%
-Dim TwoCRs$                  : TwoCRs$          = CR$ & CR$
-Dim TwoSingleQuotes$         : TwoSingleQuotes$ = Chr$( 039 ) & Chr$( 039 )
-Dim TwoSpaces$               : TwoSpaces$       = "  "
+
+Dim CR                As String*1 : CR                = Chr$( 013 )
+Dim CR_SPACE_AFTER    As String*2 : CR_SPACE_AFTER    = CR & " "
+Dim CR_SPACE_BEFORE   As String*2 : CR_SPACE_BEFORE   = " " & CR
+Dim DELIMITER_CLIP    As String*1
+Dim EMPTY_TAG         As String*3
+Dim TWO_CRs           As String*2 : TWO_CRs           = CR & CR
+Dim TWO_SINGLE_QUOTES As String*2 : TWO_SINGLE_QUOTES = Chr$( 039 ) & Chr$( 039 )
+Dim TWO_SPACES        As String*2 : TWO_SPACES        = "  "
 
 Dim i As Integer
 
-DELIMITER_CLIP = Chr$( 159 )
-DELIMITER_OCLC = Chr$( 223 )
-FILL_CHAR      = Chr$( 252 )
-EMPTY_TAG      = FILL_CHAR & FILL_CHAR & FILL_CHAR
-QUOTE          = Chr$( 034 )
-WaltsMacros$   = "[Walt's macros] Extras1:PasteUnformattedPlus"
+DELIMITER_CLIP  = Chr$( 159 )
+DELIMITER_OCLC  = Chr$( 223 )
+FILL_CHAR       = Chr$( 252 )
+EMPTY_TAG       = FILL_CHAR & FILL_CHAR & FILL_CHAR
+QUOTE           = Chr$( 034 )
+WaltsMacros$    = "[Walt's macros] Extras1:PasteUnformattedPlus"
 
-CRFound        = FALSE
-DelimFound     = FALSE
+CRFound         = FALSE
+DelimFound      = FALSE
+AddFieldDefault = FALSE
 
 ' First, make sure there is text on the clipboard to paste.
 
@@ -144,6 +150,9 @@ Select Case TypeOfWindow%
     MsgBox "Sorry, this macro only works when there is text to paste in bibliographic or authority records.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
 
 ' If there is text on the clipboard and a record to paste it into, start the process by
 ' removing extraneous carriage return/line feeds (and any other non-printing characters,
@@ -175,6 +184,11 @@ For i = 1 To Len( RawString$ )
     Case 124, DELIMITER_ASCI
       Character$ = " " & DELIMITER_OCLC
       DelimFound = TRUE
+      If i = 1 Then
+          If Mid$( RawString$, i + 1, 1 ) = "a" Then
+              AddFieldDefault = TRUE
+          End If
+      End If
     Case 32 To 95, 97 To 123, 125, 128, 130 To 132, 138, 140, 142, 154
       Character$ = CharT$
     Case 156, 158 To 159, 163, 169, 174, 176 To 179, 185, 186, 191 To 255
@@ -182,17 +196,17 @@ For i = 1 To Len( RawString$ )
     Case 133
       Character$ = "..."
 '    Case 96
-'      Character$ = Chr$( 39 )
+'      Character$ = Chr$( 039 )
     Case 145 To 146
-      Character$ = Chr$( 39 )
+      Character$ = Chr$( 039 )
     Case 147 To 148
-      Character$ = Chr$( 34 )
+      Character$ = Chr$( 034 )
     Case 150
       Character$ = "-"
     Case 151
       Character$ = "--"
     Case 94, 96, 126, 136, 152, 168, 175, 180, 184
-      MsgBox "ELSE -- " & CharT$
+'      MsgBox "ELSE -- " & CharT$
       Character$ = ""
     Case Else
       Character$ = ""
@@ -206,7 +220,7 @@ TempString$ = Trim$( TempString$ )
 
 ' Do a first round of eliminating extra white space.
 
-TempString$ = Replace( (TempString$), " ", TwoSpaces$ )
+TempString$ = Replace( (TempString$), " ", TWO_SPACES )
 
 ' Check the beginning of the text for a tag and indicators, looking for the pattern of
 ' three digits, a space, a pair of characters from the set [ _0-9], and another space,
@@ -239,7 +253,7 @@ If INDICATOR_2 = "_" Then INDICATOR_2 = " "
 
 ' Combine consecutive single quotation marks into one double quotation mark.
 
-TempString$ = Replace( (TempString$), QUOTE, TwoSingleQuotes$ )
+TempString$ = Replace( (TempString$), QUOTE, TWO_SINGLE_QUOTES )
 
 ' Add a space after subfield codes.
 
@@ -251,28 +265,28 @@ If CRFound = TRUE Then
 
 ' Eliminate spaces preceding and following carriage returns.
 
-    TempString$ = Replace( (TempString$), CR$, CRSpaceBefore$ )
-    TempString$ = Replace( (TempString$), CR$, CRSpaceAfter$ )
+    TempString$ = Replace( (TempString$), CR$, CR_SPACE_BEFORE )
+    TempString$ = Replace( (TempString$), CR$, CR_SPACE_AFTER )
 
 ' Collapse consecutive occurrences of a carriage return to a single occurrence.
 
-    TempString$ = Replace( (TempString$), CR$, TwoCRs$ )
+    TempString$ = Replace( (TempString$), CR$, TWO_CRs )
 
 ' Convert carriage returns to spaces.
 
-    TempStringSpace$ = Replace( (TempString$), " ", CR$ )
+    TempStringSpace$ = Replace( (TempString$), " ", CR )
 
 ' Convert carriage returns to space-dash-space (i.e., space-hyphen-hyphen-space).
 
-    TempStringDash$ = Replace( (TempString$), " -- ", CR$ )
+    TempStringDash$ = Replace( (TempString$), " -- ", CR )
 
 ' As the last step, clean up any remaining or introduced double spaces.
 
-    TempStringSpace$ = Replace( TempStringSpace$, " ", TwoSpaces$ )
-    TempStringDash$  = Replace( TempStringDash$, " ", TwoSpaces$ )
+    TempStringSpace$ = Replace( TempStringSpace$, " ", TWO_SPACES )
+    TempStringDash$  = Replace( TempStringDash$, " ", TWO_SPACES )
 
   Else
-    TempStringSpace$ = Replace( TempString$, " ", TwoSpaces$ )
+    TempStringSpace$ = Replace( TempString$, " ", TWO_SPACES )
 End If
 
 ' If the first characters represent subfield $a, they can be eliminated, as Connexion
@@ -286,18 +300,13 @@ If Left$( TempString$, 2 ) = DELIMITER_OCLC & "a" Then TempStringDash$  = Trim$(
 '     returns--whether to change them to spaces or to dashes.
 '  2. No string can be pasted in the fixed field, or in a tag or indicator cell.
 '  3. A string with neither delimiters nor carriage returns will be pasted in immediately
-'     at the cursor position, except:
-'     A. If the cursor is in the fixed field, the dialog box will prompt to paste the
-'        string as a new field.
-'     B. If the cursor is in a tag or indicator cell, the string will be pasted in
-'        immediately at the end of the field.
+'     at the cursor position, except if the cursor is in the fixed field or a tag or
+'     indicator cell, in which case the dialog box will prompt to paste the string as a
+'     new field.
 '  4. A string with delimiters will be pasted in immediately if the field is empty, but
 '     will trigger the dialog box otherwise, as it may be that a whole new field is what
 '     is wanted.
-' So the first step is to get the position of the cursor.
-
-Row% = CS.CursorRow
-Col% = CS.CursorColumn
+' So the first step is to check the position of the cursor.
 
 If Col% = 0 Then                                            'cursor in FF
     CursorPosition% = FIXED_FIELD
@@ -311,8 +320,9 @@ If Col% = 0 Then                                            'cursor in FF
                 CS.CursorColumn = 6
                 CursorPosition% = FIELD_BEGIN
               Else                                          'non-empty field
-                CS.CursorColumn = CurrentFieldLength% + 1
-                CursorPosition% = FIELD_END
+                CursorPosition% = FIELD_BEGIN
+'                CS.CursorColumn = CurrentFieldLength% + 1
+'                CursorPosition% = FIELD_END
             End If
           Else                                              'cursor in field
             If CurrentFieldLength% < 6 Then                 'empty field
@@ -361,7 +371,9 @@ If CRFound = FALSE Then
             Exit Sub
         End If
       Else
-        If CursorPosition% = FIELD_BEGIN Then GoTo PasteNow:
+        If AddFieldDefault = FALSE Then
+            If CursorPosition% = FIELD_BEGIN Then GoTo PasteNow:
+        End If
     End If
   Else
     If Col% = 6 And CurrentFieldLength% < 6 Then GoTo PasteNow:
@@ -374,13 +386,13 @@ Tag$ = Trim$( Tag$ )
 ' as a new field.
 
 Begin Dialog Dialog1Definition  260, 188, WaltsMacros$, .Dialog1ControlFunction
-  OptionGroup .ChoicePaste
+  OptionGroup                                                           .ChoicePaste
    OptionButton   18,  18, 104,  12, StringPaste$,                      .OptionPasteAsString
    OptionButton   18,  32,  44,  12, "&New field:",                     .OptionPasteAsField
   TextBox         66,  32,  18,  12,                                    .TextBoxTag
   TextBox         88,  32,   8,  12,                                    .TextBoxInd1
   TextBox         98,  32,   8,  12,                                    .TextBoxInd2
-  OptionGroup .ChoiceReplace
+  OptionGroup                                                           .ChoiceReplace
    OptionButton  168,  18,  36,  12, "&Spaces",                         .OptionConvertToSpaces
    OptionButton  168,  32,  36,  12, "&Dashes",                         .OptionConvertToDashes
   OkButton       138, 164,  52,  14
@@ -388,7 +400,7 @@ Begin Dialog Dialog1Definition  260, 188, WaltsMacros$, .Dialog1ControlFunction
   GroupBox        10,   6, 116,  46, "Paste copied text in as ..."
   GroupBox       134,   6, 116,  46, "Convert carriage returns to ...", .ConvertQ
   GroupBox        10,  58, 240,  98, "",                                .ConvertedTextBox
-  Text            18,  70, 224,  80, "",                                .ConvertedText
+  Text            18,  70, 224,  80, "",                                .DS
   Text            18, 134, 200,  16, "",                                .EndNote
 End Dialog
 
@@ -784,20 +796,27 @@ Select Case Action%
   Case INITIALIZE
 
     If Tag$ = "" Then
-        DlgValue   "ChoicePaste",           0
-        DlgText    "ConvertedTextBox",      PromptString$
-        DlgText    "ConvertedText",         TempStringSpace$
+        If AddFieldDefault Then
+            DlgValue   "ChoicePaste",           1
+            DlgFocus   "TextBoxTag"
+            DlgText    "ConvertedTextBox",      "Text string to add as new field:"
+            DisplayString$ = TempStringSpace$
+          Else
+            DlgValue   "ChoicePaste",           0
+            DlgText    "ConvertedTextBox",      PromptString$
+            DisplayString$ = TempStringSpace$
+        End If
       Else
         DlgFocus   "OptionPasteAsField"
         DlgValue   "ChoicePaste",           1
         DlgText    "ConvertedTextBox",      PromptTag$
-        DlgText    "ConvertedText",         TempStringDash$
+        DisplayString$ = TempStringDash$
     End If
     If CRFound = FALSE Then
         DlgEnable  "ConvertQ",              DISABLED
         DlgEnable  "OptionConvertToSpaces", DISABLED
         DlgEnable  "OptionConvertToDashes", DISABLED
-        DlgText    "ConvertedText",         TempStringSpace$
+        DisplayString$ = TempStringSpace$
     End If
     If DelimFound = TRUE Then
         DlgText    "EndNote",               DelimiterText$
@@ -812,13 +831,22 @@ Select Case Action%
         DlgValue   "ChoicePaste",           1
         DlgFocus   "TextBoxTag"
     End If
+    DlgText "DS", DisplayString$
 
   Case CONTROL_CHANGE
 
     Select Case Id$
 
       Case "OptionPasteAsString"
+        DlgValue   "ChoicePaste",           0
+        DlgText    "TextBoxInd1",           ""
+        DlgText    "TextBoxInd2",           ""
+        DlgText    "TextBoxTag",            ""
+        INDICATOR_1 = ""
+        INDICATOR_2 = ""
+        Tag$        = ""
         DlgText    "ConvertedTextBox",      PromptString$
+        DisplayString$ = TempStringSpace$
         If DelimFound = TRUE Then
             DlgText    "EndNote",               DelimiterText$
           Else
@@ -826,6 +854,7 @@ Select Case Action%
         End If
 
       Case "OptionPasteAsField"
+        DlgValue   "ChoicePaste",           1
         DlgText    "ConvertedTextBox",      PromptTag$
         DlgFocus   "TextBoxTag"
         If DelimFound = TRUE Then
@@ -835,51 +864,59 @@ Select Case Action%
         End If
 
       Case "OptionConvertToSpaces"
-        DlgText    "ConvertedText",         TempStringSpace$
+        DisplayString$ = TempStringSpace$
 
       Case "OptionConvertToDashes"
-        DlgText    "ConvertedText",         TempStringDash$
+        DisplayString$ = TempStringDash$
 
       Case "TextBoxTag"
         DlgValue   "ChoicePaste",           1
 
-    End Select
-
-    If DlgText( "TextBoxTag" ) Like "###" And Val( DlgText( "TextBoxTag" ) ) > 9 Then
-        If DlgText( "TextBoxInd1" ) = "" Or DlgText( "TextBoxInd1" ) Like "[ _0-9]" Then
-            If DlgText( "TextBoxInd2" ) = "" Or DlgText( "TextBoxInd2" ) Like "[ _0-9]" Then
+      Case "OK"
+        If DlgValue( "ChoicePaste" ) = 1 Then
+            If DlgText( "TextBoxTag" ) Like "###" And Val( DlgText( "TextBoxTag" ) ) > 9 Then
+                If DlgText( "TextBoxInd1" ) = "" Or DlgText( "TextBoxInd1" ) Like "[ _0-9]" Then
+                    If DlgText( "TextBoxInd2" ) = "" Or DlgText( "TextBoxInd2" ) Like "[ _0-9]" Then
+                        Exit Function
+                      Else
+                        MsgBox "Please use only digits or a space (or leave the input box empty) for the indicators!", WARNING_MESSAGE, WaltsMacros$
+                        DlgFocus   "TextBoxInd2"
+                    End If
+                  Else
+                    MsgBox "Please use only digits or a space (or leave the input box empty) for the indicators!", WARNING_MESSAGE, WaltsMacros$
+                    DlgFocus   "TextBoxInd1"
+                End If
+              ElseIf DlgText( "TextBoxTag" ) = "" Then
                 Exit Function
               Else
-                MsgBox "Please use only digits or a space (or leave the input box empty) for the indicators!", WARNING_MESSAGE, WaltsMacros$
-                DlgFocus   "TextBoxInd2"
+                MsgBox "Please enter only three digits for a tag!", WARNING_MESSAGE, WaltsMacros$
+                DlgFocus   "TextBoxTag"
             End If
-          Else
-            MsgBox "Please use only digits or a space (or leave the input box empty) for the indicators!", WARNING_MESSAGE, WaltsMacros$
-            DlgFocus   "TextBoxInd1"
+            Dialog1ControlFunction = KEEP_DLG_OPEN
         End If
-      ElseIf DlgText( "TextBoxTag" ) = "" Then
-        Exit Function
-      Else
-        MsgBox "Please enter only three digits for a tag!", WARNING_MESSAGE, WaltsMacros$
-        DlgFocus   "TextBoxTag"
-    End If
-    Dialog1ControlFunction = KEEP_DLG_OPEN
+    End Select
 
   Case TEXTBOX_CHANGE
 
-    If Id$ = "TextBoxTag" Then
+    If Id$ = "TextBoxTag" Or Id$ = "TextBoxInd1" Or Id$ = "TextBoxInd2" Then
         DlgValue   "ChoicePaste",           1
-        Tag$ = Trim$( DlgText( "TextBoxTag" ) )
+        Tag$        = Trim$( DlgText( "TextBoxTag" ) )
+        INDICATOR_1 = Trim$( DlgText( "TextBoxInd1" ) )
+        INDICATOR_2 = Trim$( DlgText( "TextBoxInd2" ) )
         If Tag$ = "" Then
             DlgText    "ConvertedTextBox",      "Text string to add as new field:"
           Else
-            DlgText    "ConvertedTextBox",      "Text string to add as new " & Tag$ & " field:"
+'            DlgText    "ConvertedTextBox",      "Text string to add as new " & Tag$ & " field:"
+            DisplayString$ = Tag$ & " " & INDICATOR_1 & INDICATOR_2 & " " & TempStringSpace$
+                DlgVisible "EndNote",               VISIBLE
+'                DlgText    "EndNote",               CleanupText$
             If Tag$ = "505" Then
                 DlgText    "TextBoxInd1",           "0"
                 DlgVisible "EndNote",               VISIBLE
                 DlgText    "EndNote",               CleanupText$
             End If
         End If
+    DlgText "DS", DisplayString$
     End If
 
   Case FOCUS_CHANGE
@@ -890,7 +927,7 @@ Select Case Action%
         If Tag$ = "" Then
             DlgText    "ConvertedTextBox",      "Text string to add as new field:"
           Else
-            DlgText    "ConvertedTextBox",      "Text string to add as new " & Tag$ & " field:"
+'            DlgText    "ConvertedTextBox",      "Text string to add as new " & Tag$ & " field:"
             If Tag$ = "505" Then
                 DlgText    "TextBoxInd1",           "0"
                 DlgVisible "EndNote",               VISIBLE
@@ -902,8 +939,8 @@ Select Case Action%
 End Select
 
 End Function
-'93134962
+'97036616
 '
 'Macro name: PasteUnformattedPlus
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 6/28/2017 11:34:09 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:06:16 AM using "MacroBookInspector" macro by Walter F. Nickeson.

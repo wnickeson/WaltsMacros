@@ -1,4 +1,4 @@
-'MacroName:FixedFieldChecker.2017.03
+'MacroName:FixedFieldChecker.2018.02
 'MacroDescription:Fills in various elements of the fixed field from data in the variable
 ' fields of a bibliographic record. UNDER DEVELOPMENT
 
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 3 May 2017.
+' Last updated: 10 May 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -31,15 +31,17 @@ Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical mes
 Const DISPLAY_AT_TOP      As Integer = 1   'The value to display the fixed field at the top of a record.
 Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
 
+Dim DELIMITER                : DELIMITER    = Chr$( 223 )
+Dim FILL_CHAR                : FILL_CHAR    = Chr$( 252 )
+
 Dim CS As Object
 Set CS = CreateObject("Connex.Client")
 
 Dim ContLen%
-Dim Delimiter$               : Delimiter$   = Chr$( 223 )
 Dim FieldData$
-Dim FILL_CHAR                : FILL_CHAR    = Chr$( 252 )
 Dim FirstChar$
 Dim LastDelim%
+Dim MainTerm$
 Dim PosFF%
 Dim Replace$
 Dim SecondChar$
@@ -47,7 +49,6 @@ Dim Start%
 Dim Tag$
 Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras1:FixedFieldChecker"
-Dim MainTerm$
 
 'These are the codes to be put in the fixed field from analysis of the record:
 
@@ -85,7 +86,7 @@ TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
   Case 0, 1, 17, 35
   Case Else
-    MsgBox "This macro only works in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -106,7 +107,7 @@ End If
 
 If ( FFType$ = "a" Or FFType$ = "t" ) And FFBLvl$ Like "[acdm]" Then
     Else
-      MsgBox "Sorry, this macro only works in the books format!", CRITICAL_MESSAGE, WaltsMacros$
+      MsgBox "Sorry, this macro works only in the books format!", CRITICAL_MESSAGE, WaltsMacros$
       Exit Sub
 End If
 If CS.GetFixedField( "Audn", FFAudn$ ) = FALSE Then
@@ -241,17 +242,19 @@ If CS.GetField( "111", 1, FieldData$ ) Then
     End If
 End If
 
+' Look in the subject headings for various codes.
+
 i = 1
 Do
   Found6XX = CS.GetField( "6..", i, FieldData$ )
   If Found6XX Then
       Tag$ = Left$( FieldData$, 3 )
       If Tag$ Like "[6][0145][01]" Then
-          If InStr( FieldData$, Delimiter$ & "2 fast" ) = 0 Then
+          If InStr( FieldData$, DELIMITER & "2 fast" ) = 0 Then
               Start%     = 1
               LastDelim% = 0
               Do
-                p = InStr( Start%, FieldData$, Delimiter$ )
+                p = InStr( Start%, FieldData$, DELIMITER )
                 If p <> 0 Then
                     If Start% = 1 Then
                         MainTerm$ = Trim$( Mid$( FieldData$, 6, p - 7 ) )
@@ -268,75 +271,110 @@ Do
                   If p <> 0 Then
                       AudnCode$ = "j"
                   End If
-                  p = InStr( FieldData$, "fiction" )
-                  If p <> 0 Then
-                      If FFLitF$ Like "[fs]" Then
-                          LitFCode$ = FFLitF$
-                        Else
-                          LitFCode$ = "1"
-                      End If
+              End If
+              p = InStr( FieldData$, "fiction" )
+              If p <> 0 Then
+                  If FFLitF$ Like "[fs]" Then
+                      LitFCode$ = FFLitF$
+                    Else
+                      LitFCode$ = "1"
                   End If
-                  p = InStr( FieldData$, "poetry" )
-                  If p <> 0 Then
-                      LitFCode$ = "p"
-                  End If
-                  p = InStr( FieldData$, "drama" )
-                  If p <> 0 Then
-                      LitFCode$ = "d"
-                  End If
-                  p = InStr( FieldData$, "biography" )
-                  If p <> 0 Then
-                      BiogCode$ = "b"
-                  End If
+              End If
+              p = InStr( FieldData$, "poetry" )
+              If p <> 0 Then
+                  LitFCode$ = "p"
+              End If
+              p = InStr( FieldData$, "drama" )
+              If p <> 0 Then
+                  LitFCode$ = "d"
+              End If
+              p = InStr( FieldData$, "biography" )
+              If p <> 0 Then
+                  BiogCode$ = "b"
+              End If
 
 ' Various terms for "Cont" codes.
 
-                  p = InStr( FieldData$, "bibliography" )
-                  If p <> 0 Then
-                      q = InStr( ContCode$, "b" )
-                      If q = 0 Then
-                          ContCode$ = ContCode$ & "b"
-                      End If
+              p = InStr( FieldData$, "bibliography" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "b" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "b"
                   End If
-                  p = InStr( FieldData$, "catalogs" )
-                  If p <> 0 Then
-                      q = InStr( ContCode$, "c" )
-                      If q = 0 Then
-                          ContCode$ = ContCode$ & "c"
-                      End If
+              End If
+              p = InStr( FieldData$, "calendars" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "2" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "2"
                   End If
-                  p = InStr( FieldData$, "directories" )
-                  If p <> 0 Then
-                      q = InStr( ContCode$, "r" )
-                      If q = 0 Then
-                          ContCode$ = ContCode$ & "r"
-                      End If
+              End If
+              p = InStr( FieldData$, "catalogs" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "c" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "c"
                   End If
-                  p = InStr( FieldData$, "exhibitions" )
-                  If p <> 0 Then
-                      q = InStr( ContCode$, "c" )
-                      If q = 0 Then
-                          ContCode$ = ContCode$ & "c"
-                      End If
+              End If
+              p = InStr( FieldData$, "comic books" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "6" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "6"
                   End If
-                  p = InStr( FieldData$, "handbooks," )
-                  If p <> 0 Then
-                      q = InStr( ContCode$, "f" )
-                      If q = 0 Then
-                          ContCode$ = ContCode$ & "f"
-                      End If
+              End If
+              p = InStr( FieldData$, "dictionaries" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "d" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "d"
                   End If
-                  p = InStr( FieldData$, "statistics" )
-                  If p <> 0 Then
-                      q = InStr( ContCode$, "s" )
-                      If q = 0 Then
-                          ContCode$ = ContCode$ & "s"
-                      End If
+              End If
+              p = InStr( FieldData$, "directories" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "r" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "r"
                   End If
-                Else
-                  If InStr( MainTerm$, "essays" ) Then
-                      LitFCode$ = "e"
+              End If
+              p = InStr( FieldData$, "discographies" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "k" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "k"
                   End If
+              End If
+              p = InStr( FieldData$, "encyclopedias" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "e" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "e"
+                  End If
+              End If
+              p = InStr( FieldData$, "exhibitions" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "c" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "c"
+                  End If
+              End If
+              p = InStr( FieldData$, "handbooks," )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "f" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "f"
+                  End If
+              End If
+              p = InStr( FieldData$, "statistics" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "s" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "s"
+                  End If
+              End If
+            Else
+              If InStr( MainTerm$, "essays" ) Then
+                  LitFCode$ = "e"
               End If
           End If
       End If
@@ -402,8 +440,8 @@ If Replace$ = "" Then
 End If
 
 End Sub
-'43115179
+'46916294
 '
 'Macro name: FixedFieldChecker
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 6/28/2017 11:33:45 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:05:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -111,12 +111,13 @@ Global OriginalPart$
 Global OriginalTrAr$
 Global Part$
 Global PrevSelection%
-Global QUOTE As String*1
 Global Rearrange$
 Global RecordType$
 Global TrAr$
 Global WaltsMacros$
 Global When047Displays$
+
+Global QUOTE As String*1
 
 Global CompCodesByTerm
 Global InvalidCode
@@ -150,7 +151,6 @@ Set CS = CreateObject("Connex.Client")
 
 Dim Candidate047$
 Dim FieldData$
-Dim FILL_CHAR As String*1    : FILL_CHAR  = Chr$( 252 )
 Dim OptionChangeComp$
 Dim OptionDelete047$
 Dim OptionDoNothing1$
@@ -159,6 +159,8 @@ Dim OptionOptions$
 Dim PosFF%
 Dim TypeOfRecord$
 Dim TypeOfWindow%
+
+Dim FILL_CHAR As String*1    : FILL_CHAR  = Chr$( 252 )
 
 Dim Change047                : Change047  = FALSE
 Dim ChangeComp               : ChangeComp = FALSE
@@ -189,7 +191,7 @@ Select Case TypeOfWindow%
   Case 0 To 1, 17, 35
     If CS.GetFixedField( "Type", TypeOfRecord$ ) Then
         If TypeOfRecord$ Like "[!cdij]" Then
-            MsgBox "Sorry, this macro only works with bibliographic records for music materials.", CRITICAL_MESSAGE, WaltsMacros$
+            MsgBox "Sorry, this macro works only with bibliographic records for music materials.", CRITICAL_MESSAGE, WaltsMacros$
             Exit Sub
           Else
 
@@ -336,7 +338,7 @@ Continue:
     End If
 
   Case Else
-    MsgBox "Sorry, this macro only works with bibliographic records for music materials.", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only with bibliographic records for music materials.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 
 End Select
@@ -1932,8 +1934,8 @@ If AccM$ <> OriginalAccM$ Or FMus$ <> OriginalFMus$ Or LTxt$ <> OriginalLTxt$ Or
 End If
 
 End Function
-'196190488
+'196390492
 '
 'Macro name: MusicFFHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 8/15/2017 10:49:00 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:06:11 AM using "MacroBookInspector" macro by Walter F. Nickeson.

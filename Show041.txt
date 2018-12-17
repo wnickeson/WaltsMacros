@@ -1,4 +1,4 @@
-'MacroName:Show041.2016.03
+'MacroName:Show041.2018.01
 'MacroDescription:Displays the language codes in an 041 field in a friendly way for
 ' verification and/or correction. Also compares codes to "Lang" in the fixed field and
 ' fixes discrepancies.
@@ -10,7 +10,7 @@
 ' Thanks to Terry Simpkins for clarifying discussion. However, all responsibility for
 ' this macro's appearance and functionality are mine alone.
 '
-' Last updated: 6 April 2016.
+' Last updated: 20 August 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -142,8 +142,6 @@ Global CS As Object
 
 Global Addition$
 Global CurrentControl%
-Global Delimiter$
-Global DoubleQuote$
 Global Duplicates$
 Global FFLangDisplay$
 Global FF_Lang$
@@ -193,6 +191,9 @@ Global Subf7K$
 Global SubfieldsUsed$
 Global TempArrayElements%
 Global WaltsMacros$
+
+Global DELIMITER    As String*1
+Global DOUBLE_QUOTE As String*1
 
 Global Change
 Global ChangeFF
@@ -283,13 +284,13 @@ Dim In041                    : In041              = FALSE
 
 Dim i As Integer, j As Integer, p As Integer, q As Integer
 
-Delimiter$      = Chr$( 223 )
-DoubleQuote$    = Chr$( 034 )
+DELIMITER       = Chr$( 223 )
+DOUBLE_QUOTE    = Chr$( 034 )
 InitialFocus%   = ID_FIRST_TEXT_BOX
 Instructions1$  = "Click in a text box to view language names and to add, change, or delete language codes. "
 Instructions1$  = Instructions1$ & "Separate multiple language codes in a subfield with a space."
 Instructions2$  = "Or, select a code from this list of languages to add to the subfield in which the cursor is located:"
-Instructions3$  = "Click " & DoubleQuote$ & "Update form" & DoubleQuote$ & " to view language names after adding codes."
+Instructions3$  = "Click " & DOUBLE_QUOTE & "Update form" & DOUBLE_QUOTE & " to view language names after adding codes."
 ListLegendBase$ = "Language names in "
 WaltsMacros$    = "[Walt's macros] Extras1:Show041"
 
@@ -326,7 +327,7 @@ If CS.GetFieldLine( Row%, FieldData$ ) Then
         Select Case TypeOfWindow%
           Case 0, 1, 17, 35
           Case Else
-            MsgBox "This macro only works in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+            MsgBox "this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
             Exit Sub
           End Select
     End If
@@ -358,7 +359,7 @@ End If
 CS.FixedFieldPosition = PosFF%
 
 If CS.GetField( "040", 1, CatSource$ ) Then
-    p = InStr( CatSource$, Delimiter$ & "b" )
+    p = InStr( CatSource$, DELIMITER & "b" )
     If p > 0 Then
         CatLang$ = Trim$( Mid$( CatSource$, p + 3, LANG_CODE_LENGTH ) )
       Else
@@ -426,7 +427,7 @@ If Found041 = FALSE Then
 
         WorkformTest$ = Mid$( FieldData$, 6 )
         Do
-          p = InStr( WorkformTest$, Delimiter$ )
+          p = InStr( WorkformTest$, DELIMITER )
           If p <> 0 Then
               WorkformTest$ = Left$( WorkformTest$, p - 1 ) & Mid$( WorkformTest$, p + 2 )
           End If
@@ -452,8 +453,8 @@ End If
 ' To aid in processing, make sure the field begins with a delimiter and "a", which OCLC
 ' hides by default if the first subfield is "a".
 
-If Left$( FieldData$, 1 ) <> Delimiter$ Then
-    FieldData$ = Delimiter$ & "a " & FieldData$
+If Left$( FieldData$, 1 ) <> DELIMITER Then
+    FieldData$ = DELIMITER & "a " & FieldData$
 End If
 
 ' Break up the field into its constituent subfields. Store the data in a two-dimensional
@@ -463,13 +464,13 @@ End If
 Start%         = 1
 NextDelimiter% = 1
 Do
-  i = InStr( Start%, FieldData$, Delimiter$ )
+  i = InStr( Start%, FieldData$, DELIMITER )
   If i <> 0 Then
 
 ' If a delimiter is found, look ahead to the next one (or to the end of the field), and
 ' take the text string between the two occurrences for manipulation
 
-      NextDelimiter% = InStr( i + 1, FieldData$, Delimiter$ )
+      NextDelimiter% = InStr( i + 1, FieldData$, DELIMITER )
       If NextDelimiter% = 0 Then
           NextDelimiter% = Len( FieldData$ ) + 2
       End If
@@ -800,7 +801,7 @@ If Len( MultipleCodes$ ) > 0 Then
     FixCodingErrors% = FixCodingErrors% + WARN_SPLIT
 End If
 
-MsgSplit$ = "Pressing " & DoubleQuote$ & "OK" & DoubleQuote$ & " will separate all language codes in " & MultipleCodes$
+MsgSplit$ = "Pressing " & DOUBLE_QUOTE & "OK" & DOUBLE_QUOTE & " will separate all language codes in " & MultipleCodes$
 MsgSplit$ = MsgSplit$ & " and replace the 041 field, even if no other changes are made."
 
 ' Check that the code in the fixed field element "Lang" is the same as the first code in
@@ -1212,7 +1213,7 @@ If Change = TRUE Or AddNew = TRUE Then
 
 ' If the first subfield is $a, delete the delimiter and subfield code.
 
-    If Mid$( NewField$, 6, 2 ) = Delimiter$ & "a" Then
+    If Mid$( NewField$, 6, 2 ) = DELIMITER & "a" Then
         Newfield$ = Left$( NewField$, 5 ) & Mid$( NewField$, 9 )
     End If
 
@@ -2814,7 +2815,7 @@ If Update = FALSE Then
     WorkString$ = ""
     i           = 1
     Do While i < Len( TempString$ )
-      WorkString$ = WorkString$ & " " & Delimiter$ & Code$ & " " & Mid$( TempString$, i, LANG_CODE_LENGTH )
+      WorkString$ = WorkString$ & " " & DELIMITER & Code$ & " " & Mid$( TempString$, i, LANG_CODE_LENGTH )
       i           = i + 4
     Loop
   Else
@@ -3233,7 +3234,7 @@ StartOver:
             InputProblem$ = "h" & ValidateInput( Subf7H$ )
         End If
         If InputProblem$ <> "" Then
-            MsgBox "Invalid code " & DoubleQuote$ & Mid$( InputProblem$, 2 ) & DoubleQuote$ & " in subfield $" & Left$( InputProblem$, 1 ) & "! Check input.", WARNING_MESSAGE, WaltsMacros$
+            MsgBox "Invalid code " & DOUBLE_QUOTE & Mid$( InputProblem$, 2 ) & DOUBLE_QUOTE & " in subfield $" & Left$( InputProblem$, 1 ) & "! Check input.", WARNING_MESSAGE, WaltsMacros$
             Dialog2ControlFunction = KEEP_DLG_OPEN
         End If
 
@@ -3314,7 +3315,7 @@ StartOver:
                   Else
                     FFLangDisplay$ = "Fixed field Lang: [unavailable]"
                 End If
-                MsgBox "The code in " & DoubleQuote$ & "Lang" & DoubleQuote$ & " in the fixed field was changed!", INFORMATION_MESSAGE, WaltsMacros$
+                MsgBox "The code in " & DOUBLE_QUOTE & "Lang" & DOUBLE_QUOTE & " in the fixed field was changed!", INFORMATION_MESSAGE, WaltsMacros$
             End If
             Lang041Match = TRUE
             Whoops       = TRUE
@@ -3368,7 +3369,7 @@ StartOver:
                 If FF_Lang$ = "zxx" Then
                     If FF_Type$ = "a" Then
                         If Subfields( 0, aLANG_CODES_PRIMARY ) <> "" Then
-                            Answer% = MsgBox( "The language code " & DoubleQuote$ & "zxx" & DoubleQuote$ & " does not allow for subfield $a to be used! Do you want to clear subfield $a of all content?", 52, WaltsMacros$ )
+                            Answer% = MsgBox( "The language code " & DOUBLE_QUOTE & "zxx" & DOUBLE_QUOTE & " does not allow for subfield $a to be used! Do you want to clear subfield $a of all content?", 52, WaltsMacros$ )
                             If Answer% = 6 Then
                                 Subfields( 0, aLANG_CODES_PRIMARY ) = ""
                               Else
@@ -3376,8 +3377,8 @@ StartOver:
                             End If
                         End If
                       Else
-                        MsgZxxInA$ = "Can't add code " & DoubleQuote$ & "zxx" & DoubleQuote$ & " to subfield $a! Click OK to replace contents of subfield $a with "
-                        MsgZxxInA$ = MsgZxxInA$ & DoubleQuote$ & "zxx" & DoubleQuote$ & " , or Cancel to return to the dialog box."
+                        MsgZxxInA$ = "Can't add code " & DOUBLE_QUOTE & "zxx" & DOUBLE_QUOTE & " to subfield $a! Click OK to replace contents of subfield $a with "
+                        MsgZxxInA$ = MsgZxxInA$ & DOUBLE_QUOTE & "zxx" & DOUBLE_QUOTE & " , or Cancel to return to the dialog box."
                         Answer% = MsgBox( MsgZxxInA$, 33, WaltsMacros$ )
                         If Answer% = 1 Then
                             Subfields( 0, aLANG_CODES_PRIMARY ) = FF_Lang$
@@ -3450,8 +3451,8 @@ StartOver:
 End Select
 
 End Function
-'3479163559
+'3480163581
 '
 'Macro name: Show041
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 6/28/2017 11:34:31 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:06:48 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,394 @@
+'MacroName:TitleFrom588.2018.32
+'MacroDescription:Changes source of title note tag to 588, or quickly adds selected
+' source of title notes to certain formats: "cover" for volumes, "label" for discs,
+' "container" for AV.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 1 March 2018.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 2.63 and 64-bit Windows 7 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro while viewing a bibliographic record (cursor position is
+' irrelevant). If the macro finds a note about the source of the title in a 500 field, it
+' converts the tag to 588. If a note about the source of the title is not found, the
+' macro adds one, depending on the type of carrier of the resource:
+'
+'  + Volumes (including language material, notated music, cartographic material, and two-
+'    dimensional nonprojectable graphic material): "Title from cover." Exceptions to this
+'    rule are serials, for which no note is added, and monographic component parts, for
+'    which the note added is "Caption title."
+'  + Discs (including audio and computer resources, but not visual material): "Title from
+'    disc label."
+'  + Visual material, kits, and mixed material resources: "Title from container."
+'
+' Notes of the form "[Source] title" are changed to "Title from [source]," except for
+' caption titles.
+'
+' The macro is based on RDA 2.2, "Sources of information," and is designed to help
+' quickly add to the record certain standard phrases when "a note on the source of the
+' title proper" is required (2.2.2.4). First, the macro looks through the record for an
+' existing note. If one is found, as a common phrase such as "Cover title" or "Title from
+' disc label," the macro changes the tag to 588, if necessary, and converts some forms of
+' the note to "Title from ..."
+'
+' If no source of title note is found, the macro adds one by checking the record's
+' carrier type (field 338, term or code), if present, and in the fixed field, the "Type,"
+' "BLvl," and "CrTp" codes.
+'
+' For "Manifestations consisting of one or more pages, leaves, sheets, or cards," the
+' preferred source is a "title page, title sheet, or title card." If the preferred source
+' is lacking, the macro simply asserts the source of information is the cover. This is
+' the case for "Type" codes "a," "c", "d", "k," and "t." Exceptions are serials,
+' analytics or monographic component parts, and maps. For serials ("BLvl" code "s"), the
+' macro does not attempt to supply the source of title. For analytics, the macro assumes
+' the title is from a page of content, or a caption. For cartographic material, the macro
+' adds the note only for an atlas, or "CrTp" code "e".
+'
+' For "Manifestations consisting of moving images" ("Type" code "g"), if there is no
+' "title frame or frames, or title screen or screens" to be used as the preferred source
+' of information, the macro assumes the title comes from the container.
+'
+' For resources whose carrier is a disc or a cartridge (for sound recordings, "Type"
+' codes "i" and "j", and some electronic resources), the macro assumes the title is taken
+' from the disc or cartridge label.
+'
+' For resources with "Type" codes "o", "m", "p", and "r," the macro assumes the title is
+' from a container.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CASE_INSENSITIVE    As Integer = 1   'The value to force a string comparison test to ignore case.
+Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                           ' a big "X") in a message box; used to report the macro quitting.
+Const INFORMATION_MESSAGE As Integer = 64  'The value to display the "Information message" icon in a message box.
+Const DISPLAY_FF_AT_TOP   As Integer = 1   'The value to display the fixed field at the top of a record.
+
+Const CARTRIDGE           As Integer = 6
+Const CONTAINER           As Integer = 3
+Const DISC                As Integer = 2
+Const ONLINE              As Integer = 4
+Const OTHER               As Integer = 5
+Const VOLUME              As Integer = 1
+
+Dim CS As Object
+Set CS = CreateObject("Connex.Client")
+
+Dim BLvl$
+Dim CarrierCode$
+Dim CarrierTerm$
+Dim CarrierType%
+Dim CrTp$
+Dim Extent$
+Dim FieldData$
+Dim First5XX%
+Dim NoteText$
+Dim OldText$
+Dim PosFF%
+Dim RecType$
+Dim TypeOfWindow%
+Dim TypePhrase$
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras1:588TitleFrom"
+
+Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
+Dim QUOTE     As String*1    : QUOTE         = Chr$( 034 )
+
+Dim ChangedFFView            : ChangedFFView = FALSE
+Dim FoundField
+Dim GetFF
+Dim Success
+
+Dim i As Integer, p As Integer, q As Integer
+
+' First, make sure that a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End Select
+
+' Then, make sure the language of the record is English.
+
+If CS.GetField( "040", 1, FieldData$ ) Then
+    p = InStr( FieldData$, DELIMITER & "b" )
+    If p <> 0 Then
+        If Mid$( FieldData$, p + 3, 3 ) <> "eng" Then
+            MsgBox "Sorry, this macro works only in English-language records.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+End If
+
+' Begin by checking for an existing note to change. Go through all the record's fields
+' looking for the phrase "Cover title" or "Title from". If this phrase is found in a 500
+' field, replace it with the 588 equivalent, and quit; the macro is done. While going
+' through the record, note in which row the first 5XX field is found; if a new field is
+' to be added, it will be before that first 5XX.
+
+i = 1
+Do
+  FoundField = CS.GetFieldLine( i, FieldData$ )
+  If FoundField Then
+      If Left$( FieldData$, 1 ) = "5" Then
+          If First5XX% = 0 Then
+              First5XX% = i
+          End If
+          If Left$( FieldData$, 16 ) = "500  Cover title" Or Left$( FieldData$, 16 ) = "500  Cover-title." Then
+              NoteText$ = "Title from cover"
+              OldText$ = Mid$( FieldData$, 6 )
+            ElseIf Left$( FieldData$, 18 ) = "500  Caption title" Then
+              NoteText$ = "Caption title"
+              OldText$ = Mid$( FieldData$, 6 )
+            Else
+              If Left$( FieldData$, 15 ) = "500  Title from" Then
+                  NoteText$ = Trim$( Mid$( FieldData$, 16 ) )
+                  If Right$( NoteText$, 1 ) = "." Then
+                      NoteText$ = Left$( NoteText$, Len( NoteText$ ) - 1 )
+                  End If
+                  If NoteText$ = "disc" Or NoteText$ = "disc surface" Then
+                      NoteText$ = "disc label"
+                  End If
+                  NoteText$ = "Title from " & NoteText$
+                Else
+                  GoTo Increment:
+              End If
+          End If
+          If CS.SetFieldLine( i, "588  " & NoteText$ & "." ) Then
+              MsgBox QUOTE & NoteText$ & QUOTE & " note changed.", INFORMATION_MESSAGE, WaltsMacros$
+            Else
+              MsgBox "Sorry, could not change " & QUOTE & OldText$ & QUOTE & " note.", CRITICAL_MESSAGE, WaltsMacros$
+          End If
+          Exit Sub
+      End If
+  End If
+
+Increment:
+
+  i = i + 1
+Loop Until FoundField = FALSE
+
+' If a note must be added, the easiest way to determine what type of note to add is to
+' look for the carrier type. A carrier type of "volume" will usually trigger the
+' addition or change of the "Title from cover" note; a carrier type of "audio disc" will
+' usually do the same for "Title from disc label" note. Stop with the first carrier type
+' found.
+
+If CS.GetField( "338", 1, FieldData$ ) Then
+    If Mid$( FieldData$, 6, 1 ) <> DELIMITER Then
+        FieldData$ = Left$( FieldData$, 5 ) & DELIMITER & "a " & Mid$( FieldData$, 6 )
+    End If
+    p = InStr( FieldData$, DELIMITER & "a" )
+    If p > 0 Then
+        q = InStr( p + 1, FieldData$, DELIMITER )
+        If q = 0 Then
+            CarrierTerm$ = Trim$( Mid$( FieldData$, p + 2 ) )
+          Else
+            CarrierTerm$ = Trim$( Mid$( FieldData$, p + 2, q - p - 2 ) )
+        End If
+      Else
+        p = InStr( FieldData$, DELIMITER & "b" )
+        If p > 0 Then
+            q = InStr( p + 1, FieldData$, DELIMITER )
+            If q = 0 Then
+                CarrierCode$ = Trim$( Mid$( FieldData$, p + 2 ) )
+              Else
+                CarrierCode$ = Trim$( Mid$( FieldData$, p + 2, q - p - 2 ) )
+            End If
+        End If
+    End If
+  Else
+
+' If no 338 field is found, try the 300 field for some clues.
+
+    If CS.GetField( "300", 1, FieldData$ ) Then
+        p = InStr( FieldData$, DELIMITER )
+        If p > 6 Then
+            Extent$ = Trim$( Mid$( FieldData$, 6, p - 6 ) )
+            If InStr( 1, Extent$, "disc", CASE_INSENSITIVE ) Then
+                CarrierCode$ = "300disc"
+              ElseIf InStr( 1, Extent$, "online", CASE_INSENSITIVE ) Then
+                CarrierCode$ = "cr"
+              ElseIf InStr( 1, Extent$, "cartridge", CASE_INSENSITIVE ) Then
+                CarrierCode$ = "300cartridge"
+              ElseIf InStr( 1, Extent$, "pages", CASE_INSENSITIVE ) Then
+                CarrierCode$ = "nc"
+            End If
+        End If
+    End If
+End If
+
+If CarrierTerm$ <> "" Then
+    Select Case CarrierTerm$
+      Case "volume"
+        CarrierType% = VOLUME
+      Case "videodisc", "audio disc", "computer disc"
+        CarrierType% = DISC
+      Case "online resource"
+        CarrierType% = ONLINE
+      Case "other"
+        CarrierType% = OTHER
+'      Case Else
+'        CarrierType% = CONTAINER
+    End Select
+  Else
+    Select Case CarrierCode$
+      Case "nc"
+        CarrierType% = VOLUME
+      Case "vd", "sd", "cd", "300disc"
+        CarrierType% = DISC
+      Case "cr"
+        CarrierType% = ONLINE
+      Case ""
+        CarrierType% = OTHER
+      Case "300cartridge"
+        CarrierType% = CARTRIDGE
+      Case Else
+        CarrierType% = CONTAINER
+    End Select
+End If
+
+' Then find the record's Type, Bibliographic Level, and, if present, Cartographic Type
+' codes.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+GetFF = CS.GetFixedField( "BLvl", BLvl$ )
+GetFF = CS.GetFixedField( "Type", RecType$ )
+GetFF = CS.GetFixedField( "CrTp", CrTp$ )
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Prepare the actions. If a carrier type is supplied in a 338 field, the action is pretty
+' straightforward. If no carrier type can be found, the macro can make some guesses based
+' on information elsewhere in the record. If it can't get enough information, the macro
+' will do nothing.
+
+Select Case CarrierType%
+
+  Case VOLUME
+
+' A carrier type of volume suggests the chief source of information is a title page or
+' equivalent, so the macro can add the note about the title being found on the cover--
+' unless the record is for an "in" analytic, in which case most likely the source will be
+' the first page of text, making for a caption title.
+
+    Select Case BLvl$
+
+      Case "m"
+        NoteText$ = "Title from cover"
+
+      Case "s"
+        Msgbox "Sorry, this macro isn't designed to be used in a record for a serial.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+
+      Case "a"
+        If RecType$ ="a" then
+            NoteText$ = "Caption title"
+        End If
+
+    End Select
+
+  Case DISC
+
+    NoteText$ = "Title from disc label"
+
+  Case ONLINE
+
+    TypePhrase$ = "an online resource."
+
+  Case CARTRIDGE
+
+    NoteText$ = "Title from cartridge label"
+
+  Case OTHER
+
+    Msgbox "Sorry, this macro can't supply a source of title note for this record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+  Case Else
+
+' For other types of material, or for when no carrier type is given, the action to take
+' varies, based on the values for Type of record, Bibliographic level, and Cartographic
+' type.
+
+    Select Case RecType$
+
+' No attempt is made to add a note for the source of title of serials.
+
+      Case "a"
+        If BLvl$ = "s" Then
+            TypePhrase$ = "a serial."
+        End If
+
+' For maps in the form of an atlas, that is, a volume, the note to add is "Title from cover." Other kinds of maps
+' won't have any note added.
+
+      Case "e", "f"
+        If CrTp$ = "e" Then
+            NoteText$ = "Title from cover"
+          Else
+            TypePhrase$ = "cartographic material other than atlases."
+        End If
+
+' Otherwise, the note to add is "Title from container."
+
+      Case "g", "k", "o", "p", "r"
+        NoteText$ = "Title from container"
+
+    End Select
+
+End Select
+
+' If the macro can take no action, it displays the message and quits.
+
+If TypePhrase$ <> "" Then
+    Msgbox "Sorry, this macro isn't designed to be used in a record for " & TypePhrase$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' The note will be added as the first 5XX field.
+
+If First5XX% = 0 Then
+    If CS.AddField( 1, "588  " & NoteText$ & "." ) Then
+        Success = TRUE
+      Else
+        Success = FALSE
+    End If
+  Else
+    If CS.AddFieldLine( First5XX%, "588  " & NoteText$ & "." ) Then
+        Success = TRUE
+      Else
+        Success = FALSE
+    End If
+End If
+
+If Success Then
+    MsgBox QUOTE & NoteText$ & QUOTE & " note added.", INFORMATION_MESSAGE, WaltsMacros$
+  Else
+    MsgBox "Sorry, could not add " & QUOTE & "Title from" & QUOTE & " note.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'41616321
+'
+'Macro name: TitleFrom588
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
+'Saved: 12/17/2018 9:06:52 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,4 +1,4 @@
-'MacroName:VisMatHelper.2017.04
+'MacroName:VisMatHelper.2017.06
 'MacroDescription:Helps correct and add fixed field and 007 field values in bibliographic
 ' records for visual materials.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 5 June 2017.
+' Last updated: 17 July 2017.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -94,12 +94,13 @@ Global ffType$
 Global FieldCount%               'Total number of 007 fields.
 Global FieldNumber%              'Which 007 field is displayed.
 Global FieldsRowCount%           'Upper bound of array of 007 fields (1 less than total number).
-Global FILL_CHAR As String*1
 Global OriginalFieldCount%
 Global OriginalMaterial$
 Global OriginalTMat$
 Global OriginalType$
 Global WaltsMacros$
+
+Global FILL_CHAR As String*1
 
 Global ChangeTech
 Global ChangeTime
@@ -180,7 +181,6 @@ Dim Ctry$
 Dim CurrentRow%
 Dim Dates1$
 Dim Dates2$
-Dim DELIMITER                : DELIMITER      = Chr$( 223 )
 Dim DtSt$
 Dim Fest$
 Dim ffBLvl$
@@ -202,6 +202,8 @@ Dim Summation$
 Dim TempCode$
 Dim TempString$
 Dim TypeOfWindow%
+
+Dim DELIMITER As String*1    : DELIMITER      = Chr$( 223 )
 
 Dim Add006                   : Add006         = FALSE
 Dim ChangedFFView            : ChangedFFView  = FALSE
@@ -228,7 +230,7 @@ TypeOfWindow% = CS.ItemType
 Select Case TypeOfWindow%
 
   Case -1, 3 To 16, 18, 20 To 36
-    MsgBox "Sorry, this macro only works in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 
 End Select
@@ -362,6 +364,25 @@ If FieldCount% > 0 Then
 End If
 
 OriginalFieldCount% = FieldCount%
+
+' If the record is not in Visual Materials format, check for the presence of an 006 field
+' describing the visual materials aspect of the resource.
+
+i = 1
+Do
+  FoundField = CS.GetField( "006", i, FieldData$ )
+  If FoundField Then
+      If Mid$( FieldData$, 6, 1 ) Like "[gkor]" Then
+          ffType$ = Mid$( FieldData$, 6, 1 )
+          ffTime$ = Mid$( FieldData$, 7, 3 )
+          ffTMat$ = Mid$( FieldData$, 22, 1 )
+          ffTech$ = Mid$( FieldData$, 23, 1 )
+          Exit Do
+        Else
+          i = i + 1
+      End If
+  End If
+Loop Until FoundField = FALSE
 
 ' Now fill the arrays for display.
 
@@ -2112,7 +2133,6 @@ ReInitialize:
             DlgEnable       "DropListBox_Tech",     DISABLED
             DlgEnable       "TextBox_Time",         DISABLED
 
-
           Case "b"
             DlgListBoxArray "DropListBox_TMat",     aTMat_o()
             DlgEnable       "DropListBox_Tech",     DISABLED
@@ -2539,8 +2559,8 @@ Add007:
 End Select
 
 End Function
-'2568102821
+'2588103412
 '
 'Macro name: VisMatHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 6/28/2017 11:34:37 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:06:58 AM using "MacroBookInspector" macro by Walter F. Nickeson.

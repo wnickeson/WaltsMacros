@@ -1,11 +1,11 @@
-'MacroName:ChangeCase.2015.01
+'MacroName:ChangeCase.2018.01
 'MacroDescription:Changes the case of selected text within a field or of an entire field.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 30 April 2015.
+' Last updated: 30 May 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -116,7 +116,7 @@ AllUpperCase = FALSE
 Window% = CS.ItemType
 Select Case Window%
   Case -1, 3 To 16, 18, 20-36
-    MsgBox "This macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
 
@@ -127,7 +127,7 @@ If CS.GetSelectedText( SelectedText$ ) = FALSE Or CS.CursorColumn < 6 Then
     Row% = CS.CursorRow
     If CS.GetFieldLine( Row%, FieldData$ ) Then
         If FieldData$ = "Data contains non-latin script" Then
-            MsgBox "Sorry, this macro only works in fields with only Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+            MsgBox "Sorry, this macro works only in fields with only Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
             Exit Sub
         End If
 
@@ -148,7 +148,7 @@ If CS.GetSelectedText( SelectedText$ ) = FALSE Or CS.CursorColumn < 6 Then
     End If
   Else
     If SelectedText$ = "Data contains non-latin script" Then
-        MsgBox "Sorry, this macro only works with Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox "Sorry, this macro works only with Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
     WorkString$ = SelectedText$
@@ -360,22 +360,22 @@ End Sub
 Function ChangeContents( SelectedText$, Enhanced$ )
 
 Dim BeginTitle%
-Dim ChrDash$                 : ChrDash$      = " -- "
-Dim ChrDelimiter$            : ChrDelimiter$ = Chr$( 223 )
-Dim ChrFullStop$             : ChrFullStop$  = ". "
-Dim ChrSemicolon$            : ChrSemicolon$ = " ; "
-Dim ChrSlash$                : ChrSlash$     = " / "
+Dim DASH      As String*4    : DASH        = " -- "
+Dim DELIMITER As String*1    : DELIMITER   = Chr$( 223 )
+Dim FULLSTOP  As String*2    : FULLSTOP    = ". "
+Dim SEMICOLON As String*3    : SEMICOLON   = " ; "
+Dim SLASH     As String*3    : SLASH       = " / "
 Dim Start%
 Dim Start1%
 Dim Start2%
 Dim SubfCode$
 Dim Title$
-Dim TitleCount%              : TitleCount%   = 0
+Dim TitleCount%              : TitleCount% = 0
 Dim TitleString$
 
 Dim i As Integer, p As Integer
 
-Dim Beginn                   : Beginn        = FALSE
+Dim Beginn                   : Beginn      = FALSE
 
 Dim Titles() As String
 
@@ -383,7 +383,7 @@ Dim Titles() As String
 ' there are no dashes, there is nothing to process, so exit the function.
 
 Do
-  p = InStr( SelectedText$, ChrDash$ )
+  p = InStr( SelectedText$, DASH )
   If p <> 0 Then
       ReDim Preserve Titles( TitleCount% )
       Titles( TitleCount% ) = Left$( SelectedText$, p - 1 )
@@ -413,7 +413,7 @@ For i = 0 To UBound( Titles )
       Start1% = 1
       Start2% = Start1%
       Do
-        p = InStr( Start1%, Title$, ChrDelimiter$ )
+        p = InStr( Start1%, Title$, DELIMITER )
         If p <> 0 Then
             SubfCode$ = Mid$( Title$, p + 1, 1 )
             If p > 1 Then
@@ -477,11 +477,11 @@ For i = 0 To UBound( Titles )
           Case Else
             Mid$( Title$, BeginTitle%, 1 ) = UCase$( Mid$( Title$, BeginTitle%, 1 ) )
             Mid$( Title$, BeginTitle% + 1, p - BeginTitle% ) = LCase$( Mid$( Title$, BeginTitle% + 1, p - BeginTitle% ) )
-            If Mid$( Title$, p - 1, 2 )       = ChrFullStop$ Then
+            If Mid$( Title$, p - 1, 2 )       = FULLSTOP Then
                 BeginTitle% = p + 1
-              ElseIf Mid$( Title$, p - 2, 3 ) = ChrSemicolon$ Then
+              ElseIf Mid$( Title$, p - 2, 3 ) = SEMICOLON Then
                 BeginTitle% = p + 1
-              ElseIf Mid$( Title$, p - 2, 3 ) = ChrSlash$ Then
+              ElseIf Mid$( Title$, p - 2, 3 ) = SLASH Then
                 Exit Do
             End If
             Start% = p + 2
@@ -493,7 +493,7 @@ Next i
 
 TitleString$ = Titles( 0 )
 For i = 1 To UBound( Titles )
-  TitleString$ = TitleString$ & ChrDash$ & Titles( i )
+  TitleString$ = TitleString$ & DASH & Titles( i )
 Next i
 
 ChangeContents = TitleString$
@@ -531,8 +531,8 @@ Select Case Action%
 End Select
 
 End Function
-'56021762
+'56021729
 '
 'Macro name: ChangeCase
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 6/28/2017 11:33:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/17/2018 9:05:41 AM using "MacroBookInspector" macro by Walter F. Nickeson.
