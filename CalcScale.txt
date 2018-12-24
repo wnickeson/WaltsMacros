@@ -1,4 +1,4 @@
-'MacroName:CalcScale.2018.35
+'MacroName:CalcScale.2018.36
 'MacroDescription:Calculates the representative fraction from the scale ratio on a map,
 ' and optionally adds that information in fields 034 and 255 in a bibliographic record
 ' for a cartographic resource.
@@ -10,7 +10,7 @@
 ' Initial design partly inspired by Terry Reese's "Scale Calculator" at
 ' http://reeset.net/scale-calculator/
 '
-' Last updated: 14 December 2018.
+' Last updated: 23 December 2018.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -83,8 +83,8 @@ Const UNCHECKED As Integer = 0   'The value of a checkbox when it is not checked
 
 Const INPUT_BAD_CHARACTERS      As Integer = 1
 Const INPUT_BAD_FRACTION_FORMAT As Integer = 3
-Const INPUT_NO_INPUT            As Integer = 0
 Const INPUT_GOOD                As Integer = 2
+Const INPUT_NO_INPUT            As Integer = 0
 
 Dim DELIMITER As String*1
 
@@ -136,10 +136,6 @@ UnitsList2( 4 ) = "meters"
 UnitsList2( 5 ) = "chains"
 UnitsList2( 6 ) = "rods"
 
-Field034$    = ""
-Field255$    = ""
-NewField034$ = ""
-NewField255$ = ""
 WaltsMacros$ = "[Walt's macros] Extras2:CalcScale"
 
 ' First, determine if a bibliographic record is displayed; if it is, then the option to
@@ -230,7 +226,11 @@ Dim TempString$
 
 If BibRecord Then
     SelectedScale$ = ScaleStatements( ListSelection% )
-    TempString$    = Mid$( SelectedScale$, 17 )
+    If Left$( SelectedScale$, 16 ) = "approximately 1:" Then
+        TempString$ = Mid$( SelectedScale$, 17 )
+      Else
+        TempString$ = Mid$( SelectedScale$, 3 )
+    End If
     NewField034$   = "0341 a " & DELIMITER  & "b " & RemoveCommas( TempString$ )
     If NewField034$ <> Field034$ Then
         DlgEnable       "CheckBox034",       ENABLED
@@ -717,8 +717,8 @@ Select Case Action%
 End Select
 
 End Function
-'74627726
+'74627786
 '
 'Macro name: CalcScale
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras2.mbk
-'Saved: 12/17/2018 9:11:40 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 12/24/2018 8:52:34 AM using "MacroBookInspector" macro by Walter F. Nickeson.
