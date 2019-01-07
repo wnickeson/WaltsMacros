@@ -1,4 +1,4 @@
-'MacroName:AddRBMSGenreTerm.2018.535
+'MacroName:AddRBMSGenreTerm.2019.01
 'MacroDescription:Displays the list of RBMS genre terms to help find a term to add in a
 ' new field or to replace a field with the authorized term.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 10 October 2018.
+' Last updated: 7 January 2019.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -79,70 +79,56 @@ Declare Function Normalize( InString$ ) As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Global Const COUNT_OF_TERMS         As Integer = 813
+Const COUNT_OF_TERMS         As Integer = 813
 
-Global Const CHECKED                As Integer = 1   'The value of a ticked checkbox in the dialog box.
-Global Const DISABLED               As Integer = 0   'The value to make a dialog box control disabled.
-Global Const ENABLED                As Integer = 1   'The value to make a dialog box control enabled.
-Global Const INVISIBLE              As Integer = 0   'The value to make a dialog box control invisible.
-Global Const NO_SELECTION           As Integer = -1  'The value to have nothing selected in the list boxes in the dialog box.
-Global Const UNCHECKED              As Integer = 0   'The value of a checkbox when it is not checked.
-Global Const VISIBLE                As Integer = 1   'The value to make a dialog box control visible.
-Global Const WARNING_MESSAGE        As Integer = 48  'The value to display the "Warning message" icon in a message box.
+Const CHECKED                As Integer = 1   'The value of a ticked checkbox in the dialog box.
+Const DISABLED               As Integer = 0   'The value to make a dialog box control disabled.
+Const ENABLED                As Integer = 1   'The value to make a dialog box control enabled.
+Const INVISIBLE              As Integer = 0   'The value to make a dialog box control invisible.
+Const NO_SELECTION           As Integer = -1  'The value to have nothing selected in the list boxes in the dialog box.
+Const UNCHECKED              As Integer = 0   'The value of a checkbox when it is not checked.
+Const VISIBLE                As Integer = 1   'The value to make a dialog box control visible.
+Const WARNING_MESSAGE        As Integer = 48  'The value to display the "Warning message" icon in a message box.
 
-Global Const CEASED                 As Integer = 1   'The value to show that typing in the search box is completed.
-Global Const CONTINUING             As Integer = 0   'The value to show that typing in the search box is continuing.
-Global Const INITIAL_WITH_655       As Integer = 3   'The value to identify the macro state when the macro begins and the
-                                                     ' cursor is in a 650/655 field.
-Global Const INITIAL_WITH_NOTHING   As Integer = 1   'The value to identify the macro state when the macro begins, no text is
-                                                     ' selected, and the cursor is not in a 650/655 field.
-Global Const INITIAL_WITH_SELECTION As Integer = 2   'The value to identify the macro state when the macro begins and text has
-                                                     ' been selected somewhere in the record.
-Global Const NOT_INITIAL            As Integer = 0   'The value to identify the macro state after the macro has begun and a
+Const CEASED                 As Integer = 1   'The value to show that typing in the search box is completed.
+Const CONTINUING             As Integer = 0   'The value to show that typing in the search box is continuing.
+Const INITIAL_WITH_655       As Integer = 3   'The value to identify the macro state when the macro begins and the
+                                              ' cursor is in a 650/655 field.
+Const INITIAL_WITH_NOTHING   As Integer = 1   'The value to identify the macro state when the macro begins, no text is
+                                              ' selected, and the cursor is not in a 650/655 field.
+Const INITIAL_WITH_SELECTION As Integer = 2   'The value to identify the macro state when the macro begins and text has
+                                              ' been selected somewhere in the record.
+Const NOT_INITIAL            As Integer = 0   'The value to identify the macro state after the macro has begun and a
                                                      ' term has been searched or a selection made in a list box.
 
-Global DOUBLE_QUOTE As String*1
-Global NEW_LINE     As String*1
+Dim DOUBLE_QUOTE As String*1
+Dim NEW_LINE     As String*1
 
-Global IndexOf1stTermOf25%
-Global IndexOfAuthorizedTerm%
-Global IndexOfMatchingTerm%
-Global MacroState%
-Global NotUsedTerm$
-Global SubfieldString$
-Global TermInRecord$
-Global TypingStatus%
-Global UseAndScopeNote$
-Global WaltsMacros$
+Dim IndexOf1stTermOf25%
+Dim IndexOfAuthorizedTerm%
+Dim IndexOfMatchingTerm%
+Dim MacroState%
+Dim NotUsedTerm$
+Dim SubfieldString$
+Dim TermInRecord$
+Dim TypingStatus%
+Dim UseAndScopeNote$
+Dim WaltsMacros$
 
-Global RBMSField
-Global ReplaceableField
+Dim RBMSField
+Dim ReplaceableField
 
-Global BroaderTerms () As String
-Global NarrowerTerms() As String
-Global RelatedTerms () As String
+Dim BroaderTerms () As String
+Dim NarrowerTerms() As String
+Dim RelatedTerms () As String
 
-Global Remainders( COUNT_OF_TERMS ) As String
-Global Terms     ( COUNT_OF_TERMS ) As String
-Global WindowOf25( 25 )             As String
+Dim Remainders( COUNT_OF_TERMS ) As String
+Dim Terms     ( COUNT_OF_TERMS ) As String
+Dim WindowOf25( 25 )             As String
 
 '****************************************************************************************
 
 Sub Main
-
-IndexOf1stTermOf25%    = 0
-IndexOfAuthorizedTerm% = 0
-IndexOfMatchingTerm%   = 0
-MacroState%            = 0
-NotUsedTerm$           = ""
-SubfieldString$        = ""
-TermInRecord$          = ""
-UseAndScopeNote$       = ""
-
-Erase BroaderTerms
-Erase NarrowerTerms
-Erase RelatedTerms
-Erase WindowOf25
 
 Const CRITICAL_MESSAGE     As Integer = 16  'The value to display a "Critical message" (which includes the red button with
                                             ' a big "X") in a message box; used to report the macro quitting.
@@ -175,7 +161,7 @@ DOUBLE_QUOTE  = Chr$( 034 )
 NEW_LINE      = Chr$( 010 )
 RBMSField     = FALSE
 TypingStatus% = CEASED
-WaltsMacros$  = "[Walt's macros] MacroBook:AddRBMSGenreTerm"
+WaltsMacros$  = "[Walt's macros] Extras1:AddRBMSGenreTerm"
 
 ' Proceed only if a bibliographic record is displayed.
 
@@ -2882,8 +2868,8 @@ Select Case Action%
 End Select
 
 End Function
-'2912209723
+'2897209240
 '
 'Macro name: AddRBMSGenreTerm
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 12/17/2018 9:05:29 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 1/7/2019 12:12:54 PM using "MacroBookInspector" macro by Walter F. Nickeson.

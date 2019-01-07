@@ -1,4 +1,4 @@
-'MacroName:TitleFrom588.2019.01
+'MacroName:TitleFrom588.2019.02
 'MacroDescription:Changes source of title note tag to 588, or quickly adds selected
 ' source of title notes to certain formats: "cover" for volumes, "label" for discs,
 ' "container" for AV.
@@ -300,12 +300,7 @@ Select Case CarrierType%
         Exit Sub
 
       Case "a"
-        If RecType$ ="a" then
-            NoteText$ = "Caption title"
-          Else
-            Msgbox "Sorry, this macro doesn't know what to do with a non-textual analytic.", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
-        End If
+        NoteText$ = "Caption title"
 
     End Select
 
@@ -390,8 +385,8 @@ If Success Then
 End If
 
 End Sub
-'41916485
+'41416271
 '
 'Macro name: TitleFrom588
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 1/7/2019 10:33:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 1/7/2019 12:13:07 PM using "MacroBookInspector" macro by Walter F. Nickeson.
