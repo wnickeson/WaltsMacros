@@ -303,7 +303,7 @@ Select Case CarrierType%
         Msgbox "Sorry, this macro isn't designed to be used in a record for a serial.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
 
-      Case "t"
+      Case "a"
         NoteText$ = "Caption title"
 
     End Select
