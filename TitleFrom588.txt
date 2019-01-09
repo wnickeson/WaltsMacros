@@ -1,4 +1,4 @@
-'MacroName:TitleFrom588.2019.02
+'MacroName:TitleFrom588.2019.03
 'MacroDescription:Changes source of title note tag to 588, or quickly adds selected
 ' source of title notes to certain formats: "cover" for volumes, "label" for discs,
 ' "container" for AV.
@@ -7,7 +7,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 7 January 2019.
+' Last updated: 9 January 2019.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -66,9 +66,13 @@
 
 Option Explicit
 
+Declare Sub LogMacroUse
+
 '****************************************************************************************
 
 Sub Main
+
+LogMacroUse
 
 Const CASE_INSENSITIVE    As Integer = 1   'The value to force a string comparison test to ignore case.
 Const CRITICAL_MESSAGE    As Integer = 16  'The value to display a "Critical message" (which includes the red button with
@@ -299,7 +303,7 @@ Select Case CarrierType%
         Msgbox "Sorry, this macro isn't designed to be used in a record for a serial.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
 
-      Case "a"
+      Case "t"
         NoteText$ = "Caption title"
 
     End Select
@@ -386,7 +390,28 @@ End If
 
 End Sub
 '41416271
+
+'########################################################################################
+Sub LogMacroUse                                                                       '##
+Dim FileLog%                 : FileLog% = Freefile                                    '##
+Dim Path$, FileName$                                                                  '##
+Dim i As Integer             : i = 1                                                  '##
+Do                                                                                    '##
+  Path$ = Environ( i )                                                                '##
+  If Left$( Path$, 11 ) = "USERPROFILE" Then                                          '##
+      FileName$ = Mid$( Path$, 13 ) & "\Documents\MacroLog.txt"                       '##
+      Exit Do                                                                         '##
+  End If                                                                              '##
+  i = i + 1                                                                           '##
+Loop Until Environ( i ) = ""                                                          '##
+If FileName$ = "" Then Exit Sub                                                       '##
+Open FileName$ For Append As #FileLog%                                                '##
+Print #FileLog%, "CoverTitle" & Chr$(9) & Date$ & " " & Time$                         '##
+Close #FileLog%                                                                       '##
+Reset                                                                                 '##
+End Sub                                                                               '##
+'########################################################################################
 '
 'Macro name: TitleFrom588
-'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 1/7/2019 12:13:07 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1W.mbk
+'Saved: 1/9/2019 2:19:32 PM using "MacroBookInspector" macro by Walter F. Nickeson.
