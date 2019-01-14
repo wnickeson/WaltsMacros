@@ -1,4 +1,4 @@
-'MacroName:FixedFieldChecker.2018.02
+'MacroName:FixedFieldChecker.2019.01
 'MacroDescription:Fills in various elements of the fixed field from data in the variable
 ' fields of a bibliographic record. UNDER DEVELOPMENT
 
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 10 May 2018.
+' Last updated: 14 January 2019.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -365,6 +365,13 @@ Do
                       ContCode$ = ContCode$ & "f"
                   End If
               End If
+              p = InStr( FieldData$, "registers" )
+              If p <> 0 Then
+                  q = InStr( ContCode$, "r" )
+                  If q = 0 Then
+                      ContCode$ = ContCode$ & "r"
+                  End If
+              End If
               p = InStr( FieldData$, "statistics" )
               If p <> 0 Then
                   q = InStr( ContCode$, "s" )
@@ -444,4 +451,4 @@ End Sub
 '
 'Macro name: FixedFieldChecker
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 12/17/2018 9:05:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 1/14/2019 12:14:59 PM using "MacroBookInspector" macro by Walter F. Nickeson.
