@@ -1,4 +1,4 @@
-'MacroName:AddRBMSGenreTerm.2019.01
+'MacroName:AddRBMSGenreTerm.2019.02
 'MacroDescription:Displays the list of RBMS genre terms to help find a term to add in a
 ' new field or to replace a field with the authorized term.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 7 January 2019.
+' Last updated: 18 January 2019.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -2639,12 +2639,12 @@ Function Dialog1ControlFunction( Id$, Action%, SValue& )
 ' com.ibm.swg.im.cognos.cgspmac.7.5.0.doc/cgspmac_id24757FindFiles.html#FindFiles, last
 ' viewed 5 October 2018.
 
-Const CONTROL_CHANGE  As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
-Const IDLE_STATE      As Integer = 5   'The value of the dialog box function parameter "Action%" while no action is occurring.
-Const INITIALIZE      As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
-Const KEEP_DLG_OPEN   As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const IDLE_STATE     As Integer = 5   'The value of the dialog box function parameter "Action%" while no action is occurring.
+Const INITIALIZE     As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog box function to keep a dialog box open.
 
-Const WAIT_INTERVAL   As Integer = 55  'The length of time (measured by count of SValue&) to wait until assuming keyboard entry
+Const WAIT_INTERVAL  As Integer = 1000 'The length of time (measured by count of SValue&) to wait until assuming keyboard entry
                                        ' has ceased. I don't know what the rate of SValue& increase depends upon. SValue& does
                                        ' not increase when the mouse is being moved, so if a user starts typing and then
                                        ' immediately begins playing with the mouse, the dialog box will never update!
@@ -2868,8 +2868,8 @@ Select Case Action%
 End Select
 
 End Function
-'2897209240
+'2897209217
 '
 'Macro name: AddRBMSGenreTerm
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 1/7/2019 12:12:54 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 1/18/2019 1:02:22 PM using "MacroBookInspector" macro by Walter F. Nickeson.
