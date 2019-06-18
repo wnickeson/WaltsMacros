@@ -1,4 +1,4 @@
-'MacroName:FixedFieldChecker.2019.01
+'MacroName:FixedFieldChecker.2019.02
 'MacroDescription:Fills in various elements of the fixed field from data in the variable
 ' fields of a bibliographic record. UNDER DEVELOPMENT
 
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 14 January 2019.
+' Last updated: 18 June 2019.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -292,6 +292,10 @@ Do
               If p <> 0 Then
                   BiogCode$ = "b"
               End If
+              p = InStr( FieldData$, "congresses" )
+              If p <> 0 Then
+                  ConfCode$ = "1"
+              End If
 
 ' Various terms for "Cont" codes.
 
@@ -397,6 +401,14 @@ If AudnCode$ <> "" Then
     End If
 End If
 
+If ConfCode$ <> "" Then
+    If ConfCode$ <> FFConf$ Then
+        If CS.SetFixedField( "Conf", ConfCode$ ) Then
+            Replace$ = Replace$ & "Fixed field 'Conf' changed. "
+        End If
+    End If
+End If
+
 If LitFCode$ <> "0" Then
     If LitFCode$ <> FFLitF$ Then
         If CS.SetFixedField( "LitF", LitFCode$ ) Then
@@ -447,8 +459,4 @@ If Replace$ = "" Then
 End If
 
 End Sub
-'46916294
-'
-'Macro name: FixedFieldChecker
-'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Extras1.mbk
-'Saved: 1/14/2019 12:14:59 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'48816914
