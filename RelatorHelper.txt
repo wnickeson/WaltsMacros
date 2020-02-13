@@ -1,4 +1,4 @@
-'MacroName:RelatorHelper.2018.04
+'MacroName:RelatorHelper.2020.01
 'MacroDescription:Helps with verifying, adding, replacing, and deleting relator codes and
 ' terms, singly and en masse.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 14 December 2018.
+' Last updated: 13 February 2020.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -2061,7 +2061,10 @@ If Left$( ProblemString$, 1 ) = NOT_USED Then
 
   Else
     ReplacementTerm$ = ""
-    AllTermsIndex% = RelatorInfo( Selection% ).Index
+    AllTermsIndex%   = RelatorInfo( Selection% ).Index
+    If AllTermsIndex% > RELATOR_COUNT% Then
+        AllTermsIndex% = 0
+    End If
     DlgValue   "AllTerms",             AllTermsIndex%
     DlgText    "Description",          UCase$( RelatorInfo( Selection% ).Term ) & CR & RelatorNote( AllTermsIndex% )
     DlgValue   "OptionGroup1",         NO_SELECTION
@@ -2690,8 +2693,8 @@ Reload:
 End Select
 
 End Function
-'2719155400
+'2722155488
 '
 'Macro name: RelatorHelper
 'Macro book: C:\Program Files (x86)\OCLC\Connexion\Program\Macros\Essentials.mbk
-'Saved: 12/17/2018 9:02:17 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 2/13/2020 11:19:13 AM using "MacroBookInspector" macro by Walter F. Nickeson.
