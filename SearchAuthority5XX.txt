@@ -1,11 +1,11 @@
-'MacroName:SearchAuthority5XX.2022.03
+'MacroName:SearchAuthority5XX.2023.02
 'MacroDescription:Helps search the related headings (5XX fields) in an authority record.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 22 January 2022.
+' Last updated: 19 March 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -492,9 +492,6 @@ End If
 ' opened, the macro searches the list for the last subdivision of the heading as a
 ' potentially unique identifier.
 
-' trial records: ARN 11171787; 10591124; 1850779; 3237476; 11062061; 6749791; 3156907;
-' 2103323; 2038705; 2067515; 10590780; 4907140
-
 If CS.BrowseAuthorityExpanded( 0, SearchLabel$, SearchTerm$, ExpandedTerm$ ) Then
     If NameAsSubject = FALSE Then
         ListSearchResults = CS.SearchList( ListSearchString$, "Results", FALSE )
@@ -517,6 +514,35 @@ If CS.BrowseAuthorityExpanded( 0, SearchLabel$, SearchTerm$, ExpandedTerm$ ) The
             OpenSelectedItem = FALSE
         End If
         If OpenSelectedItem Then
+
+' Quite often a successful browse will result in a brief list that contains two matching
+' records, identical except that one of them is a children's heading. The trick is
+' getting the one that is not the children's heading. The way the macro goes about this
+' is by once again using the "SearchList" command. The search term is "children", and by
+' setting the "ExactMatch" parameter to "FALSE," the command can find the term within the
+' larger term "[CHILDREN'S]" that appears in the description column. It also selects the
+' rows that contain the matching search term. Use the "GetFirstSelectedItem" to open
+' the first selection. Because it's a children's heading, immediately close that record
+' and check for a preceding or following heading. In a list of two items, with one having
+' been selected, the other heading must be the LCSH sought.
+
+            If CS.ItemType% = AUTHORITY_FILE_BRIEF_LIST Then
+                Matches% = CS.SearchList( "children", "Description", FALSE )
+                If Matches% = 0 Then
+                    Exit Sub
+                  Else
+                    If CS.GetFirstSelectedItem Then
+                        CS.CloseRecord( FALSE )
+                        If CS.GetPrevItem = FALSE Then
+                           If CS.GetNextItem = FALSE Then
+                               GoTo Failure:
+                           End If
+                        End If
+                      Else
+                        GoTo Failure:
+                    End If
+                End If
+            End If
             If CS.ItemType% = AUTHORITY_RECORD Then
                 Exit Sub
               Else
@@ -1349,8 +1375,8 @@ Select Case Action%
 End Select
 
 End Function
-'135351300
+'137952726
 '
 'Macro name: SearchAuthority5XX
 'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 4/17/2023 9:54:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 4/19/2023 3:35:11 PM using "MacroBookInspector" macro by Walter F. Nickeson.
