@@ -1,0 +1,295 @@
+'MacroName:DupRecsReportHelper.2023.01
+'MacroDescription:Gets the OCLC control numbers of all opened bibliographic records and
+' writes them to a text file to help in reporting duplicate records to OCLC.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+'
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'***************************************************************************************#
+' How it works: This macro creates a text file consisting of the OCLC control numbers of
+' bibliographic records you have identified as duplicates and want to report on the
+' "WorldCat Bibliographic and Authority Record Change Request" form, at (as of the last
+' updated date of this macro, above) https://www.oclc.org/content/forms/worldwide/en/record-quality.html.
+' The file can help in filling out the form by conveniently listing all the duplicate
+' records for easy copying and pasting into the boxes for duplicates.
+'
+' Have all the records whose numbers you want to report open in their own windows; this
+' means, of course, that all, or all but one, need to be pinned. Identify the preferred
+' record by putting an exclamation mark ("!") somewhere in its 040 field. Run the macro.
+' It cycles through all the open windows, harvests the OCLC control numbers of all the
+' bibliographic records, and writes them to a text file. Finally, the name and path of
+' the file are placed on the Windows Clipboard so it can be pasted into the Windows "Run"
+' command for quick opening of the file by your computer's default text editor.
+'
+' The first line of this text file is the URI of the Record Change Request form given
+' above. If your text editor makes URIs clickable, you can open your browser directly
+' from that line. The preferred record number, if the 040 was marked with the exclamation
+' mark, appears first on a line by itself. The other record numbers appear beneath, in
+' order from smallest to largest. When the Record Change Request web form is open, toggle
+' back and forth between the browser and the text editor, copying and pasting the control
+' numbers into the form's fields.
+'
+' To change the name and path of the file of record numbers, change the value of the
+' variable "DupRecsListFileName$" on line 66 below.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub AddNumbersToList( OCLCNumber$ )
+
+Dim CRLF As String*2
+Dim CS As Object
+Dim DupRecsListFileName$
+Dim PreferredNumber$
+
+Dim OCLCNumbers() As String
+
+'****************************************************************************************
+
+Sub Main
+
+'====  CHANGE THIS FILE PATH IF DESIRED  ================================================
+' The macro will automatically find "[User_Name]" so don't edit the path unless you want
+' to save the list of records in another location on your computer or under a different
+' name.
+
+DupRecsListFileName$ = "C:\Users\[User_Name]\Documents\DuplicateOCLCRecordNumbers.txt"
+'========================================================================================
+
+Const CRITICAL_MESSAGE    As Integer = 16
+Const INFORMATION_MESSAGE As Integer = 64
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Dim BibCount%
+Dim ConfirmationMsgPart1$
+Dim ConfirmationMsgPart2$
+Dim CountOfWindows%
+Dim DisplayedBib%
+Dim DocumentsFolder$
+Dim DupReportForm$
+Dim FieldData$
+Dim FileCheck%
+Dim FileName$
+Dim FileNumber%
+Dim FirstBib%
+Dim OCLCNumber$
+Dim Path$
+Dim RecordCount%
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:DupRecsReportHelper"
+
+Dim i As Integer
+
+CRLF             = Chr$( 013 ) & Chr$( 010 )     'Standard Windows new line characters
+DupReportForm$   = "http://www.oclc.org/content/forms/worldwide/en/record-quality.html" & CRLF & CRLF
+PreferredNumber$ = ""
+
+ReDim OCLCNumbers( 0 )
+
+' Compile the list of potentially duplicate records by cycling through all the open
+' windows. For each online bibliographic record (records in a save file are ignored),
+' call the subroutine to add its control number to the array of numbers. If an
+' exclamation mark is found in the 040 field, indicating the preferred record, that
+' control number is not put in the array because it will be displayed in the output file
+' on its own line. Only the first record the macro encounters with an exclamation mark
+' can be considered preferred. If no record has been so marked, the first bibliographic
+' record found will be the one displayed at the end.
+
+CountOfWindows% = CS.WindowCount
+i = 0
+Do Until i = CountOfWindows%
+  CS.SetTopWindow( i )
+  TypeOfWindow% = CS.ItemType
+  If TypeOfWindow% = 0 Then
+      BibCount% = BibCount% + 1
+      If CS.GetFixedField( "OCLC", OCLCNumber$ ) Then
+          If FirstBib% = 0 Then
+              FirstBib% = i
+          End If
+          If CS.GetField( "040", 1, FieldData$ ) = TRUE Then
+              If InStr( FieldData$, "!" ) Then
+                  If PreferredNumber$ = "" Then
+                      PreferredNumber$ = OCLCNumber$
+                      If PreferredNumber$ <> "" Then
+                          If DisplayedBib% = 0 Then
+                              DisplayedBib% = i
+                          End If
+                      End If
+                    Else
+                      AddNumbersToList( OCLCNumber$ )
+                  End If
+                Else
+                  AddNumbersToList( OCLCNumber$ )
+              End If
+          End If
+      End If
+  End If
+  i = i + 1
+Loop
+
+' If no bibliographic records have been found, the macro is finished.
+
+If BibCount% = 0 Then
+    MsgBox "There are no bibliographic records open. To use this macro, have open all the records you want to report as duplicates.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+If DisplayedBib% = 0 Then DisplayedBib% = FirstBib%
+
+' To report on what the macro did, begin by counting the number of records found.
+
+If PreferredNumber$ = "" Then
+    RecordCount% = UBound( OCLCNumbers$ ) + 1
+  Else
+    RecordCount% = UBound( OCLCNumbers$ ) + 2
+End If
+
+If BibCount% <> RecordCount% Then
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' A single bibliographic record isn't a duplicate. In that case, the macro stops.
+' Otherwise, if a preferred record has been identified, set that to display when the
+' macro is done; if no preferred record was identified, set the first bibliographic
+' record found to display. Include the record counts in a confirmation message.
+
+If RecordCount% = 1 Then
+    CS.SetTopWindow( DisplayedBib% )
+    MsgBox "To use this macro, you must have open at least one more bibliographic record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    CS.SetTopWindow( DisplayedBib% )
+    ConfirmationMsgPart1$ = CStr( RecordCount% ) & " record numbers were written to " & DupRecsListFileName$ & "."
+End If
+
+ConfirmationMsgPart2$ = "The file name and path were put on the Clipboard to paste into the " & Chr$( 034 ) & "Run" & Chr$( 034 ) & " command."
+
+' Write the control numbers to the file. First, prepare the display of the preferred
+' record.
+
+If PreferredNumber$ <> "" Then
+    PreferredNumber$ = "Preferred record: " & PreferredNumber$ & CRLF
+    RecordCount%     = RecordCount% + 1
+    PreferredNumber$ = PreferredNumber$ & CRLF
+  Else
+    ConfirmationMsgPart1$ = ConfirmationMsgPart1$ & CRLF & CRLF & "No record was marked as being preferred."
+End If
+
+' Then, if a filename has not been specified, find the path to the user's Documents
+' folder in order to use the default filename.
+
+If DupRecsListFileName$ = "C:\Users\[User_Name]\Documents\DuplicateOCLCRecordNumbers.txt" Then
+    i = 1
+    Do
+      Path$ = Environ( i )
+      If Left$( Path$, 11 ) = "USERPROFILE" Then
+          DocumentsFolder$ = Mid$( Path$, 13 ) & "\Documents\"
+          DupRecsListFileName$ = DocumentsFolder$ & "DuplicateOCLCRecordNumbers.txt"
+          Exit Do
+      End If
+      i = i + 1
+    Loop Until Environ( i ) = ""
+    If DupRecsListFileName$ = "" Then
+        MsgBox "Sorry, the file could not be saved in the default location. Please check the file name or path and try again.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' Write the file.
+
+FileNumber% = FreeFile
+On Error Resume Next
+Open DupRecsListFileName$ For Output As #FileNumber%
+If Err > 0 Then
+    MsgBox "Sorry, there was a problem creating the file. Please check the file name or path and try again.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+Print #FileNumber%, DupReportForm$ ; PreferredNumber$ ;
+For i = 0 To UBound( OCLCNumbers )
+  Print #FileNumber%, OCLCNumbers( i ) & CRLF ;
+Next i
+Close #FileNumber%
+Reset
+
+' Check to confirm the file exists and was created just now.
+
+On Error Resume Next
+FileCheck% = GetAttr( DupRecsListFileName$ )
+i = Err
+If Err > 0 Then
+    MsgBox "Sorry, the list could not be written to a file.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+If Now - FileDateTime( DupRecsListFileName$ ) > 2 Then
+    MsgBox "Sorry, the list could not be written to a file.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+Clipboard.Clear
+Clipboard.SetText DupRecsListFileName$
+
+' If all went well, show the confirmation message.
+
+MsgBox ConfirmationMsgPart1$ & CRLF & CRLF & ConfirmationMsgPart2$, INFORMATION_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Sub AddNumbersToList( OCLCNumber$ )
+
+' This function adds the OCLC control number of the displayed record to the array of open
+' records viewed thus far, sorting as it adds so the record numbers are stored in
+' ascending numerical value.
+
+Dim UBOCLCNumbers%
+
+Dim Candidate
+Dim Incumbent
+
+Dim i As Integer, j As Integer
+
+UBOCLCNumbers% = UBound( OCLCNumbers )
+If OCLCNumbers( 0 ) = "" Then
+    OCLCNumbers( 0 ) = OCLCNumber$
+  Else
+    UBOCLCNumbers% = UBOCLCNumbers% + 1
+    ReDim Preserve OCLCNumbers( UBOCLCNumbers% )
+    Candidate = Val( OCLCNumber$ )
+    For i = 0 To UBOCLCNumbers%
+      Incumbent = Val( OCLCNumbers( i ) )
+      If Candidate < Incumbent Then
+          For j = UBOCLCNumbers% To i + 1 Step -1
+            OCLCNumbers( j ) = OCLCNumbers( j - 1 )
+          Next j
+          OCLCNumbers( i ) = OCLCNumber$
+          Exit For
+        Else
+          If i = UBOCLCNumbers% Then
+              OCLCNumbers( i ) = OCLCNumber$
+              Exit For
+          End If
+      End If
+    Next i
+End If
+
+End Sub
+'29211172
+'
+'Macro name: DupRecsReportHelper
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 4/17/2023 10:00:20 AM using "MacroBookInspector" macro by Walter F. Nickeson.

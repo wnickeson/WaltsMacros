@@ -1,0 +1,661 @@
+'MacroName:ShowDisplayConstants.2022.04
+'MacroDescription:Shows the display constants of the fields in a bibliographic record
+' that have those options, and helps make changes to those fields.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 4 November 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic record (cursor position is irrelevant)
+' to see the fields with display constants. For each field that has a display constant,
+' whether or not it is formally defined by an indicator, the macro shows those constants
+' for verification or change. Select a different display constant from the list for each
+' tag, and the macro will change the indicator accordingly.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub SetDialogBox( Selection% )
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const aFIELD      As Integer = 0
+Global Const aIND_VAL_1  As Integer = 4
+Global Const aIND_VAL_2  As Integer = 5
+Global Const aIND_VAL_3  As Integer = 6
+Global Const aIND_VAL_4  As Integer = 7
+Global Const aIND_VAL_5  As Integer = 8
+Global Const aIND_VAL_6  As Integer = 9
+Global Const aIND_VAL_7  As Integer = 10
+Global Const aIND_VAL_8  As Integer = 11
+Global Const aIND_VAL_9  As Integer = 12
+Global Const aIND_VAL_10 As Integer = 13
+Global Const aOCCURENCE  As Integer = 1
+Global Const aTAG_NAME   As Integer = 2
+Global Const aWHICH      As Integer = 3
+
+Global CS As Object
+Global Difference%
+Global FieldCount%
+Global InitialField%
+Global InvalidValue$
+Global Occurrence%
+Global WaltsMacros$
+
+Global ConstantList() As String
+Global MainArray()    As String
+Global TagList()      As String
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim ArrayRow%
+Dim FieldData$
+Dim Fields$
+Dim InitialCursor%
+Dim RecordRow%
+Dim Tag$
+Dim TypeOfWindow%
+
+Dim FoundField               : FoundField   = FALSE
+
+Dim i As Integer
+
+Difference%  = aIND_VAL_1 - aFIELD
+WaltsMacros$ = "[Walt's macros] Extras2:ShowDisplayConstants"
+
+' To begin with, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro works only in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' OK to proceed? Then get ready to cycle through the record. First, list the fields to
+' look for. Note that for fields 246, 510, and 856, the indicators do not actually define
+' display constants; the MARC21 documentation associates the indicator values with
+' display constants in the "Input Conventions" section.
+
+Fields$        = "017,246,307,382,505,510,511,516,520,521,522,524,526,555,556,565,567,581,586,588,760,762,765,767,770,772,773,774,775,776,777,786,787,856"
+InitialCursor% = CS.CursorRow
+RecordRow%     = 1
+
+' Examine every field in the record. For those that have a display constant, store
+' information about that field in the main array: The data in the field, the occurrence
+' of that field if it appears more than once, the name of the field, which indicator is
+' controlling the display, and finally the available values for the display constant
+' indicator. A blank, or space, is replaced by the word "[blank]" to help avoid
+' ambiguity.
+
+Do
+  FoundField = CS.GetFieldLine( RecordRow%, FieldData$ )
+  If FoundField Then
+      Tag$ = Left$( FieldData$, 3 )
+      If InStr( Fields$, Tag$ ) Then
+          If RecordRow% = InitialCursor% Then
+              InitialField% = ArrayRow%
+          End If
+          ReDim Preserve MainArray( aIND_VAL_10, ArrayRow% )
+          MainArray( aFIELD, ArrayRow% ) = FieldData$
+          Occurrence% = 1
+          If ArrayRow% > 0 Then
+            For i = 0 To ArrayRow% - 1
+              If Tag$ = Left$( MainArray( aFIELD, i ), 3 ) Then Occurrence% = Occurrence% + 1
+            Next i
+          End If
+          MainArray( aOCCURENCE, ArrayRow% ) = Trim$( Str$( Occurrence% ) )
+
+          Select Case Tag$
+
+            Case "017"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "017: Copyright or Legal Deposit Number"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Copyright or legal deposit number"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "246"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "246: Varying Form of Title"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - [no display constant]"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - [no display constant]"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "1 - [no display constant]"
+              MainArray( aIND_VAL_4, ArrayRow% )  = "2 - Distinctive title"
+              MainArray( aIND_VAL_5, ArrayRow% )  = "3 - Other title"
+              MainArray( aIND_VAL_6, ArrayRow% )  = "4 - Cover title"
+              MainArray( aIND_VAL_7, ArrayRow% )  = "5 - Added title page title"
+              MainArray( aIND_VAL_8, ArrayRow% )  = "6 - Caption title"
+              MainArray( aIND_VAL_9, ArrayRow% )  = "7 - Running title"
+              MainArray( aIND_VAL_10, ArrayRow% ) = "8 - Spine title"
+
+            Case "307"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "307: Hours, etc."
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Hours"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "382"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "382: Medium of Performance"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - No information provided"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Medium of performance"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "1 - Partial medium of performance"
+
+            Case "505"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "505: Formatted Contents Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "0 - Contents"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "1 - Incomplete contents"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "2 - Partial contents"
+              MainArray( aIND_VAL_4, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "510"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "510: Citation/References Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "0 - Indexed by"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "1 - Indexed in its entirety by"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "2 - Indexed selectively by"
+              MainArray( aIND_VAL_4, ArrayRow% )  = "3 - References"
+              MainArray( aIND_VAL_5, ArrayRow% )  = "4 - References"
+
+            Case "511"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "511: Participant or Performer Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "0 - [No display constant generated]"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "1 - Cast"
+
+            Case "516"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "516: Type of Computer File or Data Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Type of file"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "520"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "520: Summary, etc."
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Summary"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Subject"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "1 - Review"
+              MainArray( aIND_VAL_4, ArrayRow% )  = "2 - Scope and content"
+              MainArray( aIND_VAL_5, ArrayRow% )  = "3 - Abstract"
+              MainArray( aIND_VAL_6, ArrayRow% )  = "4 - Content advice"
+              MainArray( aIND_VAL_7, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "521"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "521: Target Audience Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Audience"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Reading grade level"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "1 - Interest age level"
+              MainArray( aIND_VAL_4, ArrayRow% )  = "2 - Interest grade level"
+              MainArray( aIND_VAL_5, ArrayRow% )  = "3 - Special audience characteristics"
+              MainArray( aIND_VAL_6, ArrayRow% )  = "4 - Motivation/interest level"
+              MainArray( aIND_VAL_7, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "522"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "522: Geographic Coverage Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Geographic coverage"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "524"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "524: Preferred Citation of Described Materials Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Cite as"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "526"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "526: Study Program Information Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "0 - Reading program"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "555"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "555: Cumulative Index/Finding Aids Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Indexes"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Finding aids"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "556"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "556: Information About Documentation Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Documentation"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "565"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "565: Case File Characteristics Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - File size"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Case file characteristics"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "567"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "567: Methodology Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Methodology"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "581"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "581: Publications About Described Materials Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Publications"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "586"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "586: Awards Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Awards"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "588"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "588: Source of Description Note"
+              MainArray( aWHICH,     ArrayRow% )  = "1"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - [No display constant generated]"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Source of description"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "1 - Latest issue consulted"
+
+            Case "760"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "760: Main Series Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Main series"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "762"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "762: Subseries Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Has subseries"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "765"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "765: Original Language Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Translation of"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "767"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "767: Translation Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Translated as"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "770"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "770: Supplement/Special Issue Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Has supplement"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "772"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "772: Supplement Parent Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Supplement to"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Parent"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "773"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "773: Host Item Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - In"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "774"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "774: Constituent Unit Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Constituent unit"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "775"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "775: Other Edition Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Other edition available"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "776"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "776: Additional Physical Form Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Available in another form"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "777"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "777: Issued With Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Issued with"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "786"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "786: Data Source Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Data source"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "787"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "787: Other Relationship Entry"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - Related item"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "8 - [No display constant generated]"
+
+            Case "856"
+              MainArray( aTAG_NAME,  ArrayRow% )  = "856: Electronic Location and Access"
+              MainArray( aWHICH,     ArrayRow% )  = "2"
+              MainArray( aIND_VAL_1, ArrayRow% )  = "[blank] - [no information provided]"
+              MainArray( aIND_VAL_2, ArrayRow% )  = "0 - Electronic resource"
+              MainArray( aIND_VAL_3, ArrayRow% )  = "1 - Electronic version"
+              MainArray( aIND_VAL_4, ArrayRow% )  = "2 - Related electronic resource"
+              MainArray( aIND_VAL_5, ArrayRow% )  = "8 - [No display constant generated]"
+
+          End Select
+
+          ArrayRow% = ArrayRow% + 1
+      End If
+      RecordRow% = RecordRow% + 1
+  End If
+Loop Until FoundField = FALSE
+
+' For every field found with a display constant, copy its tag to a secondary array, which
+' will display as a drop-down list in the dialog box for selection.
+
+If ArrayRow% = 0 Then
+    MsgBox "This record contains no fields with display constant controllers.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    For i = 0 To ArrayRow% - 1
+      ReDim Preserve TagList( i )
+      TagList( i ) = Left$( MainArray( aFIELD, i ), 3 )
+    Next i
+    FieldCount% = i
+End If
+
+Begin Dialog Dialog1Definition  232, 120, WaltsMacros$, .Dialog1ControlFunction
+  PushButton    175,  98,  50,  14, "Close",                      .Close
+  CancelButton    2,   2,   2,   2
+  Text            8,  18,  48,   8, "Select tag:"
+  Text           64,  18, 128,   8, "",                           .Legend
+  ListBox         8,  27,  48,  72, TagList(),                    .ListBox1
+  ListBox        64,  27, 160,  72, ConstantList(),               .ListBox2
+  PushButton     64,  98, 100,  14, "&Change selected indicator", .ChangeButton
+  Text            8,   6, 216,   8, "",                           .TagName
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetDialogBox( SelectedTag% )
+
+' This function sets up the dialog box by matching the display constants to the specified
+' tag, and selecting the default or current display constant to show in the drop list
+' box. It runs every time a tag is selected.
+
+Dim DisplayConstant$
+Dim DisplayIndicator$
+Dim Indicator$
+Dim IndicatorValueCount%
+Dim InitialIndicator$
+Dim QUOTE As String*1        : QUOTE = Chr$( 034 )
+Dim Tag$
+Dim TempString$
+
+Dim i As Integer, j As Integer
+
+InvalidValue$ = ""
+
+Tag$          = TagList( SelectedTag% )
+Indicator$    = MainArray( aWHICH, SelectedTag% )
+
+' The list box controls in the dialog box can accommodate only one-dimensional arrays.
+' The list of tags has already been created from the main array; now create, for the
+' specified tag, the list of possible indicator values. This is simply a matter of
+' copying the indicator values from the main array into a new array.
+
+For i = aIND_VAL_1 To aIND_VAL_10
+  DisplayConstant$ = MainArray( i, SelectedTag% )
+  If DisplayConstant$ <> "" Then
+      ReDim Preserve ConstantList( j )
+      ConstantList( j ) = DisplayConstant$
+      j = j + 1
+    Else
+      Exit For
+  End If
+Next i
+DlgListBoxArray "ListBox2",     ConstantList()
+
+DlgText         "TagName",      MainArray( aTAG_NAME, SelectedTag% )
+
+If Indicator$ = "1" Then
+    InitialIndicator$ = Mid$( MainArray( aFIELD, SelectedTag% ), 4, 1 )
+  Else
+    InitialIndicator$ = Mid$( MainArray( aFIELD, SelectedTag% ), 5, 1 )
+End If
+
+IndicatorValueCount% = UBound( ConstantList ) + aIND_VAL_1
+For i = 0 To UBound( ConstantList )
+  DisplayIndicator$ = Left$( MainArray( i + Difference%, SelectedTag% ), 1 )
+  If DisplayIndicator$ = "[" Then
+      DisplayIndicator$ = " "
+  End If
+  If DisplayIndicator$ = InitialIndicator$ Then
+      Exit For
+    Else
+
+' If an indicator value is not on the list, expand the array, adding a row at the end to
+' hold the invalid value and a warning message. Also, with the tag and indicator in hand,
+' create a warning message incorporating those data, which will display if the macro is
+' closed without an invalid value for an indicator having been changed.
+
+      If i = UBound( ConstantList ) Then
+          ReDim Preserve ConstantList( i + 1 )
+          If InitialIndicator$ = " " Then
+              InitialIndicator$ = "[blank]"
+          End If
+          TempString$ = MainArray( aOCCURENCE, SelectedTag% )
+          If TempString$ = "1" Then
+              TempString$ = ""
+            Else
+              TempString$ = "/" & TempString$
+          End If
+          InvalidValue$         = "Field " & Tag$ & TempString$ & ", indicator " & Indicator$ & " has invalid value " & QUOTE & InitialIndicator$ & QUOTE & "."
+          ConstantList( i + 1 ) = InitialIndicator$ & " - INVALID! Please select a correct value!"
+          DlgListBoxArray "ListBox2",     ConstantList()
+      End If
+  End If
+Next i
+
+DlgValue        "ListBox2",     i
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' This function controls the dialog box. It matches the indicator value list to the tag
+' and controls when an indicator can be changed.
+
+Const CONTROL_CHANGE       As Integer = 2
+Const DISABLED             As Integer = 0
+Const ENABLED              As Integer = 1
+Const FIX_BUTTON           As Integer = 2
+Const INFORMATION_MESSAGE  As Integer = 64
+Const INITIALIZE           As Integer = 1
+Const INVISIBLE            As Integer = 0
+Const KEEP_DLG_OPEN        As Integer = -1
+
+Dim DisplayConstant$
+Dim FieldsMessage$
+Dim FieldData$
+Dim InitialIndicator$
+Dim NewField$
+Dim NewIndicator$
+Dim SelectedDisplayText$
+Dim SelectedIndicator$
+Dim SelectedTag%
+Dim WhichIndicator$
+
+Dim i As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+GoAgain:
+
+' When the dialog box appears, the Change button is disabled, because it can't be changed
+' to itself.
+
+    DlgVisible      "Cancel",       INVISIBLE
+    DlgEnable       "ChangeButton", DISABLED
+    DlgValue        "ListBox1",     InitialField%
+    SelectedTag% = DlgValue( "ListBox1" )
+    SetDialogBox( SelectedTag% )
+    If MainArray( aWHICH, SelectedTag% ) = "1" Then
+        DlgText        "Legend",        "1st indicator - Display constant:"
+      Else
+        DlgText        "Legend",        "2nd indicator - Display constant:"
+    End If
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' When a certain tag is selected, the list of indicator values must change, and also the
+' legend that tells which indicator is the controller. The name of the field must change
+' also, but that is controlled by the setup subroutine.
+
+      Case "ListBox1"
+
+        DlgEnable       "ChangeButton", DISABLED
+        SelectedTag% = DlgValue( "ListBox1" )
+        If MainArray( aWHICH, SelectedTag% ) = "1" Then
+            DlgText        "Legend",        "1st indicator - Display constant:"
+          Else
+            DlgText        "Legend",        "2nd indicator - Display constant:"
+        End If
+        SetDialogBox( SelectedTag% )
+
+' When different indicator values are being selected, make sure that selecting the
+' current value is not an option, by comparing the selected value with the current value.
+
+      Case "ListBox2"
+
+        SelectedTag% = DlgValue( "ListBox1" )
+        If MainArray( aWHICH, SelectedTag% ) = "1" Then
+            InitialIndicator$ = Mid$( MainArray( aFIELD, SelectedTag% ), 4, 1 )
+          Else
+            InitialIndicator$ = Mid$( MainArray( aFIELD, SelectedTag% ), 5, 1 )
+        End If
+        SelectedIndicator$ = Left$( DlgText( "ListBox2" ), 1 )
+        If SelectedIndicator$ = "[" Then
+            SelectedIndicator$ = " "
+        End If
+        If SelectedIndicator$ = InitialIndicator$ Then
+            DlgEnable       "ChangeButton", DISABLED
+          Else
+            DlgEnable       "ChangeButton", ENABLED
+        End If
+
+' To change an indicator value, replace the current value in the field data with the
+' selected value. Then set the field in the record.
+
+      Case "ChangeButton"
+
+        SelectedTag%         = DlgValue( "ListBox1" )
+        SelectedDisplayText$ = DlgText( "ListBox2" )
+        FieldData$           = MainArray( aFIELD, SelectedTag% )
+        Occurrence%          = Val( MainArray( aOCCURENCE, SelectedTag% ) )
+        For i = 0 To UBound( MainArray )
+          DisplayConstant$ = MainArray( i + Difference%, SelectedTag% )
+          If SelectedDisplayText$ = DisplayConstant$ Then
+              NewIndicator$ = Left$( DisplayConstant$, 1 )
+              If NewIndicator$ = "[" Then
+                  NewIndicator$ = " "
+              End If
+              WhichIndicator$ = MainArray( aWHICH, SelectedTag% )
+              If WhichIndicator$ = "1" Then
+                  NewField$ = Left$( FieldData$, 3 ) & NewIndicator$ & Mid$( FieldData$, 5 )
+                Else
+                  NewField$ = Left$( FieldData$, 4 ) & NewIndicator$ & Mid$( FieldData$, 6 )
+              End If
+              MainArray( aFIELD, SelectedTag% ) = NewField$
+              FieldsMessage$                 = Left$( NewField$, 3 ) & ", occurrence " & Trim$( Str$( Occurrence% ) ) & "."
+              If CS.SetField( Occurrence%, NewField$ ) Then
+                  MsgBox "Indicator " & WhichIndicator$ & " changed in field " & FieldsMessage$, INFORMATION_MESSAGE, WaltsMacros$
+                Else
+                  MsgBox "Sorry, the macro was unable to replace the indicator.", INFORMATION_MESSAGE, WaltsMacros$
+              End If
+              Exit For
+          End If
+        Next i
+
+' If the record contains only one field with display constants, and its indicator has
+' been changed, the macro is now done. However, if the record contains several such
+' fields, the macro remains open so other fields may also be changed. In this case, offer
+' as the default selection the next field in the list, or the first one if the last field
+' in the list is the one that has been changed.
+
+        If FieldCount% > 1 Then
+            If SelectedTag% = FieldCount% - 1 Then
+                InitialField% = 0
+              Else
+                InitialField% = SelectedTag% + 1
+            End If
+            Dialog1ControlFunction = KEEP_DLG_OPEN
+            DlgFocus        "Close"
+            GoTo GoAgain:
+        End If
+
+      Case "Close"
+
+        If InvalidValue$ <> "" Then
+            InvalidValue$ = "Are you sure to want to quit this macro?" & InvalidValue$
+
+            Begin Dialog Dialog2Definition  204, 52, WaltsMacros$
+              CancelButton  146, 28,  50, 14
+              PushButton      8, 28,  50, 14, "&Quit macro"
+              PushButton     66, 28,  72, 14, "&Fix indicator value"
+              Text            8,  6, 188, 16, InvalidValue$
+            End Dialog
+
+            Dim Dialog2 As Dialog2Definition
+
+            If Dialog( Dialog2 ) = FIX_BUTTON Then
+                Dialog1ControlFunction = KEEP_DLG_OPEN
+              Else
+                DlgEnd 0
+            End If
+        End If
+
+    End Select
+
+End Select
+
+End Function
+'65829490
+'
+'Macro name: ShowDisplayConstants
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:58:30 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,214 @@
+'MacroName:Add336StillImage.2023.01
+'MacroDescription:Adds a 336 field for "still image" to bibliographic records for other
+' than visual materials.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro while viewing a bibliographic record to quickly add a 336
+' field for "still image" with subfields $b "sti" and $2 "rdacontent". Of course, this
+' makes sense only for certain types of material. These are the broad formats for which
+' the macro will add the 336 field: Language material ("Type" codes "a", "s", and "t"),
+' notated music ("c" and "d"), cartographic material ("e" and "f"), kits ("o"), and
+' mixed materials ("p"). For material whose description includes use of field 300,
+' subfield $b, or the fixed field element "Ills", the macro checks for appropriate
+' content in those places indicating the presence of illustrations, and if there is none,
+' displays a warning.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE  As Integer = 16
+Const DISPLAY_FF_AT_TOP As Integer = 1
+Const WARNING_MESSAGE   As Integer = 48
+
+Dim DELIMITER As String*1    : DELIMITER          = Chr$( 223 )
+
+Dim BibLevel$
+Dim FieldData$
+Dim Illustrations$
+Dim MessageText$
+Dim MessageType%
+Dim PosFF%
+Dim Sequence%
+Dim TypeOfRecord$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$       = "[Walt's macros] Extras2:Add336StillImage"
+
+Dim ChangedFFView
+Dim FFIlls
+Dim FoundField
+Dim IllustrationsIn300       : IllustrationsIn300 = FALSE
+Dim IllustrationsInFF
+
+Dim i As Integer
+
+Dim IllusTerms( 14 ) As String
+
+' Proceed only if a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MessageText$ = "Sorry, this macro works only in bibliographic records."
+    MessageType% = CRITICAL_MESSAGE
+    GoTo DisplayMessage:
+End Select
+
+' Proceed further only if the record is in English.
+
+If CS.GetField( "040", 1, FieldData$ ) Then
+    If InStr( FieldData$, DELIMITER & "b" ) > 0 Then
+        If InStr( FieldData$, "b eng" ) = FALSE Then
+            MessageText$ = "Sorry, this macro can add a 336 field to only English-language records."
+            MessageType% = CRITICAL_MESSAGE
+            GoTo DisplayMessage:
+        End If
+    End If
+End If
+
+' Get some fixed field values. The macro will warn if the fixed field element "Ills" is
+' not coded for illustrations (if the element is present, which it will not be for some
+' types of printed material).
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+If CS.GetFixedField( "Type", TypeOfRecord$ ) Then
+    If TypeOfRecord$ Like "[at]" Then
+        If CS.GetFixedField( "BLvl", BibLevel$ ) Then
+            If BibLevel$ Like "[acdm]" Then
+                FFIlls = TRUE
+                If CS.GetFixedField( "Ills", Illustrations$ ) = FALSE Then
+                    MessageText$ = "Sorry, this macro could not get some fixed field values."
+                    MessageType% = CRITICAL_MESSAGE
+                    GoTo DisplayMessage:
+                End If
+              Else
+                FFIlls = FALSE
+            End If
+        End If
+      Else
+        If TypeOfRecord$ Like "[!acdefopt]" Then
+            MessageText$ = "Sorry, this macro will not work on this type of record."
+            MessageType% = CRITICAL_MESSAGE
+            GoTo DisplayMessage:
+        End If
+    End If
+ Else
+    MessageText$ = "Sorry, this macro could not get some fixed field values."
+    MessageType% = CRITICAL_MESSAGE
+    GoTo DisplayMessage:
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+If Illustrations$ <> "" Then
+    IllustrationsInFF = TRUE
+  Else
+    IllustrationsInFF = FALSE
+End If
+
+' Check for the presence of illustrations in the 300 field by looking for the text string
+' "ill" (which means, of course, that other kinds of illustrations present in the record,
+' like maps and portraits, won't show up).
+
+If CS.GetField( "300", 1, FieldData$ ) Then
+    If TypeOfRecord$ Like "[at]" Then
+        Sequence% = 2
+        IllusTerms( 0  ) = "ill"
+        IllusTerms( 1  ) = "map"
+        IllusTerms( 2  ) = "port"
+        IllusTerms( 3  ) = "char"
+        IllusTerms( 4  ) = "plan"
+        IllusTerms( 5  ) = "plat"
+        IllusTerms( 6  ) = "musi"
+        IllusTerms( 7  ) = "facs"
+        IllusTerms( 8  ) = "coat"
+        IllusTerms( 9  ) = "gene"
+        IllusTerms( 10 ) = "form"
+        IllusTerms( 11 ) = "samp"
+        IllusTerms( 12 ) = "phon"
+        IllusTerms( 13 ) = "phot"
+        IllusTerms( 14 ) = "illum"
+        For i = 0 To 14
+          If InStr( FieldData$, IllusTerms( i ) ) Then
+              IllustrationsIn300 = TRUE
+              Exit For
+          End If
+        Next i
+      Else
+        Sequence% = 1
+    End If
+End If
+
+i = 1
+Do
+  FoundField = CS.GetField( "336", i, FieldData$ )
+  If FoundField Then
+      If InStr( FieldData$, "still image" ) > 0 Or InStr( FieldData$, "b sti" ) > 0 Then
+          MessageText$ = "A 336 field for still images is already present!"
+          MessageType% = WARNING_MESSAGE
+          GoTo DisplayMessage:
+      End If
+  End If
+  i = i + 1
+Loop Until FoundField = FALSE
+
+' Add the field, and warn if the fixed field needs adjusting.
+
+If CS.AddField( Sequence%, "336  still image " & DELIMITER & "b sti " & DELIMITER & "2 rdacontent" ) = FALSE Then
+    MessageText$ = "Sorry, the macro could not add a 336 field."
+    MessageType% = CRITICAL_MESSAGE
+    GoTo DisplayMessage:
+  Else
+    If TypeOfRecord$ Like "[at]" Then
+        If FFIlls Then
+            If IllustrationsInFF = FALSE And IllustrationsIn300 = FALSE Then
+                MessageText$ = "Fixed field and 300 field do not show illustrations are present."
+                MessageType% = WARNING_MESSAGE
+              ElseIf IllustrationsInFF = TRUE And IllustrationsIn300 = FALSE Then
+                MessageText$ = "300 field does not show illustrations are present."
+                MessageType% = WARNING_MESSAGE
+              ElseIf IllustrationsInFF = FALSE And IllustrationsIn300 = TRUE Then
+                MessageText$ = "Fixed field does not show illustrations are present."
+                MessageType% = WARNING_MESSAGE
+            End If
+        End If
+    End If
+End If
+
+DisplayMessage:
+
+If MessageText$ <> "" Then
+    MsgBox MessageText$, MessageType%, WaltsMacros$
+End If
+
+End Sub
+'2117467
+'
+'Macro name: Add336StillImage
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:56:08 AM using "MacroBookInspector" macro by Walter F. Nickeson.

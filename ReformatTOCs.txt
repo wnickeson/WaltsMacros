@@ -1,0 +1,415 @@
+'MacroName:ReformatTOCs.2022.04
+'MacroDescription:Performs some simple reformatting of contents notes.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 30 June 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro will do some simple, mechanical reformatting of contents notes
+' that are already formatted with a space-dash-space separator between chapter or volume
+' titles, such as in some machine-generated TOCs, or text formatted by my macro
+' "DeformatClipboard."
+'
+' Put the cursor in the 505 field to be reformatted and run the macro. It removes dot
+' leaders and extra spaces. Numbers at the beginnings and ends of titles (a title being
+' anything between space-dash-space separators, e.g., "-- New York --") are removed, on
+' the assumption that they indicate chapter or volume numbers and pages; however, four-
+' digit numbers are assumed to be dates and are retained. The macro also attempts to find
+' roman numerals at the beginnings of titles, assuming they are chapter numbers. Finally,
+' it offers the option to make lowercase all but the first word of each title. Then it
+' adds the reformatted field below the original.
+'
+' For example, this list of contents:
+'
+' 1  Do Coincidences have Causes?  3
+' 2  Is Cause related to Necessitation or to Explanation?  26
+' 3  Necessitation and Law in Ancient Accounts of Cause and Explanation   45
+' 4  Stoic Embarrassment over Necessity.....70
+'
+' would be formatted by the macro "PasteUnformattedPlus" into this:
+'
+' 1 Do Coincidences have Causes? 3 -- 2 Is Cause related to Necessitation or to
+' Explanation? 26 -- 3 Necessitation and Law in Ancient Accounts of Cause and Explanation
+' 45 -- 4 Stoic Embarrassment over Necessity.....70
+'
+' and further transformed by this macro, "ReformatTOCs," into the final result:
+'
+' Do coincidences have causes? -- Is cause related to necessitation or to explanation?
+' -- Necessitation and law in ancient accounts of cause and explanation -- Stoic
+' embarrassment over necessity.
+'
+' This is not AI, so capitalization and number removal will not be perfect, and strange
+' results may occur. Ellipses may be lost. The macro's results also depend on the source
+' of the TOC; data copied from LC's website, for example, may resist easy formatting.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const INFORMATION_MESSAGE  As Integer = 64
+
+Dim DASH                     : DASH         = " -- "
+Dim DOUBLE_DASH              : DOUBLE_DASH  = " -- -- "
+Dim DOUBLE_QUOTE             : DOUBLE_QUOTE = " " & Chr$( 034 )
+Dim SINGLE_QUOTE             : SINGLE_QUOTE = " " & Chr$( 039 )
+
+Dim Alpha%
+Dim DashPosition%
+Dim Decap1$
+Dim Decap2$
+Dim Digit%
+Dim FieldData$
+Dim FirstWord$
+Dim Indicators$
+Dim LastDot%
+Dim LastWord$
+Dim LengthFirstWord%
+Dim LengthLastWord%
+Dim LengthTitlePortion%
+Dim NewField$
+Dim RawContents$
+Dim Remainder$
+Dim Roman%
+Dim Row%
+Dim Start%
+Dim Tag$
+Dim TestChar$
+Dim Title$
+Dim TitlePortion$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:ReformatTOCs"
+
+Dim Decap                    : Decap        = FALSE
+Dim NumberProb               : NumberProb   = FALSE
+
+Dim i As Integer, p As Integer, x As Integer
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Get the field in which the cursor is placed.
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
+    Tag$        = Left$( FieldData$, 3 )
+    Indicators$ = Mid$( FieldData$, 4, 2 )
+    If Left$( Tag$, 3 ) = "505" Then
+        If Right$( Indicators$, 1 ) = "0" Then
+            MsgBox "Sorry, this macro can't deal with an enhanced contents note.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+          Else
+            RawContents$ = Mid$( FieldData$, 6 )
+        End If
+      Else
+        MsgBox "This is not a contents field!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' The first step in processing is to eliminate double spaces.
+
+Do
+  p = InStr( RawContents$, "  " )
+  If p <> 0 Then RawContents$ = Mid$( RawContents$, 1, p ) & Mid$( RawContents$, p + 2)
+Loop Until p = 0
+
+' Then check whether capitalization should be removed. This is less useful for TOCs
+' consisting of short titles, such as collections of poems, or for TOCs containing many
+' names.
+
+Decap1$ = "Decapitalize (remove all internal capital letters)"
+Decap2$ = "from this field?"
+
+Begin Dialog Dialog1Definition 184, 92, WaltsMacros$
+  Text           20,  8, 148,  8, Decap1$
+  Text           66, 16,  48,  8, Decap2$
+  ButtonGroup .Choice
+   PushButton    24, 32,  60, 16, "&Yes"
+   PushButton   100, 32,  60, 16, "&No"
+   CancelButton  62, 60,  60, 16
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+Select Case Dialog1.Choice
+  Case 0
+    Decap = TRUE
+  Case 1
+    Decap = FALSE
+  Case 2
+    Exit Sub
+End Select
+
+Do
+
+' Successively chop off the leftmost title (everything up to the first dash), process it,
+' and add it to the end of the new string.
+
+  Start%        = 1
+  DashPosition% = InStr( Start%, RawContents$, DASH )
+  If DashPosition% <> 0 Then
+      Title$       = Trim$( Mid$( RawContents$, Start%, DashPosition% - 1 ) )
+      RawContents$ = Trim$( Mid$( RawContents$, DashPosition% + 3 ) )
+    Else
+      Title$       = Trim$( RawContents$ )
+  End If
+
+' Eliminate dot leaders.
+
+Do
+  p = InStr( Title$, ". ." )
+  If p <> 0 Then
+      LastDot% = p
+      Title$ = Mid$( Title$, 1, p - 1 ) & Mid$( Title$, p + 3)
+  End If
+Loop until p = 0
+
+Do
+  p = InStr( Title$, ".." )
+  If p <> 0 Then
+      LastDot% = p
+      Title$ = Mid$( Title$, 1, p - 1 ) & Mid$( Title$, p + 2)
+  End If
+Loop until p = 0
+
+Do
+  p = InStr( Title$, " . " )
+  If p <> 0 Then
+      LastDot% = p
+      Title$ = Mid$( Title$, 1, p - 1 ) & Mid$( Title$, p + 2)
+  End If
+Loop until p = 0
+
+If Mid$( Title$, LastDot%, 1 ) = "." Then
+    Title$ = Left$( Title$, LastDot% - 1 ) & " " & Mid$( Title$, LastDot% + 1 )
+End If
+
+' Check the first word of the title to see if it is all digits or a number in Roman
+' numerals. If it is, remove it.
+
+  p = InStr( Title$, " " )
+  If p <> 0 Then
+      FirstWord$ = Left$( Title$, p - 1 )
+    Else
+      FirstWord$ = Title$
+  End If
+  If FirstWord$ = "ch." Or FirstWord$ = "t." Then
+      Title$        = Mid$( Title$, p - 1 )
+      DashPosition% = DashPosition% - 1
+    Else
+      If Right$( FirstWord$, 1 ) = "." Then
+          FirstWord$ = Left$( FirstWord$, Len( FirstWord$ ) - 1 )
+          NumberProb = TRUE
+      End If
+      LengthFirstWord% = Len( FirstWord$ )
+      Roman%           = 0
+      Digit%           = 0
+      Alpha%           = 0
+      For i = 1 To LengthFirstWord%
+        TestChar$ = Mid$( FirstWord$, i, 1 )
+        If TestChar$ Like "[IVXLCDMivxlcdm]" Then
+            Roman% = Roman% + 1
+          ElseIf TestChar$ Like "[0-9]" Then
+            Digit% = Digit% + 1
+          ElseIf TestChar$ Like "[A-Za-z]" Then
+            Alpha% = Alpha% + 1
+        End If
+      Next i
+  End If
+  If Digit% = LengthFirstWord% Or Roman% = LengthFirstWord% Or ( Digit% > 0 And Alpha% > 0 ) Then
+'Originally: If Digit% = LengthFirstWord% Or ( Roman% = LengthFirstWord% And NumberProb = TRUE ) Or ( Digit% > 0 And Alpha% > 0 ) Then
+      If p <> 0 Then
+          Title$ = Mid$( Title$, p + 1 )
+        Else
+          GoTo NextTitle:
+      End If
+  End If
+
+' Then check the last word. If it is all digits, remove it, except if it is four digits,
+' which we assume is a date and thus kept.
+
+  If Right$( Title$, 1 ) = "." Then Title$ = Left$( Title$, Len( Title$ ) - 1 )
+  If Right$( Title$, 5 ) Like " ####" Then
+      Title$ = Trim$( Title$ )
+    Else
+      Start% = 1
+      Do
+        p = InStr( Start%, Title$, " " )
+        If p <> 0 Then
+            Start% = p + 1
+          Else
+            If Start% > 1 Then
+                LastWord$       = Mid$( Title$, Start% )
+                LengthLastWord% = Len( LastWord$ )
+                Digit%          = 0
+                For i = 1 To LengthLastWord%
+                  If Mid$( LastWord$, i, 1 ) Like "[!0-9]" Then
+                      Exit For
+                    Else
+                      Digit% = Digit% + 1
+                  End If
+                Next
+                If Digit% = LengthLastWord% Then Title$ = Left$( Title$, Start% - 1 )
+                Title$ = Trim$( Title$ )
+              Else
+                Title$ = Trim$( Title$ )
+            End If
+        End If
+      Loop Until p = 0
+  End If
+
+' If decapitalization has been chosen, get the title string up to a statement of
+' responsibility (identified by the forward slash) and make it lowercase. Then make its
+' first letter uppercase. If the statement of responsibility starts with a capital "By",
+' make that lowercase. Make uppercase any character following a quotation mark, whether
+' single or double. Then put the whole title back together.
+
+  If Decap = TRUE Then
+      p = InStr( Title$, " / " )
+      If p <> 0 Then
+          TitlePortion$ = Left$( Title$, p - 1 )
+          Remainder$    = Mid$( Title$, p )
+        Else
+          TitlePortion$ = Title$
+          Remainder$    = ""
+      End If
+      LengthTitlePortion% = Len( TitlePortion$ )
+'      Remainder$          = Mid$( Title$, LengthTitlePortion%, Len( Title$ ) - LengthTitlePortion% )
+      If Remainder$ <> "" Then
+          If Mid$( Remainder$, 4, 3 ) = "By " Then Mid$( Remainder$, 4, 3 ) = "by "
+      End If
+      TitlePortion$ = LCase( TitlePortion$ )
+      x = 1
+      Do
+        TestChar$ = Mid$( TitlePortion$, x, 1 )
+        If TestChar$ Like "[!A-Za-z]" Then
+            x = x + 1
+          ElseIf TestChar$ Like "[a-z]" Then
+            Mid$( TitlePortion$, x, 1 ) = UCase( TestChar$ )
+            Exit Do
+        End If
+      Loop Until x = LengthTitlePortion%
+      Start% = 1
+      Do
+        p = InStr( Start%, TitlePortion$, DOUBLE_QUOTE )
+        If p <> 0 Then
+            If Mid$( TitlePortion$, p + 2, 1 ) Like "[a-z]" Then Mid$( TitlePortion$, p + 2, 1 ) = UCase( Mid$( TitlePortion$, p + 2, 1 ) )
+            Start% = p + 2
+        End If
+      Loop Until p = 0
+      Start% = 1
+      Do
+        p = InStr( Start%, TitlePortion$, SINGLE_QUOTE )
+        If p <> 0 Then
+            If Mid$( TitlePortion$, p + 2, 1 ) Like "[a-z]" Then Mid$( TitlePortion$, p + 2, 1 ) = UCase( Mid$( TitlePortion$, p + 2, 1 ) )
+            Start% = p + 2
+        End If
+      Loop Until p = 0
+      Title$ = TitlePortion$ & Remainder$
+  End If
+
+' Add the processed title to the string.
+
+  NewField$ = NewField$ & DASH & Title$
+
+NextTitle:
+
+Loop Until DashPosition% = 0
+
+' Eliminate the initial dash.
+
+NewField$ = Trim$( Mid$( NewField$, 4 ) )
+
+' Eliminate double spaces.
+
+Do
+  p = InStr( NewField$, "  " )
+  If p <> 0 Then NewField$ = Mid$( NewField$, 1, p ) & Mid$( NewField$, p + 2)
+Loop Until p = 0
+
+' Take out dashes separated by a space.
+
+Do
+  p = InStr( NewField$, DOUBLE_DASH )
+  If p <> 0 Then NewField$ = Mid$( NewField$, 1, p ) & Mid$( NewField$, p + 4)
+Loop Until p = 0
+
+' Change any solitary lower-case "i" to uppercase.
+
+Start% = 1
+Do
+  p = InStr( Start%, NewField$, " i " )
+    If p <> 0 Then
+        Mid( NewField$, p + 1, 1 ) = "I"
+        Start% = p + 2
+    End If
+Loop Until p = 0
+
+' Change any initials (a letter followed by a period) to uppercase.
+
+Start% = 1
+Do
+  p = InStr( Start%, NewField$, "." )
+  If p <> 0 Then
+      If Mid$( NewField$, p - 1, 1 ) Like "[a-z]" Then
+          Mid$( NewField$, p - 1, 1 ) = UCase( Mid$( NewField$, p - 1, 1 ) )
+          Start% = p + 1
+        Else
+          Start% = p + 1
+      End If
+  End If
+Loop Until p = 0
+
+' Eliminate double spaces again.
+
+Do
+  p = InStr( NewField$, "  " )
+  If p <> 0 Then NewField$ = Mid$( NewField$, 1, p ) & Mid$( NewField$, p + 2)
+Loop Until p = 0
+
+NewField$ = Trim( NewField$ )
+
+NewField$ = Tag$ & Indicators$ & NewField$ & "."
+If NewField$ = FieldData$ Then
+    MsgBox "The existing field needs no formatting!", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+If CS.AddFieldLine( Row% + 1, NewField$ ) = FALSE Then
+    MsgBox "Sorry, the formatted field was not added.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'41213590
+'
+'Macro name: ReformatTOCs
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:58:19 AM using "MacroBookInspector" macro by Walter F. Nickeson.

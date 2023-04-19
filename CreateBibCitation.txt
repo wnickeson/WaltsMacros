@@ -1,0 +1,1227 @@
+'MacroName:CreateBibCitation.2023.02
+'MacroDescription:Gets the 1XX, 245-26X, and 8XX fields from a bibliographic record (with
+' the ability to exclude any of those fields) and arranges the data into a bibliographic
+' citation-like form on the Windows Clipboard for copying or printing.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 29 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic record to copy certain descriptive data
+' into a compact paragraph, approximating a bibliographic citation. This might be useful
+' when you are in Connexion and want to pass along information about a publication to
+' someone who doesn't know MARC. The text string the macro produces is placed on the
+' Windows Clipboard, and includes information from these fields and subfields, if
+' present, in this order:
+'
+'  + 100: $a, $b, $c
+'  + 110: $a, $b
+'  + 111: $a, $e, $q
+'  + 130: $a, $n, $p
+'  + 245: $a
+'  + 245: $c
+'  + 250: $a
+'  + 260/264: $a, $b, $c
+'  + 490: $a, $v
+'  + 800: $a, $b, $c, $t, $n, $p, $v
+'  + 810: $a, $b, $t, $n, $p, $v
+'  + 811: $a, $e, $t, $v
+'  + 830: $a, $n, $p, $v
+'
+' Each field except 245 subfield $a can be included or omitted from the result by simply
+' clicking its checkbox. The resulting string is displayed in the dialog box for
+' confirmation before putting it on the Clipboard. In this string, MARC coding between
+' fields is removed, and other prescribed punctuation is usually simplified to commas and
+' periods. The data is modified to contain only characters in the ISO-8859-1 character
+' set. However, because of the limitations of that character set, some characters will be
+' represented by an equivalent or substitute, and some special characters and diacritics
+' simply won't appear. If one of the fields is in a non-Latin script, and is linked to a
+' field with Latin characters, that Latin script field is selected as the one to copy.
+' Otherwise, a field containing non-Latin characters won't be copied, and if such a field
+' is the title, the macro will quit.
+'
+' If a field or a subfield in a field is repeated, only the first occurrence is captured.
+' A 490 field is not copied if it has a corresponding 8XX field.
+'
+' The macro tries to determine if the name in the 1XX field also appears in the statement
+' of responsibility in 245 subfield $c. If the determination is that the name is indeed
+' repeated, the default view is that the statement of responsibility is not included; but
+' it can be added (or removed) by simply ticking that field's checkbox.
+'
+' If one or more of subfields $a, $b, and $c are lacking from the publication statement,
+' an asterisk displays by the field's checkbox to indicate that something may be missing.
+'
+' For dates, copyright information is discarded; other information is generally kept.
+'
+' Parentheses are added around a series statement.
+'
+' The OCLC control number may be included, and if the record is in a save file, that too
+' may be included, although neither of these numbers is included by default.
+'
+' The preview area in the dialog box may not be able to show the entire citation if it's
+' quite lengthy, but the whole string is placed on the Clipboard for pasting.
+'
+' The information copied depends, of course, upon the cataloging rules under which the
+' record was created. The macro's output is no more accurate or reliable than the
+' bibliographic record from which the information was copied. This macro produces the
+' best results when used with records for printed books. Its primary purpose is to
+' quickly get a good idea of the manifestation, in order to make a list, for example, or
+' to simply share information.
+'****************************************************************************************
+
+Option Compare Text
+Option Explicit
+
+Declare Function AssemblePreview       ( Part1$, Part2$, Part3$, Part4$, Part5$, Part6$ ) As String
+Declare Function ConvertToISO88591     ( InputString$ )                                   As String
+Declare Function FixTerminalPunctuation( WhichWay%, InString$ )                           As String
+Declare Function GetFieldData          ( SearchTag$ )                                     As String
+Declare Function GetSubfieldData       ( SubfieldCode$, StringPointer%, FData$ )          As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const ADD   As Integer = 1
+Global Const STRIP As Integer = 0
+
+Global CS As Object
+Global DELIMITER As String*1
+Global EditionStatement$
+Global MainEntry$
+Global NON_LATIN As String*1
+Global OCLCCN$
+Global Preview$
+Global PublicationStatement$
+Global SaveNumber$
+Global SeriesStatement$
+Global StatementOfResponsibility$
+Global TagString$
+Global TitleProper$
+Global [1XX] As String
+Global [245a] As String
+Global [245c] As String
+Global [250] As String
+Global [26X] As String
+Global [8XX/490] As String
+
+Global MainEntryInBody 'Old-timers will remember this as an element in the display of the fixed field, long ago: "M/F/B".
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim BaseName$
+Dim BaseNameWord$
+Dim CharT$
+Dim DateString1$
+Dim DateString2$
+Dim FieldData$
+Dim PreviousCode$
+Dim SOR$
+Dim SaveFileNumber%
+Dim StringPointer%
+Dim SubfieldCode$
+Dim SubfieldData$
+Dim Tag$
+Dim TempString$
+Dim TestString$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$     = "[Walt's macros] Extras3:CreateBibCitation"
+Dim WordBoundary%
+Dim WordCount%
+Dim WordMatch%
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer, x As Integer
+
+Dim SubfieldAPresent         : SubfieldAPresent = FALSE
+Dim SubfieldBPresent         : SubfieldBPresent = FALSE
+Dim SubfieldCPresent         : SubfieldCPresent = FALSE
+Dim SubfieldNPresent         : SubfieldNPresent = FALSE
+Dim ValidDate                : ValidDate        = FALSE
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+DELIMITER                  = Chr$( 223 )
+EditionStatement$          = ""
+MainEntry$                 = ""
+MainEntryInBody            = FALSE
+NON_LATIN                  = Chr$( 021 )
+OCLCCN$                    = ""
+Preview$                   = ""
+PublicationStatement$      = ""
+SaveNumber$                = ""
+SeriesStatement$           = ""
+StatementOfResponsibility$ = ""
+TagString$                 = ""
+TitleProper$               = ""
+[1XX]                      = ""
+[245a]                     = ""
+[245c]                     = ""
+[250]                      = ""
+[26X]                      = ""
+[8XX/490]                  = ""
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then get the OCLC control number.
+
+If CS.GetFixedField( "OCLC", OCLCCN$ ) Then
+    If OCLCCN$ = "" Or OCLCCN$ = "NEW" Then
+        OCLCCN$ = ""
+      Else
+        OCLCCN$ = "OCLC# " & OCLCCN$
+    End If
+End If
+
+' If the record is in a save file, get that number.
+
+If CS.QueryRecordStatus( "SAVE", SaveFileNumber% ) Then
+    If SaveFileNumber% = 0 Then
+        SaveNumber$ = ""
+      Else
+        SaveNumber$ = "Save: " & Trim$( Str$( SaveFileNumber% ) )
+    End If
+End If
+
+' Begin getting data from the record by starting with the title field.
+
+FieldData$ = GetFieldData( "245" )
+If FieldData$ = NON_LATIN Then
+    MsgBox "Sorry, this macro can't get data from this non-Latin script record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  ElseIf FieldData$ = "" Then
+    MsgBox "This record contain no title!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+[245a]         = "245"
+TagString$     = "245,"
+FieldData$     = Mid$( FieldData$, 6 )
+StringPointer% = 1
+SubfieldCode$  = " "
+Do
+  SubfieldData$ = GetSubfieldData( SubfieldCode$, StringPointer%, FieldData$ )
+  If SubfieldCode$ Like "[anpc]" Then
+      SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+      Select Case SubfieldCode$
+        Case "a"
+          TempString$ = SubfieldData$
+        Case "n"
+          TempString$ = TempString$ & ". " & SubfieldData$
+          SubfieldNPresent = TRUE
+        Case "p"
+          If SubfieldNPresent Then
+              TempString$ = TempString$ & ", " & SubfieldData$
+            Else
+              TempString$ = TempString$ & ". " & SubfieldData$
+          End If
+        Case "c"
+          [245c]     = "245 $c"
+          TagString$ = TagString$ & "245 $c,"
+          StatementOfResponsibility$ = ConvertToISO88591( SubfieldData$ )
+          SOR$ = StatementOfResponsibility$
+          StatementOfResponsibility$ = FixTerminalPunctuation( ADD, StatementOfResponsibility$ )
+          StatementOfResponsibility$ = UCase$( Left$( StatementOfResponsibility$, 1 ) ) & Mid$( StatementOfResponsibility$, 2 )
+      End Select
+  End If
+Loop Until StringPointer% = 0
+TempString$  = ConvertToISO88591( TempString$ )
+TitleProper$ = FixTerminalPunctuation( ADD, TempString$ )
+
+' For personal names, keep only subfields $a, $b, and $c. For corporate and conference
+' names, keep only subfields containing subordinate units or conference information.
+
+TempString$ = ""
+FieldData$  = GetFieldData( "1.." )
+If FieldData$ = "" Or FieldData$ = NON_LATIN Then
+    GoTo GetEdition:
+  Else
+    Tag$           = Left$( FieldData$, 3 )
+    [1XX]          = Tag$
+    TagString$     = [1XX] & "," & TagString$
+    FieldData$     = Mid$( FieldData$, 6 )
+    StringPointer% = 1
+    SubfieldCode$  = " "
+    Do
+      SubfieldData$ = GetSubfieldData( SubfieldCode$, StringPointer%, FieldData$ )
+      Select Case Tag$
+        Case "100"
+          If SubfieldCode$ Like "[abc]" Then
+              SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+              Select Case SubfieldCode$
+                Case "a"
+                  TempString$ = SubfieldData$
+
+' Remove spaces between initials in a personal name.
+
+                  TempString$ = TempString$ & "."
+                  x = Len( TempString$ )
+                  If x > 4 Then
+                      q = 1
+                      Do
+                        TestString$ = Mid$( TempString$, q, 5 )
+                        If TestString$ Like "[A-Z]. [A-Z]." Then
+                            TempString$ = Left$( TempString$, q + 1 ) & Mid$( TempString$, q + 3 )
+                          Else
+                            q = q + 1
+                        End If
+                      Loop Until q > x - 4
+                  End If
+                  TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+                  BaseName$ = TempString$
+                Case "b"
+                  TempString$ = TempString$ & SubfieldData$
+                Case "c"
+                  If Left$( SubfieldData$, 1 ) = "(" Then
+                      TempString$ = TempString$ & " " & SubfieldData$
+                    Else
+                      TempString$ = TempString$ & ", " & SubfieldData$
+                  End If
+              End Select
+          End If
+        Case "110"
+          If SubfieldCode$ Like "[ab]" Then
+              SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+              Select Case SubfieldCode$
+                Case "a"
+                  TempString$ = SubfieldData$
+                Case "b"
+                  TempString$ = TempString$ & ". " & SubfieldData$
+              End Select
+          End If
+        Case "111"
+          If SubfieldCode$ Like "[aeq]" Then
+              SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+              Select Case SubfieldCode$
+                Case "a"
+                  TempString$ = SubfieldData$
+                Case "e", "q"
+                  TempString$ = TempString$ & ". " & SubfieldData$
+              End Select
+          End If
+        Case "130"
+          If SubfieldCode$ Like "[anp]" Then
+              SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+              Select Case SubfieldCode$
+                Case "a"
+                  TempString$ = SubfieldData$
+                Case "n"
+                  TempString$ = TempString$ & ". " & SubfieldData$
+                Case "p"
+                  If PreviousCode$ = "n" Then
+                      TempString$ = TempString$ & ", " & SubfieldData$
+                    Else
+                      TempString$ = TempString$ & ". " & SubfieldData$
+                  End If
+              End Select
+          End If
+      End Select
+      PreviousCode$ = SubfieldCode$
+    Loop Until StringPointer% = 0
+    MainEntry$ = ConvertToISO88591( TempString$ )
+
+' Check to see if the name or title in the 1XX field is repeated in the statement of
+' responsibility. If it is, it won't be included in the default citation form.
+
+    If SOR$ <> "" Then
+        If BaseName$ <> "" Then
+            WordBoundary% = 1
+            For i = 1 To Len( BaseName$ )
+              CharT$ = Mid$( BaseName$, i, 1 )
+              If CharT$ Like "[!A-Za-z0-9]" Or i = Len( BaseName$ ) Then
+                  If WordBoundary% <> i Then
+                      If i = Len( BaseName$ ) Then
+                          BaseNameWord$ = Mid$( BaseName$, WordBoundary% )
+                        Else
+                          BaseNameWord$ = Mid$( BaseName$, WordBoundary%, i - WordBoundary% )
+                      End If
+
+' When comparing strings, ignore words in the 1XX field that are only a single character
+' (that is, ignore initials).
+
+                      If Len( BaseNameWord$ ) > 1 Then
+                          WordCount% = WordCount% + 1
+                          If InStr( SOR$, BaseNameWord$ ) Then
+                              WordMatch% = WordMatch% + 1
+                          End If
+                      End If
+                      WordBoundary% = i + 1
+                    Else
+                      WordBoundary% = i + 1
+                  End If
+              End If
+            Next i
+
+' If half or more of the words in the 1XX field appear in the statement of
+' responsibility, consider the name to be repeated, and don't offer it in the default
+' view. (The name of the Boolean variable for this test recalls the old fixed field
+' element "M/F/B" in the earliest decades of WorldCat--before it was called WorldCat!)
+
+            If WordMatch% >= WordCount% / 2 Then
+                MainEntryInBody = TRUE
+            End If
+        End If
+    End If
+
+    MainEntry$ = FixTerminalPunctuation( ADD, MainEntry$ )
+
+End If
+
+GetEdition:
+
+' Find the first edition statement.
+
+TempString$ = ""
+FieldData$  = GetFieldData( "250" )
+If FieldData$ = "" Or FieldData$ = NON_LATIN Then
+    GoTo PubState:
+  Else
+    [250]          = "250"
+    TagString$     = TagString$ & "250,"
+    FieldData$     = Mid$( FieldData$, 6 )
+    StringPointer% = 1
+    SubfieldCode$  = " "
+    Do
+      SubfieldData$ = GetSubfieldData( SubfieldCode$, StringPointer%, FieldData$ )
+      If SubfieldCode$ = "a" Then
+          SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+          If SubfieldCode$ = "a" Then
+              TempString$ = SubfieldData$
+              Exit Do
+          End If
+      End If
+    Loop Until StringPointer% = 0
+    TempString$       = ConvertToISO88591( TempString$ )
+    EditionStatement$ = FixTerminalPunctuation( ADD, TempString$ )
+End If
+
+' Then, the first publication statement.
+
+PubState:
+
+TempString$ = ""
+FieldData$  = GetFieldData( "26[04]" )
+If FieldData$ = "" Or FieldData$ = NON_LATIN Then
+    GoTo GetSeries:
+  Else
+    Tag$           = Left$( FieldData$, 3 )
+    FieldData$     = Mid$( FieldData$, 6 )
+    StringPointer% = 1
+    SubfieldCode$  = " "
+    Do
+      SubfieldData$ = GetSubfieldData( SubfieldCode$, StringPointer%, FieldData$ )
+      If SubfieldCode$ Like "[abc]" Then
+          SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+          Select Case SubfieldCode$
+            Case "a"
+              If SubfieldAPresent = FALSE Then
+                  TempString$ = SubfieldData$
+                  SubfieldAPresent   = TRUE
+              End If
+            Case "b"
+              If SubfieldBPresent = FALSE Then
+                  If SubfieldAPresent Then
+                      TempString$ = TempString$ & ": " & SubfieldData$
+                    Else
+                      TempString$ = SubfieldData$
+                  End If
+              SubfieldBPresent = TRUE
+              End If
+            Case "c"
+              If SubfieldCPresent = FALSE Then
+
+' Isolate the first date but retain brackets and a hyphen.
+
+                  If ( InStr( SubfieldData$, "between" ) ) Or ( InStr( SubfieldData$, "ca." ) ) Then
+                      ValidDate = FALSE
+                    Else
+                      For i = 1 To Len( SubfieldData$ ) - 3
+                        DateString1$ = Mid$( SubfieldData$, i, 4 )
+                        If DateString1$ Like "[1-2][0-9][0-9][0-9]" Then
+                            ValidDate = TRUE
+                            Exit For
+                        End If
+                      Next i
+                  End If
+                  If ValidDate = FALSE Then
+                      DateString1$ = SubfieldData$
+                    Else
+                      If i > 1 Then
+                          If InStr( Left$( SubfieldData$, i - 1 ), "[" ) Then
+                              If Mid$( SubfieldData$, i + 4, 1 ) = "?" Then
+                                  DateString1$ = "[" & DateString1$ & "?]"
+                                Else
+                                  DateString1$ = "[" & DateString1$ & "]"
+                              End If
+                          End If
+                      End If
+                      ValidDate = FALSE
+                      p = InStr( SubfieldData$, "-" )
+                      If p = i + 4 Then
+
+' Check for a second date.
+
+                          If Len( SubfieldData$ ) >= p + 4 Then
+                              For j = p To Len( SubfieldData$ ) - 3
+                                DateString2$ = Mid$( SubfieldData$, j, 4 )
+                                If DateString2$ Like "[1-2][0-9][0-9][0-9]" Then
+                                    ValidDate = TRUE
+                                    Exit For
+                                End If
+                              Next j
+                              If ValidDate Then
+                                  DateString1$ = DateString1$ & "-" & DateString2$
+                                Else
+                                  DateString1$ = DateString1$ & "-"
+                              End If
+                          End If
+                      End If
+                  End If
+
+                  If SubfieldBPresent Then
+                      TempString$ = TempString$ & ", " & DateString1$
+                    Else
+                      If SubfieldAPresent Then
+                          TempString$ = TempString$ & ", " & DateString1$
+                        Else
+                          TempString$ = DateString1$
+                      End If
+                  End If
+                  SubfieldCPresent = TRUE
+              End If
+          End Select
+      End If
+    Loop Until StringPointer% = 0
+    TempString$           = ConvertToISO88591( TempString$ )
+    PublicationStatement$ = FixTerminalPunctuation( ADD, TempString$ )
+    If SubfieldAPresent = FALSE Or SubfieldBPresent = FALSE Or SubfieldCPresent = FALSE Then
+        Tag$ = Tag$ & "*"
+    End If
+    [26X]          = Tag$
+    TagString$     = TagString$ & [26X] & ","
+
+End If
+
+GetSeries:
+
+' Find a series. Start with an authorized heading in an 8XX; if there is none, try the
+' 4XX.
+
+TempString$ = ""
+FieldData$ = GetFieldData( "8[013][01]" )
+If FieldData$ = "" Or FieldData$ = NON_LATIN Then
+    FieldData$ = GetFieldData( "490" )
+    If FieldData$ = "" Or FieldData$ = NON_LATIN Then
+        GoTo DialogBox:
+    End If
+End If
+Tag$ = Left$( FieldData$, 3 )
+[8XX/490]      = Tag$
+TagString$     = TagString$ & [8XX/490]
+FieldData$     = Mid$( FieldData$, 6 )
+StringPointer% = 1
+SubfieldCode$  = " "
+Do
+  SubfieldData$ = GetSubfieldData( SubfieldCode$, StringPointer%, FieldData$ )
+  Select Case Tag$
+    Case "490"
+      If SubfieldCode$ Like "[av]" Then
+          SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+          Select Case SubfieldCode$
+            Case "a"
+              TempString$ = SubfieldData$
+            Case "v"
+              TempString$ = TempString$ & ", " & SubfieldData$
+          End Select
+      End If
+    Case "800"
+      If SubfieldCode$ Like "[abcnptv]" Then
+          SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+          Select Case SubfieldCode$
+            Case "a"
+              TempString$ = SubfieldData$
+            Case "b"
+              TempString$ = TempString$ & SubfieldData$
+            Case "c"
+              TempString$ = TempString$ & ", " & SubfieldData$
+            Case "n"
+              TempString$ = TempString$ & ". " & SubfieldData$
+            Case "p"
+              TempString$ = TempString$ & ", " & SubfieldData$
+            Case "t"
+              TempString$ = TempString$ & ". " & SubfieldData$
+            Case "v"
+              TempString$ = TempString$ & ", " & SubfieldData$
+          End Select
+      End If
+    Case "810"
+      If SubfieldCode$ Like "[abnptv]" Then
+          SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+          Select Case SubfieldCode$
+            Case "a"
+              TempString$ = SubfieldData$
+            Case "b"
+              TempString$ = TempString$ & ". " & SubfieldData$
+            Case "n"
+              TempString$ = TempString$ & ". " & SubfieldData$
+            Case "p"
+              TempString$ = TempString$ & ", " & SubfieldData$
+            Case "t"
+              TempString$ = TempString$ & ". " & SubfieldData$
+            Case "v"
+              TempString$ = TempString$ & ", " & SubfieldData$
+          End Select
+      End If
+    Case "811"
+      If SubfieldCode$ Like "[aet]" Then
+          SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+          Select Case SubfieldCode$
+            Case "a"
+              TempString$ = SubfieldData$
+            Case "e", "t"
+              TempString$ = TempString$ & ". " & SubfieldData$
+          End Select
+      End If
+    Case "830"
+      If SubfieldCode$ Like "[anpv]" Then
+          SubfieldData$ = FixTerminalPunctuation( STRIP, SubfieldData$ )
+          Select Case SubfieldCode$
+            Case "a"
+              TempString$ = SubfieldData$
+            Case "n"
+              TempString$ = TempString$ & ". " & SubfieldData$
+            Case "p"
+              If PreviousCode$ = "n" Then
+                  TempString$ = TempString$ & ", " & SubfieldData$
+                Else
+                  TempString$ = TempString$ & ". " & SubfieldData$
+              End If
+            Case "v"
+              TempString$ = TempString$ & ", " & SubfieldData$
+          End Select
+      End If
+  End Select
+  PreviousCode$ = SubfieldCode$
+Loop Until StringPointer% = 0
+TempString$      = ConvertToISO88591( TempString$ )
+SeriesStatement$ = "(" & TempString$ & ")"
+
+DialogBox:
+
+If Right$( TagString$, 1 ) = "," Then
+    TagString$ = Left$( TagString$, Len( TagString$ ) - 1 )
+End If
+
+Begin Dialog Dialog1Definition  288, 108, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      166,  84,  52,  14                                   '0
+  CancelButton  226,  84,  52,  14                                   '1
+  CheckBox       10,  16,  40,  12, "",                   .CheckBox1 '2
+  CheckBox       10,  28,  40,  12, "",                   .CheckBox2 '3
+  CheckBox       10,  40,  40,  12, "",                   .CheckBox3 '4
+  CheckBox       10,  52,  40,  12, "",                   .CheckBox4 '5
+  CheckBox       10,  64,  40,  12, "",                   .CheckBox5 '6
+  CheckBox       10,  76,  40,  12, "",                   .CheckBox6 '7
+  CheckBox       10,  88,  80,  12, OCLCCN$,              .CheckBox7 '8
+  CheckBox       96,  88,  64,  12, SaveNumber$,          .CheckBox8 '9
+  Text            8,   6,  40,   8, "Include:"                       '10
+  Text           62,  16, 210,  56, "",                   .Preview   '11
+  Text           10,  90,  80,   8, "[Workform]",         .Workform  '12
+  GroupBox       56,   6, 222,  70, "Copy to Clipboard:"             '13
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+' Clean up the doubled ampersands created for display.
+
+Do
+  p = InStr( Preview$, "&&" )
+  If p > 0 Then
+      Preview$ = Left$( Preview$, p ) & Mid$( Preview$, p + 2 )
+  End If
+Loop Until p = 0
+
+Clipboard.Clear
+Clipboard.SetText Preview$
+
+End Sub
+
+'****************************************************************************************
+
+Function AssemblePreview( Element1$, Element2$, Element3$, Element4$, Element5$, Element6$ ) As String
+
+Dim TempString$
+
+If Element1$ <> "" Then
+    TempString$ = Element1$
+End If
+If Element2$ <> "" Then
+    TempString$ = TempString$ & " " & Element2$
+End If
+If Element3$ <> "" Then
+    TempString$ = TempString$ & " " & Element3$
+End If
+If Element4$ <> "" Then
+    TempString$ = TempString$ & " " & Element4$
+End If
+If Element5$ <> "" Then
+    TempString$ = TempString$ & " " & Element5$
+End If
+If Element6$ <> "" Then
+    TempString$ = TempString$ & " " & Element6$
+End If
+
+TempString$ = FixTerminalPunctuation( ADD, TempString$ )
+
+AssemblePreview = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function ConvertToISO88591( InputString$ ) As String
+
+' This function converts the MARC21 string to characters in ISO-8859-1, making
+' appropriate conversions where possible (and noting that that was done), and
+' substituting the vertical bar "|" where an appropriate conversion is not possible. It
+' works on a line of the record at a time. Unicode strings are sent to the function for
+' conversion.
+
+Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The differences between OCLC-MARC encodings of subscript and
+Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  ' superscript numbers and ISO-8859-1 encodings of those numbers.
+
+Dim CURRENCY_SIGN As String*1 : CURRENCY_SIGN = "¤"
+Dim VERTICAL_BAR  As String*1 : VERTICAL_BAR  = "|"
+
+Dim Character$                : Character$    = " "
+Dim CharNext%
+Dim CharRead%
+Dim TempString$
+
+Dim i As Integer
+
+InputString$ = InputString$ & Character$
+
+' Read the current character in the line, but also the next one, because diacritics
+' follow their base characters; if the next character is a diacritic there may be a
+' precomposed equivalent for the base + combining character in the character set. (Only
+' the first combining character following a base character can be considered, as there
+' are no precomposed characters incorporating two or more diacritics.)
+
+For i = 1 To Len( InputString$ ) - 1
+
+  CharRead% = Asc( Mid$( InputString$, i, 1 ) )
+  CharNext% = Asc( Mid$( InputString$, i + 1, 1 ) )
+
+  Select Case CharRead%
+
+    Case 0 To 31   'Should never be encountered?
+      Character$ = CURRENCY_SIGN
+
+    Case 32 To 37, 39 To 64   'Numbers and symbols
+      Character$ = Chr$( CharRead% )
+
+    Case 38   '&: This must be doubled for display.
+      Character$ = "&&"
+
+    Case 66, 68, 70 To 72, 74 To 77, 80 To 82, 84, 86 To 88, 91 To 96   'Uppercase letters and punctuation.
+      Character$ = Chr$( CharRead% )
+
+    Case 98, 100, 102 To 104, 106 To 109, 112 To 114, 116, 118 To 120, 123 To 128   'Lowercase letters and punctuation.
+      Character$ = Chr$( CharRead% )
+
+' OCLC-MARC modified letters are turned into precomposed characters, when possible.
+
+    Case 65, 97   'A, a
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 127 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 128 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 129 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 130 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 234  'ring
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224, 229 To 231, 233, 235 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 67, 99   'C, c
+      Select Case CharNext%
+        Case 240  'cedilla
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224 To 239, 241 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 69, 101  'E, e
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 73, 105  'I, i
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 78, 110  'N, n
+      Select Case CharNext%
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 224 To 227, 229 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 79, 111  'O, o
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 229 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 83, 115  'S, s
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 85, 117  'U, u
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 89, 121  'Y, y
+      Select Case CharNext%
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 232  'diaeresis
+          If CharRead% = 121 Then
+              Character$ = Chr$( 255 )
+            Else
+              Character$ = Chr$( CharRead% )
+          End If
+          i = i + 1
+        Case 224 To 225, 227 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 90, 122  'Z, z
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 128 To 157  'subscript and superscript numbers
+      Select Case CharRead%
+        Case 128 to 137  'superscript numbers
+          Character$ = Chr$( CharRead% - ASCII_DIFF_SUPERSCRIPT )
+        Case 144 to 153  'subscript numbers
+          Character$ = Chr$( CharRead% - ASCII_DIFF_SUBSCRIPT )
+        Case 138 To 139  'superscript parentheses
+          Character$ = Chr$( CharRead% - 98 )
+        Case 154 To 155  'subscript parentheses
+          Character$ = Chr$( CharRead% - 114 )
+        Case 140, 156    'superscript, subscript plus
+          Character$ = Chr$( 43 )
+        Case 141, 157    'superscript, subscript minus
+          Character$ = Chr$( 45 )
+      End Select
+
+    Case 158   'degree sign
+      Character$ = Chr$( 176 )
+    Case 159   'eszett
+      Character$ = Chr$( 223 )
+    Case 160   'euro
+      Character$ = Chr$( 128 )
+    Case 161   'crossed L
+      Character$ = "L"
+    Case 162   'crossed O
+      Character$ = Chr$( 216 )
+    Case 163   'Eth
+      Character$ = Chr$( 208 )
+    Case 164   'Thorn
+      Character$ = Chr$( 222 )
+    Case 165   'AE Ligature
+      Character$ = Chr$( 198 )
+    Case 166   'OE Ligature
+      Character$ = "Oe"
+    Case 167   'prime
+      Character$ = Chr$( 039 )
+    Case 168   'middle dot
+      Character$ = Chr$( 183 )
+    Case 169   'musical flat
+      Character$ = "[flat]"
+    Case 170   'registered trade mark sign
+      Character$ = Chr$( 174 )
+    Case 171   'plus-or-minus
+      Character$ = Chr$( 177 )
+    Case 172   'O with hook
+      Character$ = "O"
+    Case 173   'U with hook
+      Character$ = "O"
+    Case 174   'alif
+      Character$ = Chr$( 039 )
+    Case 176   'ayn
+      Character$ = Chr$( 039 )
+    Case 177   'crossed l
+      Character$ = "l"
+    Case 178   'crossed o
+      Character$ = Chr$( 248 )
+    Case 179   'd with crossbar
+      Character$ = Chr$( 240 )
+    Case 180   'thorn
+      Character$ = Chr$( 254 )
+    Case 181   'ae ligature
+      Character$ = Chr$( 230 )
+    Case 182   'oe ligature
+      Character$ = "oe"
+    Case 183   'double prime
+      Character$ = Chr$( 034 )
+    Case 184   'Turkish i
+      Character$ = "i"
+    Case 185   'pound
+      Character$ = Chr$( 163 )
+    Case 186   'eth
+      Character$ = Chr$( 240 )
+    Case 188   'o with hook
+      Character$ = "o"
+    Case 189   'u with hook
+      Character$ = "u"
+    Case 190   'script l
+      Character$ = "l"
+    Case 200   'inverted question mark
+      Character$ = Chr$( 191 )
+    Case 201   'inverted exclamation mark
+      Character$ = Chr$( 161 )
+    Case 202   'copyright
+      Character$ = Chr$( 169 )
+    Case 203   'sound recording copyright
+      Character$ = "p"
+    Case 204   'musical sharp
+      Character$ = "#"
+    Case 223   'delimiter
+      If Character$ = " " And Mid$( InputString$, i + 1, 2 ) Like "[a-z0-9] " Then
+          Character$ = "$"
+        Else
+          Character$ = Chr$( 223 )
+      End If
+    Case 252   'fill character
+      Character$ = "*"
+    Case 224 To 234, 237 To 251, 245 To 255  'diacritical marks
+      If CharNext% < 223 Then
+          Character$ = Chr$( CharNext% ) : i = i + 1
+      End If
+    Case Else   'everything not already accounted for
+      If CharNext% > 223 Then
+          Character$ = VERTICAL_BAR : i = i + 1
+        Else
+          Character$ = Chr$( CharRead% )
+      End If
+
+  End Select
+
+  TempString$ = TempString$ & Character$
+
+Next i
+
+ConvertToISO88591 = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function FixTerminalPunctuation( WhichWay%, InString$ ) As String
+
+' This function works backward from the input string removing spaces and punctuation.
+' It stops after the first mark of punctuation it finds.
+
+Dim TempString$
+Dim TestChar$
+
+Dim i As Integer
+
+TempString$ = Trim$( InString$ )
+
+If WhichWay% = STRIP Then
+    For i = Len( TempString$ ) To 0 Step -1
+      TestChar$ = Mid$( TempString$, i, 1 )
+      If TestChar$ Like "[ :;/=,.]" Then
+          TempString$ = Left$( TempString$, i - 1 )
+          TempString$ = Trim$( TempString$ )
+          Exit For
+        Else
+          Exit For
+      End If
+    Next i
+  Else
+    If Right$( TempString$, 1 ) Like "[!)-.]" Then
+        TempString$ = TempString$ & "."
+    End If
+End If
+
+FixTerminalPunctuation = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function GetFieldData( SearchTag$ ) As String
+
+Dim FieldData$
+
+If CS.GetField( SearchTag$, 1, FieldData$ ) Then
+    If FieldData$ = "Data contains non-latin script" Then
+        If CS.GetField( SearchTag$, 2, FieldData$ ) Then
+            If Mid$( FieldData$, 6, 2 ) = "<>" Then
+                GetFieldData = NON_LATIN
+              Else
+                GetFieldData = FieldData$
+            End If
+          Else
+            GetFieldData = NON_LATIN
+        End If
+      Else
+        GetFieldData = FieldData$
+    End If
+  Else
+    GetFieldData = ""
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function GetSubfieldData( SubfieldCode$, StringPointer%, FData$ ) As String
+
+Dim Start%
+Dim TempString$
+
+Dim p As Integer
+
+Start% = StringPointer%
+
+If Mid$( FData$, Start%, 1 ) = DELIMITER Then
+    SubfieldCode$ = Mid$( FData$, Start% + 1, 1 )
+  Else
+    SubfieldCode$ = "a"
+End If
+
+p = InStr$( Start% + 1, FData$, DELIMITER )
+If p = 0 Then
+    TempString$ = Trim$( Mid$( FData$, Start% ) )
+    StringPointer% = 0
+  Else
+    TempString$ = Trim$( Mid$( FData$, Start%, p - Start% ) )
+    StringPointer% = p
+End If
+
+If Left$( TempString$, 1 ) = DELIMITER Then
+    TempString$ = Trim$( Mid$( TempString$, 3 ) )
+End If
+
+GetSubfieldData = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CHECKED        As Integer = 1
+Const CONTROL_CHANGE As Integer = 2
+Const INITIALIZE     As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const UNCHECKED      As Integer = 0
+Const VISIBLE        As Integer = 1
+
+Dim ControlId%
+Dim Element1$
+Dim Element2$
+Dim Element3$
+Dim Element4$
+Dim Element5$
+Dim Element6$
+Dim TagChoice$
+
+Dim i As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    For i = 1 To 6
+      ControlId% = i + 1
+      TagChoice$ = GetField( TagString, i, "," )
+      If TagChoice$ <> "" Then
+          DlgVisible ControlId%,  VISIBLE
+          DlgText    ControlId%,  TagChoice$
+          DlgValue   ControlId%,  CHECKED
+          Select Case TagChoice$
+            Case [1XX]
+              Element1$ = MainEntry$
+            Case [245a]
+              Element2$ = TitleProper$
+            Case [245c]
+              If MainEntryInBody Then
+                  Element3$ = ""
+                  DlgValue   ControlId%,  UNCHECKED
+                Else
+                  Element3$ = StatementOfResponsibility$
+              End If
+            Case [250]
+              Element4$ = EditionStatement$
+            Case [26X]
+              Element5$ = PublicationStatement$
+            Case [8XX/490]
+              Element6$ = SeriesStatement$
+          End Select
+        Else
+          DlgVisible ControlId%,  INVISIBLE
+      End If
+    Next i
+
+    If OCLCCN$ = "" Then
+        DlgVisible "CheckBox7", INVISIBLE
+        DlgVisible "Workform",  VISIBLE
+      Else
+        DlgVisible "CheckBox7", VISIBLE
+        DlgVisible "Workform",  INVISIBLE
+    End If
+
+    If SaveNumber$ = "" Then
+        DlgVisible "CheckBox8", INVISIBLE
+      Else
+        DlgVisible "CheckBox8", VISIBLE
+    End If
+
+    Preview$ = AssemblePreview( Element1$, Element2$, Element3$, Element4$, Element5$, Element6$ )
+    DlgText    "Preview",   Preview$
+
+
+  Case CONTROL_CHANGE
+
+    If DlgText( Id$ ) = [245a] Then
+        DlgValue   Id$,         CHECKED
+    End If
+
+    For i = 1 To 6
+      ControlId% = i + 1
+      If DlgValue( ControlId% ) = CHECKED Then
+          Select Case DlgText( ControlId% )
+            Case [1XX]
+              Element1$ = MainEntry$
+            Case [245a]
+              Element2$ = TitleProper$
+            Case [245c]
+              Element3$ = StatementOfResponsibility$
+            Case [250]
+              Element4$ = EditionStatement$
+            Case [26X]
+              Element5$ = PublicationStatement$
+            Case [8XX/490]
+              Element6$ = SeriesStatement$
+          End Select
+      End If
+    Next i
+
+' Every time a control is clicked, change the preview.
+
+    Preview$ = AssemblePreview( Element1$, Element2$, Element3$, Element4$, Element5$, Element6$ )
+    If DlgValue( "CheckBox7") = CHECKED Then
+        Preview$ = Preview$ & " [" & OCLCCN$ & "]"
+    End If
+    If DlgValue( "CheckBox8") = CHECKED Then
+        Preview$ = Preview$ & " [" & SaveNumber$ & "]"
+    End If
+    DlgText    "Preview",   Preview$
+
+End Select
+
+End Function
+'122442974
+'
+'Macro name: CreateBibCitation
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 4/17/2023 10:00:01 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,217 @@
+'MacroName:DimensionX.2023.01
+'MacroDescription:Inserts the multiplication or dimension sign "×" at the cursor
+' position, or changes the letter "x" used to indicate dimensions to the actual
+' dimension sign "×".
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×
+' How it works: Run the macro in a bibliographic record to insert the multiplication or
+' dimension sign "×" (ASCII 215, or Unicode U+00D7) at the cursor position. If the cursor
+' is placed next to a lowercase letter "x" that indicates dimensions--that is, that is
+' surrounded by digits, rather than letters or other characters--the macro replaces the
+' letter with the dimension sign. In that case, the macro will also replace any other
+' letter "x" in that field that is also serving to indicate dimensions.
+'x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE    As Integer = 16
+Const INFORMATION_MESSAGE As Integer = 64
+
+Dim ChangeMade%
+Dim CharT$
+Dim Col%
+Dim CursorWarning$
+Dim FieldData$
+Dim LenFieldDataString%
+Dim MULTIPLICATION_SIGN As String*1
+Dim PosX%
+Dim QUOTE As String*1
+Dim Row%
+Dim Selection$
+Dim Start%
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:DimensionX"
+
+Dim Digits_ToTheLeft
+Dim Digits_ToTheRight
+Dim FoundX                   : FoundX       = FALSE
+Dim X_ToTheLeft
+Dim X_ToTheRight
+
+Dim i As Integer, p As Integer
+
+MULTIPLICATION_SIGN = Chr$( 215 )
+QUOTE               = Chr$( 039 )
+
+CursorWarning$      = "Put the cursor in a field data cell to add the dimension sign, or next to a letter " & QUOTE & "x" & QUOTE
+CursorWarning$      = CursorWarning$ & " used to indicate dimensions to change it to the dimension sign."
+
+' First, make sure that a bibliographic record is open.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in bibliographic records.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then find the cursor position.
+
+Row%   = CS.CursorRow
+Col%   = CS.CursorColumn
+
+' If the cursor is not positioned in a field data cell, display a warning and quit.
+
+If Col% < 6 Then
+    MsgBox CursorWarning$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If the cursor was positioned in a field data cell, check if a solitary letter "x" is
+' selected. Treat this selected letter in the same way as if the cursor were simply
+' positioned next to it.
+
+If CS.GetSelectedText( Selection$ ) Then
+    If Selection$ = "x" Then
+        Col% = CS.CursorColumn
+    End If
+End If
+
+' If the cursor is positioned next to the lowercase letter "x", or separated from an "x"
+' by spaces only, replace the letter with the dimension sign. Otherwise, simply insert
+' the dimension sign at the cursor position.
+
+' Now look around the cursor position for the lowercase letter "x". If it is the first
+' character found on both sides of the cursor position, it will be replaced. If the
+' cursor is not next to an "x", the dimension sign will be added to the field.
+
+If CS.GetFieldLine( Row%, FieldData$ ) Then
+    LenFieldDataString% = Len( FieldData$ )
+    If Col% > 5 Then
+        For i = Col% - 1 To 1 Step -1
+          CharT$ = Mid$( FieldData$, i, 1 )
+          If CharT$ Like "[! x]" Then
+              X_ToTheLeft = FALSE
+              Exit For
+            ElseIf CharT$ = "x" Then
+              X_ToTheLeft = TRUE
+              PosX%       = i
+              Exit For
+          End If
+        Next i
+    End If
+    If X_ToTheLeft = FALSE Then
+        If Col% < LenFieldDataString% Then
+            For i = Col% To LenFieldDataString%
+              CharT$ = Mid$( FieldData$, i, 1 )
+              If CharT$ Like "[! x]" Then
+                  X_ToTheRight = FALSE
+                  Exit For
+                ElseIf CharT$ = "x" Then
+                  X_ToTheRight = TRUE
+                  PosX%        = i
+                  Exit For
+              End If
+            Next i
+          ElseIf Col% = LenFieldDataString% Then
+            X_ToTheRight = FALSE
+        End If
+    End If
+
+' If the dimension sign is to be added to the field, put that character on the Windows
+' Clipboard and paste it in at the cursor position. Then quit.
+
+    If X_ToTheLeft = FALSE And X_ToTheRight = FALSE Then
+        Clipboard.Clear
+        Clipboard.SetText MULTIPLICATION_SIGN
+        CS.Paste
+        Exit Sub
+
+' But if the dimension sign is to replace a letter "x" that is serving to indicate
+' dimensions, go through the whole field and replace all such instances of that letter.
+' The test is simply whether the "x" is surrounded by digits (ignoring spaces). If it is,
+' just swap out the "x" for the dimension sign. Finish by returning the cursor to its
+' initial position.
+
+      ElseIf X_ToTheLeft Or X_ToTheRight Then
+        If CS.GetFieldLine( Row%, FieldData$ ) Then
+            LenFieldDataString% = Len( FieldData$ )
+            Start% = 1
+            Do
+              PosX%  = InStr( Start%, FieldData$, "x" )
+              If PosX% = 0 Then
+                  Exit Do
+                Else
+                  FoundX = TRUE
+              End If
+              For i = PosX% - 1 To 1 Step -1
+                CharT$ = Mid$( FieldData$, i, 1 )
+                If CharT$ Like "[! 0-9]" Then
+                    Digits_ToTheLeft = FALSE
+                    Exit For
+                  ElseIf CharT$ Like "[0-9]" Then
+                    Digits_ToTheLeft = TRUE
+                    Exit For
+                End If
+              Next i
+              If Digits_ToTheLeft Then
+                  For i = PosX% + 1 To LenFieldDataString%
+                    CharT$ = Mid$( FieldData$, i, 1 )
+                    If CharT$ Like "[! 0-9]" Then
+                        Digits_ToTheRight = FALSE
+                        Exit For
+                      ElseIf CharT$ Like "[0-9]" Then
+                        Digits_ToTheRight = TRUE
+                        Exit For
+                    End If
+                  Next i
+                  If Digits_ToTheRight Then
+                      Mid$( FieldData$, PosX%, 1 ) = MULTIPLICATION_SIGN
+                      ChangeMade% = ChangeMade% + 1
+                  End If
+              End If
+              Start% = PosX% + 1
+            Loop Until PosX% = 0
+          Else
+            MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+        If ChangeMade% > 0 Then
+            If CS.SetFieldLine( Row%, FieldData$ ) = FALSE Then
+                MsgBox "Sorry, this macro could not change an " & QUOTE & "x" & QUOTE & " to a dimension sign in this field.", INFORMATION_MESSAGE, WaltsMacros$
+              Else
+                CS.CursorColumn = Col%
+            End If
+        End If
+        Exit Sub
+    End If
+End If
+
+End Sub
+'2147890
+'
+'Macro name: DimensionX
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 4/17/2023 10:00:16 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,488 @@
+'MacroName:ClipboardSearch.2023.01
+'MacroDescription:Performs a directed search from text on the Windows Clipboard.
+
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Either select some text in a Connexion record, or select and copy text
+' from any other source (copying plain text works best; formatted text may cause
+' problems) to the Windows clipboard and run the macro. The macro formats the copied text
+' for a title search or a title browse. For a title search, choose between a phrase,
+' keyword, or derived search. Stopwords and keywords are omitted from derived and word
+' searches. For each type of search, the search string may be reviewed for modification
+' (such as adding qualifiers) before the search is executed.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub SetKeywords
+Declare Sub SetStopwords
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const KEYWORD_COUNT  As Integer = 42
+Global Const STOPWORD_COUNT As Integer = 108
+
+Global SearchStringBrowse$
+Global SearchStringPhrase$
+Global SearchStringWord$
+
+Global Keyword ( KEYWORD_COUNT )  As String
+Global StopWord( STOPWORD_COUNT ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const WARNING_MESSAGE      As Integer = 48
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE  = Chr$( 034 )
+
+Dim Failure$
+Dim ProcessedString$
+Dim Qualifier$
+Dim RawString$
+Dim SearchString$
+Dim SelectedText$
+Dim TestChar$
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:ClipboardSearch"
+Dim WordsInString%
+
+Dim StopwordFound            : StopwordFound = FALSE
+
+Dim i As Integer, j As Integer, p As Integer, x As Integer
+
+Dim WordStorage() As String
+
+' First, check to see if text has been selected from a Connexion record. If it has, use
+' that for the search/browse; if not, check the clipboard for text.
+
+If CS.GetSelectedText( SelectedText$ ) = TRUE Then
+    RawString$ = SelectedText$
+  Else
+    RawString$ = Clipboard.GetText()
+End If
+
+' Make sure the macro has something to work with!
+
+If RawString$ = "" Then
+    MsgBox "There is no text on the clipboard! Please copy some text to search for a title in WorldCat.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Then make the search string lowercase and remove non-searchable characters.
+
+RawString$ = LCase$( Trim$( RawString$ ) )
+For i = 1 To Len( RawString$ )
+  TestChar$ = Mid$( RawString$, i, 1 )
+  If TestChar$ Like "[ 0-9a-z&$@%]" Or TestChar$ = "*" Or Asc( TestChar$ ) = 169 Or Asc( TestChar$ ) = 186 Then
+      ProcessedString$ = ProcessedString$ & TestChar$
+    ElseIf TestChar$ = "-" Then
+      ProcessedString$ = ProcessedString$ & " "
+  End If
+  If Len( ProcessedString$ ) = 60 Then Exit For
+Next i
+
+ProcessedString$ = Trim$( ProcessedString$ )
+
+If ProcessedString$ = " " Then
+    MsgBox "There is no text with which to search! Please copy only text to search for a title in WorldCat.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Compress any string of multiple spaces into one space.
+
+Do
+  i = InStr( ProcessedString$, "  " )
+  If i <> 0 Then
+      ProcessedString$ = Left$( ProcessedString$, i - 1 ) & Mid$( ProcessedString$, i + 1 )
+  End If
+Loop Until i = 0
+
+' The title phrase search and title browse are each simply the processed string.
+
+SearchStringPhrase$ = ProcessedString$
+SearchStringBrowse$ = ProcessedString$
+
+' For a word search, the component words of the string are filed into an array to be
+' checked against the stopword lists.
+
+Do
+  i = InStr( ProcessedString$, " " )
+  ReDim Preserve WordStorage( x )
+  If i <> 0 Then
+      WordStorage( x ) = Left$( ProcessedString$, i - 1 )
+      x = x + 1
+      ProcessedString$ = Mid$( ProcessedString$, i + 1 )
+    Else
+      WordStorage( x ) = ProcessedString$
+  End If
+Loop Until i = 0
+
+' Finally, with text to search, prepare to check the strings against the lists of
+' stopwords.
+
+SetStopwords
+SetKeywords
+
+' For a keyword search, remove stopwords from the array, and then recombine the remaining
+' words into a string
+
+i = 0
+Do
+  For j = 0 To UBound( Keyword )
+    If WordStorage( i ) = Keyword( j ) Then
+        p = UBound( WordStorage ) - 1
+        For x = i To p
+          WordStorage( x ) = WordStorage( x + 1 )
+        Next x
+        ReDim Preserve WordStorage( p )
+        i = i - 1
+        Exit For
+    End If
+  Next j
+  i = i + 1
+Loop Until i > UBound( WordStorage )
+
+For i = 0 To UBound( WordStorage )
+  SearchStringWord$ = SearchStringWord$ & " " & WordStorage( i )
+Next i
+SearchStringWord$ = Trim$( SearchStringWord$ )
+
+' Present the strings for modification and selection of search type.
+
+Begin Dialog Dialog1Definition 240, 158, WaltsMacros$, .Dialog1ControlFunction
+  TextBox          20,  20, 200, 10, .InputBox
+  OptionGroup .SearchType
+   OptionButton    28,  44,  56, 10, "&Browse",        .OptionButton1
+   OptionButton    82,  44,  60, 10, "&Phrase search", .OptionButton2
+   OptionButton   158,  44,  56, 10, "&Word search",   .OptionButton3
+   OptionButton    28,  72,  56, 10, "B&rowse",        .OptionButton4
+   OptionButton    82,  72,  60, 10, "P&hrase search", .OptionButton5
+   OptionButton   158,  72,  56, 10, "W&ord search",   .OptionButton6
+   OptionButton    28, 100,  56, 10, "Brows&e",        .OptionButton7
+   OptionButton    82, 100,  60, 10, "Phr&ase search", .OptionButton8
+   OptionButton   158, 100,  56, 10, "Wor&d search",   .OptionButton9
+  ButtonGroup .Choice
+   PushButton      54, 126,  56, 16, "&Go"
+   PushButton     132, 126,  56, 16, "&Cancel"
+  GroupBox         20,  34, 200, 24, "Title"
+  GroupBox         20,  62, 200, 24, "Name"
+  GroupBox         20,  90, 200, 24, "Subject"
+  Text             26,   8, 184,  8, "Choose type of search and modify search string, if desired:"
+  CancelButton  1,1,1,1, .CancelB
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+If Dialog1.Choice = 1 Then Exit Sub
+
+SearchString$ = Dialog1.InputBox
+
+' Send the search string.
+
+Select Case Dialog1.SearchType
+
+  Case 0
+    If CS.Browse( "WC", "tiw ", SearchString$ ) = FALSE Then
+        MsgBox "Sorry, the title browse failed.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+
+  Case 1
+    SearchString$ = "ti=" & SearchString$
+    Failure$      = "The title phrase search "
+    GoTo Search:
+
+  Case 2
+    SearchString$ = "ti:" & SearchString$
+    Failure$      = "The title keyword search "
+    GoTo Search:
+
+  Case 3
+    If CS.Browse( "WC", "auw ", SearchString$ ) = FALSE Then
+        MsgBox "Sorry, the name browse failed.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+
+  Case 4
+    SearchString$ = "au=" & SearchString$
+    Failure$      = "The name phrase search "
+    GoTo Search:
+
+  Case 5
+    SearchString$ = "au:" & SearchString$
+    Failure$      = "The name keyword search "
+    GoTo Search:
+
+  Case 6
+    If CS.Browse( "WC", "suw ", SearchString$ ) = FALSE Then
+        MsgBox "Sorry, the subject browse failed.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+
+  Case 7
+    SearchString$ = "su=" & SearchString$
+    Failure$      = "The subject phrase search "
+    GoTo Search:
+
+  Case 8
+    SearchString$ = "su:" & SearchString$
+    Failure$      = "The subject keyword search "
+    GoTo Search:
+
+  Case 1
+    If CS.Browse( "WC", "tiw ", SearchString$ ) = FALSE Then
+        MsgBox "Sorry, the title browse failed.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+
+End Select
+
+Search:
+
+If CS.Search( "WC", SearchString$ ) = 0 Then
+    MsgBox Failure$ & DOUBLE_QUOTE & SearchString$ & DOUBLE_QUOTE & " retrieved no (or too many) results.", WARNING_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetKeywords
+
+Keyword( 0  ) = "a"
+Keyword( 1  ) = "an"
+Keyword( 2  ) = "and"
+Keyword( 3  ) = "are"
+Keyword( 4  ) = "as"
+Keyword( 5  ) = "at"
+Keyword( 6  ) = "be"
+Keyword( 7  ) = "but"
+Keyword( 8  ) = "by"
+Keyword( 9  ) = "for"
+Keyword( 10 ) = "from"
+Keyword( 11 ) = "had"
+Keyword( 12 ) = "has"
+Keyword( 13 ) = "have"
+Keyword( 14 ) = "he"
+Keyword( 15 ) = "her"
+Keyword( 16 ) = "his"
+Keyword( 17 ) = "if"
+Keyword( 18 ) = "in"
+Keyword( 19 ) = "into"
+Keyword( 20 ) = "is"
+Keyword( 21 ) = "it"
+Keyword( 22 ) = "its"
+Keyword( 23 ) = "not"
+Keyword( 24 ) = "of"
+Keyword( 25 ) = "on"
+Keyword( 26 ) = "or"
+Keyword( 27 ) = "she"
+Keyword( 28 ) = "so"
+Keyword( 29 ) = "than"
+Keyword( 30 ) = "that"
+Keyword( 31 ) = "the"
+Keyword( 32 ) = "their"
+Keyword( 33 ) = "there"
+Keyword( 34 ) = "this"
+Keyword( 35 ) = "to"
+Keyword( 36 ) = "was"
+Keyword( 37 ) = "were"
+Keyword( 38 ) = "when"
+Keyword( 39 ) = "which"
+Keyword( 40 ) = "with"
+Keyword( 41 ) = "would"
+Keyword( 42 ) = "you"
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetStopwords
+
+Stopword( 0   ) = "&"
+Stopword( 1   ) = "a"
+Stopword( 2   ) = "alabama"
+Stopword( 3   ) = "alaska"
+Stopword( 4   ) = "american"
+Stopword( 5   ) = "an"
+Stopword( 6   ) = "and"
+Stopword( 7   ) = "arizona"
+Stopword( 8   ) = "arkansas"
+Stopword( 9   ) = "association"
+Stopword( 10  ) = "at"
+Stopword( 11  ) = "australia"
+Stopword( 12  ) = "board"
+Stopword( 13  ) = "bureau"
+Stopword( 14  ) = "california"
+Stopword( 15  ) = "canada"
+Stopword( 16  ) = "college"
+Stopword( 17  ) = "colloquium"
+Stopword( 18  ) = "colorado"
+Stopword( 19  ) = "commission"
+Stopword( 20  ) = "committee"
+Stopword( 21  ) = "commonwealth"
+Stopword( 22  ) = "conference"
+Stopword( 23  ) = "congress"
+Stopword( 24  ) = "connecticut"
+Stopword( 25  ) = "council"
+Stopword( 26  ) = "delaware"
+Stopword( 27  ) = "department"
+Stopword( 28  ) = "dept."
+Stopword( 29  ) = "division"
+Stopword( 30  ) = "east"
+Stopword( 31  ) = "federal"
+Stopword( 32  ) = "florida"
+Stopword( 33  ) = "for"
+Stopword( 34  ) = "france"
+Stopword( 35  ) = "georgia"
+Stopword( 36  ) = "great britain"
+Stopword( 37  ) = "hawaii"
+Stopword( 38  ) = "house"
+Stopword( 39  ) = "idaho"
+Stopword( 40  ) = "illinois"
+Stopword( 41  ) = "in"
+Stopword( 42  ) = "india"
+Stopword( 43  ) = "indiana"
+Stopword( 44  ) = "institute"
+Stopword( 45  ) = "international"
+Stopword( 46  ) = "iowa"
+Stopword( 47  ) = "joint"
+Stopword( 48  ) = "kansas"
+Stopword( 49  ) = "kentucky"
+Stopword( 50  ) = "louisiana"
+Stopword( 51  ) = "maine"
+Stopword( 52  ) = "maryland"
+Stopword( 53  ) = "massachusetts"
+Stopword( 54  ) = "meeting"
+Stopword( 55  ) = "michigan"
+Stopword( 56  ) = "minnesota"
+Stopword( 57  ) = "mississippi"
+Stopword( 58  ) = "missouri"
+Stopword( 59  ) = "montana"
+Stopword( 60  ) = "national"
+Stopword( 61  ) = "nebraska"
+Stopword( 62  ) = "nevada"
+Stopword( 63  ) = "new hampshire"
+Stopword( 64  ) = "new jersey"
+Stopword( 65  ) = "new mexico"
+Stopword( 66  ) = "new york"
+Stopword( 67  ) = "north"
+Stopword( 68  ) = "north carolina"
+Stopword( 69  ) = "north dakota"
+Stopword( 70  ) = "of"
+Stopword( 71  ) = "office"
+Stopword( 72  ) = "ohio"
+Stopword( 73  ) = "oklahoma"
+Stopword( 74  ) = "on"
+Stopword( 75  ) = "oregon"
+Stopword( 76  ) = "organization"
+Stopword( 77  ) = "parliament"
+Stopword( 78  ) = "pennsylvania"
+Stopword( 79  ) = "rhode island"
+Stopword( 80  ) = "school"
+Stopword( 81  ) = "seminar"
+Stopword( 82  ) = "senate"
+Stopword( 83  ) = "society"
+Stopword( 84  ) = "south"
+Stopword( 85  ) = "south carolina"
+Stopword( 86  ) = "south dakota"
+Stopword( 87  ) = "state"
+Stopword( 88  ) = "subcommittee"
+Stopword( 89  ) = "symposium"
+Stopword( 90  ) = "tennessee"
+Stopword( 91  ) = "texas"
+Stopword( 92  ) = "the"
+Stopword( 93  ) = "u.n."
+Stopword( 94  ) = "u. n."
+Stopword( 95  ) = "united nations"
+Stopword( 96  ) = "united states"
+Stopword( 97  ) = "university"
+Stopword( 98  ) = "u.s."
+Stopword( 99  ) = "u. s."
+Stopword( 100 ) = "utah"
+Stopword( 101 ) = "vermont"
+Stopword( 102 ) = "virginia"
+Stopword( 103 ) = "washington"
+Stopword( 104 ) = "west"
+Stopword( 105 ) = "west virginia"
+Stopword( 106 ) = "wisconsin"
+Stopword( 107 ) = "workshop"
+Stopword( 108 ) = "wyoming"
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const INITIALIZE     As Integer = 1
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText    "InputBox", SearchStringPhrase$
+'    SendKeys   "{END}"
+    DlgVisible "CancelB",  0
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "OptionButton1"
+        DlgText    "InputBox", SearchStringBrowse$
+      Case "OptionButton2"
+        DlgText    "InputBox", SearchStringPhrase$
+      Case "OptionButton3"
+        DlgText    "InputBox", SearchStringWord$
+      Case "OptionButton4"
+        DlgText    "InputBox", SearchStringBrowse$
+      Case "OptionButton5"
+        DlgText    "InputBox", SearchStringPhrase$
+      Case "OptionButton6"
+        DlgText    "InputBox", SearchStringWord$
+      Case "OptionButton7"
+        DlgText    "InputBox", SearchStringBrowse$
+      Case "OptionButton8"
+        DlgText    "InputBox", SearchStringPhrase$
+      Case "OptionButton9"
+        DlgText    "InputBox", SearchStringWord$
+
+    End Select
+
+    DlgFocus   "InputBox"
+'    SendKeys "{END}"
+
+End Select
+
+End Function
+'48514503
+'
+'Macro name: ClipboardSearch
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:57:12 AM using "MacroBookInspector" macro by Walter F. Nickeson.

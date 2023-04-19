@@ -1,0 +1,3343 @@
+'MacroName:ShortcutKeysIndex.2023.46
+'MacroDescription:Shows all the keys used for all keyboard shortcuts (macros, menu
+' commands, characters, and text strings), and lists all the shortcuts that employ a
+' selected key. Copies lists of shortcuts to the Windows Clipboard. Allows searching for
+' a specific item to find its shortcut key.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 14 April 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro to see the items (macros, characters, text strings, and
+' menu commands) for which any particular key has been assigned as a shortcut. In the
+' macro's dialog box, select a key from the drop-down lists, and a specific category of
+' shortcut, if desired, and the macro presents a page of all the shortcuts assigned to
+' that key and its combinations with the modifier keys [SHIFT], [CTRL], and [ALT]. The
+' default setting is to include the key assignments built in to the Client (and also
+' four standard Windows shortcuts that use the [F4] and [F6] keys), but the macro can
+' also show only user-assigned shortcuts. You can also search for a specific item to see
+' what shortcut key has been assigned to it. From the results of that search you can jump
+' to the page that shows all the shortcuts assigned to that key. There is no need to be
+' logged on to use this macro.
+'
+' The macro can also accept direct input of character keys, without the use of the mouse,
+' under two conditions: The mouse pointer must remain somewhere within the borders of the
+' dialog box, excluding the title bar; and no other control can have the focus, meaning
+' you cannot have just clicked on the drop-down lists or the checkbox. If those
+' conditions are met, keyboard input is available immediately after the dialog box opens
+' or after the "Keyboard input" button is clicked, and results in the display of the page
+' of shortcuts that use that key. Otherwise, input by pressing keys can be re-enabled by
+' clicking the "Keyboard input" button, and hovering the mouse pointer over the dialog
+' box. "Character keys" are those keys that produce characters; function keys, the three
+' modifier keys, and all other keys produce no response. Use of the [SHIFT] key makes no
+' difference; pressing "7" and "&" shows the same page. The numbers on a separate number
+' keypad are also characters (if the "Num Lock" key is on), but unfortunately the macro
+' can't tell them apart from the numbers entered by using the top row of keys above the
+' letter keys. To see the shortcuts assigned to the number keypad keys, and all other
+' non-character keys, the drop-down menus must be used.
+'
+' In the display, the type of each item is not explicitly identified, unless it has been
+' assigned by the Client, in which case it is labeled as "(App)". If a category has been
+' selected to filter the list, each item displayed is therefore of that category. If no
+' category has been selected, items are distinguished by their form:
+'
+'  - Macrobook!Macroname is a macro
+'  - "Text strings" are surrounded by quotation marks
+'  - Menu items are a chain of commands, e.g., EditCutCopyPasteCopy
+'  - Characters are simply the name of a character, e.g., Acute
+'
+' Lists of shortcut keys can be copied to the Windows Clipboard. You can produce a list
+' of all the shortcuts used in the Client, or filter the shortcuts by type of item, and
+' whether to include app-assigned shortcuts. The output is a tab-delimited string, able
+' to be pasted into a word processing or spreadsheet program for further manipulation.
+' The list is arranged by key group, and within each group, alphabetically by the base
+' key.
+'
+' The Client stores user-assigned shortcuts in files in the user's profile folder; the
+' default location for those files is "X:\Users\[username]\AppData\Roaming\OCLC\Connex\
+' Profiles\". The default profile is "MyProfile" and the default keymap file in any
+' particular profile is "Custom.Keymap.xml". The macro starts by showing the shortcuts in
+' that file. If there is only one profile which contains only one keymap file, the macro
+' simply displays the shortcuts in that file. If a profile contains more than one keymap
+' file, or if there is more than one profile, the macro allows for selection of any
+' profile and keymap file from drop-down lists. If the default keymap file or profile
+' doesn't exist, the macro shows the shortcuts in the first keymap file in the first
+' profile instead.
+'
+' For any keymap file, the macro extracts all the key assignments stored in it and puts
+' them in a series of arrays, each array holding a type of key. Each row of those arrays
+' contains three pieces of information: The key assigned, along with any modifier keys
+' used; the type or category of the item (macro, character, etc.); and the name of the
+' item. When a key is selected in the dialog box, whether it has been typed or chosen
+' from the drop-down lists, the macro finds it in the array that holds information
+' associated with that key, and then displays in the dialog box all the items assigned to
+' that key. Note that a keymap file may retain names of items that no longer exist;
+' deleting an item may not also delete its shortcut key assignments, which remain in the
+' file for this macro to display. It is probably necessary to unassign a shortcut in
+' order to permanently remove it from the file.
+'
+' The search function of the macro works in reverse: The macro searches in the arrays
+' for all the items that match the search term to find the key used in the shortcuts of
+' those items. However, characters are excluded from that type of search. To search for
+' the shortcut that might have been assigned to produce a character, select the character
+' from a drop-down list. Unfortunately, the dialog box can't display many characters
+' beyond the basic ASCII repertoire, so there is no possibility of matching a name with a
+' picture of the character. (It also doesn't help that the OCLC/ALA character set retains
+' antiquated or provincial forms of names for some characters, like "turkish i without
+' dot, lowercase", which the Unicode world knows as "Latin small letter dotless i".)
+'
+' The result of a search is a display with names of items and keys showing in separate
+' list boxes. A search for macros also retrieves the names of their macrobooks (although
+' the macrobook names are not included in a search), and a search for text strings
+' retrieves also their descriptions (which are included in a search). The need for
+' multiple list boxes is in part because OCLC's version of BASIC can't display multiple
+' columns in a single list. Unfortunately, the macro also can't synchronize scrolling
+' between the two (or three) boxes. If the number of entries in a list exceeds the
+' capacity of the box, requiring scrolling up and down to see the beginning or end of the
+' list, the list in the other box doesn't move accordingly. However, selecting an item in
+' any box will automatically select the corresponding item in the other. The two lists
+' may not appear synchronized, but they in fact are.
+'
+' This macro can work with only 12 function keys. It should be noted that a few keys on
+' the keyboard are not identified by name, only by code, and can differ by region or
+' keyboard manufacturer. This macro is based on the standard US keyboard layout, in
+' which the "Oem1," "Oem5," "Oem6", and "Oem7" keys are mapped to the semicolon,
+' backward slash, right bracket, and quotation marks, respectively, although the client
+' stores them as codes rather than names. Other Oem keys are stored by Connexion with
+' names: The "Oem2," "Oem3," and "Oem4" keys are called "Question" (that is, the forward
+' slash/question mark), "Grave," and "OpenBrackets" (the left bracket/brace),
+' respectively. A different keyboard may produce different results.
+'
+' The ability of the macro to accept keyboard input without a definite input location is
+' due to the dialog box's text box control being able to function even though it is
+' invisible. The text box is the first control defined in the dialog box definition, so
+' it receives focus upon initialization and after the "Keyboard input" button is clicked.
+' As long as it has the focus it can receive input. I don't know why this doesn't work if
+' the cursor moves away from the dialog box; it may be that with proper programming the
+' user could enter characters with the keyboard, with the mouse pointer anywhere on the
+' screen.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub ClearShortcutDisplay
+Declare Sub DisplayShortcuts
+Declare Sub FillCopyArray
+Declare Sub FillDisplayStores     ( TypeOfKey() As String, SelectedKey$ )
+Declare Sub FillPresetArrays
+Declare Sub FillTempSearchArray   ( ArrayID% )
+Declare Sub FillTypeOfKeyArrays   ( AssignedKeys() As String )
+Declare Sub FindKeymapFiles       ( PathName$ )
+Declare Sub FixLineBreaksInArray  ( LineEnd$ )
+Declare Sub GetShortcutsFromFile
+Declare Sub GetTextStringsFromFile
+Declare Sub MakeListForClipboard
+Declare Sub PutFileIntoArrays     ( FilePath$ )
+Declare Sub ReadFileFromDrive     ( FileName$ )
+Declare Sub ReadOptionsFile       ( SelectedProfilePath$ )
+Declare Sub SearchItems           ( SearchTerm$, TypeOfSearch$ )
+Declare Sub SelectShortcutsToCopy ( TypeOfKey() As String, Index%, SelectedCategory$ )
+Declare Sub SetRowInTypeOfKeyArray( TypeOfKey() As String, KeymapString$, AddToTotalCount%, AddToCategoryCount$ )
+
+Declare Function CalculateCounts  ( TypeOfKeyArrayID% )            As String
+Declare Function ExtractPairValues( InString$, KeyName$ )          As String
+Declare Function FormatKeyString  ( KeymapString$ )                As String
+Declare Function GetBaseKey       ( KeymapString$, RestOfString$ ) As String
+Declare Function GetKeyName       ( InString$ )                    As String
+Declare Function SearchDialogs    ( InString$ )                    As String
+Declare Function SetupKeyPage     ( InString$ )                    As String
+Declare Function UnicodeConvert   ( InString$ )                    As String
+
+Declare Function SearchResultsDialogsControlFunction( Id$, Action%, SValue& )
+Declare Function CopyListDialogControlFunction      ( Id$, Action%, SValue& )
+Declare Function MainDialogControlFunction          ( Id$, Action%, SValue& )
+Declare Function SearchDialogControlFunction        ( Id$, Action%, SValue& )
+
+Global Const APP_ASSIGNED_COUNT  As Integer = 185    'The number of the Client's built-in shortcuts for menu commands and
+                                                     ' characters (actually 187).
+Global Const MAX_LEN_STRING      As Integer = 30000  'The constant for the maximum string size in this macro is based on an
+                                                     ' OML memory limit, even though OML claims to be able to handle a string
+                                                     ' length of up to 32,767 bytes.
+Global Const VARIANT_IS_INTEGER  As Integer = 2
+
+Global Const CHECKED             As Integer = 1
+Global Const CONTROL_CHANGE      As Integer = 2
+Global Const DISABLED            As Integer = 0
+Global Const ENABLED             As Integer = 1
+Global Const INFORMATION_MESSAGE As Integer = 64
+Global Const INITIALIZE          As Integer = 1
+Global Const INVISIBLE           As Integer = 0
+Global Const UNCHECKED           As Integer = 0
+Global Const VISIBLE             As Integer = 1
+
+Global Const aACTION             As Integer = 2
+Global Const aCATEGORY           As Integer = 0
+Global Const aCODE               As Integer = 0
+Global Const aCOPY               As Integer = 1
+Global Const aKEYS               As Integer = 1
+Global Const aNAME               As Integer = 1
+Global Const aOCLC               As Integer = 0
+
+Global Const ACTION_FIELD        As Integer = 3
+Global Const CATEGORY_FIELD      As Integer = 2
+Global Const KEY_COMBO_FIELD     As Integer = 1
+
+Global Const ALPHANUMERICS       As Integer = 1
+Global Const FUNCTION_KEYS       As Integer = 2
+Global Const NO_SELECTION        As Integer = 0
+Global Const NUMBER_PAD          As Integer = 4
+Global Const OTHER_KEYS          As Integer = 3
+
+Global Const CASE_INSENSITIVE    As Integer = 1
+
+Type SearchedItemInfo
+ tMatchPosition    As Integer
+ tNameOfItem       As String
+ tOtherInformation As String
+ tShortcutKeys     As String
+End Type
+
+Global CRLF_ASCII                As String*2
+Global CRLF_UNICODE              As String*4
+Global DOUBLE_QUOTE              As String*1
+Global NULL_CHAR                 As String*1
+Global TAB_CHAR                  As String*1
+Global XML_SUFFIX                As String*4
+
+Global AddToCategoryCount$
+Global AddToTotalCount%
+Global AppCharacterKeyCount%
+Global AppCommandKeyCount%
+Global AppMacroKeyCount%
+Global AppTextKeyCount%
+Global FilePath$
+Global FileProblem$
+Global IndexOfCustom             As Variant
+Global IndexOfMyProfile          As Variant
+Global KeyboardEntry$
+Global KeymapFileCount%
+Global ProfileCount%
+Global ProfilesFolderPath$
+Global SearchHitsCount%
+Global SelectedCategory$
+Global SelectedProfilePath$
+Global TextStringsFilePath$
+Global TotalShortcutKeyCount%
+Global UserAssignedKeyCount%
+Global UserCharacterKeyCount%
+Global UserCommandKeyCount%
+Global UserMacroKeyCount%
+Global UserTextKeyCount%
+Global WaltsMacros$
+Global [0-9 Count]               As Integer
+Global [A-Z Count]               As Integer
+Global [Alphanumeric key Count]  As Integer
+Global [F1-F9 Count]             As Integer
+Global [F10-F12 Count]           As Integer
+Global [Function keys Count]     As Integer
+Global [Number keypad Count]     As Integer
+Global [Other keys Count]        As Integer
+
+Global CancelCopy
+Global FirstPass
+Global IncludeAppAssignments
+
+Global AlphaNums      ( 36 )     As String
+Global Characters     ( 1, 102 ) As String
+Global CopyKeys       ( 1, 50 )  As String
+Global Functions      ( 12 )     As String
+Global ItemCategories ( 4 )      As String
+Global KeyGroup       ( 4 )      As String
+Global NumPadDisplay  ( 28 )     As String
+Global NumPadOCLC     ( 28 )     As String
+Global OthersDisplay  ( 32 )     As String
+Global OthersOCLC     ( 32 )     As String
+
+Global CopiedShortcuts()         As String
+Global FileArray      ()         As String
+Global KeymapFiles    ()         As String
+Global KeyStore       ()         As String
+Global ProfileStore   ()         As String
+Global SearchResults  ()         As SearchedItemInfo
+Global TempSearchArray()         As String
+Global TextStrings    ()         As String
+Global ValStore       ()         As String
+Global [0-9]          ()         As String
+Global [A-Z]          ()         As String
+Global [F1-F9]        ()         As String
+Global [F10-F12]      ()         As String
+Global [Function keys]()         As String
+Global [Number keypad]()         As String
+Global [Other keys]   ()         As String
+
+Global AppAssigned ( 2, APP_ASSIGNED_COUNT ) As String
+Global UserAssigned()                        As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DIRECTORY            As Integer = 16   'The attribute indicating the path name is a directory.
+Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'Maximum number of reads of environment strings to try.
+
+Dim AppData$
+Dim EnvironmentString$
+Dim FileAttribute%
+Dim KeyboardInputMsg$
+Dim ProfileName$
+Dim Select3Things$           : Select3Things$ = "Select a category (optional), a key group, and a key:"
+
+Erase CopiedShortcuts
+Dim i As Integer, p As Integer, q As Integer, x As Integer
+
+NULL_CHAR             = Chr$( 0 )
+CancelCopy            = TRUE
+CRLF_ASCII            = Chr$( 013 ) & Chr$( 010 )
+CRLF_UNICODE          = Chr$( 013 ) & NULL_CHAR & Chr$( 010 ) & NULL_CHAR
+DOUBLE_QUOTE          = Chr$( 034 )
+FileProblem$          = ""
+FirstPass             = TRUE
+IncludeAppAssignments = TRUE
+IndexOfCustom         = NULL_CHAR
+KeyboardInputMsg$     = "Keep the mouse pointer inside the borders of this dialog box to be able to press character keys for"
+KeyboardInputMsg$     = KeyboardInputMsg$ & " input."
+TAB_CHAR              = Chr$( 009 )
+WaltsMacros$          = "[Walt's macros] MacroTools:ShortcutKeysIndex"
+XML_SUFFIX            = ".xml"
+
+' The first step is to find the relevant files, which are located in
+' X:\Users\[user name]\AppData\Roaming\OCLC\Connex\Profiles\MyProfile\, where X is the
+' letter of the drive. The first part of this path, which tells what X and the user name
+' are, is given in the "APPDATA" variable.
+
+i = 1
+Do
+  EnvironmentString$ = Environ( i )
+  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
+      AppData$ = Mid$( EnvironmentString$, 9 )
+      Exit Do
+  End If
+  i = i + 1
+Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
+If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GoTo FileFailure:
+
+ProfilesFolderPath$ = AppData$ & "\OCLC\Connex\Profiles\"
+
+On Error GoTo FileFailure:
+
+' Get the list of profiles.
+
+ProfileName$ = Dir( ProfilesFolderPath$, DIRECTORY )
+Do While ProfileName$ <> ""
+  If ProfileName$ <> "." And ProfileName$ <> ".." Then
+      If ProfileName$ = "MyProfile" Then
+          IndexOfMyProfile = ProfileCount%
+      End If
+      FileAttribute% = GetAttr( ProfilesFolderPath$ & ProfileName$ )
+      If FileAttribute% = DIRECTORY Then
+          ReDim Preserve ProfileStore( ProfileCount% )
+          ProfileStore( ProfileCount% ) = ProfileName$
+          ProfileCount%                 = ProfileCount% + 1
+      End If
+  End If
+  ProfileName$ = Dir
+Loop
+
+' If "MyProfile" is found, use that as the first profile whose key assignments will be
+' displayed. Otherwise, use the first profile in the folder.
+
+If VarType( IndexOfMyProfile ) = VARIANT_IS_INTEGER Then
+    ProfileName$ = ProfileStore( IndexOfMyProfile )
+  Else
+    ProfileName$ = ProfileStore( 0 )
+End If
+SelectedProfilePath$ = ProfilesFolderPath$ & ProfileName$ & "\"
+Call ReadOptionsFile( SelectedProfilePath$ )
+Call FindKeymapFiles( SelectedProfilePath$ & "*" & XML_SUFFIX )
+If KeymapFileCount% = 0 Then
+    MsgBox "No keymap files were found.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If there is a "Custom.Keymap" file, send that to the sub for extraction of shortcuts;
+' otherwise, send the first file in the list.
+
+If VarType( IndexOfCustom ) = VARIANT_IS_INTEGER Then
+    FilePath$ = SelectedProfilePath$ & KeymapFiles( IndexOfCustom )
+  Else
+    FilePath$ = SelectedProfilePath$ & KeymapFiles( 0 )
+End If
+Call PutFileIntoArrays( FilePath$ )
+
+' A problem reading the file means exiting the macro.
+
+If FileProblem$ <> "" Then GoTo FileFailure:
+
+TextStringsFilePath$ = SelectedProfilePath$ & "TextStrings"
+Call PutFileIntoArrays( TextStringsFilePath$ )
+
+' If all is OK, go ahead and fill the array for the app-assigned keys.
+
+FillPresetArrays
+
+' The last preparatory step is to build the arrays for each key group, taking the user-
+' generated assignments found in the keymap file and the app's assignments listed in
+' "FillPresetArrays."
+
+If UserAssignedKeyCount% > 0 Then
+    Call FillTypeOfKeyArrays( UserAssigned() )
+End If
+
+' Then run the dialog box to show what has been found.
+
+Begin Dialog MainDialogDefinition  348, 196, WaltsMacros, .MainDialogControlFunction
+  TextBox       325,  19,   8,  12,                            .KeyboardInputTextBox
+  PushButton    286, 172,  52,  14, "Cl&ose",                  .MainDialogCloseButton
+  CancelButton   30,  21,   1,   1
+  PushButton    226, 172,  52,  14, "&Copy...",                .CopyButton
+  PushButton    166, 172,  52,  14, "&Search...",              .SearchButton
+  Text          126,  37, 136,  12, "",                        .ShortcutKeyCount
+  PushButton    267,  35,  56,  12, "&Keyboard input",         .KeyboardInputButton
+  DropListBox    24,  19,  88,  56, ItemCategories(),          .DropListBoxCategory
+  CheckBox       24,  35,  84,  12, "&Include app categories", .IncludeAppCheckbox
+  DropListBox   130,  19,  88,  63, KeyGroup(),                .DropListBoxKeyGroup
+  DropListBox   236,  19,  88, 168, "",                        .DropListBoxKey
+  DropListBox    10, 174,  64,  44, ProfileStore(),            .DropListBoxProfiles
+  DropListBox    80, 174,  72,  80, KeymapFiles(),             .DropListBoxKeymapFiles
+  Text           10, 164,  24,   8, "Profile:",                .SelectAProfile
+  Text           80, 164,  40,   8, "Keymap file:",            .SelectAFile
+  Text           14,  66,  80,   8, "unmodified"
+  Text           14,  78,  20,   8, "SHIFT"
+  Text           14,  90,  20,   8, "CTRL"
+  Text           14, 102,  14,   8, "ALT"
+  Text           14, 114,  48,   8, "CTRL + SHIFT"
+  Text           14, 126,  40,   8, "CTRL + ALT"
+  Text           14, 138,  42,   8, "ALT + SHIFT"
+  Text           14, 150,  70,   8, "CTRL + ALT + SHIFT"
+  Text           64,  53, 240,   8, "",                        .MessageProfiles
+  Text           10,  53, 328,   8, KeyboardInputMsg$,         .MessageInput
+  GroupBox       10,  59, 328,  17, ""
+  GroupBox       10,  71, 328,  17, ""
+  GroupBox       10,  83, 328,  17, ""
+  GroupBox       10,  95, 328,  17, ""
+  GroupBox       10, 107, 328,  17, ""
+  GroupBox       10, 119, 328,  17, ""
+  GroupBox       10, 131, 328,  17, ""
+  GroupBox       10, 143, 328,  17, ""
+  Text           90,  66, 246,   8, "",                        .Unmodified
+  Text           90,  78, 246,   8, "",                        .Label_SHIFT
+  Text           90,  90, 246,   8, "",                        .Label_CTRL
+  Text           90, 102, 246,   8, "",                        .Label_ALT
+  Text           90, 114, 246,   8, "",                        .Label_CTRL_SHIFT
+  Text           90, 126, 246,   8, "",                        .Label_CTRL_ALT
+  Text           90, 138, 246,   8, "",                        .Label_ALT_SHIFT
+  Text           90, 150, 246,   8, "",                        .Label_CTRL_ALT_SHIFT
+  GroupBox       10,   6, 328,  47, Select3Things$
+End Dialog
+
+Dim MainDialog as MainDialogDefinition
+On Error Resume Next
+Dialog MainDialog
+
+Exit Sub
+
+FileFailure:
+
+MsgBox FileProblem$, CRITICAL_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Sub ClearShortcutDisplay
+
+' Simply resets the display of all the key combinations to blank.
+
+DlgText         "Unmodified",             ""
+DlgText         "Label_ALT",              ""
+DlgText         "Label_CTRL",             ""
+DlgText         "Label_SHIFT",            ""
+DlgText         "Label_CTRL_ALT",         ""
+DlgText         "Label_ALT_SHIFT",        ""
+DlgText         "Label_CTRL_SHIFT",       ""
+DlgText         "Label_CTRL_ALT_SHIFT",   ""
+
+ReDim KeyStore( 0 )
+ReDim ValStore( 0 )
+
+End Sub
+
+'****************************************************************************************
+
+Sub DisplayShortcuts
+
+' This sub sets text in the main dialog box.
+
+Dim TempString$
+
+Dim i As Integer
+
+For i = 0 To UBound( KeyStore )
+  TempString$ = KeyStore( i )
+  If InStr( TempString$, "Alt+Ctrl+Shift" ) Then
+      DlgText         "Label_CTRL_ALT_SHIFT",   ValStore( i )
+    ElseIf InStr( TempString$, "Ctrl+Shift" ) Then
+      DlgText         "Label_CTRL_SHIFT",       ValStore( i )
+    ElseIf InStr( TempString$, "Alt+Shift" ) Then
+      DlgText         "Label_ALT_SHIFT",        ValStore( i )
+    ElseIf InStr( TempString$, "Alt+Ctrl" ) Then
+      DlgText         "Label_CTRL_ALT",         ValStore( i )
+    ElseIf InStr( TempString$, "Shift" ) Then
+      DlgText         "Label_SHIFT",            ValStore( i )
+    ElseIf InStr( TempString$, "Ctrl" ) Then
+      DlgText         "Label_CTRL",             ValStore( i )
+    ElseIf InStr( TempString$, "Alt" ) Then
+      DlgText         "Label_ALT",              ValStore( i )
+    Else
+      DlgText         "Unmodified",             ValStore( i )
+  End If
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillDisplayStores( TypeOfKey() As String, SelectedKey$ )
+
+' This sub receives the array holding the type of key (alphanumeric, function, etc.), the
+' key selected in the dialog box, and the category of the item (if selected). It searches
+' the array for the rows that start with the base key, and copies them to the two store
+' arrays. "KeyStore" holds the modifier keys, and "ValStore" the actions. Copying doesn't
+' happen if filters are in place. First, the macro checks if the selected item matches
+' that in the character array. If it matches, or if no category has been selected, then
+' the macro checks if the app-assigned keys are to be excluded. If they are to be
+' ignored, the row isn't copied if it is an app-assigned shortcut.
+
+Dim AppAssignedTest$
+Dim AssignedCategory$
+Dim BaseKey$
+Dim KeyCount%
+Dim Remainder$
+Dim TempString$
+
+Dim i As Integer
+
+ReDim KeyStore( 0 )
+ReDim ValStore( 0 )
+
+For i = 0 To UBound( TypeOfKey )
+  TempString$ = TypeOfKey( i )
+  BaseKey$    = GetBaseKey( TempString$, Remainder$ )
+  If BaseKey$ = SelectedKey$ Then
+      AssignedCategory$ = GetField( TempString$, CATEGORY_FIELD, TAB_CHAR )
+      If SelectedCategory$ = "" Or AssignedCategory$ = SelectedCategory$ Then
+          AppAssignedTest$ = Left$( GetField( TempString$, ACTION_FIELD, TAB_CHAR ), 4 )
+          If AppAssignedTest$ <> "(App" Or ( AppAssignedTest$ = "(App" And IncludeAppAssignments ) Then
+              ReDim Preserve KeyStore( KeyCount% )
+              ReDim Preserve ValStore( KeyCount% )
+              If Remainder$ = "" Then
+                  KeyStore( KeyCount% ) = Remainder$
+                Else
+                  KeyStore( KeyCount% ) = GetField( Remainder$, KEY_COMBO_FIELD, TAB_CHAR )
+              End If
+              ValStore( KeyCount% ) = GetField( TempString$, ACTION_FIELD, TAB_CHAR )
+              KeyCount%             = KeyCount% + 1
+          End If
+      End If
+    Else
+      If KeyCount% > 0 Then Exit For
+  End If
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillPresetArrays
+
+' These are what display in the dialog box's drop-down lists.
+
+AlphaNums( 0  )       = "Select a key:"
+AlphaNums( 1  )       = "A"
+AlphaNums( 2  )       = "B"
+AlphaNums( 3  )       = "C"
+AlphaNums( 4  )       = "D"
+AlphaNums( 5  )       = "E"
+AlphaNums( 6  )       = "F"
+AlphaNums( 7  )       = "G"
+AlphaNums( 8  )       = "H"
+AlphaNums( 9  )       = "I"
+AlphaNums( 10 )       = "J"
+AlphaNums( 11 )       = "K"
+AlphaNums( 12 )       = "L"
+AlphaNums( 13 )       = "M"
+AlphaNums( 14 )       = "N"
+AlphaNums( 15 )       = "O"
+AlphaNums( 16 )       = "P"
+AlphaNums( 17 )       = "Q"
+AlphaNums( 18 )       = "R"
+AlphaNums( 19 )       = "S"
+AlphaNums( 20 )       = "T"
+AlphaNums( 21 )       = "U"
+AlphaNums( 22 )       = "V"
+AlphaNums( 23 )       = "W"
+AlphaNums( 24 )       = "X"
+AlphaNums( 25 )       = "Y"
+AlphaNums( 26 )       = "Z"
+AlphaNums( 27 )       = "1"
+AlphaNums( 28 )       = "2"
+AlphaNums( 29 )       = "3"
+AlphaNums( 30 )       = "4"
+AlphaNums( 31 )       = "5"
+AlphaNums( 32 )       = "6"
+AlphaNums( 33 )       = "7"
+AlphaNums( 34 )       = "8"
+AlphaNums( 35 )       = "9"
+AlphaNums( 36 )       = "0"
+
+ItemCategories( 0 )   = "All categories"
+ItemCategories( 1 )   = "Macros"
+ItemCategories( 2 )   = "Characters"
+ItemCategories( 3 )   = "Text strings"
+ItemCategories( 4 )   = "Menu commands"
+
+Functions( 0  )       = "Select a key:"
+Functions( 1  )       = "F1"
+Functions( 2  )       = "F2"
+Functions( 3  )       = "F3"
+Functions( 4  )       = "F4"
+Functions( 5  )       = "F5"
+Functions( 6  )       = "F6"
+Functions( 7  )       = "F7"
+Functions( 8  )       = "F8"
+Functions( 9  )       = "F9"
+Functions( 10 )       = "F10"
+Functions( 11 )       = "F11"
+Functions( 12 )       = "F12"
+
+KeyGroup( 0 )         = "Select a key group:"
+KeyGroup( 1 )         = "Alphanumeric keys"
+KeyGroup( 2 )         = "Function keys"
+KeyGroup( 3 )         = "Other keys"
+KeyGroup( 4 )         = "Number keypad"
+
+' In the next four arrays, the "Display" one contains what shows in the dialog box in the
+' list boxes, the "OCLC" array contains the text stored in the keymap file.
+
+' When "NumLock" is off, the keypad keys are identical to the other keys: Number keypad
+' "Del" is the same as the "Delete" key that is usually grouped with "Insert," "Home,"
+' etc. Non-character keys are capitalized in these arrays.
+
+NumPadDisplay( 0  ) = "Select a key:"                    : NumPadOCLC( 0  ) = ""
+NumPadDisplay( 1  ) = "0"                                : NumPadOCLC( 1  ) = "NumPad0"
+NumPadDisplay( 2  ) = "1"                                : NumPadOCLC( 2  ) = "NumPad1"
+NumPadDisplay( 3  ) = "2"                                : NumPadOCLC( 3  ) = "NumPad2"
+NumPadDisplay( 4  ) = "3"                                : NumPadOCLC( 4  ) = "NumPad3"
+NumPadDisplay( 5  ) = "4"                                : NumPadOCLC( 5  ) = "NumPad4"
+NumPadDisplay( 6  ) = "5"                                : NumPadOCLC( 6  ) = "NumPad5"
+NumPadDisplay( 7  ) = "6"                                : NumPadOCLC( 7  ) = "NumPad6"
+NumPadDisplay( 8  ) = "7"                                : NumPadOCLC( 8  ) = "NumPad7"
+NumPadDisplay( 9  ) = "8"                                : NumPadOCLC( 9  ) = "NumPad8"
+NumPadDisplay( 10 ) = "9"                                : NumPadOCLC( 10 ) = "NumPad9"
+NumPadDisplay( 11 ) = "add  +"                           : NumPadOCLC( 11 ) = "Add"
+NumPadDisplay( 12 ) = "center 5"                         : NumPadOCLC( 12 ) = "Clear"
+NumPadDisplay( 13 ) = "decimal point  ."                 : NumPadOCLC( 13 ) = "Decimal"
+NumPadDisplay( 14 ) = "DEL"                              : NumPadOCLC( 14 ) = "Del"
+NumPadDisplay( 15 ) = "divide  /"                        : NumPadOCLC( 15 ) = "Divide"
+NumPadDisplay( 16 ) = "down arrow"                       : NumPadOCLC( 16 ) = "Down Arrow"
+NumPadDisplay( 17 ) = "END"                              : NumPadOCLC( 17 ) = "End"
+NumPadDisplay( 18 ) = "ENTER"                            : NumPadOCLC( 18 ) = "Enter"
+NumPadDisplay( 19 ) = "HOME"                             : NumPadOCLC( 19 ) = "Home"
+NumPadDisplay( 20 ) = "INS"                              : NumPadOCLC( 20 ) = "Ins"
+NumPadDisplay( 21 ) = "left arrow"                       : NumPadOCLC( 21 ) = "Left"
+NumPadDisplay( 22 ) = "multiply  *"                      : NumPadOCLC( 22 ) = "Multiply"
+NumPadDisplay( 23 ) = "NUM LOCK"                         : NumPadOCLC( 23 ) = "NumLock"
+NumPadDisplay( 24 ) = "PGDN"                             : NumPadOCLC( 24 ) = "PgDn"
+NumPadDisplay( 25 ) = "PGUP"                             : NumPadOCLC( 25 ) = "PgUp Arrow"
+NumPadDisplay( 26 ) = "right arrow"                      : NumPadOCLC( 26 ) = "Right"
+NumPadDisplay( 27 ) = "subtract  -"                      : NumPadOCLC( 27 ) = "Subtract"
+NumPadDisplay( 28 ) = "up arrow"                         : NumPadOCLC( 28 ) = "Up Arrow"
+
+OthersDisplay( 0  ) = "Select a key:"                    : OthersOCLC( 0  ) = ""
+OthersDisplay( 1  ) = "backward slash  \|"               : OthersOCLC( 1  ) = "Oem5"
+OthersDisplay( 2  ) = "CAPS LOCK"                        : OthersOCLC( 2  ) = "Capital"
+OthersDisplay( 3  ) = "comma  ,<"                        : OthersOCLC( 3  ) = "Comma"
+OthersDisplay( 4  ) = "DELETE"                           : OthersOCLC( 4  ) = "Del"
+OthersDisplay( 5  ) = "down arrow"                       : OthersOCLC( 5  ) = "Down Arrow"
+OthersDisplay( 6  ) = "END"                              : OthersOCLC( 6  ) = "End"
+OthersDisplay( 7  ) = "ENTER"                            : OthersOCLC( 7  ) = "Enter"
+OthersDisplay( 8  ) = "ESC"                              : OthersOCLC( 8  ) = "Escape"
+OthersDisplay( 9  ) = "equal  =+"                        : OthersOCLC( 9  ) = "Equal"
+OthersDisplay( 10 ) = "forward slash  /?"                : OthersOCLC( 10 ) = "Question"
+OthersDisplay( 11 ) = "grave  `~"                        : OthersOCLC( 11 ) = "Grave"
+OthersDisplay( 12 ) = "HOME"                             : OthersOCLC( 12 ) = "Home"
+OthersDisplay( 13 ) = "hyphen  -_"                       : OthersOCLC( 13 ) = "Minus"
+OthersDisplay( 14 ) = "INSERT"                           : OthersOCLC( 14 ) = "Ins"
+OthersDisplay( 15 ) = "left arrow"                       : OthersOCLC( 15 ) = "Left"
+OthersDisplay( 16 ) = "left bracket  [{"                 : OthersOCLC( 16 ) = "OpenBrackets"
+OthersDisplay( 17 ) = "left Windows"                     : OthersOCLC( 17 ) = "LWin"
+OthersDisplay( 18 ) = "menu"                             : OthersOCLC( 18 ) = "Apps"
+OthersDisplay( 19 ) = "PAGE DOWN"                        : OthersOCLC( 19 ) = "PgDn"
+OthersDisplay( 20 ) = "PAGE UP"                          : OthersOCLC( 20 ) = "PgUp Arrow"
+OthersDisplay( 21 ) = "PAUSE/BREAK"                      : OthersOCLC( 21 ) = "Pause"
+OthersDisplay( 22 ) = "period  .>"                       : OthersOCLC( 22 ) = "Period"
+OthersDisplay( 23 ) = "PRINT SCREEN"                     : OthersOCLC( 23 ) = "PrintScreen"
+OthersDisplay( 24 ) = "quotation mark  '" & DOUBLE_QUOTE : OthersOCLC( 24 ) = "Oem7"
+OthersDisplay( 25 ) = "right arrow"                      : OthersOCLC( 25 ) = "Right"
+OthersDisplay( 26 ) = "right bracket  ]}"                : OthersOCLC( 26 ) = "Oem6"
+OthersDisplay( 27 ) = "right Windows"                    : OthersOCLC( 27 ) = "RWin"
+OthersDisplay( 28 ) = "SCROLL LOCK"                      : OthersOCLC( 28 ) = "Scroll"
+OthersDisplay( 29 ) = "semicolon  ;:"                    : OthersOCLC( 29 ) = "Oem1"
+OthersDisplay( 30 ) = "SPACE"                            : OthersOCLC( 30 ) = "Space"
+OthersDisplay( 31 ) = "TAB"                              : OthersOCLC( 31 ) = "Tab"
+OthersDisplay( 32 ) = "up arrow"                         : OthersOCLC( 32 ) = "Up Arrow"
+
+' The app-assigned shortcuts, from the list displayed by the menu command "View>Assigned
+' Keys." Excluded from this array is the first entry on the list, which is simply the
+' [ALT] key. This key merely activates the keys on the Client's menu bar, and is not
+' really an action, and no base key is involved. This macro also considers the Windows
+' commands "Ctrl+Shift+F6" (Previous Document Window), "Ctrl+F6" (Next Document Window),
+' and "Ctrl+F4" (Close Window) to be app-assigned. (The documentation views the standard
+' Windows shortcut "Alt+F4" to close the current application to be app-assigned.) There
+' are two misleading entries in the Client's list. The shortcut "Ctrl+Alt+Period" is
+' assigned to "Character"; I suspect something is missing, because using that shortcut
+' produces what looks like the Unicode character "modifier letter right half ring"
+' (U+02BE), with decimal value 190, but after being saved online becomes the character
+' "Ayn", with decimal value 174. I retained this entry but added the name of the
+' character, as that is what ends up in a record. The other entry is "Ctrl+Pipe", a key
+' combination that seems to do nothing at all. (Pressing those two keys doesn't even
+' changed the record's status to "Edited".) I retained that entry also for the sake of
+' completeness.
+
+AppAssigned( aCATEGORY, 0   ) = "Command"   : AppAssigned( aKEYS, 0   ) = "Alt+Ctrl+A"               : AppAssigned( aACTION, 0   ) = "(App Command) ActionAddtoAuthorityFile"
+AppAssigned( aCATEGORY, 1   ) = "Command"   : AppAssigned( aKEYS, 1   ) = "Ctrl+A"                   : AppAssigned( aACTION, 1   ) = "(App Command) EditConstantDataOnlineApplyDefault"
+AppAssigned( aCATEGORY, 2   ) = "Command"   : AppAssigned( aKEYS, 2   ) = "Ctrl+Shift+A"             : AppAssigned( aACTION, 2   ) = "(App Command) ViewHoldingsAll"
+AppAssigned( aCATEGORY, 3   ) = "Character" : AppAssigned( aKEYS, 3   ) = "Alt+Ctrl+B"               : AppAssigned( aACTION, 3   ) = "(App Character) Acute"
+AppAssigned( aCATEGORY, 4   ) = "Command"   : AppAssigned( aKEYS, 4   ) = "Alt+Ctrl+Shift+B"         : AppAssigned( aACTION, 4   ) = "(App Command) EditGuidedEntryInsert006Books"
+AppAssigned( aCATEGORY, 5   ) = "Command"   : AppAssigned( aKEYS, 5   ) = "Ctrl+B"                   : AppAssigned( aACTION, 5   ) = "(App Command) EditConstantDataLocalApplybyName"
+AppAssigned( aCATEGORY, 6   ) = "Command"   : AppAssigned( aKEYS, 6   ) = "Ctrl+Shift+B"             : AppAssigned( aACTION, 6   ) = "(App Command) CatalogingCreateSingleRecordBooks"
+AppAssigned( aCATEGORY, 7   ) = "Command"   : AppAssigned( aKEYS, 7   ) = "Alt+Ctrl+C"               : AppAssigned( aACTION, 7   ) = "(App Command) EditDeriveNewMasterRecord"
+AppAssigned( aCATEGORY, 8   ) = "Command"   : AppAssigned( aKEYS, 8   ) = "Alt+Ctrl+Shift+C"         : AppAssigned( aACTION, 8   ) = "(App Command) EditGuidedEntryInsert006Scores"
+AppAssigned( aCATEGORY, 9   ) = "Command"   : AppAssigned( aKEYS, 9   ) = "Ctrl+C"                   : AppAssigned( aACTION, 9   ) = "(App Command) EditCutCopyPasteCopy"
+AppAssigned( aCATEGORY, 10  ) = "Command"   : AppAssigned( aKEYS, 10  ) = "Ctrl+Shift+C"             : AppAssigned( aACTION, 10  ) = "(App Command) CatalogingCreateSingleRecordScores"
+AppAssigned( aCATEGORY, 11  ) = "Command"   : AppAssigned( aKEYS, 11  ) = "Alt+Ctrl+D"               : AppAssigned( aACTION, 11  ) = "(App Command) ActionDeleteRecord"
+AppAssigned( aCATEGORY, 12  ) = "Character" : AppAssigned( aKEYS, 12  ) = "Ctrl+D"                   : AppAssigned( aACTION, 12  ) = "(App Character) Subfield delimiter"
+AppAssigned( aCATEGORY, 13  ) = "Command"   : AppAssigned( aKEYS, 13  ) = "Ctrl+Shift+D"             : AppAssigned( aACTION, 13  ) = "(App Command) ViewHoldingsDefault"
+AppAssigned( aCATEGORY, 14  ) = "Character" : AppAssigned( aKEYS, 14  ) = "Alt+Ctrl+E"               : AppAssigned( aACTION, 14  ) = "(App Character) Macron"
+AppAssigned( aCATEGORY, 15  ) = "Command"   : AppAssigned( aKEYS, 15  ) = "Ctrl+E"                   : AppAssigned( aACTION, 15  ) = "(App Command) EditEnterDiacritics"
+AppAssigned( aCATEGORY, 16  ) = "Character" : AppAssigned( aKEYS, 16  ) = "Alt+Ctrl+F"               : AppAssigned( aACTION, 16  ) = "(App Character) Breve"
+AppAssigned( aCATEGORY, 17  ) = "Command"   : AppAssigned( aKEYS, 17  ) = "Ctrl+F"                   : AppAssigned( aACTION, 17  ) = "(App Command) EditFind/Replace"
+AppAssigned( aCATEGORY, 18  ) = "Command"   : AppAssigned( aKEYS, 18  ) = "Ctrl+Shift+F"             : AppAssigned( aACTION, 18  ) = "(App Command) CatalogingShowDefaultOnlineConstantData"
+AppAssigned( aCATEGORY, 19  ) = "Character" : AppAssigned( aKEYS, 19  ) = "Alt+Ctrl+G"               : AppAssigned( aACTION, 19  ) = "(App Character) Superior dot"
+AppAssigned( aCATEGORY, 20  ) = "Command"   : AppAssigned( aKEYS, 20  ) = "Alt+Ctrl+Shift+G"         : AppAssigned( aACTION, 20  ) = "(App Command) ToolsMacrosManage"
+AppAssigned( aCATEGORY, 21  ) = "Command"   : AppAssigned( aKEYS, 21  ) = "Ctrl+Shift+G"             : AppAssigned( aACTION, 21  ) = "(App Command) ViewHoldingsRegional"
+AppAssigned( aCATEGORY, 22  ) = "Character" : AppAssigned( aKEYS, 22  ) = "Alt+Ctrl+H"               : AppAssigned( aACTION, 22  ) = "(App Character) Umlaut"
+AppAssigned( aCATEGORY, 23  ) = "Command"   : AppAssigned( aKEYS, 23  ) = "Ctrl+Shift+H"             : AppAssigned( aACTION, 23  ) = "(App Command) AuthoritiesSearchOnlineConstantData"
+AppAssigned( aCATEGORY, 24  ) = "Character" : AppAssigned( aKEYS, 24  ) = "Alt+Ctrl+I"               : AppAssigned( aACTION, 24  ) = "(App Character) Hacek"
+AppAssigned( aCATEGORY, 25  ) = "Command"   : AppAssigned( aKEYS, 25  ) = "Alt+Ctrl+Shift+I"         : AppAssigned( aACTION, 25  ) = "(App Command) EditGuidedEntryInsert006MixedMaterials"
+AppAssigned( aCATEGORY, 26  ) = "Command"   : AppAssigned( aKEYS, 26  ) = "Ctrl+I"                   : AppAssigned( aACTION, 26  ) = "(App Command) EditDeriveNewConstantData"
+AppAssigned( aCATEGORY, 27  ) = "Command"   : AppAssigned( aKEYS, 27  ) = "Ctrl+Shift+I"             : AppAssigned( aACTION, 27  ) = "(App Command) CatalogingCreateSingleRecordMixedMaterials"
+AppAssigned( aCATEGORY, 28  ) = "Character" : AppAssigned( aKEYS, 28  ) = "Alt+Ctrl+J"               : AppAssigned( aACTION, 28  ) = "(App Character) Circle above letter"
+AppAssigned( aCATEGORY, 29  ) = "Character" : AppAssigned( aKEYS, 29  ) = "Alt+Ctrl+K"               : AppAssigned( aACTION, 29  ) = "(App Character) Ligature (left half)"
+AppAssigned( aCATEGORY, 30  ) = "Command"   : AppAssigned( aKEYS, 30  ) = "Ctrl+Shift+K"             : AppAssigned( aACTION, 30  ) = "(App Command) AuthoritiesCreateSingleRecordBlankRecord"
+AppAssigned( aCATEGORY, 31  ) = "Character" : AppAssigned( aKEYS, 31  ) = "Alt+Ctrl+L"               : AppAssigned( aACTION, 31  ) = "(App Character) Ligature (right half)"
+AppAssigned( aCATEGORY, 32  ) = "Command"   : AppAssigned( aKEYS, 32  ) = "Alt+Ctrl+Shift+L"         : AppAssigned( aACTION, 32  ) = "(App Command) EditGuidedEntryInsert006ContinuingResources"
+AppAssigned( aCATEGORY, 33  ) = "Command"   : AppAssigned( aKEYS, 33  ) = "Ctrl+L"                   : AppAssigned( aACTION, 33  ) = "(App Command) CatalogingSearchLocalConstantData"
+AppAssigned( aCATEGORY, 34  ) = "Command"   : AppAssigned( aKEYS, 34  ) = "Ctrl+Shift+L"             : AppAssigned( aACTION, 34  ) = "(App Command) CatalogingCreateSingleRecordContinuingResources"
+AppAssigned( aCATEGORY, 35  ) = "Character" : AppAssigned( aKEYS, 35  ) = "Alt+Ctrl+M"               : AppAssigned( aACTION, 35  ) = "(App Character) High comma, off-center"
+AppAssigned( aCATEGORY, 36  ) = "Command"   : AppAssigned( aKEYS, 36  ) = "Alt+Ctrl+Shift+M"         : AppAssigned( aACTION, 36  ) = "(App Command) EditGuidedEntryInsert006Maps"
+AppAssigned( aCATEGORY, 37  ) = "Command"   : AppAssigned( aKEYS, 37  ) = "Ctrl+Shift+M"             : AppAssigned( aACTION, 37  ) = "(App Command) CatalogingCreateSingleRecordMaps"
+AppAssigned( aCATEGORY, 38  ) = "Character" : AppAssigned( aKEYS, 38  ) = "Alt+Ctrl+N"               : AppAssigned( aACTION, 38  ) = "(App Character) Double acute"
+AppAssigned( aCATEGORY, 39  ) = "Command"   : AppAssigned( aKEYS, 39  ) = "Ctrl+N"                   : AppAssigned( aACTION, 39  ) = "(App Command) CatalogingSearchOnlineConstantData"
+AppAssigned( aCATEGORY, 40  ) = "Command"   : AppAssigned( aKEYS, 40  ) = "Ctrl+Shift+N"             : AppAssigned( aACTION, 40  ) = "(App Command) CatalogingCreateConstantData"
+AppAssigned( aCATEGORY, 41  ) = "Character" : AppAssigned( aKEYS, 41  ) = "Alt+Ctrl+O"               : AppAssigned( aACTION, 41  ) = "(App Character) Candrabindu"
+AppAssigned( aCATEGORY, 42  ) = "Command"   : AppAssigned( aKEYS, 42  ) = "Ctrl+O"                   : AppAssigned( aACTION, 42  ) = "(App Command) CatalogingShowByOnlineSaveFileStatus"
+AppAssigned( aCATEGORY, 43  ) = "Command"   : AppAssigned( aKEYS, 43  ) = "Ctrl+Shift+O"             : AppAssigned( aACTION, 43  ) = "(App Command) AuthoritiesShowDefaultOnlineConstantData"
+AppAssigned( aCATEGORY, 44  ) = "Character" : AppAssigned( aKEYS, 44  ) = "Alt+Ctrl+P"               : AppAssigned( aACTION, 44  ) = "(App Character) Cedilla"
+AppAssigned( aCATEGORY, 45  ) = "Command"   : AppAssigned( aKEYS, 45  ) = "Alt+Ctrl+Shift+P"         : AppAssigned( aACTION, 45  ) = "(App Command) EditGuidedEntryInsert006ComputerFiles"
+AppAssigned( aCATEGORY, 46  ) = "Command"   : AppAssigned( aKEYS, 46  ) = "Ctrl+P"                   : AppAssigned( aACTION, 46  ) = "(App Command) FilePrint"
+AppAssigned( aCATEGORY, 47  ) = "Command"   : AppAssigned( aKEYS, 47  ) = "Ctrl+Shift+P"             : AppAssigned( aACTION, 47  ) = "(App Command) CatalogingCreateSingleRecordComputerFiles"
+AppAssigned( aCATEGORY, 48  ) = "Character" : AppAssigned( aKEYS, 48  ) = "Alt+Ctrl+Q"               : AppAssigned( aACTION, 48  ) = "(App Character) Right hook"
+AppAssigned( aCATEGORY, 49  ) = "Command"   : AppAssigned( aKEYS, 49  ) = "Ctrl+Shift+Q"             : AppAssigned( aACTION, 49  ) = "(App Command) AuthoritiesCreateConstantData"
+AppAssigned( aCATEGORY, 50  ) = "Character" : AppAssigned( aKEYS, 50  ) = "Alt+Ctrl+R"               : AppAssigned( aACTION, 50  ) = "(App Character) Dot below letter"
+AppAssigned( aCATEGORY, 51  ) = "Command"   : AppAssigned( aKEYS, 51  ) = "Alt+Ctrl+Shift+R"         : AppAssigned( aACTION, 51  ) = "(App Command) EditGuidedEntryInsert006SoundRecordings"
+AppAssigned( aCATEGORY, 52  ) = "Command"   : AppAssigned( aKEYS, 52  ) = "Ctrl+R"                   : AppAssigned( aACTION, 52  ) = "(App Command) EditReformat"
+AppAssigned( aCATEGORY, 53  ) = "Command"   : AppAssigned( aKEYS, 53  ) = "Ctrl+Shift+R"             : AppAssigned( aACTION, 53  ) = "(App Command) CatalogingCreateSingleRecordSoundRecordings"
+AppAssigned( aCATEGORY, 54  ) = "Character" : AppAssigned( aKEYS, 54  ) = "Alt+Ctrl+S"               : AppAssigned( aACTION, 54  ) = "(App Character) Double dot below letter"
+AppAssigned( aCATEGORY, 55  ) = "Command"   : AppAssigned( aKEYS, 55  ) = "Alt+Shift+S"              : AppAssigned( aACTION, 55  ) = "(App Command) ActionSetStatus"
+AppAssigned( aCATEGORY, 56  ) = "Character" : AppAssigned( aKEYS, 56  ) = "Alt+Ctrl+T"               : AppAssigned( aACTION, 56  ) = "(App Character) Circle below letter"
+AppAssigned( aCATEGORY, 57  ) = "Command"   : AppAssigned( aKEYS, 57  ) = "Alt+Ctrl+Shift+T"         : AppAssigned( aACTION, 57  ) = "(App Command) ToolsMacrosStop"
+AppAssigned( aCATEGORY, 58  ) = "Command"   : AppAssigned( aKEYS, 58  ) = "Ctrl+T"                   : AppAssigned( aACTION, 58  ) = "(App Command) EditCutCopyPasteCopyControlNumber"
+AppAssigned( aCATEGORY, 59  ) = "Command"   : AppAssigned( aKEYS, 59  ) = "Ctrl+Shift+T"             : AppAssigned( aACTION, 59  ) = "(App Command) ViewHoldingsState"
+AppAssigned( aCATEGORY, 60  ) = "Character" : AppAssigned( aKEYS, 60  ) = "Alt+Ctrl+U"               : AppAssigned( aACTION, 60  ) = "(App Character) Double underscore"
+AppAssigned( aCATEGORY, 61  ) = "Command"   : AppAssigned( aKEYS, 61  ) = "Alt+Ctrl+Shift+U"         : AppAssigned( aACTION, 61  ) = "(App Command) ViewNavigateRecordsandListsPrevious100Records"
+AppAssigned( aCATEGORY, 62  ) = "Command"   : AppAssigned( aKEYS, 62  ) = "Ctrl+U"                   : AppAssigned( aACTION, 62  ) = "(App Command) EditConstantDataOnlineApplybyName"
+AppAssigned( aCATEGORY, 63  ) = "Command"   : AppAssigned( aKEYS, 63  ) = "Alt+Ctrl+V"               : AppAssigned( aACTION, 63  ) = "(App Command) ActionSaveRecordtoOnlineFile"
+AppAssigned( aCATEGORY, 64  ) = "Command"   : AppAssigned( aKEYS, 64  ) = "Alt+Ctrl+Shift+V"         : AppAssigned( aACTION, 64  ) = "(App Command) EditGuidedEntryInsert006VisualMaterials"
+AppAssigned( aCATEGORY, 65  ) = "Command"   : AppAssigned( aKEYS, 65  ) = "Ctrl+V"                   : AppAssigned( aACTION, 65  ) = "(App Command) EditCutCopyPastePaste"
+AppAssigned( aCATEGORY, 66  ) = "Command"   : AppAssigned( aKEYS, 66  ) = "Ctrl+Shift+V"             : AppAssigned( aACTION, 66  ) = "(App Command) CatalogingCreateSingleRecordVisualMaterials"
+AppAssigned( aCATEGORY, 67  ) = "Command"   : AppAssigned( aKEYS, 67  ) = "Alt+Ctrl+W"               : AppAssigned( aACTION, 67  ) = "(App Character) Left hook"
+AppAssigned( aCATEGORY, 68  ) = "Character" : AppAssigned( aKEYS, 68  ) = "Alt+Ctrl+X"               : AppAssigned( aACTION, 68  ) = "(App Character) Inverted cedilla"
+AppAssigned( aCATEGORY, 69  ) = "Command"   : AppAssigned( aKEYS, 69  ) = "Alt+Ctrl+Shift+X"         : AppAssigned( aACTION, 69  ) = "(App Command) ViewNavigateRecordsandListsNext100Records"
+AppAssigned( aCATEGORY, 70  ) = "Command"   : AppAssigned( aKEYS, 70  ) = "Ctrl+X"                   : AppAssigned( aACTION, 70  ) = "(App Command) EditCutCopyPasteCut"
+AppAssigned( aCATEGORY, 71  ) = "Command"   : AppAssigned( aKEYS, 71  ) = "Ctrl+Shift+X"             : AppAssigned( aACTION, 71  ) = "(App Command) EditGuidedEntryEdit"
+AppAssigned( aCATEGORY, 72  ) = "Character" : AppAssigned( aKEYS, 72  ) = "Alt+Ctrl+Y"               : AppAssigned( aACTION, 72  ) = "(App Character) Upadhmaniya"
+AppAssigned( aCATEGORY, 73  ) = "Command"   : AppAssigned( aKEYS, 73  ) = "Ctrl+Y"                   : AppAssigned( aACTION, 73  ) = "(App Command) EditConstantDataLocalApplyDefault"
+AppAssigned( aCATEGORY, 74  ) = "Character" : AppAssigned( aKEYS, 74  ) = "Alt+Ctrl+Z"               : AppAssigned( aACTION, 74  ) = "(App Character) Double tilde (left half)"
+AppAssigned( aCATEGORY, 75  ) = "Command"   : AppAssigned( aKEYS, 75  ) = "Ctrl+Z"                   : AppAssigned( aACTION, 75  ) = "(App Command) EditCutCopyPasteUndo"
+AppAssigned( aCATEGORY, 76  ) = "Command"   : AppAssigned( aKEYS, 76  ) = "Ctrl+Shift+Z"             : AppAssigned( aACTION, 76  ) = "(App Command) EditCutCopyPasteCancelChanges"
+AppAssigned( aCATEGORY, 77  ) = "Character" : AppAssigned( aKEYS, 77  ) = "Alt+0"                    : AppAssigned( aACTION, 77  ) = "(App Character) Subscript 0"
+AppAssigned( aCATEGORY, 78  ) = "Character" : AppAssigned( aKEYS, 78  ) = "Alt+Ctrl+0"               : AppAssigned( aACTION, 78  ) = "(App Character) Ayn"
+AppAssigned( aCATEGORY, 79  ) = "Character" : AppAssigned( aKEYS, 79  ) = "Alt+Ctrl+Shift+0"         : AppAssigned( aACTION, 79  ) = "(App Character) Musical flat"
+AppAssigned( aCATEGORY, 80  ) = "Character" : AppAssigned( aKEYS, 80  ) = "Alt+Shift+0"              : AppAssigned( aACTION, 80  ) = "(App Character) Superscript 0"
+AppAssigned( aCATEGORY, 81  ) = "Character" : AppAssigned( aKEYS, 81  ) = "Alt+1"                    : AppAssigned( aACTION, 81  ) = "(App Character) Subscript 1"
+AppAssigned( aCATEGORY, 82  ) = "Character" : AppAssigned( aKEYS, 82  ) = "Alt+Ctrl+1"               : AppAssigned( aACTION, 82  ) = "(App Character) l with slash, lowercase"
+AppAssigned( aCATEGORY, 83  ) = "Character" : AppAssigned( aKEYS, 83  ) = "Alt+Ctrl+Shift+1"         : AppAssigned( aACTION, 83  ) = "(App Character) L with slash, uppercase"
+AppAssigned( aCATEGORY, 84  ) = "Character" : AppAssigned( aKEYS, 84  ) = "Alt+Shift+1"              : AppAssigned( aACTION, 84  ) = "(App Character) Superscript 1"
+AppAssigned( aCATEGORY, 85  ) = "Character" : AppAssigned( aKEYS, 85  ) = "Alt+2"                    : AppAssigned( aACTION, 85  ) = "(App Character) Subscript 2"
+AppAssigned( aCATEGORY, 86  ) = "Character" : AppAssigned( aKEYS, 86  ) = "Alt+Ctrl+2"               : AppAssigned( aACTION, 86  ) = "(App Character) o with slash, lowercase"
+AppAssigned( aCATEGORY, 87  ) = "Character" : AppAssigned( aKEYS, 87  ) = "Alt+Ctrl+Shift+2"         : AppAssigned( aACTION, 87  ) = "(App Character) Pseudo question mark"
+AppAssigned( aCATEGORY, 88  ) = "Character" : AppAssigned( aKEYS, 88  ) = "Alt+Shift+2"              : AppAssigned( aACTION, 88  ) = "(App Character) Superscript 2"
+AppAssigned( aCATEGORY, 89  ) = "Character" : AppAssigned( aKEYS, 89  ) = "Alt+3"                    : AppAssigned( aACTION, 89  ) = "(App Character) Subscript 3"
+AppAssigned( aCATEGORY, 90  ) = "Character" : AppAssigned( aKEYS, 90  ) = "Alt+Ctrl+3"               : AppAssigned( aACTION, 90  ) = "(App Character) d with crossbar, lowercase"
+AppAssigned( aCATEGORY, 91  ) = "Character" : AppAssigned( aKEYS, 91  ) = "Alt+Ctrl+Shift+3"         : AppAssigned( aACTION, 91  ) = "(App Character) D with crossbar, uppercase"
+AppAssigned( aCATEGORY, 92  ) = "Character" : AppAssigned( aKEYS, 92  ) = "Alt+Shift+3"              : AppAssigned( aACTION, 92  ) = "(App Character) Superscript 3"
+AppAssigned( aCATEGORY, 93  ) = "Character" : AppAssigned( aKEYS, 93  ) = "Alt+4"                    : AppAssigned( aACTION, 93  ) = "(App Character) Subscript 4"
+AppAssigned( aCATEGORY, 94  ) = "Character" : AppAssigned( aKEYS, 94  ) = "Alt+Ctrl+4"               : AppAssigned( aACTION, 94  ) = "(App Character) Thorn, lowercase"
+AppAssigned( aCATEGORY, 95  ) = "Character" : AppAssigned( aKEYS, 95  ) = "Alt+Ctrl+Shift+4"         : AppAssigned( aACTION, 95  ) = "(App Character) Thorn, uppercase"
+AppAssigned( aCATEGORY, 96  ) = "Character" : AppAssigned( aKEYS, 96  ) = "Alt+Shift+4"              : AppAssigned( aACTION, 96  ) = "(App Character) Superscript 4"
+AppAssigned( aCATEGORY, 97  ) = "Character" : AppAssigned( aKEYS, 97  ) = "Alt+5"                    : AppAssigned( aACTION, 97  ) = "(App Character) Subscript 5"
+AppAssigned( aCATEGORY, 98  ) = "Character" : AppAssigned( aKEYS, 98  ) = "Alt+Ctrl+5"               : AppAssigned( aACTION, 98  ) = "(App Character) ae, lowercase"
+AppAssigned( aCATEGORY, 99  ) = "Character" : AppAssigned( aKEYS, 99  ) = "Alt+Ctrl+Shift+5"         : AppAssigned( aACTION, 99  ) = "(App Character) AE, uppercase"
+AppAssigned( aCATEGORY, 100 ) = "Character" : AppAssigned( aKEYS, 100 ) = "Alt+Shift+5"              : AppAssigned( aACTION, 100 ) = "(App Character) Superscript 5"
+AppAssigned( aCATEGORY, 101 ) = "Character" : AppAssigned( aKEYS, 101 ) = "Alt+6"                    : AppAssigned( aACTION, 101 ) = "(App Character) Subscript 6"
+AppAssigned( aCATEGORY, 102 ) = "Character" : AppAssigned( aKEYS, 102 ) = "Alt+Ctrl+6"               : AppAssigned( aACTION, 102 ) = "(App Character) oe, lowercase"
+AppAssigned( aCATEGORY, 103 ) = "Character" : AppAssigned( aKEYS, 103 ) = "Alt+Ctrl+Shift+6"         : AppAssigned( aACTION, 103 ) = "(App Character) High comma, centered"
+AppAssigned( aCATEGORY, 104 ) = "Character" : AppAssigned( aKEYS, 104 ) = "Alt+Shift+6"              : AppAssigned( aACTION, 104 ) = "(App Character) Superscript 6"
+AppAssigned( aCATEGORY, 105 ) = "Character" : AppAssigned( aKEYS, 105 ) = "Alt+7"                    : AppAssigned( aACTION, 105 ) = "(App Character) Subscript 7"
+AppAssigned( aCATEGORY, 106 ) = "Character" : AppAssigned( aKEYS, 106 ) = "Alt+Ctrl+7"               : AppAssigned( aACTION, 106 ) = "(App Character) Tverdyi znak"
+AppAssigned( aCATEGORY, 107 ) = "Character" : AppAssigned( aKEYS, 107 ) = "Alt+Ctrl+Shift+7"         : AppAssigned( aACTION, 107 ) = "(App Character) OE, uppercase"
+AppAssigned( aCATEGORY, 108 ) = "Character" : AppAssigned( aKEYS, 108 ) = "Alt+Shift+7"              : AppAssigned( aACTION, 108 ) = "(App Character) Superscript 7"
+AppAssigned( aCATEGORY, 109 ) = "Character" : AppAssigned( aKEYS, 109 ) = "Alt+8"                    : AppAssigned( aACTION, 109 ) = "(App Character) Subscript 8"
+AppAssigned( aCATEGORY, 110 ) = "Character" : AppAssigned( aKEYS, 110 ) = "Alt+Ctrl+8"               : AppAssigned( aACTION, 110 ) = "(App Character) Turkish i without dot, lowercase"
+AppAssigned( aCATEGORY, 111 ) = "Character" : AppAssigned( aKEYS, 111 ) = "Alt+Shift+8"              : AppAssigned( aACTION, 111 ) = "(App Character) Superscript 8"
+AppAssigned( aCATEGORY, 112 ) = "Character" : AppAssigned( aKEYS, 112 ) = "Alt+9"                    : AppAssigned( aACTION, 112 ) = "(App Character) Subscript 9"
+AppAssigned( aCATEGORY, 113 ) = "Character" : AppAssigned( aKEYS, 113 ) = "Alt+Ctrl+9"               : AppAssigned( aACTION, 113 ) = "(App Character) British pound"
+AppAssigned( aCATEGORY, 114 ) = "Character" : AppAssigned( aKEYS, 114 ) = "Alt+Ctrl+Shift+9"         : AppAssigned( aACTION, 114 ) = "(App Character) Dot in center of line"
+AppAssigned( aCATEGORY, 115 ) = "Character" : AppAssigned( aKEYS, 115 ) = "Alt+Shift+9"              : AppAssigned( aACTION, 115 ) = "(App Character) Superscript 9"
+AppAssigned( aCATEGORY, 116 ) = "Command"   : AppAssigned( aKEYS, 116 ) = "F1"                       : AppAssigned( aACTION, 116 ) = "(App Command) HelpClientHelp"
+AppAssigned( aCATEGORY, 117 ) = "Command"   : AppAssigned( aKEYS, 117 ) = "Alt+F1"                   : AppAssigned( aACTION, 117 ) = "(App Command) FileLogoff"
+AppAssigned( aCATEGORY, 118 ) = "Command"   : AppAssigned( aKEYS, 118 ) = "Ctrl+F1"                  : AppAssigned( aACTION, 118 ) = "(App Command) FileLogon"
+AppAssigned( aCATEGORY, 119 ) = "Command"   : AppAssigned( aKEYS, 119 ) = "Shift+F1"                 : AppAssigned( aACTION, 119 ) = "(App Command) HelpMARCFieldHelp"
+AppAssigned( aCATEGORY, 120 ) = "Command"   : AppAssigned( aKEYS, 120 ) = "F2"                       : AppAssigned( aACTION, 120 ) = "(App Command) CatalogingSearchWorldCat"
+AppAssigned( aCATEGORY, 121 ) = "Command"   : AppAssigned( aKEYS, 121 ) = "Alt+F2"                   : AppAssigned( aACTION, 121 ) = "(App Command) AuthoritiesBrowseLCNamesandSubjects"
+AppAssigned( aCATEGORY, 122 ) = "Command"   : AppAssigned( aKEYS, 122 ) = "Ctrl+F2"                  : AppAssigned( aACTION, 122 ) = "(App Command) CatalogingBrowseWorldCat"
+AppAssigned( aCATEGORY, 123 ) = "Command"   : AppAssigned( aKEYS, 123 ) = "Shift+F2"                 : AppAssigned( aACTION, 123 ) = "(App Command) AuthoritiesSearchLCNamesandSubjects"
+AppAssigned( aCATEGORY, 124 ) = "Command"   : AppAssigned( aKEYS, 124 ) = "F3"                       : AppAssigned( aACTION, 124 ) = "(App Command) CatalogingSearchLocalSaveFile"
+AppAssigned( aCATEGORY, 125 ) = "Command"   : AppAssigned( aKEYS, 125 ) = "Alt+F3"                   : AppAssigned( aACTION, 125 ) = "(App Command) AuthoritiesSearchOnlineSaveFile"
+AppAssigned( aCATEGORY, 126 ) = "Command"   : AppAssigned( aKEYS, 126 ) = "Ctrl+F3"                  : AppAssigned( aACTION, 126 ) = "(App Command) CatalogingSearchOnlineSaveFile"
+AppAssigned( aCATEGORY, 127 ) = "Command"   : AppAssigned( aKEYS, 127 ) = "Shift+F3"                 : AppAssigned( aACTION, 127 ) = "(App Command) AuthoritiesSearchLocalSaveFile"
+AppAssigned( aCATEGORY, 128 ) = "Command"   : AppAssigned( aKEYS, 128 ) = "F4"                       : AppAssigned( aACTION, 128 ) = "(App Command) ActionSaveRecordtoLocalFile"
+AppAssigned( aCATEGORY, 129 ) = "Command"   : AppAssigned( aKEYS, 129 ) = "Alt+F4"                   : AppAssigned( aACTION, 129 ) = "(App Command) FileExit"
+AppAssigned( aCATEGORY, 130 ) = "Command"   : AppAssigned( aKEYS, 130 ) = "Ctrl+F4"                  : AppAssigned( aACTION, 130 ) = "(App Command) Close Window"
+AppAssigned( aCATEGORY, 131 ) = "Command"   : AppAssigned( aKEYS, 131 ) = "Shift+F4"                 : AppAssigned( aACTION, 131 ) = "(App Command) ViewPinned"
+AppAssigned( aCATEGORY, 132 ) = "Command"   : AppAssigned( aKEYS, 132 ) = "F5"                       : AppAssigned( aACTION, 132 ) = "(App Command) ActionExport"
+AppAssigned( aCATEGORY, 133 ) = "Command"   : AppAssigned( aKEYS, 133 ) = "Ctrl+F5"                  : AppAssigned( aACTION, 133 ) = "(App Command) ViewNews"
+AppAssigned( aCATEGORY, 134 ) = "Command"   : AppAssigned( aKEYS, 134 ) = "Shift+F5"                 : AppAssigned( aACTION, 134 ) = "(App Command) EditValidate"
+AppAssigned( aCATEGORY, 135 ) = "Command"   : AppAssigned( aKEYS, 135 ) = "F6"                       : AppAssigned( aACTION, 135 ) = "(App Command) EditNextRecordArea"
+AppAssigned( aCATEGORY, 136 ) = "Command"   : AppAssigned( aKEYS, 136 ) = "Ctrl+F6"                  : AppAssigned( aACTION, 136 ) = "(App Command) Next Document Window"
+AppAssigned( aCATEGORY, 137 ) = "Command"   : AppAssigned( aKEYS, 137 ) = "Ctrl+Shift+F6"            : AppAssigned( aACTION, 137 ) = "(App Command) Previous Document Window"
+AppAssigned( aCATEGORY, 138 ) = "Command"   : AppAssigned( aKEYS, 138 ) = "Shift+F6"                 : AppAssigned( aACTION, 138 ) = "(App Command) EditPreviousRecordArea"
+AppAssigned( aCATEGORY, 139 ) = "Command"   : AppAssigned( aKEYS, 139 ) = "F7"                       : AppAssigned( aACTION, 139 ) = "(App Command) ToolsCheckSpelling"
+AppAssigned( aCATEGORY, 140 ) = "Command"   : AppAssigned( aKEYS, 140 ) = "Shift+F7"                 : AppAssigned( aACTION, 140 ) = "(App Command) ActionHoldingsProduceandUpdateHoldings"
+AppAssigned( aCATEGORY, 141 ) = "Command"   : AppAssigned( aKEYS, 141 ) = "F8"                       : AppAssigned( aACTION, 141 ) = "(App Command) ActionHoldingsUpdateHoldings"
+AppAssigned( aCATEGORY, 142 ) = "Command"   : AppAssigned( aKEYS, 142 ) = "Alt+F8"                   : AppAssigned( aACTION, 142 ) = "(App Command) ActionLockMasterRecord"
+AppAssigned( aCATEGORY, 143 ) = "Command"   : AppAssigned( aKEYS, 143 ) = "Ctrl+F8"                  : AppAssigned( aACTION, 143 ) = "(App Command) FilePrint"
+AppAssigned( aCATEGORY, 144 ) = "Command"   : AppAssigned( aKEYS, 144 ) = "Shift+F8"                 : AppAssigned( aACTION, 144 ) = "(App Command) ActionHoldingsDeleteHoldings"
+AppAssigned( aCATEGORY, 145 ) = "Command"   : AppAssigned( aKEYS, 145 ) = "F9"                       : AppAssigned( aACTION, 145 ) = "(App Command) ViewNavigateRecordsandListsForward"
+AppAssigned( aCATEGORY, 146 ) = "Command"   : AppAssigned( aKEYS, 146 ) = "Alt+F9"                   : AppAssigned( aACTION, 146 ) = "(App Command) ActionReleaseRecordLock"
+AppAssigned( aCATEGORY, 147 ) = "Command"   : AppAssigned( aKEYS, 147 ) = "Shift+F9"                 : AppAssigned( aACTION, 147 ) = "(App Command) ViewNavigateRecordsandListsBack"
+AppAssigned( aCATEGORY, 148 ) = "Command"   : AppAssigned( aKEYS, 148 ) = "F10"                      : AppAssigned( aACTION, 148 ) = "(App Command) ViewLabel"
+AppAssigned( aCATEGORY, 149 ) = "Command"   : AppAssigned( aKEYS, 149 ) = "Alt+F10"                  : AppAssigned( aACTION, 149 ) = "(App Command) ActionReplaceRecord"
+AppAssigned( aCATEGORY, 150 ) = "Command"   : AppAssigned( aKEYS, 150 ) = "Shift+F10"                : AppAssigned( aACTION, 150 ) = "(App Command) FilePrintLabel(s)"
+AppAssigned( aCATEGORY, 151 ) = "Command"   : AppAssigned( aKEYS, 151 ) = "F11"                      : AppAssigned( aACTION, 151 ) = "(App Command) EditControlHeadingsSingle"
+AppAssigned( aCATEGORY, 152 ) = "Command"   : AppAssigned( aKEYS, 152 ) = "Alt+F11"                  : AppAssigned( aACTION, 152 ) = "(App Command) ActionReplaceandUpdateHoldings"
+AppAssigned( aCATEGORY, 153 ) = "Command"   : AppAssigned( aKEYS, 153 ) = "Ctrl+F11"                 : AppAssigned( aACTION, 153 ) = "(App Command) EditControlHeadingsUncontrolSingle"
+AppAssigned( aCATEGORY, 154 ) = "Command"   : AppAssigned( aKEYS, 154 ) = "Shift+F11"                : AppAssigned( aACTION, 154 ) = "(App Command) EditControlHeadingsAll"
+AppAssigned( aCATEGORY, 155 ) = "Command"   : AppAssigned( aKEYS, 155 ) = "F12"                      : AppAssigned( aACTION, 155 ) = "(App Command) FilePrint"
+AppAssigned( aCATEGORY, 156 ) = "Command"   : AppAssigned( aKEYS, 156 ) = "Shift+F12"                : AppAssigned( aACTION, 156 ) = "(App Command) FilePrintList"
+AppAssigned( aCATEGORY, 157 ) = "Character" : AppAssigned( aKEYS, 157 ) = "Alt+Add"                  : AppAssigned( aACTION, 157 ) = "(App Character) Subscript plus"
+AppAssigned( aCATEGORY, 158 ) = "Character" : AppAssigned( aKEYS, 158 ) = "Alt+Ctrl+Add"             : AppAssigned( aACTION, 158 ) = "(App Character) U with hook, uppercase"
+AppAssigned( aCATEGORY, 159 ) = "Character" : AppAssigned( aKEYS, 159 ) = "Alt+Ctrl+Shift+Add"       : AppAssigned( aACTION, 159 ) = "(App Character) Plus or minus"
+AppAssigned( aCATEGORY, 160 ) = "Character" : AppAssigned( aKEYS, 160 ) = "Alt+Shift+Add"            : AppAssigned( aACTION, 160 ) = "(App Character) Superscript plus"
+AppAssigned( aCATEGORY, 161 ) = "Character" : AppAssigned( aKEYS, 161 ) = "Alt+CloseBrackets"        : AppAssigned( aACTION, 161 ) = "(App Character) Subscript right parenthesis"
+AppAssigned( aCATEGORY, 162 ) = "Character" : AppAssigned( aKEYS, 162 ) = "Alt+Shift+CloseBrackets"  : AppAssigned( aACTION, 162 ) = "(App Character) Superscript right parenthesis"
+AppAssigned( aCATEGORY, 163 ) = "Character" : AppAssigned( aKEYS, 163 ) = "Alt+Ctrl+Comma"           : AppAssigned( aACTION, 163 ) = "(App Character) o with hook, lowercase"
+AppAssigned( aCATEGORY, 164 ) = "Character" : AppAssigned( aKEYS, 164 ) = "Alt+Ctrl+Shift+Comma"     : AppAssigned( aACTION, 164 ) = "(App Character) O with hook, uppercase"
+AppAssigned( aCATEGORY, 165 ) = "Command"   : AppAssigned( aKEYS, 165 ) = "Alt+Del"                  : AppAssigned( aACTION, 165 ) = "(App Command) EditCutCopyPasteDeleteField"
+AppAssigned( aCATEGORY, 166 ) = "Command"   : AppAssigned( aKEYS, 166 ) = "Shift+Del"                : AppAssigned( aACTION, 166 ) = "(App Command) EditCutCopyPasteCut"
+AppAssigned( aCATEGORY, 167 ) = "Command"   : AppAssigned( aKEYS, 167 ) = "Alt+Down Arrow"           : AppAssigned( aACTION, 167 ) = "(App Command) EditCutCopyPasteMoveFieldDown"
+AppAssigned( aCATEGORY, 168 ) = "Command"   : AppAssigned( aKEYS, 168 ) = "Enter"                    : AppAssigned( aACTION, 168 ) = "(App Command) EditCutCopyPasteInsertBlankFieldBelowCurrentField"
+AppAssigned( aCATEGORY, 169 ) = "Command"   : AppAssigned( aKEYS, 169 ) = "Shift+Enter"              : AppAssigned( aACTION, 169 ) = "(App Command) EditCutCopyPasteInsertBlankFieldAboveCurrentField"
+AppAssigned( aCATEGORY, 170 ) = "Command"   : AppAssigned( aKEYS, 170 ) = "Alt+Ins"                  : AppAssigned( aACTION, 170 ) = "(App Command) EditCutCopyPasteCopyField"
+AppAssigned( aCATEGORY, 171 ) = "Command"   : AppAssigned( aKEYS, 171 ) = "Ctrl+Ins"                 : AppAssigned( aACTION, 171 ) = "(App Command) EditCutCopyPasteCopy"
+AppAssigned( aCATEGORY, 172 ) = "Command"   : AppAssigned( aKEYS, 172 ) = "Shift+Ins"                : AppAssigned( aACTION, 172 ) = "(App Command) EditCutCopyPastePaste"
+AppAssigned( aCATEGORY, 173 ) = "Character" : AppAssigned( aKEYS, 173 ) = "Alt+OpenBrackets"         : AppAssigned( aACTION, 173 ) = "(App Character) Subscript left parenthesis"
+AppAssigned( aCATEGORY, 174 ) = "Character" : AppAssigned( aKEYS, 174 ) = "Alt+Ctrl+OpenBrackets"    : AppAssigned( aACTION, 174 ) = "(App Character) Double tilde (right half)"
+AppAssigned( aCATEGORY, 175 ) = "Character" : AppAssigned( aKEYS, 175 ) = "Alt+Shift+OpenBrackets"   : AppAssigned( aACTION, 175 ) = "(App Character) Superscript left parenthesis"
+AppAssigned( aCATEGORY, 176 ) = "Character" : AppAssigned( aKEYS, 176 ) = "Alt+Ctrl+Period"          : AppAssigned( aACTION, 176 ) = "(App Character) Ayn"
+AppAssigned( aCATEGORY, 177 ) = "Character" : AppAssigned( aKEYS, 177 ) = "Alt+Ctrl+Shift+Period"    : AppAssigned( aACTION, 177 ) = "(App Character) Script l"
+AppAssigned( aCATEGORY, 178 ) = "Character" : AppAssigned( aKEYS, 178 ) = "Ctrl+Pipe"                : AppAssigned( aACTION, 178 ) = "(App Character) Character |"
+AppAssigned( aCATEGORY, 179 ) = "Character" : AppAssigned( aKEYS, 179 ) = "Alt+Ctrl+Quotes"          : AppAssigned( aACTION, 179 ) = "(App Character) Miagkii znak"
+AppAssigned( aCATEGORY, 180 ) = "Character" : AppAssigned( aKEYS, 180 ) = "Alt+Ctrl+Shift+Quotes"    : AppAssigned( aACTION, 180 ) = "(App Character) O with slash, uppercase"
+AppAssigned( aCATEGORY, 181 ) = "Character" : AppAssigned( aKEYS, 181 ) = "Alt+Ctrl+Shift+Semicolon" : AppAssigned( aACTION, 181 ) = "(App Character) Eth, lowercase"
+AppAssigned( aCATEGORY, 182 ) = "Character" : AppAssigned( aKEYS, 182 ) = "Alt+Subtract"             : AppAssigned( aACTION, 182 ) = "(App Character) Subscript minus"
+AppAssigned( aCATEGORY, 183 ) = "Character" : AppAssigned( aKEYS, 183 ) = "Alt+Ctrl+Subtract"        : AppAssigned( aACTION, 183 ) = "(App Character) u with hook, lowercase"
+AppAssigned( aCATEGORY, 184 ) = "Character" : AppAssigned( aKEYS, 184 ) = "Alt+Shift+Subtract"       : AppAssigned( aACTION, 184 ) = "(App Character) Superscript minus"
+AppAssigned( aCATEGORY, 185 ) = "Command"   : AppAssigned( aKEYS, 185 ) = "Alt+Up Arrow"             : AppAssigned( aACTION, 185 ) = "(App Command) EditCutCopyPasteMoveFieldUp"
+
+' The "Characters" array is for all characters able to be added by means of a shortcut.
+' The number stored as a string in the first dimension of the array is the decimal
+' representation of the character's UTF-16 encoding.
+
+Characters( aCODE, 0   ) = "94"    : Characters( aNAME, 0   ) = "Circumflex, spacing"
+Characters( aCODE, 1   ) = "95"    : Characters( aNAME, 1   ) = "Underscore, spacing"
+Characters( aCODE, 2   ) = "96"    : Characters( aNAME, 2   ) = "Grave, spacing"
+Characters( aCODE, 3   ) = "123"   : Characters( aNAME, 3   ) = "Left curly bracket"
+Characters( aCODE, 4   ) = "124"   : Characters( aNAME, 4   ) = "Pipe"
+Characters( aCODE, 5   ) = "125"   : Characters( aNAME, 5   ) = "Right curly bracket"
+Characters( aCODE, 6   ) = "126"   : Characters( aNAME, 6   ) = "Tilde, spacing"
+Characters( aCODE, 7   ) = "161"   : Characters( aNAME, 7   ) = "Inverted exclamation point"
+Characters( aCODE, 8   ) = "163"   : Characters( aNAME, 8   ) = "British pound"
+Characters( aCODE, 9   ) = "169"   : Characters( aNAME, 9   ) = "Copyright mark"
+Characters( aCODE, 10  ) = "174"   : Characters( aNAME, 10  ) = "Subscript patent mark"
+Characters( aCODE, 11  ) = "176"   : Characters( aNAME, 11  ) = "Degree sign"
+Characters( aCODE, 12  ) = "177"   : Characters( aNAME, 12  ) = "Plus or minus"
+Characters( aCODE, 13  ) = "183"   : Characters( aNAME, 13  ) = "Dot in center of line"
+Characters( aCODE, 14  ) = "191"   : Characters( aNAME, 14  ) = "Inverted question mark"
+Characters( aCODE, 15  ) = "198"   : Characters( aNAME, 15  ) = "AE, uppercase"
+Characters( aCODE, 16  ) = "216"   : Characters( aNAME, 16  ) = "O with slash, uppercase"
+Characters( aCODE, 17  ) = "222"   : Characters( aNAME, 17  ) = "Thorn, uppercase"
+Characters( aCODE, 18  ) = "223"   : Characters( aNAME, 18  ) = "Eszett"
+Characters( aCODE, 19  ) = "230"   : Characters( aNAME, 19  ) = "ae, lowercase"
+Characters( aCODE, 20  ) = "240"   : Characters( aNAME, 20  ) = "Eth, lowercase"
+Characters( aCODE, 21  ) = "248"   : Characters( aNAME, 21  ) = "o with slash, lowercase"
+Characters( aCODE, 22  ) = "254"   : Characters( aNAME, 22  ) = "Thorn, lowercase"
+Characters( aCODE, 23  ) = "272"   : Characters( aNAME, 23  ) = "D with crossbar, uppercase"
+Characters( aCODE, 24  ) = "272"   : Characters( aNAME, 24  ) = "Eth, uppercase"
+Characters( aCODE, 25  ) = "273"   : Characters( aNAME, 25  ) = "d with crossbar, lowercase"
+Characters( aCODE, 26  ) = "305"   : Characters( aNAME, 26  ) = "Turkish I without dot, lowercase"
+Characters( aCODE, 27  ) = "321"   : Characters( aNAME, 27  ) = "L with slash, uppercase"
+Characters( aCODE, 28  ) = "322"   : Characters( aNAME, 28  ) = "l with slash, lowercase"
+Characters( aCODE, 29  ) = "338"   : Characters( aNAME, 29  ) = "OE, uppercase"
+Characters( aCODE, 30  ) = "339"   : Characters( aNAME, 30  ) = "oe, lowercase"
+Characters( aCODE, 31  ) = "416"   : Characters( aNAME, 31  ) = "O with hook, uppercase"
+Characters( aCODE, 32  ) = "417"   : Characters( aNAME, 32  ) = "o with hook, lowercase"
+Characters( aCODE, 33  ) = "431"   : Characters( aNAME, 33  ) = "U with hook, uppercase"
+Characters( aCODE, 34  ) = "432"   : Characters( aNAME, 34  ) = "u with hook, lowercase"
+Characters( aCODE, 35  ) = "450"   : Characters( aNAME, 35  ) = "Subfield delimiter"
+Characters( aCODE, 36  ) = "697"   : Characters( aNAME, 36  ) = "Miagkii znak"
+Characters( aCODE, 37  ) = "698"   : Characters( aNAME, 37  ) = "Tverdyi znak"
+Characters( aCODE, 38  ) = "699"   : Characters( aNAME, 38  ) = "Ayn"
+Characters( aCODE, 39  ) = "700"   : Characters( aNAME, 39  ) = "Alif"
+Characters( aCODE, 40  ) = "768"   : Characters( aNAME, 40  ) = "Grave, non-spacing"
+Characters( aCODE, 41  ) = "769"   : Characters( aNAME, 41  ) = "Acute"
+Characters( aCODE, 42  ) = "770"   : Characters( aNAME, 42  ) = "Circumflex, non-spacing"
+Characters( aCODE, 43  ) = "771"   : Characters( aNAME, 43  ) = "Tilde, non-spacing"
+Characters( aCODE, 44  ) = "772"   : Characters( aNAME, 44  ) = "Macron"
+Characters( aCODE, 45  ) = "774"   : Characters( aNAME, 45  ) = "Breve"
+Characters( aCODE, 46  ) = "775"   : Characters( aNAME, 46  ) = "Superior dot"
+Characters( aCODE, 47  ) = "776"   : Characters( aNAME, 47  ) = "Umlaut"
+Characters( aCODE, 48  ) = "777"   : Characters( aNAME, 48  ) = "Pseudo question mark"
+Characters( aCODE, 49  ) = "779"   : Characters( aNAME, 49  ) = "Double acute"
+Characters( aCODE, 50  ) = "780"   : Characters( aNAME, 50  ) = "Hacek"
+Characters( aCODE, 51  ) = "784"   : Characters( aNAME, 51  ) = "Candrabindu"
+Characters( aCODE, 52  ) = "787"   : Characters( aNAME, 52  ) = "High comma, centered"
+Characters( aCODE, 53  ) = "789"   : Characters( aNAME, 53  ) = "High comma, off-center"
+Characters( aCODE, 54  ) = "796"   : Characters( aNAME, 54  ) = "Inverted cedilla"
+Characters( aCODE, 55  ) = "803"   : Characters( aNAME, 55  ) = "Dot below letter"
+Characters( aCODE, 56  ) = "804"   : Characters( aNAME, 56  ) = "Double dot below letter"
+Characters( aCODE, 57  ) = "805"   : Characters( aNAME, 57  ) = "Circle below letter"
+Characters( aCODE, 58  ) = "806"   : Characters( aNAME, 58  ) = "Left hook"
+Characters( aCODE, 59  ) = "807"   : Characters( aNAME, 59  ) = "Cedilla"
+Characters( aCODE, 60  ) = "808"   : Characters( aNAME, 60  ) = "Right hook"
+Characters( aCODE, 61  ) = "814"   : Characters( aNAME, 61  ) = "Upadhmaniya"
+Characters( aCODE, 62  ) = "818"   : Characters( aNAME, 62  ) = "Underscore, non-spacing"
+Characters( aCODE, 63  ) = "819"   : Characters( aNAME, 63  ) = "Double underscore"
+Characters( aCODE, 64  ) = "889"   : Characters( aNAME, 64  ) = "Circle above letter"
+Characters( aCODE, 65  ) = "8304"  : Characters( aNAME, 65  ) = "Superscript 0"
+Characters( aCODE, 66  ) = "185"   : Characters( aNAME, 66  ) = "Superscript 1"
+Characters( aCODE, 67  ) = "178"   : Characters( aNAME, 67  ) = "Superscript 2"
+Characters( aCODE, 68  ) = "179"   : Characters( aNAME, 68  ) = "Superscript 3"
+Characters( aCODE, 69  ) = "8308"  : Characters( aNAME, 69  ) = "Superscript 4"
+Characters( aCODE, 70  ) = "8309"  : Characters( aNAME, 70  ) = "Superscript 5"
+Characters( aCODE, 71  ) = "8310"  : Characters( aNAME, 71  ) = "Superscript 6"
+Characters( aCODE, 72  ) = "8311"  : Characters( aNAME, 72  ) = "Superscript 7"
+Characters( aCODE, 73  ) = "8312"  : Characters( aNAME, 73  ) = "Superscript 8"
+Characters( aCODE, 74  ) = "8313"  : Characters( aNAME, 74  ) = "Superscript 9"
+Characters( aCODE, 75  ) = "8314"  : Characters( aNAME, 75  ) = "Superscript plus"
+Characters( aCODE, 76  ) = "8315"  : Characters( aNAME, 76  ) = "Superscript minus"
+Characters( aCODE, 77  ) = "8317"  : Characters( aNAME, 77  ) = "Superscript left parenthesis"
+Characters( aCODE, 78  ) = "8318"  : Characters( aNAME, 78  ) = "Superscript right parenthesis"
+Characters( aCODE, 79  ) = "8320"  : Characters( aNAME, 79  ) = "Subscript 0"
+Characters( aCODE, 80  ) = "8321"  : Characters( aNAME, 80  ) = "Subscript 1"
+Characters( aCODE, 81  ) = "8322"  : Characters( aNAME, 81  ) = "Subscript 2"
+Characters( aCODE, 82  ) = "8323"  : Characters( aNAME, 82  ) = "Subscript 3"
+Characters( aCODE, 83  ) = "8324"  : Characters( aNAME, 83  ) = "Subscript 4"
+Characters( aCODE, 84  ) = "8325"  : Characters( aNAME, 84  ) = "Subscript 5"
+Characters( aCODE, 85  ) = "8326"  : Characters( aNAME, 85  ) = "Subscript 6"
+Characters( aCODE, 86  ) = "8327"  : Characters( aNAME, 86  ) = "Subscript 7"
+Characters( aCODE, 87  ) = "8328"  : Characters( aNAME, 87  ) = "Subscript 8"
+Characters( aCODE, 88  ) = "8329"  : Characters( aNAME, 88  ) = "Subscript 9"
+Characters( aCODE, 89  ) = "8330"  : Characters( aNAME, 89  ) = "Subscript plus"
+Characters( aCODE, 90  ) = "8331"  : Characters( aNAME, 90  ) = "Subscript minus"
+Characters( aCODE, 91  ) = "8333"  : Characters( aNAME, 91  ) = "Subscript left parenthesis"
+Characters( aCODE, 92  ) = "8334"  : Characters( aNAME, 92  ) = "Subscript right parenthesis"
+Characters( aCODE, 93  ) = "8364"  : Characters( aNAME, 93  ) = "Euro sign"
+Characters( aCODE, 94  ) = "8467"  : Characters( aNAME, 94  ) = "Script l"
+Characters( aCODE, 95  ) = "8471"  : Characters( aNAME, 95  ) = "Phonogram copyright mark"
+Characters( aCODE, 96  ) = "8718"  : Characters( aNAME, 96  ) = "Fill character"
+Characters( aCODE, 97  ) = "9837"  : Characters( aNAME, 97  ) = "Musical flat"
+Characters( aCODE, 98  ) = "9839"  : Characters( aNAME, 98  ) = "Musical sharp"
+Characters( aCODE, 99  ) = "65056" : Characters( aNAME, 99  ) = "Ligature (left half)"
+Characters( aCODE, 100 ) = "65057" : Characters( aNAME, 100 ) = "Ligature (right half)"
+Characters( aCODE, 101 ) = "65058" : Characters( aNAME, 101 ) = "Double tilde (left half)"
+Characters( aCODE, 102 ) = "65059" : Characters( aNAME, 102 ) = "Double tilde (right half)"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillCopyArray
+
+' This array fixes up display of the OCLC names in a copied list. Non-character keys are
+' capitalized, and other keys are spelled out in full and made consistent. For example,
+' the Client uses the word "Pipe" in the list of keys it has assigned, but "Oem5" for the
+' same character when assigned by the user.
+
+CopyKeys( aOCLC, 0  ) = "Add"           : CopyKeys( aCOPY, 0  ) = "Add"
+CopyKeys( aOCLC, 1  ) = "Apps"          : CopyKeys( aCOPY, 1  ) = "MENU"
+CopyKeys( aOCLC, 2  ) = "Capital"       : CopyKeys( aCOPY, 2  ) = "CAPS LOCK"
+CopyKeys( aOCLC, 3  ) = "Clear"         : CopyKeys( aCOPY, 3  ) = "CLEAR"
+CopyKeys( aOCLC, 4  ) = "CloseBrackets" : CopyKeys( aCOPY, 4  ) = "Right bracket"
+CopyKeys( aOCLC, 5  ) = "Comma"         : CopyKeys( aCOPY, 5  ) = "Comma"
+CopyKeys( aOCLC, 6  ) = "Decimal"       : CopyKeys( aCOPY, 6  ) = "Period"
+CopyKeys( aOCLC, 7  ) = "Del"           : CopyKeys( aCOPY, 7  ) = "DELETE"
+CopyKeys( aOCLC, 8  ) = "Divide"        : CopyKeys( aCOPY, 8  ) = "Divide"
+CopyKeys( aOCLC, 9  ) = "Down Arrow"    : CopyKeys( aCOPY, 9  ) = "DOWN ARROW"
+CopyKeys( aOCLC, 10 ) = "End"           : CopyKeys( aCOPY, 10 ) = "END"
+CopyKeys( aOCLC, 11 ) = "Enter"         : CopyKeys( aCOPY, 11 ) = "ENTER"
+CopyKeys( aOCLC, 12 ) = "Equal"         : CopyKeys( aCOPY, 12 ) = "Equal"
+CopyKeys( aOCLC, 13 ) = "Escape"        : CopyKeys( aCOPY, 13 ) = "ESCAPE"
+CopyKeys( aOCLC, 14 ) = "Grave"         : CopyKeys( aCOPY, 14 ) = "Grave"
+CopyKeys( aOCLC, 15 ) = "Home"          : CopyKeys( aCOPY, 15 ) = "HOME"
+CopyKeys( aOCLC, 16 ) = "Ins"           : CopyKeys( aCOPY, 16 ) = "INSERT"
+CopyKeys( aOCLC, 17 ) = "Left"          : CopyKeys( aCOPY, 17 ) = "LEFT ARROW"
+CopyKeys( aOCLC, 18 ) = "LWin"          : CopyKeys( aCOPY, 18 ) = "LEFT WINDOWS"
+CopyKeys( aOCLC, 19 ) = "Minus"         : CopyKeys( aCOPY, 19 ) = "Minus"
+CopyKeys( aOCLC, 20 ) = "Multiply"      : CopyKeys( aCOPY, 20 ) = "Multiply"
+CopyKeys( aOCLC, 21 ) = "NumLock"       : CopyKeys( aCOPY, 21 ) = "NUMLOCK"
+CopyKeys( aOCLC, 22 ) = "NumPad0"       : CopyKeys( aCOPY, 22 ) = "Number pad 0"
+CopyKeys( aOCLC, 23 ) = "NumPad1"       : CopyKeys( aCOPY, 23 ) = "Number pad 1"
+CopyKeys( aOCLC, 24 ) = "NumPad2"       : CopyKeys( aCOPY, 24 ) = "Number pad 2"
+CopyKeys( aOCLC, 25 ) = "NumPad3"       : CopyKeys( aCOPY, 25 ) = "Number pad 3"
+CopyKeys( aOCLC, 26 ) = "NumPad4"       : CopyKeys( aCOPY, 26 ) = "Number pad 4"
+CopyKeys( aOCLC, 27 ) = "NumPad5"       : CopyKeys( aCOPY, 27 ) = "Number pad 5"
+CopyKeys( aOCLC, 28 ) = "NumPad6"       : CopyKeys( aCOPY, 28 ) = "Number pad 6"
+CopyKeys( aOCLC, 29 ) = "NumPad7"       : CopyKeys( aCOPY, 29 ) = "Number pad 7"
+CopyKeys( aOCLC, 30 ) = "NumPad8"       : CopyKeys( aCOPY, 30 ) = "Number pad 8"
+CopyKeys( aOCLC, 31 ) = "NumPad9"       : CopyKeys( aCOPY, 31 ) = "Number pad 9"
+CopyKeys( aOCLC, 32 ) = "Oem1"          : CopyKeys( aCOPY, 32 ) = "Semicolon"
+CopyKeys( aOCLC, 33 ) = "Oem5"          : CopyKeys( aCOPY, 33 ) = "Backward slash"
+CopyKeys( aOCLC, 34 ) = "Oem6"          : CopyKeys( aCOPY, 34 ) = "Right bracket"
+CopyKeys( aOCLC, 35 ) = "Oem7"          : CopyKeys( aCOPY, 35 ) = "Quotes"
+CopyKeys( aOCLC, 36 ) = "OpenBrackets"  : CopyKeys( aCOPY, 36 ) = "Left bracket"
+CopyKeys( aOCLC, 37 ) = "Pause"         : CopyKeys( aCOPY, 37 ) = "PAUSE"
+CopyKeys( aOCLC, 38 ) = "Period"        : CopyKeys( aCOPY, 38 ) = "Period"
+CopyKeys( aOCLC, 39 ) = "PgDn"          : CopyKeys( aCOPY, 39 ) = "PAGE DOWN"
+CopyKeys( aOCLC, 40 ) = "PgUp Arrow"    : CopyKeys( aCOPY, 40 ) = "PAGE UP"
+CopyKeys( aOCLC, 41 ) = "Pipe"          : CopyKeys( aCOPY, 41 ) = "Backward slash"
+CopyKeys( aOCLC, 42 ) = "PrintScreen"   : CopyKeys( aCOPY, 42 ) = "PRINTSCREEN"
+CopyKeys( aOCLC, 43 ) = "Question"      : CopyKeys( aCOPY, 43 ) = "Question"
+CopyKeys( aOCLC, 44 ) = "Right"         : CopyKeys( aCOPY, 44 ) = "RIGHT ARROW"
+CopyKeys( aOCLC, 45 ) = "RWin"          : CopyKeys( aCOPY, 45 ) = "RIGHT WINDOWS"
+CopyKeys( aOCLC, 46 ) = "Scroll"        : CopyKeys( aCOPY, 46 ) = "SCROLL"
+CopyKeys( aOCLC, 47 ) = "Space"         : CopyKeys( aCOPY, 47 ) = "Space"
+CopyKeys( aOCLC, 48 ) = "Subtract"      : CopyKeys( aCOPY, 48 ) = "Subtract"
+CopyKeys( aOCLC, 49 ) = "Tab"           : CopyKeys( aCOPY, 49 ) = "TAB"
+CopyKeys( aOCLC, 50 ) = "Up Arrow"      : CopyKeys( aCOPY, 50 ) = "UP ARROW"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillTempSearchArray( WhichArray% )
+
+' This is a temporary array used in the search function. Because the shortcut information
+' is held in several arrays rather than one big array, the search has to go through them
+' all, and uses this subroutine in a For..Next loop.
+
+Dim UBArray%
+
+Dim i As Integer
+
+Select Case WhichArray%
+  Case 0
+    UBArray% = UBound( [0-9] )
+    ReDim TempSearchArray( UBArray% )
+    For i = 0 To UBArray%
+      TempSearchArray( i ) = [0-9]( i )
+    Next i
+  Case 1
+    UBArray% = UBound( [A-Z] )
+    ReDim TempSearchArray( UBArray% )
+    For i = 0 To UBound( [A-Z] )
+      TempSearchArray( i ) = [A-Z]( i )
+    Next i
+  Case 2
+    UBArray% = UBound( [Function keys] )
+    ReDim TempSearchArray( UBArray% )
+    For i = 0 To UBound( [Function keys] )
+      TempSearchArray( i ) = [Function keys]( i )
+    Next i
+  Case 3
+    UBArray% = UBound( [Number keypad] )
+    ReDim TempSearchArray( UBArray% )
+    For i = 0 To UBound( [Number keypad] )
+      TempSearchArray( i ) = [Number keypad]( i )
+    Next i
+  Case 4
+    UBArray% = UBound( [Other keys] )
+    ReDim TempSearchArray( UBArray% )
+    For i = 0 To UBound( [Other keys] )
+      TempSearchArray( i ) = [Other keys]( i )
+    Next i
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillTypeOfKeyArrays( AssignedKeys() As String )
+
+' This sub fills the arrays for each character group, first from the user-assigned keymap
+' file, then from the app-assigned. The second time through, if a key has already been
+' assigned by the user, the app assignment doesn't get added.
+
+Dim ActionString$
+Dim BaseKey$
+Dim ModifyingKeys$
+Dim TempString$
+Dim UBInArray%
+
+Dim AssignedByApp
+Dim KeyFound
+
+Dim i As Integer, j As Integer, z As Integer
+
+UBInArray% = UBound( AssignedKeys, 2 )
+
+For i = 0 To UBInArray%
+  TempString$   = FormatKeyString( AssignedKeys( aKEYS, i ) )
+  BaseKey$      = GetBaseKey( TempString$, ModifyingKeys$ )
+  ActionString$ = AssignedKeys( aACTION, i )
+  If ActionString$ Like "##" Or ActionString$ Like "###" Or ActionString$ Like "####" Or ActionString$ Like "#####" Then
+      For j = 0 To UBound( Characters, 2 )
+        If ActionString$ = Characters( aCODE, j ) Then
+            ActionString$ = Characters( aNAME, j )
+            Exit For
+        End If
+      Next j
+    Else
+      If AssignedKeys( aCATEGORY, i ) = "Text" Then
+          ActionString$ = DOUBLE_QUOTE & ActionString$ & DOUBLE_QUOTE
+      End If
+  End If
+  TempString$ = BaseKey$ & ModifyingKeys$ & TAB_CHAR & AssignedKeys( aCATEGORY, i ) & TAB_CHAR & ActionString$
+  If BaseKey$ Like "[A-Z]" Then
+      Call SetRowInTypeOfKeyArray( [A-Z], TempString$, AddToTotalCount%, AddToCategoryCount$ )
+      [A-Z Count]     = [A-Z Count] + AddToTotalCount%
+    ElseIf BaseKey$ Like "[0-9]" Then
+      Call SetRowInTypeOfKeyArray( [0-9], TempString$, AddToTotalCount%, AddToCategoryCount$ )
+      [0-9 Count]     = [0-9 Count] + AddToTotalCount%
+    ElseIf BaseKey$ Like "F[1-9]" Then
+      Call SetRowInTypeOfKeyArray( [F1-F9], TempString$, AddToTotalCount%, AddToCategoryCount$ )
+      [F1-F9 Count]   = [F1-F9 Count] + AddToTotalCount%
+    ElseIf BaseKey$ Like "F1[0-9]" Then
+      Call SetRowInTypeOfKeyArray( [F10-F12], TempString$, AddToTotalCount%, AddToCategoryCount$ )
+      [F10-F12 Count] = [F10-F12 Count] + AddToTotalCount%
+    Else
+      KeyFound = FALSE
+      For j = 0 To UBound( OthersOCLC )
+        If BaseKey$ = OthersOCLC( j ) Then
+            Call SetRowInTypeOfKeyArray( [Other keys], TempString$, AddToTotalCount%, AddToCategoryCount$ )
+            [Other keys Count] = [Other keys Count] + AddToTotalCount%
+            KeyFound = TRUE
+            Exit For
+        End If
+      Next j
+      If KeyFound = FALSE Then
+          For j = 0 To UBound( NumPadOCLC)
+            If BaseKey$ = NumPadOCLC( j ) Then
+                Call SetRowInTypeOfKeyArray( [Number keypad], TempString$, AddToTotalCount%, AddToCategoryCount$ )
+                [Number keypad Count] = [Number keypad Count] + AddToTotalCount%
+                KeyFound = TRUE
+                Exit For
+            End If
+          Next j
+      End If
+      If KeyFound = FALSE Then
+          If BaseKey$ = "Semicolon" Or BaseKey$ = "Pipe" Or BaseKey$ = "CloseBrackets" Or BaseKey$ = "Quotes" Then
+              Call SetRowInTypeOfKeyArray( [Other keys], TempString$, AddToTotalCount%, AddToCategoryCount$ )
+              [Other keys Count] = [Other keys Count] + AddToTotalCount%
+          End If
+      End If
+  End If
+
+  If Left$( ActionString$, 4 ) = "(App" Then
+      AssignedByApp = TRUE
+    Else
+      AssignedByApp = FALSE
+  End If
+
+  Select Case AddToCategoryCount$
+    Case "Macro"
+      If AssignedByApp Then
+          AppMacroKeyCount% = AppMacroKeyCount% + 1
+        Else
+          UserMacroKeyCount% = UserMacroKeyCount% + 1
+      End If
+    Case "Character"
+      If AssignedByApp Then
+          AppCharacterKeyCount% = AppCharacterKeyCount% + 1
+        Else
+          UserCharacterKeyCount% = UserCharacterKeyCount% + 1
+      End If
+    Case "Command"
+      If AssignedByApp Then
+          AppCommandKeyCount% = AppCommandKeyCount% + 1
+        Else
+          UserCommandKeyCount% = UserCommandKeyCount% + 1
+      End If
+    Case "Text"
+      If AssignedByApp Then
+          AppTextKeyCount% = AppTextKeyCount% + 1
+        Else
+          UserTextKeyCount% = UserTextKeyCount% + 1
+      End If
+  End Select
+
+Next i
+
+' Re-run the sub with the key assignments built into Connexion, unless it has been
+' determined that app-assigned keys are to be ignored.
+
+If IncludeAppAssignments Then
+    If FirstPass Then
+        FirstPass = FALSE
+        Call FillTypeOfKeyArrays( AppAssigned() )
+    End If
+End If
+
+' Combine the alphabetic and numeric key counts.
+
+[Alphanumeric key Count] = [A-Z Count] + [0-9 Count]
+
+' Combine the two arrays of function key assignments and their counts.
+
+If [F1-F9 Count] > 0 Or [F10-F12 Count] > 0 Then
+    ReDim [Function keys]( UBound( [F1-F9] ) )
+End If
+If [F1-F9 Count] > 0 Then
+    For i = 0 To UBound( [F1-F9] )
+    [Function keys]( i ) = [F1-F9]( i )
+    Next i
+End If
+If [F10-F12 Count] > 0 Then
+    z = UBound( [Function keys] ) + 1
+    ReDim Preserve [Function keys]( z + UBound( [F10-F12] ) )
+    For i = z To z + UBound( [F10-F12] )
+      [Function keys]( i ) = [F10-F12]( i - z )
+    Next i
+End If
+[Function keys Count] = UBound( [Function keys] ) + 1
+
+TotalShortcutKeyCount% = [Alphanumeric key Count] + [Function keys Count] + [Number keypad Count] + [Other keys Count]
+
+End Sub
+
+'****************************************************************************************
+
+Sub FindKeymapFiles( PathName$ )
+
+' Search the Profile directory for the keymap files (there may be more than one). Fill
+' the array with the names of the keymap files. Keep track of the "Custom" file, as that
+' will be the default, or the first, file displayed. Exclude the
+' "AppExclusions.Keymap.xml" as that file stores de-assigned shortcut keys. An empty but
+' valid shortcut file contains only the string "<Keymap />" (in 22 bytes). That, and any
+' file of smaller size, will not be included in the list.
+
+Dim ProfileFilesFilename$
+
+Dim i As Integer, p As Integer
+
+ReDim KeymapFiles( 0 )
+KeymapFileCount% = 0
+
+ProfileFilesFilename$ = Dir( PathName$ )
+Do While ProfileFilesFilename$ <> ""
+  If Right$( ProfileFilesFilename$, 11 ) = ".Keymap.xml" Then
+      If ProfileFilesFilename$ <> "AppExclusions.Keymap.xml" Then
+          ReDim Preserve KeymapFiles( KeymapFileCount% )
+          p = InStr( ProfileFilesFilename$, XML_SUFFIX )
+          ProfileFilesFilename$ = Left$( ProfileFilesFilename$, p - 1 )
+          If ProfileFilesFilename$ = "Custom" Then
+              IndexOfCustom = KeymapFileCount%
+          End If
+          KeymapFiles( KeymapFileCount% ) = ProfileFilesFilename$
+          KeymapFileCount%                = KeymapFileCount% + 1
+      End If
+  End If
+  ProfileFilesFilename$ = Dir
+Loop
+
+End Sub
+
+'****************************************************************************************
+
+Sub FixLineBreaksInArray( LineEnd$ )
+
+' Files larger than 32K will have been broken up into strings smaller than 32K. That
+' could mean a line in the file is divided between two strings. The following code
+' rearranges the strings in the array so each one ends with a proper line ending (hex 0D
+' 00 0A 00, ASCII decimal 013 010), so each piece of information, whether a line in the
+' "Options" file or a key assignment, is whole. This is why the string limit in the macro
+' is 30K rather than 32K: Taking some characters from one string (to end the line with a
+' line break) and adding them to another could make the second string exceed the limit of
+' 32K.
+
+Dim UBFileArray%             : UBFileArray% = UBound( FileArray )
+
+If UBFileArray% = 0 Then Exit Sub
+
+Dim LineEndLength%
+Dim TempString$
+Dim TestForCRLF$
+Dim WorkString$
+
+LineEndLength% = Len( LineEnd$ )
+
+Dim i As Integer, p As Integer
+
+For i = 0 To UBFileArray% - 1
+  WorkString$ = FileArray( i )
+  p = Len( WorkString$ ) - ( LineEndLength% - 1 )
+  Do
+    TestForCRLF$ = Mid$( WorkString$, p, LineEndLength% )
+    If TestForCRLF$ = LineEnd$ Then
+        Exit Do
+      Else
+        p = p - 1
+    End If
+  Loop Until TestForCRLF$ = LineEnd$ Or p = 1
+  If p = 1 Then Exit Sub
+  TempString$        = Left$( WorkString$, p + ( LineEndLength% - 1 ) )
+  FileArray( i )     = Trim$( TempString$ )
+  TempString$        = Mid$( WorkString$, p + LineEndLength% ) & FileArray( i + 1 )
+  FileArray( i + 1 ) = Trim$( TempString$ )
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetShortcutsFromFile
+
+' Break down the shortcut file into its shortcut components and fill the "UserAssigned"
+' array.
+
+Dim CHECK_STRING_BEGINNING As String*18
+Dim CHECK_STRING_END As String*18
+
+Dim KeyType$
+Dim NextCRLF%
+Dim PairName$
+Dim PairValue$
+Dim TempString$
+Dim UBFileArray%
+Dim WorkString$
+
+Dim i As Integer, p As Integer
+
+CHECK_STRING_BEGINNING = Chr$( 255 ) & Chr$( 254 ) & "<" & NULL_CHAR & "K" & NULL_CHAR & "e" & NULL_CHAR & _
+                         "y" & NULL_CHAR & "m" & NULL_CHAR & "a" & NULL_CHAR & "p" & NULL_CHAR & ">" & NULL_CHAR
+CHECK_STRING_END       = "<" & NULL_CHAR & "/" & NULL_CHAR & "K" & NULL_CHAR & "e" & NULL_CHAR & _
+                         "y" & NULL_CHAR & "m" & NULL_CHAR & "a" & NULL_CHAR & "p" & NULL_CHAR & ">" & NULL_CHAR
+
+UBFileArray% = UBound( FileArray )
+
+' Check that the keymap file is encoded as Unicode, begins with "<Keymap>", and ends with
+' "</Keymap>".
+
+WorkString$ = FileArray( 0 )
+If Left$( WorkString$, 18 ) <> CHECK_STRING_BEGINNING Then
+    GoTo ReadFailure:
+  Else
+    FileArray( 0 ) = Mid$( WorkString$, 23 )
+    WorkString$    = FileArray( UBFileArray% )
+    p = InStr( WorkString$, CHECK_STRING_END )
+    If p > 0 Then
+        FileArray( UBFileArray% ) = Left$( WorkString$, p - 1 )
+      Else
+        GoTo ReadFailure:
+    End If
+End If
+
+UserAssignedKeyCount% = 0
+ReDim UserAssigned( 2, UserAssignedKeyCount% )
+For i = 0 To UBFileArray%
+  WorkString$ = FileArray( i )
+  Do
+    NextCRLF% = InStr( WorkString$, CRLF_UNICODE )
+    If NextCRLF% > 0 Then
+        TempString$ = Trim$( UnicodeConvert( Left$( WorkString$, NextCRLF ) ) )
+        WorkString$ = Mid$( WorkString$, NextCRLF% + 5 )
+        p = InStr( TempString$, " " )
+        If p > 0 Then
+            KeyType$ = Mid$( TempString$, 2, p - 2 )
+        End If
+        PairName$   = ExtractPairValues( TempString$, "Key" )
+        PairValue$  = ExtractPairValues( TempString$, "Value" )
+
+' If proper values have been extracted from the line, add them to the array. Otherwise,
+' exit this sub with an error message that the file could not be read.
+
+        If KeyType$ <> "" And PairName$ <> "" And PairValue$ <> "" Then
+            ReDim Preserve UserAssigned( 2, UserAssignedKeyCount% )
+            UserAssigned( aCATEGORY, UserAssignedKeyCount% ) = KeyType$
+            UserAssigned( aKEYS,     UserAssignedKeyCount% ) = PairName$
+            UserAssigned( aACTION,   UserAssignedKeyCount% ) = PairValue$
+            UserAssignedKeyCount% = UserAssignedKeyCount% + 1
+        End If
+      Else
+        Exit Do
+    End If
+  Loop Until NextCRLF% = 0
+Next i
+
+Exit Sub
+
+ReadFailure:
+
+FileProblem$ = "Sorry, could not read the keymap file."
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetTextStringsFromFile
+
+' Break down the text strings file into its components and fill its array.
+
+Dim CHECK_STRING_BEGINNING As String
+Dim CHECK_STRING_END       As String
+
+Dim NextCRLF%
+Dim PairName$
+Dim PairValue$
+Dim TempString$
+Dim TextStringsCount%
+Dim UBFileArray%
+Dim WorkString$
+
+Dim i As Integer, p As Integer
+
+CHECK_STRING_BEGINNING = "<section name=" & DOUBLE_QUOTE & "TextStrings" & DOUBLE_QUOTE & ">"
+CHECK_STRING_END       = "</sections>"
+
+UBFileArray% = UBound( FileArray )
+
+' Check that the text strings file has the proper strings near the beginning and at the
+' end.
+
+TempString$ = FileArray( 0 )
+If Mid$( TempString$, 58, 28 ) = CHECK_STRING_BEGINNING Then
+    FileArray( 0 ) = Mid$( TempString$, 92 )
+    TempString$    = FileArray( UBFileArray% )
+    p = InStr( TempString$, NULL_CHAR )
+    If p > 0 Then
+        TempString$ = Left$( TempString$, p - 1 )
+    End If
+    If Right$( TempString$, 11 ) = CHECK_STRING_END Then
+        FileArray( UBFileArray% ) = TempString$
+      Else
+        FileProblem$ = "Can't read TextStrings file"
+        Exit Sub
+    End If
+End If
+
+For i = 0 To UBFileArray%
+  WorkString$ = FileArray( i )
+  Do
+    NextCRLF% = InStr( WorkString$, CRLF_ASCII )
+    If NextCRLF% > 0 Then
+        TempString$ = Trim$( Left$( WorkString$, NextCRLF% ) )
+        WorkString$ = Trim$( Mid$( WorkString$, NextCRLF% + 5 ) )
+        PairName$   = ExtractPairValues( TempString$, "item key" )
+        PairValue$  = ExtractPairValues( TempString$, "value" )
+        Do
+          p = InStr( PairValue$, Chr$( 199 ) & Chr$( 130 ) )
+          If p > 0 Then
+              PairValue$ = Left$( PairValue$, p - 1 ) & "$" & Mid$( PairValue$, p + 2 )
+          End If
+        Loop Until p = 0
+
+' If proper values have been extracted from the line, add them to the array. Otherwise,
+' exit this sub with an error message that the file could not be read.
+
+        If PairName$ <> "" And PairValue$ <> "" Then
+            ReDim Preserve TextStrings( 1, TextStringsCount% )
+            TextStrings( 0, TextStringsCount% ) = PairName$
+            TextStrings( 1, TextStringsCount% ) = PairValue$
+            TextStringsCount% = TextStringsCount% + 1
+        End If
+      Else
+        Exit Do
+    End If
+  Loop Until NextCRLF% = 0
+Next i
+
+Exit Sub
+
+ReadFailure:
+
+FileProblem$ = "Sorry, could not read the text strings file."
+
+End Sub
+
+'****************************************************************************************
+
+Sub MakeListForClipboard
+
+' This routine assembles all the character arrays to produce a tab-delimited string to
+' put on the clipboard.
+
+Const WARNING_MESSAGE As Integer = 48
+
+Dim CategoryString$
+Dim CopiedShortcutsString$
+Dim DateString$
+Dim Footer$
+Dim Header$
+Dim TempString$
+Dim UBCopiedShortcuts%
+
+Dim i As Integer, j As Integer, p As Integer, z As Integer
+
+' Offer the option to filter the output. The default filter matches whatever has been set
+' up in the main dialog box.
+
+Begin Dialog CopyListDialogDefinition  190, 124, WaltsMacros$, .CopyListDialogControlFunction
+  OkButton       68, 100,  52,  14
+  CancelButton  128, 100,  52,  14
+  CheckBox       16,  20,  64,  12, "Macros",                                                .CheckBoxMacro
+  CheckBox       16,  34,  64,  12, "Characters",                                            .CheckBoxCharacter
+  CheckBox       16,  48,  64,  12, "Text strings",                                          .CheckBoxText
+  CheckBox       16,  62,  64,  12, "Menu items",                                            .CheckBoxCommand
+  CheckBox      102,  20,  48,  12, "From app",                                              .CheckBoxIncludeApp
+  Text           10,   6, 128,   8, "Include these key assignments in the list:"
+  Text           16,  76,  80,  16, "Please select at least one category!",                  .IncludeCategories
+  Text          102,  34,  72,  24, "(User-assigned keys are always included in the list.)"
+End Dialog
+
+Dim CopyListDialog As CopyListDialogDefinition
+If Dialog( CopyListDialog ) <> 0 Then
+    CancelCopy = FALSE
+  Else
+    Exit Sub
+End If
+
+If CopyListDialog.CheckBoxIncludeApp = CHECKED Then
+    IncludeAppAssignments = TRUE
+  Else
+    IncludeAppAssignments = FALSE
+End If
+
+' The category filter simply assembles a text string of all the categories; if the
+' category of the key assignment is in that string, that assignment will be added.
+
+If CopyListDialog.CheckBoxMacro = CHECKED Then
+    CategoryString$ = CategoryString$ & "Macro"
+End If
+
+If CopyListDialog.CheckBoxCharacter = CHECKED Then
+    CategoryString$ = CategoryString$ & "Character"
+End If
+
+If CopyListDialog.CheckBoxText = CHECKED Then
+    CategoryString$ = CategoryString$ & "Text"
+End If
+
+If CopyListDialog.CheckBoxCommand = CHECKED Then
+    CategoryString$ = CategoryString$ & "Command"
+End If
+
+If [A-Z Count] > 0 Then
+    ReDim CopiedShortcuts( 2 )
+    CopiedShortcuts( 0 ) = "ALPHANUMERIC KEYS"
+    CopiedShortcuts( 1 ) = ""
+    Call SelectShortcutsToCopy( [A-Z](), 2, CategoryString$ )
+End If
+
+If [0-9 Count] > 0 Then
+    z = UBound( CopiedShortcuts ) + 1
+    Call SelectShortcutsToCopy( [0-9](), z, CategoryString$ )
+End If
+
+' If nothing has been added, include a note indicating that.
+
+If UBound( CopiedShortcuts ) = 2 Then
+    CopiedShortcuts( 2 ) = "None assigned."
+End If
+
+If [Function keys Count] > 0 Then
+    z = UBound( CopiedShortcuts ) + 4
+    ReDim Preserve CopiedShortcuts( z )
+    CopiedShortcuts( z - 3 ) = ""
+    CopiedShortcuts( z - 2 ) = "FUNCTION KEYS"
+    CopiedShortcuts( z - 1 ) = ""
+    Call SelectShortcutsToCopy( [Function keys](), z, CategoryString$ )
+End If
+
+If UBound( CopiedShortcuts ) = z Then
+    CopiedShortcuts( z ) = "None assigned."
+End If
+
+If [Other keys Count] > 0 Then
+    z = UBound( CopiedShortcuts ) + 4
+    ReDim Preserve CopiedShortcuts( z )
+    CopiedShortcuts( z - 3 ) = ""
+    CopiedShortcuts( z - 2 ) = "OTHER KEYS"
+    CopiedShortcuts( z - 1 ) = ""
+    Call SelectShortcutsToCopy( [Other keys](), z, CategoryString$ )
+End If
+
+If UBound( CopiedShortcuts ) = z Then
+    CopiedShortcuts( z ) = "None assigned."
+End If
+
+If [Number keypad Count] > 0 Then
+    z = UBound( CopiedShortcuts ) + 4
+    ReDim Preserve CopiedShortcuts( z )
+    CopiedShortcuts( z - 3 ) = ""
+    CopiedShortcuts( z - 2 ) = "NUMBER KEYPAD"
+    CopiedShortcuts( z - 1 ) = ""
+    Call SelectShortcutsToCopy( [Number keypad](), z, CategoryString$ )
+End If
+
+If UBound( CopiedShortcuts ) = z Then
+    CopiedShortcuts( z ) = "None assigned."
+End If
+
+If UBound( CopiedShortcuts ) > 0 Then
+    For i = 0 To UBound( CopiedShortcuts )
+      TempString$ = CopiedShortcuts( i )
+      If Left$( TempString$, 3 ) Like "F[9][0-2]" Then
+          Mid$( CopiedShortcuts( i ), 2, 1 ) = "1"
+      End If
+    Next i
+End If
+
+' Set some explanatory text in the copied string.
+
+Select Case CategoryString$
+
+  Case "Character"
+    CategoryString$ = "Selected category: Characters."
+  Case "CharacterCommand"
+    CategoryString$ = "Selected categories: Characters and menu items."
+  Case "CharacterText"
+    CategoryString$ = "Selected categories: Characters and text strings."
+  Case "CharacterTextCommand"
+    CategoryString$ = "Selected categories: Characters, menu items, and text strings."
+  Case "Command"
+    CategoryString$ = "Selected category: Menu items."
+  Case "Macro"
+    CategoryString$ = "Selected category: Macros."
+  Case "MacroCharacter"
+    CategoryString$ = "Selected categories: Characters and macros."
+  Case "MacroCharacterCommand"
+    CategoryString$ = "Selected categories: Characters, macros, and menu items."
+  Case "MacroCharacterText"
+    CategoryString$ = "Selected categories: Characters, macros, and text strings."
+  Case "MacroCharacterTextCommand"
+    CategoryString$ = "All categories shown."
+  Case "MacroCommand"
+    CategoryString$ = "Selected categories: Macros and menu items."
+  Case "MacroText"
+    CategoryString$ = "Selected categories: Macros and text strings."
+  Case "MacroTextCommand"
+    CategoryString$ = "Selected categories: Macros, menu items, and text strings."
+  Case "Text"
+    CategoryString$ = "Selected category: Text strings."
+  Case "TextCommand"
+    CategoryString$ = "Selected categories: Menu items and text strings."
+
+End Select
+
+Header$ = "Shortcut keys in " & FilePath$ & XML_SUFFIX & CRLF_ASCII
+If IncludeAppAssignments Then
+    Header$ = Header$ & "Includes app-assigned shortcut keys. "
+End If
+Header$ = Header$ & CategoryString$ & CRLF_ASCII & CRLF_ASCII
+
+DateString$ = Date$ & " " & Time$
+DateString$ = Format( DateString$, "General Date" )
+Footer$     = "This list was created " & DateString$ & " using the " & DOUBLE_QUOTE & "ShortcutKeysIndex" & DOUBLE_QUOTE & " macro by Walter F. Nickeson."
+
+UBCopiedShortcuts% = UBound( CopiedShortcuts )
+For i = 0 To UBCopiedShortcuts%
+  CopiedShortcutsString$ = CopiedShortcutsString$ & CopiedShortcuts( i ) & CRLF_ASCII
+Next i
+
+CopiedShortcutsString$ = Header$ & CopiedShortcutsString$
+CopiedShortcutsString$ = CopiedShortcutsString$ & CRLF_ASCII
+CopiedShortcutsString$ = CopiedShortcutsString$ & Footer$
+
+On Error GoTo Problem:
+
+Clipboard.Clear
+Clipboard.SetText CopiedShortcutsString$
+MsgBox "List of shortcut keys copied to the Clipboard.", INFORMATION_MESSAGE, WaltsMacros$
+
+Exit Sub
+
+Problem:
+
+MsgBox "Sorry, there was a problem copying the list to the Clipboard.", WARNING_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Sub ReadFileFromDrive( FileName$ )
+
+' This sub reads the data from the file parameter into a string array.
+
+Const NORMAL_FILE          As Integer = 0    'Attribute of a normal file.
+Const NORMAL_FILE_ARCHIVE  As Integer = 32   'Attribute of a normal file with archive bit set?
+Const MIN_FILE_SIZE        As Integer = 40   'Minimum size in bytes of a .keymap file. (This is the size of the default file
+                                             ' created by the Client if it doesn't find a keymap file in the profile.)
+
+Dim INPUT_CHUNK As String*MAX_LEN_STRING
+
+Dim Attributes%
+Dim FileNum%
+Dim FileSize&
+Dim NumberOfInputChunks%
+
+Dim i As Integer
+
+FileSize& = FileLen( FileName$ )
+If InStr( 1, FileName$, "keymap", 1 ) > 0 Then
+    If FileSize& < MIN_FILE_SIZE Then
+        FileProblem$ = "The keymap file is empty!"
+        Exit Sub
+    End If
+End If
+ReDim FileArray( 0 )
+
+On Error GoTo ErrorHandler:
+Attributes% = GetAttr( FileName$ )
+If Attributes% = NORMAL_FILE Or Attributes% = NORMAL_FILE_ARCHIVE Then
+    FileNum%             = FreeFile
+    NumberOfInputChunks% = Int( FileSize& / MAX_LEN_STRING  )
+    If FileSize& < MAX_LEN_STRING Then
+        NumberOfInputChunks% = 0
+    End If
+    Open FileName$ For Binary Access Read As #FileNum%
+    For i = 0 To NumberOfInputChunks%
+      ReDim Preserve FileArray( NumberOfInputChunks% )
+      Get #FileNum%, , INPUT_CHUNK
+      FileArray( i ) = INPUT_CHUNK
+    Next i
+    Close #FileNum%
+    Reset
+End If
+
+Exit Sub
+
+ErrorHandler:
+
+FileProblem$ = "Sorry, could not read the file " & FileName$ & "."
+
+End Sub
+
+'****************************************************************************************
+
+Sub PutFileIntoArrays( FilePath$ )
+
+Call ReadFileFromDrive( FilePath$ & XML_SUFFIX )
+If FileProblem <> "" Then Exit Sub
+Call FixLineBreaksInArray( CRLF_UNICODE )
+If InStr( FilePath, "Keymap" ) Then
+    GetShortcutsFromFile
+  Else
+    GetTextStringsFromFile
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub ReadOptionsFile( SelectedProfilePath$ )
+
+Dim IgnoreAppDecision$
+
+Dim i As Integer
+
+IgnoreAppDecision$ = "<item key=" & DOUBLE_QUOTE & "IgnoreAppDefaultKeymap" & DOUBLE_QUOTE & " value=" & _
+                      DOUBLE_QUOTE & "True" & DOUBLE_QUOTE & " />"
+
+Call ReadFileFromDrive( SelectedProfilePath$ & "Options.xml" )
+Call FixLineBreaksInArray( CRLF_ASCII )
+IncludeAppAssignments = TRUE
+
+For i = 0 To UBound( FileArray )
+  If InStr( FileArray( i ), IgnoreAppDecision$ ) Then
+      IncludeAppAssignments = FALSE
+      Exit For
+  End If
+Next i
+
+ReDim FileArray( 0 )
+
+End Sub
+
+'****************************************************************************************
+
+Sub SearchItems( SearchTerm$, TypeOfSearch$ )
+
+' This routine finds all the items that match (even partially) whatever has been entered
+' as a search term, without regard to case. For characters, there is no search term--the
+' macro simply lists them all--so the sub extracts every one. However, if the checkbox
+' for including app-assigned shortcuts on the main page is not checked, those shortcuts
+' are excluded. The result of this sub for characters is simply the populating of the
+' list in the search dialog box. For text strings, not only is the text string itself
+' searched, but so is the description. For macros, although the name of the macro book
+' associated with a macro is not included in the search, it is retrieved for display. For
+' all items other than characters, the search results are sorted into a crude relevance
+' ranking. The rank of an item is the measure of its closeness to the beginning of the
+' item's name. Therefore, a search term that matches the item's name right at the
+' beginning of that name is ranked higher than a match that occurs later in the name.
+' Items with the same rank are sorted alphabetically. Because characters are not being
+' searched in the same way, they are not subject to ranking.
+
+Dim TempType As SearchedItemInfo
+
+Dim Amp%
+Dim Compare%
+Dim ItemName$
+Dim KeyArrayIndex%
+Dim ItemOtherInfo$
+Dim MatchPosition%
+Dim TabPosition%
+Dim TempString$
+Dim TestString$
+Dim UBSearchResults%
+
+Dim IncludeAppItems
+Dim Sorted
+
+Dim i As Integer, j As Integer, p As Integer
+
+Erase SearchResults
+SearchHitsCount% = 0
+
+IncludeAppItems = DlgValue( "IncludeAppCheckbox" )
+For KeyArrayIndex% = 0 To 4
+  Call FillTempSearchArray( KeyArrayIndex% )
+  For i = 0 To UBound( TempSearchArray )
+    TempString$  = TempSearchArray( i )
+    TabPosition% = InStr( TempString$, TAB_CHAR )
+    If TabPosition% > 0 Then
+        If Mid$( TempString$, TabPosition% + 1, 4 ) = TypeOfSearch$ Then
+
+            Select Case TypeOfSearch$
+
+              Case "Macr"
+                p = InStr( TempString$, "!" )
+                If p > 0 Then
+                    ItemName$ = Trim$( Mid$( TempString$, p + 1 ) )
+                    Do
+                      Amp% = InStr( ItemName$, "&amp;" )
+                      If Amp% > 0 Then
+                          If Amp% = 1 Then
+                              ItemName$ = "&" & Mid$( ItemName$, 6 )
+                            Else
+                              ItemName$ = Left$( ItemName$, Amp% ) & Mid$( ItemName$, Amp% + 5 )
+                          End If
+                      End If
+                    Loop Until Amp% = 0
+                    ItemOtherInfo$ = Trim$( Mid$( TempString$, TabPosition% + 7, p - TabPosition% - 7 ) )
+                End If
+                MatchPosition% = InStr( 1, ItemName$, SearchTerm$, CASE_INSENSITIVE )
+
+              Case "Text"
+
+' For text strings, search both the description and the actual string.
+
+                ItemName$ = Mid$( TempString$, TabPosition% + 6 )
+                ItemName$ = Mid$( ItemName$, 2, Len( ItemName$ ) - 2 )
+                For j = 0 To UBound( TextStrings, 2 )
+                  TestString$ = TextStrings( 0, j )
+                  If ItemName$ = TestString$ Then
+                      ItemOtherInfo$ = TextStrings( 1, j )
+                      Exit For
+                  End If
+                Next j
+                MatchPosition% = InStr( 1, ItemName$, SearchTerm$, CASE_INSENSITIVE )
+                If MatchPosition% = 0 Then
+                    MatchPosition% = InStr( 1, ItemOtherInfo$, SearchTerm$, 1 )
+                    If MatchPosition% = 0 Then
+                        GoTo Skip:
+                    End If
+                End If
+
+              Case "Comm"
+                p = InStr( TempString$, "(App Command) " )
+                If p > 0 Then
+                    If IncludeAppItems Then
+                        ItemName$ = Mid$( TempString$, p + 14 )
+                    End If
+                  Else
+                    p = InStr( TempString$, TAB_CHAR & "Command" & TAB_CHAR )
+                    If p > 0 Then
+                        ItemName$ = Mid$( TempString$, p + 9 )
+                    End If
+                End If
+                MatchPosition% = InStr( 1, ItemName$, SearchTerm$, CASE_INSENSITIVE )
+
+              Case "Char"
+                p = InStr( TempString$, "(App Character) " )
+                If p > 0 Then
+                    If IncludeAppItems Then
+                        ItemName$ = Mid$( TempString$, p + 16 )
+                    End If
+                  Else
+                    p = InStr( TempString$, TAB_CHAR & "Character" & TAB_CHAR )
+                    If p > 0 Then
+                        ItemName$ = Mid$( TempString$, p + 11 )
+                    End If
+                End If
+                If ItemName$ <> "" Then
+                    MatchPosition% = 1
+                End If
+
+            End Select
+
+' Characters are not being searched, so all characters for which shortcuts exist are
+' placed in the results array; that's why the match position is always a true value (that
+' is, greater than zero). Otherwise, an item gets added to the array only if it contains,
+' somewhere within its name, the search term.
+
+            If MatchPosition% > 0 Then
+                ReDim Preserve SearchResults( SearchHitsCount% )
+                SearchResults( SearchHitsCount% ).tNameOfItem       = ItemName$
+                SearchResults( SearchHitsCount% ).tOtherInformation = ItemOtherInfo$
+                SearchResults( SearchHitsCount% ).tShortcutKeys     = Trim$( Left$( TempString$, TabPosition% - 1 ) )
+                SearchResults( SearchHitsCount% ).tMatchPosition    = MatchPosition%
+                SearchHitsCount% = SearchHitsCount% + 1
+            End If
+        End If
+    End If
+
+Skip:
+
+  Next i
+Next KeyArrayIndex%
+
+If SearchHitsCount% = 0 Then
+    ReDim Preserve SearchResults( 0 )
+    SearchResults( SearchHitsCount% ).tNameOfItem   = "No keys assigned."
+    SearchResults( SearchHitsCount% ).tShortcutKeys = ""
+    Exit Sub
+End If
+
+UBSearchResults% = SearchHitsCount% - 1
+
+' Sort the search results with the inefficient but easy to code bubble sort.
+
+If TypeOfSearch$ <> "Char" Then
+
+' The rank of matches is alphabetical by beginning position; that is, the closer the
+' search term is to the beginning of the item name, the higher the rank, or the lower the
+' value of the index in the array. Start by ordering the search results by the beginning
+' position of the search term in the item name.
+
+    Do
+      Sorted = FALSE
+      For i = 0 To UBSearchResults% - 1
+        If SearchResults( i ).tMatchPosition > SearchResults( i + 1 ).tMatchPosition Then
+            TempType               = SearchResults( i )
+            SearchResults( i )     = SearchResults( i + 1 )
+            SearchResults( i + 1 ) = TempType
+            Sorted = TRUE
+        End If
+      Next i
+    Loop Until Sorted = FALSE
+End If
+
+' Then sort alphabetically by the name of the item for each beginning position.
+
+Do
+  Sorted = FALSE
+  For i = 0 To UBSearchResults% - 1
+    If SearchResults( i ).tMatchPosition = SearchResults( i + 1 ).tMatchPosition Then
+        Compare% = StrComp( SearchResults( i ).tNameOfItem, SearchResults( i + 1 ).tNameOfItem, 1 )
+        If Compare% > 0 Then
+            TempType               = SearchResults( i )
+            SearchResults( i )     = SearchResults( i + 1 )
+            SearchResults( i + 1 ) = TempType
+            Sorted = TRUE
+        End If
+    End If
+  Next i
+Loop Until Sorted = FALSE
+
+End Sub
+
+'****************************************************************************************
+
+Sub SelectShortcutsToCopy( TypeOfKey() As String, CumulativeIndex%, CategoryString$ )
+
+' This sub selects which shortcuts to copy for the complete index. It first checks the
+' source of the shortcut assignment, so app-assigned keys can be either included or
+' excluded. Then it checks which categories are being added to determine, again, whether
+' or not to add the assignment. If only one category of shortcuts has been selected for
+' copying, that term is removed from each line; otherwise, each shortcut includes the
+' category to which it belongs.
+
+Dim AppAssignedTest$
+Dim AssignedCategory$
+Dim Candidate$
+Dim FirstKey$
+Dim Incumbent$
+Dim KeyCount%
+Dim KeyName$
+Dim StartingIndex%
+Dim TempString$
+Dim UBCopiedShortcuts%
+
+Dim i As Integer, j As Integer, k As Integer, p As Integer
+
+StartingIndex% = CumulativeIndex%
+
+For i = 0 To UBound( TypeOfKey )
+  TempString$      = TypeOfKey( i )
+  AppAssignedTest$ = Left$( GetField( TempString$, ACTION_FIELD, TAB_CHAR ), 4 )
+  If AppAssignedTest$ <> "(App" Or ( AppAssignedTest$ = "(App" And IncludeAppAssignments ) Then
+      AssignedCategory$ = GetField( TempString$, CATEGORY_FIELD, TAB_CHAR )
+      If InStr( CategoryString$, AssignedCategory$ ) Then
+          If CategoryString$ = AssignedCategory$ Then
+              p = InStr( TempString$, AssignedCategory$ )
+              TempString$ = Left$( TempString$, p - 2 ) & TAB_CHAR & Mid$( TempString$, p + Len( CategoryString$ ) + 1 )
+          End If
+          p = InStr( TempString$, " +" )
+          If p = 0 Then
+              p = InStr( TempString$, TAB_CHAR )
+              If p > 0 Then
+                  KeyName$ = Left$( TempString$, p - 1 )
+              End If
+            Else
+              KeyName$ = Left$( TempString$, p - 1 )
+          End If
+          If KeyName$ Like "[0-9A-Z]" Then
+              p = 2
+            Else
+              If KeyName$ Like "F[1-9]" Then
+                  p = 3
+                ElseIf KeyName$ Like "F[1-9][0-2]" Then
+                  p = 4
+                Else
+                  For j = 0 To 50
+                    If KeyName$ = CopyKeys( aOCLC, j ) Then
+                        KeyName$ = CopyKeys( aCOPY, j )
+                    End If
+                  Next j
+                End If
+          End If
+
+' Function keys F10-F12 need to be manipulated so they come after function keys F1-F9.
+
+          If KeyName$ Like "F[1-9][0-2]" Then
+              Mid$( KeyName$, 2, 1 ) = "9"
+          End If
+          TempString$ = KeyName$ & Mid$( TempString$, p )
+
+' When this sub is called, the last rows of the array of copied shortcuts include a
+' header introducing the next section of keys being copied, except for the section for
+' numeric keys. This section follows on directly from the list of alphabetic keys and has
+' no separate header, being combined as "alphanumeric keys." The row with the header is
+' followed by one empty row for spacing and another for the next key to be entered.
+' However, when the numeric keys are being added to the array, the last row has the last
+' alphabetic character in it, so a new empty row must be added at the end to hold the
+' first numeric key. This situation is identified by the key count having been reset to
+' zero.
+
+          If KeyCount% = 0 Then
+              If CopiedShortcuts( CumulativeIndex% - 1 ) <> "" Then
+                  ReDim Preserve CopiedShortcuts( CumulativeIndex% )
+              End If
+          End If
+          Candidate$ = TempString$
+
+' A simple insertion sort to get the keys in order.
+
+          If KeyCount% = 0 Then
+              CopiedShortcuts( CumulativeIndex% ) = Candidate$
+            Else
+              UBCopiedShortcuts% = UBound( CopiedShortcuts ) + 1
+              ReDim Preserve CopiedShortcuts( UBCopiedShortcuts% )
+              For j = StartingIndex% To UBCopiedShortcuts%
+                Incumbent$ = CopiedShortcuts( j )
+                If StrComp( Candidate$, Incumbent$, CASE_INSENSITIVE ) <= 0 Then
+                    For k = UBCopiedShortcuts% To j + 1 Step -1
+                      CopiedShortcuts( k ) = CopiedShortcuts( k - 1 )
+                    Next k
+                    CopiedShortcuts( j ) = Candidate$
+                    Exit For
+                  Else
+                    If j = UBCopiedShortcuts% Then
+                        CopiedShortcuts( j ) = Candidate$
+                    End If
+                End If
+              Next j
+          End If
+          KeyCount% = KeyCount% + 1
+      End If
+  End If
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetRowInTypeOfKeyArray( TypeOfKey() As String, KeymapString$, AddToTotalCount%, AddToCategoryCount$ )
+
+' This sub fills the array for the type of key selected with the lines from the keymap
+' files, sorting the array as it fills it.
+
+Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9  'The Error value returned when the upper bound of an uninitialized array is
+                                             ' requested.
+
+Dim Candidate$
+Dim Incumbent$
+Dim UBTypeOfKey%
+
+Dim i As Integer, j As Integer
+
+AddToTotalCount% = 1
+
+On Error Resume Next
+UBTypeOfKey% = UBound( TypeOfKey )
+If Err = SUBSCRIPT_OUT_OF_RANGE Then
+    UBTypeOfKey% = 0
+    ReDim TypeOfKey( UBTypeOfKey% )
+End If
+
+Candidate$ = GetField( KeymapString$, KEY_COMBO_FIELD, TAB_CHAR )
+
+' This is a simple insertion sort where each entry is guaranteed to be unique. New
+' entries that match existing entries are simply ignored; so, because the array is filled
+' first by user assignments, the same key in an app assignment is not added.
+
+If TypeOfKey( 0 ) = "" Then
+    TypeOfKey( 0 ) = KeymapString$
+  Else
+    ReDim Preserve TypeOfKey( UBTypeOfKey% + 1 )
+    UBTypeOfKey% = UBound( TypeOfKey )
+    For i = 0 To UBTypeOfKey%
+      Incumbent$ = TypeOfKey( i )
+      If Incumbent$ = "" Then
+          TypeOfKey( i ) = KeymapString$
+          Exit For
+        Else
+          Incumbent$ = GetField( Incumbent$, KEY_COMBO_FIELD, TAB_CHAR )
+          If Candidate$ = Incumbent$ Then
+              ReDim Preserve TypeOfKey( UBTypeOfKey% - 1 )
+              AddToTotalCount% = 0
+              Exit For
+            ElseIf Candidate$ < Incumbent$ Then
+              For j = UBTypeOfKey% To i + 1 Step -1
+                TypeOfKey( j ) = TypeOfKey( j - 1 )
+              Next j
+              TypeOfKey( i ) = KeymapString$
+              Exit For
+          End If
+      End If
+    Next i
+End If
+
+If AddToTotalCount% > 0 Then
+    AddToCategoryCount$ = GetField( KeymapString$, CATEGORY_FIELD, TAB_CHAR )
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function CalculateCounts( TypeOfKeyArrayID% ) As String
+
+Dim AppAssignedTest$
+Dim Counter%
+Dim Shortcut$
+Dim ShortcutCategory$
+Dim TempString$
+Dim Term$
+Dim TypeOfKey() As String
+
+Dim i As Integer, z As Integer
+
+If UserAssignedKeyCount% > 0 Then
+
+    Select Case TypeOfKeyArrayID%
+
+      Case NO_SELECTION
+
+        Select Case SelectedCategory$
+
+          Case "Macro"
+            If IncludeAppAssignments Then
+                Counter% = UserMacroKeyCount% + AppMacroKeyCount%
+              Else
+                Counter% = UserMacroKeyCount%
+            End If
+
+          Case "Character"
+            If IncludeAppAssignments Then
+                Counter% = UserCharacterKeyCount% + AppCharacterKeyCount%
+              Else
+                Counter% = UserCharacterKeyCount%
+            End If
+
+          Case "Command"
+            If IncludeAppAssignments Then
+                Counter% = UserCommandKeyCount% + AppCommandKeyCount%
+              Else
+                Counter% = UserCommandKeyCount%
+            End If
+
+          Case "Text"
+            If IncludeAppAssignments Then
+                Counter% = UserTextKeyCount% + AppTextKeyCount%
+              Else
+                Counter% = UserTextKeyCount%
+            End If
+
+          Case ""
+            If IncludeAppAssignments Then
+                Counter% = TotalShortcutKeyCount%
+              Else
+                Counter% = UserAssignedKeyCount%
+            End If
+
+        End Select
+
+      Case ALPHANUMERICS
+
+        For i = 0 To UBound( [A-Z] )
+          ReDim Preserve TypeOfKey( i )
+          TypeOfKey( i ) = [A-Z]( i )
+        Next i
+        z = UBound( TypeOfKey ) + 1
+        For i = 0 To UBound( [0-9] )
+          ReDim Preserve TypeOfKey( z + i )
+          TypeOfKey( z + i ) = [0-9]( i )
+        Next i
+
+      Case FUNCTION_KEYS
+
+        For i = 0 To UBound( [Function keys] )
+          ReDim Preserve TypeOfKey( i )
+          TypeOfKey( i ) = [Function keys]( i )
+        Next i
+
+      Case OTHER_KEYS
+
+        For i = 0 To UBound( [Other keys] )
+          ReDim Preserve TypeOfKey( i )
+          TypeOfKey( i ) = [Other keys]( i )
+        Next i
+
+      Case NUMBER_PAD
+
+        For i = 0 To UBound( [Number keypad] )
+          ReDim Preserve TypeOfKey( i )
+          TypeOfKey( i ) = [Number keypad]( i )
+        Next i
+
+    End Select
+
+    If TypeOfKeyArrayID% <> NO_SELECTION Then
+        For i = 0 To UBound( TypeOfKey )
+          TempString$      = TypeOfKey( i )
+          AppAssignedTest$ = Left$( GetField( TempString$, ACTION_FIELD, TAB_CHAR ), 4 )
+          If AppAssignedTest$ <> "(App" Or ( AppAssignedTest$ = "(App" And IncludeAppAssignments ) Then
+              ShortcutCategory$ = GetField( TempString$, CATEGORY_FIELD, TAB_CHAR )
+              If ShortcutCategory$ = SelectedCategory$ Or SelectedCategory$ = "" Then
+                  Counter% = Counter% + 1
+              End If
+          End If
+        Next i
+    End If
+
+    Select Case SelectedCategory$
+      Case "Macro"
+        Term$ = " macro"
+      Case "Command"
+        Term$ = " menu item"
+      Case "Text"
+        Term$ = " text string"
+      Case "Character"
+        Term$ = " character"
+      Case ""
+        Term$ = ""
+    End Select
+
+End If
+
+If Counter% = 0 Then
+    Shortcut$ = "No" & Term$ & " shortcuts"
+  ElseIf Counter% = 1 Then
+    Shortcut$ = "One" & Term$ & " shortcut"
+  Else
+    Shortcut$ = Trim$( Str$( Counter% ) ) & Term$ & " shortcuts"
+End If
+
+If TypeOfKeyArrayID% = NO_SELECTION Then
+    If SelectedCategory$ = "" Then
+        CalculateCounts = Shortcut$ & " in all categories."
+      Else
+        CalculateCounts = Shortcut$ & "."
+    End If
+  Else
+    CalculateCounts = Shortcut$ & " in this key group."
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function ExtractPairValues( InString$, KeyName$ ) As String
+
+' This function gets the values from the name-value pair in the file, "Key=" for the
+' shortcut key combination, and "Value=" for the command or macro, etc., that the
+' shortcut key triggers.
+
+Dim p As Integer, q As Integer
+
+p = InStr( InString$, KeyName$ & "=" )
+If p > 0 Then
+    p = InStr( p, InString$, DOUBLE_QUOTE )
+    If p > 0 Then
+        q = InStr( p + 1, InString$, DOUBLE_QUOTE )
+        If q > 0 Then
+            ExtractPairValues = Mid$( InString$, p + 1, q - p - 1 )
+            Exit Function
+        End If
+    End If
+End If
+
+ExtractPairValues = ""
+
+End Function
+
+'****************************************************************************************
+
+Function FormatKeyString( KeymapString$ ) As String
+
+' This function formats the string for each key assignment. It puts the key at the head
+' of the string and adds the modifier keys in order ("ALT", "CTRL", then "SHIFT").
+
+Dim Key$
+Dim Start%
+Dim TempString$
+
+Dim i As Integer, p As Integer
+
+Start% = 1
+Do
+  p = InStr( Start%, KeymapString$, "+" )
+  If p > 0 Then
+      Start% = p + 1
+  End If
+Loop Until p = 0
+
+TempString$ = Mid$( KeymapString$, Start% )
+
+For i = 1 To 3
+  Key$ = GetField$( "Alt,Ctrl,Shift", i, "," )
+  If InStr( 1, KeymapString$, Key$, 1 ) > 0 Then
+      TempString$ = TempString$ & "+" & Key$
+  End If
+Next i
+
+' Add spaces around the first plus sign to help make the base key stand out..
+
+p = InStr( TempString$, "+" )
+If p > 0 Then
+    TempString$ = Left$( TempString$, p - 1 ) & " + " & Mid$( TempString$, p + 1 )
+End If
+
+FormatKeyString = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function GetBaseKey( KeymapString$, RestOfString$ ) As String
+
+' This function finds the base key in the keymap string. It is always the last element,
+' following the combinations of modifier keys, except for unmodified keys; an unmodified
+' key is the only element in the string of added keys.
+
+Dim TempString$
+
+Dim p As Integer, q As Integer
+
+p = InStr( KeymapString$, "+" )
+If p > 0 Then
+    TempString$   = Trim$( Left$( KeymapString$, p - 1 ) )
+    RestOfString$ = Mid$( KeymapString$, p - 1 )
+  Else
+    TempString$   = GetField( KeymapString$, KEY_COMBO_FIELD, TAB_CHAR )
+    RestOfString$ = ""
+End If
+
+GetBaseKey = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function GetKeyName( InString$ ) As String
+
+' Characters entered from the keyboard must be converted to their names for the macro to
+' be able to process them.
+
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE = Chr$( 039 )
+
+Dim TempString$
+
+Dim p As Integer
+
+p = InStr( InString$, " " )
+If p < 2 Then
+    TempString$ = InString$
+  Else
+    TempString$ = Left$( InString$, p - 1 )
+End If
+
+If TempString$ Like "[0-9A-Za-z]" Then
+    GetKeyName = TempString$
+  Else
+    Select Case TempString$
+      Case " "
+        GetKeyName = "Space"
+      Case "`", "~"
+        GetKeyName = "Grave"
+      Case "!"
+        GetKeyName = "1"
+      Case "@"
+        GetKeyName = "2"
+      Case "#"
+        GetKeyName = "3"
+      Case "$"
+        GetKeyName = "4"
+      Case "%"
+        GetKeyName = "5"
+      Case "^"
+        GetKeyName = "6"
+      Case "&"
+        GetKeyName = "7"
+      Case "*"
+        GetKeyName = "8"
+      Case "("
+        GetKeyName = "9"
+      Case ")"
+        GetKeyName = "0"
+      Case "-", "_"
+        GetKeyName = "Minus"
+      Case "=", "+"
+        GetKeyName = "Equal"
+      Case "[", "{"
+        GetKeyName = "OpenBrackets"
+      Case "]", "}"
+        GetKeyName = "Oem6"
+      Case "\", "|"
+        GetKeyName = "Oem5"
+      Case ";", ":"
+        GetKeyName = "Oem1"
+      Case SINGLE_QUOTE, DOUBLE_QUOTE
+        GetKeyName = "Oem7"
+      Case ",", "<"
+        GetKeyName = "Comma"
+      Case ".", ">"
+        GetKeyName = "Period"
+      Case "/", "?"
+        GetKeyName = "Question"
+      Case "Down"
+        GetKeyName = "Down Arrow"
+      Case "PgUp"
+        GetKeyName = "PgUp Arrow"
+      Case "Up"
+        GetKeyName = "Up Arrow"
+    End Select
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function SearchDialogs( SearchCategory$ ) As String
+
+Dim DialogReturn%
+Dim KeyString$
+Dim UBSearchResults%
+
+Dim i As Integer
+
+Dim SearchItemKeys()      As String
+Dim SearchItemNames()     As String
+Dim SearchItemOtherInfo() As String
+
+UBSearchResults% = UBound( SearchResults )
+ReDim SearchItemNames( UBSearchResults% )
+ReDim SearchItemOtherInfo( UBSearchResults% )
+ReDim SearchItemKeys( UBSearchResults% )
+For i = 0 To UBSearchResults%
+  SearchItemKeys( i )      = SearchResults( i ).tShortcutKeys
+  SearchItemNames( i )     = SearchResults( i ).tNameOfItem
+  SearchItemOtherInfo( i ) = SearchResults( i ).tOtherInformation
+Next i
+
+Select Case SearchCategory$
+
+  Case "Macr"
+
+    Begin Dialog Dialog4Definition  376, 114, WaltsMacros$, .SearchResultsDialogsControlFunction
+      PushButton    254,  90,  52,  14, "&Close",              .Close
+      CancelButton  314,  90,  52,  14
+      PushButton    122,  90,  66,  14, "&Go to key page...",  .GoTo
+      PushButton    194,  90,  52,  14, "&Search again",       .ReSearch
+      PushButton     10,  90,  52,  14, "Scrolling note",      .Scroll
+      ListBox        10,  16, 116,  80, SearchItemNames(),     .ListBoxNames
+      ListBox       130,  16, 116,  80, SearchItemOtherInfo(), .ListBoxOther
+      ListBox       250,  16, 116,  80, SearchItemKeys(),      .ListBoxKeys
+      Text           10,   6,  64,   8, "Macro names:"
+      Text          126,   6,  64,   8, "Macro book names:"
+      Text          242,   6,  64,   8, "Shortcut keys:"
+    End Dialog
+    Dim Dialog4 as Dialog4Definition
+    On Error Resume Next
+    DialogReturn% = Dialog( Dialog4 )
+    If DialogReturn% = 2 Then
+        KeyString$ = SearchItemKeys( Dialog4.ListBoxKeys )
+    End If
+
+  Case "Text"
+
+    Begin Dialog Dialog5Definition  464, 114, WaltsMacros$, .SearchResultsDialogsControlFunction
+      PushButton    342,  90,  52,  14, "&Close",              .Close
+      CancelButton  402,  90,  52,  14
+      PushButton    208,  90,  66,  14, "&Go to key page...",  .GoTo
+      PushButton    282,  90,  52,  14, "&Search again",       .ReSearch
+      PushButton     10,  90,  52,  14, "Scrolling note",      .Scroll
+      ListBox        10,  16, 160,  80, SearchItemNames(),     .ListBoxNames
+      ListBox       174,  16, 160,  80, SearchItemOtherInfo(), .ListBoxOther
+      ListBox       338,  16, 116,  80, SearchItemKeys(),      .ListBoxKeys
+      Text           10,   6,  64,   8, "Description:"
+      Text          174,   6,  64,   8, "Text strings:"
+      Text          338,   6,  64,   8, "Shortcut keys:"
+    End Dialog
+    Dim Dialog5 as Dialog5Definition
+    On Error Resume Next
+    DialogReturn% = Dialog( Dialog5 )
+    If DialogReturn% = 2 Then
+        KeyString$ = SearchItemKeys( Dialog5.ListBoxKeys )
+    End If
+
+  Case "Comm"
+
+    Begin Dialog Dialog6Definition  324, 114, WaltsMacros$, .SearchResultsDialogsControlFunction
+      PushButton    202,  90,  52,  14, "&Close",             .Close
+      CancelButton  262,  90,  52,  14
+      PushButton     68,  90,  66,  14, "&Go to key page...", .GoTo
+      PushButton    142,  90,  52,  14, "&Search again",      .ReSearch
+      ListBox        10,  16, 188,  72, SearchItemNames(),    .ListBoxNames
+      ListBox       202,  16, 112,  72, SearchItemKeys(),     .ListBoxKeys
+      Text           10,   6,  64,   8, "Text strings:"
+      Text          202,   6,  64,   8, "Shortcut keys:"
+    End Dialog
+    Dim Dialog6 as Dialog6Definition
+    On Error Resume Next
+    DialogReturn% = Dialog( Dialog6 )
+    If DialogReturn% = 2 Then
+        KeyString$ = SearchItemKeys( Dialog4.ListBoxKeys )
+    End If
+
+End Select
+
+SearchDialogs = Str( DialogReturn% ) & KeyString$
+
+End Function
+
+'****************************************************************************************
+
+Function SetupKeyPage( InString$ ) As String
+
+' Given a key, whether entered directly from the keyboard or returned as the result of a
+' search, this function identifies what type of key it is and where in the list of keys
+' of that type it occupies.
+
+Dim KeyGroupIndex%
+Dim NewPageKeySelection%
+Dim SelectedKey$
+
+Dim i As Integer, p As Integer
+
+' If the input to this function is from keyboard entry, the key must receive a name.
+' Identify the source of input by the count of search hits. Keyboard entry doesn't
+' involve a search, so the count of hits must be zero for that kind of input. If the
+' count of hits is greater than zero, the input is already the name of a key. If the
+' input is the latter, it may have modifier keys attached to it, which are preceded by
+' the plus sign, making it easy to remove them from the string.
+
+If SearchHitsCount% = 0 Then
+    SelectedKey$ = GetKeyName( InString$ )
+  Else
+    p = InStr( InString$, "+" )
+    If p = 0 Then
+        SelectedKey$ = InString$
+      Else
+        SelectedKey$ = Trim$( Left$( InString$, p - 1 ) )
+    End If
+End If
+
+If SelectedKey$ Like "[A-Z0-9]" Then
+    KeyGroupIndex% = 1
+    For i = 1 To 36
+      If SelectedKey$ = AlphaNums( i ) Then
+          NewPageKeySelection% = i
+          Exit For
+      End If
+    Next i
+  ElseIf SelectedKey$ Like "F[1-9]" Or SelectedKey$ Like "F1[0-2]" Then
+    KeyGroupIndex% = 2
+    For i = 1 To 12
+      If SelectedKey$ = Functions( i ) Then
+          NewPageKeySelection% = i
+          Exit For
+      End If
+    Next i
+  Else
+    For i = 1 To 32
+      If SelectedKey$ = OthersOCLC( i ) Then
+          KeyGroupIndex% = 3
+          NewPageKeySelection% = i
+          Exit For
+      End If
+    Next i
+    If KeyGroupIndex% = 0 Then
+        KeyGroupIndex% = 4
+        For i = 1 To 28
+          If SelectedKey$ = NumPadOCLC( i ) Then
+              NewPageKeySelection% = i
+              Exit For
+          End If
+        Next i
+    End If
+End If
+
+SetupKeyPage = SelectedKey$ & "," & Str$( KeyGroupIndex% ) & "," & Str$( NewPageKeySelection% )
+
+End Function
+
+'****************************************************************************************
+
+Function UnicodeConvert( InString$ ) As String
+
+' This function converts a string in Unicode to ASCII and vice versa. The simple presence
+' or absence of the null character determines which way the conversion goes.
+
+Dim CharT$
+Dim TempString$
+
+Dim i As Integer
+
+If InStr( InString$, NULL_CHAR ) Then
+    For i = 1 To Len( InString$ )
+      CharT$ = Mid$( InString$, i, 1 )
+      If CharT$ <> NULL_CHAR Then
+          TempString$ = TempString$ & CharT$
+      End If
+    Next i
+  Else
+    For i = 1 To Len( InString$ )
+      TempString$ = TempString$ & Mid$( InString$, i, 1 ) & NULL_CHAR
+    Next i
+End If
+
+UnicodeConvert = Trim$( TempString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function SearchResultsDialogsControlFunction( Id$, Action%, SValue& )
+
+' This function synchronizes the list boxes when making selections in those boxes after a
+' search has been run.
+
+Dim ListSelection%
+
+Select Case Action%
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "ListBoxNames"
+        ListSelection% = DlgValue( "ListBoxNames" )
+        DlgValue        "ListBoxKeys",            ListSelection%
+        On Error Resume Next
+        DlgValue        "ListBoxOther",           ListSelection%
+
+      Case "ListBoxKeys"
+        ListSelection% = DlgValue( "ListBoxKeys" )
+        DlgValue        "ListBoxNames",           ListSelection%
+        On Error Resume Next
+        DlgValue        "ListBoxOther",           ListSelection%
+
+      Case "ListBoxOther"
+        ListSelection% = DlgValue( "ListBoxOther" )
+        DlgValue        "ListBoxNames",           ListSelection%
+        DlgValue        "ListBoxKeys",            ListSelection%
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function CopyListDialogControlFunction( Id$, Action%, SValue& )
+
+' This is the dialog box that controls what gets written to the clipboard. If filters are
+' applied in the main dialog box, they are carried over to this box as a default set, but
+' checkboxes allow for the default to be overridden.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If IncludeAppAssignments Then
+        DlgValue        "CheckBoxIncludeApp",     CHECKED
+      Else
+        DlgValue        "CheckBoxIncludeApp",     UNCHECKED
+    End If
+    DlgValue        "CheckBoxMacro",          UNCHECKED
+    DlgValue        "CheckBoxCharacter",      UNCHECKED
+    DlgValue        "CheckBoxText",           UNCHECKED
+    DlgValue        "CheckBoxCommand",        UNCHECKED
+    DlgVisible      "IncludeCategories",      INVISIBLE
+
+    Select Case SelectedCategory$
+
+      Case ""
+        DlgValue        "CheckBoxMacro",          CHECKED
+        DlgValue        "CheckBoxCharacter",      CHECKED
+        DlgValue        "CheckBoxText",           CHECKED
+        DlgValue        "CheckBoxCommand",        CHECKED
+
+      Case "Macro"
+        DlgValue        "CheckBoxMacro",          CHECKED
+
+      Case "Character"
+        DlgValue        "CheckBoxCharacter",      CHECKED
+
+      Case "Text"
+        DlgValue        "CheckBoxText",           CHECKED
+
+      Case "Command"
+        DlgValue        "CheckBoxCommand",        CHECKED
+
+    End Select
+
+    SelectedCategory$ = ""
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "CheckBoxIncludeApp"
+
+        If DlgValue( "CheckBoxIncludeApp" ) = CHECKED Then
+            IncludeAppAssignments = TRUE
+          Else
+            IncludeAppAssignments = FALSE
+        End If
+
+      Case "CheckBoxMacro", "CheckBoxCharacter", "CheckBoxText", "CheckBoxCommand"
+
+' The Client has no built-in shortcuts for text strings (because there are no app-
+' supplied text strings) or for macros, even its own, so there is no point in offering
+' to include them: Uncheck the checkbox. But if the checkbox to include app assignments
+' has been checked in the main dialog box, keep it.
+
+        If DlgValue( "CheckBoxMacro" ) = UNCHECKED And DlgValue( "CheckBoxCharacter" ) = UNCHECKED And _
+           DlgValue( "CheckBoxText" ) = UNCHECKED And DlgValue( "CheckBoxCommand" ) = UNCHECKED Then
+            DlgVisible      "IncludeCategories",      VISIBLE
+            DlgEnable       "OK",                     DISABLED
+          Else
+            DlgVisible      "IncludeCategories",      INVISIBLE
+            DlgEnable       "OK",                     ENABLED
+            If ( DlgValue( "CheckBoxMacro" ) = CHECKED Or DlgValue( "CheckBoxText" ) = CHECKED ) And _
+               ( DlgValue( "CheckBoxCharacter" ) = UNCHECKED And DlgValue( "CheckBoxCommand" ) = UNCHECKED ) Then
+                DlgValue        "CheckBoxIncludeApp",     UNCHECKED
+              Else
+                DlgValue        "CheckBoxIncludeApp",     CHECKED
+            End If
+        End If
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function MainDialogControlFunction( Id$, Action%, SValue& )
+
+' The main dialog box.
+
+Const FOCUS_CHANGE              As Integer = 4
+Const IDLE_STATE                As Integer = 5
+Const KEEP_DLG_OPEN             As Integer = 1
+
+Const DLG_BUTTON_CANCEL         As Integer = 0
+Const DLG_BUTTON_CLOSE          As Integer = 1
+Const DLG_BUTTON_FIND_CHARS     As Integer = 3
+Const DLG_BUTTON_GO_TO_PAGE     As Integer = 2
+Const DLG_BUTTON_SEARCH_AGAIN   As Integer = 3
+Const DLG_BUTTON_SEARCH_STRINGS As Integer = 2
+Const DLG_STATEMENT_CANCEL      As Integer = 102
+Const SEARCH_MACROS             As Integer = 0
+Const SEARCH_MENUS              As Integer = 2
+Const SEARCH_TEXT               As Integer = 1
+
+Static KeyGroupIndex%
+Static NewPageKeySelection%
+Static PreviousEntry$
+Static SelectedKey$
+
+Dim CountString$
+Dim CurrentEntry$
+Dim SearchDialogButtonChoice%
+Dim DialogAction%
+Dim KeyboardInputMsg$
+Dim KeyInformation$
+Dim KeySelection$
+Dim KeyString$
+Dim ProfileSelection$
+Dim SearchCategory$
+Dim SearchInstructions1$
+Dim SearchInstructions2$
+Dim SearchTerm$
+Dim TypeOfKey%
+
+Dim i As Integer, p As Integer, x As Integer
+
+Dim CharKeys()                  As String
+Dim CharNames()                 As String
+Dim CategoriesForDisplay( 2 )   As String
+Dim CategoriesForSearch( 2 )    As String
+Dim TextStringKeys()            As String
+Dim TextStrings()               As String
+
+SearchInstructions1$   = "Select a category and enter a search term, or leave the search box empty to retrieve all the items"
+SearchInstructions1$   = SearchInstructions1$ & " in that category. Truncation is automatic, and case is ignored. Macro book"
+SearchInstructions1$   = SearchInstructions1$ & " names are not included in searches, but Text string descriptions are."
+SearchInstructions2$   = "Select an item from the drop-down list, and click this button to see the page containing all the"
+SearchInstructions2$   = SearchInstructions2$ & " shortcuts for that key."
+
+CategoriesForDisplay( 0 ) = "Macros"
+CategoriesForDisplay( 1 ) = "Text strings"
+CategoriesForDisplay( 2 ) = "Menu commands"
+
+CategoriesForSearch( 0 )  = "Macr"
+CategoriesForSearch( 1 )  = "Text"
+CategoriesForSearch( 2 )  = "Comm"
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible      "KeyboardInputTextBox",   INVISIBLE
+    DlgListBoxArray "DropListBoxKey",         AlphaNums()
+    DlgValue        "DropListBoxKey",         NO_SELECTION
+    DlgEnable       "DropListBoxKey",         DISABLED
+    DlgValue        "IncludeAppCheckbox",     CHECKED
+    If ProfileCount% = 1 Then
+        DlgVisible      "SelectAProfile",         INVISIBLE
+        DlgVisible      "DropListBoxProfiles",    INVISIBLE
+      Else
+        If VarType( IndexOfMyProfile ) = VARIANT_IS_INTEGER Then
+            DlgValue        "DropListBoxProfiles",    IndexOfMyProfile
+          Else
+            DlgValue        "DropListBoxProfiles",    0
+        End If
+    End If
+    If KeymapFileCount% = 1 Then
+        DlgVisible      "SelectAFile",            INVISIBLE
+        DlgVisible      "DropListBoxKeymapFiles", INVISIBLE
+      Else
+        If VarType( IndexOfCustom ) = VARIANT_IS_INTEGER Then
+            DlgValue        "DropListBoxKeymapFiles", IndexOfCustom
+          Else
+            DlgValue        "DropListBoxKeymapFiles", 0
+        End If
+    End If
+    If UserAssignedKeyCount% = 0 Then
+        DlgText         "MessageProfiles",        "There are no user-assigned shortcuts in this profile's keymap file."
+        DlgVisible      "MessageInput",           INVISIBLE
+      Else
+        If IncludeAppAssignments = FALSE Then
+            DlgText         "MessageProfiles",        "The app-assigned shortcuts in this profile have been disabled."
+            DlgVisible      "MessageInput",           INVISIBLE
+            DlgValue        "IncludeAppCheckbox",     UNCHECKED
+            DlgEnable       "IncludeAppCheckbox",     DISABLED
+        End If
+    End If
+    DlgText         "ShortcutKeyCount",       Trim$( Str$( TotalShortcutKeyCount% ) ) & " shortcuts in all categories."
+    DlgFocus        "KeyboardInputTextBox"
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "MainDialogCloseButton"
+
+        DlgEnd 0
+
+      Case "CopyButton"
+
+        FillCopyArray
+        MakeListForClipboard
+        If CancelCopy Then MainDialogControlFunction = KEEP_DLG_OPEN
+
+      Case "DropListBoxProfiles", "DropListBoxKeymapFiles"
+
+'Changing the profile or the keymap file is like a reset. Changing the profile includes
+' reading a new keymap file and extracting its shortcuts.
+
+        ProfileSelection$ = ProfilesFolderPath$ & DlgText( "DropListBoxProfiles" ) & "\"
+
+        If Id$ = "DropListBoxProfiles" Then
+            Call ReadOptionsFile( ProfileSelection$ )
+            If IncludeAppAssignments = FALSE Then
+                DlgText         "MessageProfiles",        "The app-assigned shortcuts in this profile have been disabled."
+                DlgValue        "IncludeAppCheckbox",     UNCHECKED
+                DlgEnable       "IncludeAppCheckbox",     DISABLED
+              Else
+                DlgText         "MessageProfiles",        ""
+                DlgValue        "IncludeAppCheckbox",     CHECKED
+                DlgEnable       "IncludeAppCheckbox",     ENABLED
+            End If
+            Call FindKeymapFiles( ProfileSelection$ & "*" & XML_SUFFIX )
+            If KeymapFileCount% = 1 Then
+                FilePath$ = ProfileSelection$ & KeymapFiles( 0 )
+              Else
+                FilePath$ = ProfileSelection$ & KeymapFiles( DlgValue( "DropListBoxKeymapFiles" ) )
+            End If
+          Else
+            FilePath$ = ProfileSelection$ & KeymapFiles( DlgValue( "DropListBoxKeymapFiles" ) )
+        End If
+
+        Call PutFileIntoArrays( FilePath$ )
+
+' Reset the global variables involved in filling the character arrays.
+
+        [0-9 Count]              = 0
+        [A-Z Count]              = 0
+        [Alphanumeric key Count] = 0
+        [F1-F9 Count]            = 0
+        [F10-F12 Count]          = 0
+        [Function keys Count]    = 0
+        [Number keypad Count]    = 0
+        [Other keys Count]       = 0
+        ReDim [0-9]              ( 0 )
+        ReDim [A-Z]              ( 0 )
+        ReDim [F1-F9]            ( 0 )
+        ReDim [F10-F12]          ( 0 )
+        ReDim [Function keys]    ( 0 )
+        ReDim [Number keypad]    ( 0 )
+        ReDim [Other keys]       ( 0 )
+        TotalShortcutKeyCount%   = 0
+        FirstPass                = TRUE
+
+        If UserAssignedKeyCount% > 0 Then
+            Call FillTypeOfKeyArrays( UserAssigned() )
+            DlgText         "MessageProfiles",        ""
+          Else
+            If Id$ = "DropListBoxProfiles" Then
+               DlgText         "MessageProfiles",        "There are no user-assigned shortcuts in this profile's keymap file."
+             Else
+               DlgText         "MessageProfiles",        "There are no user-assigned shortcuts in this keymap file."
+            End If
+        End If
+        ClearShortcutDisplay
+        DlgValue        "DropListBoxCategory",    NO_SELECTION
+        DlgListBoxArray "DropListBoxKey",         AlphaNums()
+        DlgValue        "DropListBoxKey",         NO_SELECTION
+        DlgValue        "DropListBoxKeyGroup",    NO_SELECTION
+        DlgText         "ShortcutKeyCount",       Trim$( Str$( TotalShortcutKeyCount% ) ) & " shortcuts in all categories."
+
+      Case "DropListBoxCategory", "IncludeAppCheckbox", "DropListBoxKeyGroup", "DropListBoxKey"
+
+        SelectedCategory$ = DlgText( "DropListBoxCategory" )
+
+        Select Case SelectedCategory$
+          Case "Macros"
+            SelectedCategory$ = "Macro"
+          Case "Characters"
+            SelectedCategory$ = "Character"
+          Case "Text strings"
+            SelectedCategory$ = "Text"
+          Case "Menu items"
+            SelectedCategory$ = "Command"
+          Case "All categories"
+            SelectedCategory$ = ""
+        End Select
+
+        If DlgValue( "IncludeAppCheckbox" ) = CHECKED Then
+            IncludeAppAssignments = TRUE
+          Else
+            IncludeAppAssignments = FALSE
+        End If
+
+        TypeOfKey% = DlgValue( "DropListBoxKeyGroup" )
+        If TypeOfKey% = NO_SELECTION Then
+            DlgEnable       "DropListBoxKey",         DISABLED
+          Else
+            DlgEnable       "DropListBoxKey",         ENABLED
+        End If
+
+        If Id$ <> "DropListBoxKey" Then
+            CountString$ = CalculateCounts( DlgValue( "DropListBoxKeyGroup" ) )
+        End If
+
+        If Id$ = "DropListBoxKeyGroup" Then
+            Select Case TypeOfKey%
+              Case NO_SELECTION, ALPHANUMERICS
+                DlgListBoxArray "DropListBoxKey",         AlphaNums()
+              Case FUNCTION_KEYS
+                DlgListBoxArray "DropListBoxKey",         Functions()
+              Case OTHER_KEYS
+                DlgListBoxArray "DropListBoxKey",         OthersDisplay()
+              Case NUMBER_PAD
+                DlgListBoxArray "DropListBoxKey",         NumPadDisplay()
+            End Select
+            DlgValue        "DropListBoxKey",         NO_SELECTION
+            ClearShortcutDisplay
+        End If
+
+        If DlgValue( "DropListBoxKey" ) > 0 Then
+            ClearShortcutDisplay
+            KeySelection$ = DlgText( "DropListBoxKey" )
+
+            Select Case DlgValue( "DropListBoxKeyGroup" )
+
+              Case 0
+
+              Case ALPHANUMERICS
+                If KeySelection$ Like "[A-Z]" Then
+                    If [A-Z Count] > 0 Then
+                        Call FillDisplayStores( [A-Z], KeySelection$ )
+                    End If
+                  Else
+                    If [0-9 Count] > 0 Then
+                        Call FillDisplayStores( [0-9], KeySelection$ )
+                    End If
+                End If
+
+              Case FUNCTION_KEYS
+                If [Function keys Count] > 0 Then
+                    Call FillDisplayStores( [Function keys], KeySelection$ )
+                End If
+
+              Case OTHER_KEYS
+                If [Other keys Count] > 0 Then
+                    For i = 0 To UBound( OthersDisplay )
+                      If KeySelection$ = OthersDisplay( i ) Then
+                          KeySelection$ = OthersOCLC( i )
+                          Exit For
+                      End If
+                    Next i
+                    Call FillDisplayStores( [Other keys], KeySelection$ )
+                End If
+
+              Case NUMBER_PAD
+                If [Number keypad Count] > 0 Then
+                    For i = 0 To UBound( NumPadDisplay )
+                      If KeySelection$ = NumPadDisplay( i ) Then
+                          KeySelection$ = NumPadOCLC( i )
+                          Exit For
+                      End If
+                    Next i
+                    Call FillDisplayStores( [Number keypad], KeySelection$ )
+                End If
+
+            End Select
+
+            DisplayShortcuts
+
+        End If
+
+        If CountString$ <> "" Then
+            DlgText         "ShortcutKeyCount",       CountString$
+        End If
+
+      Case "SearchButton"
+
+Search:
+
+        Call SearchItems( "", "Char" )
+        x = UBound( SearchResults )
+        ReDim CharNames( x )
+        ReDim CharKeys( x )
+        For i = 0 To x
+          CharNames( i ) = SearchResults( i ).tNameOfItem
+          CharKeys( i )  = SearchResults( i ).tShortcutKeys
+        Next i
+
+        Begin Dialog SearchDialogDefinition  258, 182, WaltsMacros$, .SearchDialogControlFunction
+          PushButton    136, 158,  52,  14, "&Close",                                             .Dlg3CloseButton
+          CancelButton  196, 158,  52,  14
+          DropListBox    18,  28,  64,  56, CategoriesForDisplay(),                               .DropListBoxCategories
+          TextBox        88,  28,  80,  12,                                                       .SearchTextBox
+          PushButton    174,  25,  66,  16, "&Search",                                            .ButtonDoSearch
+          DropListBox    18, 102, 110,  80, CharNames(),                                          .DropListBoxCharNames
+          DropListBox   134, 102, 106,  80, CharKeys(),                                           .DropListBoxCharKeys
+          PushButton    174, 122,  66,  16, "&Go to key page...",                                 .GoToPage
+          Text           18,  44, 222,  32, SearchInstructions1$
+          Text           18, 120, 148,  24, SearchInstructions2$
+          Text           18,  18,  40,   8, "Category:"
+          Text           88,  18,  64,   8, "Enter search term:"
+          GroupBox       10,   6, 238,  76, "Search for macros, text strings, and menu commands"
+          GroupBox       10,  88, 238,  63, "Search for diacritics and other characters"
+        End Dialog
+
+        Dim SearchDialog as SearchDialogDefinition
+        On Error Resume Next
+        SearchDialogButtonChoice% = Dialog( SearchDialog )
+
+        Select Case SearchDialogButtonChoice%
+
+          Case DLG_BUTTON_CANCEL
+
+            DlgEnd 0
+
+          Case DLG_BUTTON_CLOSE
+
+            DlgFocus        "MainDialogCloseButton"
+            MainDialogControlFunction = KEEP_DLG_OPEN
+
+          Case DLG_BUTTON_FIND_CHARS
+
+            KeyString$                = CharKeys( SearchDialog.DropListBoxCharKeys )
+            KeyInformation$           = SetupKeyPage( KeyString$ )
+            SelectedKey$              = GetField( KeyInformation$, 1, "," )
+            KeyGroupIndex%            = Val( GetField( KeyInformation$, 2, "," ) )
+            NewPageKeySelection%      = Val( GetField( KeyInformation$, 3, "," ) )
+            MainDialogControlFunction = KEEP_DLG_OPEN
+
+          Case DLG_BUTTON_SEARCH_STRINGS
+
+            SearchTerm$     = SearchDialog.SearchTextBox
+            SearchCategory$ = CategoriesForSearch( SearchDialog.DropListBoxCategories )
+
+            Call SearchItems( SearchTerm$, SearchCategory$ )
+
+            If SearchHitsCount% = 0 Then
+                MsgBox "No matches were found for the search term " & DOUBLE_QUOTE & SearchTerm$ & DOUBLE_QUOTE & "!", _
+                       INFORMATION_MESSAGE, WaltsMacros$
+                GoTo Search:
+            End If
+
+            KeyString$    = SearchDialogs( SearchCategory$ )
+            DialogAction% = Val( Left$( KeyString$, 2 ) )
+            KeyString$    = Mid$( KeyString$, 3 )
+
+            Select Case DialogAction%
+
+              Case DLG_BUTTON_CANCEL
+
+                DlgEnd 0
+
+              Case DLG_BUTTON_CLOSE
+
+                DlgFocus        "MainDialogCloseButton"
+                MainDialogControlFunction = KEEP_DLG_OPEN
+
+              Case DLG_BUTTON_GO_TO_PAGE
+
+                MainDialogControlFunction = KEEP_DLG_OPEN
+                KeyInformation$           = SetupKeyPage( KeyString$ )
+                SelectedKey$              = GetField( KeyInformation$, 1, "," )
+                KeyGroupIndex%            = Val( GetField( KeyInformation$, 2, "," ) )
+                NewPageKeySelection%      = Val( GetField( KeyInformation$, 3, "," ) )
+
+' Reset the count of the results of the search to re-enable keyboard entry.
+
+                SearchHitsCount%       = 0
+
+              Case DLG_BUTTON_SEARCH_AGAIN
+
+                GoTo Search:
+
+            End Select
+
+        End Select
+
+EntryFromKeyboard:
+
+        If KeyboardEntry$ <> "" Then
+            KeyString$           = UCase$( KeyboardEntry$ )
+            KeyInformation$      = SetupKeyPage( KeyString$ )
+            SelectedKey$         = GetField( KeyInformation$, 1, "," )
+            KeyGroupIndex%       = Val( GetField( KeyInformation$, 2, "," ) )
+            NewPageKeySelection% = Val( GetField( KeyInformation$, 3, "," ) )
+        End If
+
+' With a specific key in hand, display the page containing all the shortcuts assigned to
+' it.
+
+        DlgEnable       "DropListBoxKey",         ENABLED
+        ClearShortcutDisplay
+        Select Case KeyGroupIndex%
+          Case 1
+            DlgListBoxArray "DropListBoxKey",         AlphaNums()
+            If SelectedKey$ Like "[A-Z]" Then
+                Call FillDisplayStores( [A-Z], SelectedKey$ )
+              Else
+                Call FillDisplayStores( [0-9], SelectedKey$ )
+            End If
+          Case 2
+            DlgListBoxArray "DropListBoxKey",         Functions()
+            Call FillDisplayStores( [Function keys], SelectedKey$ )
+          Case 3
+            DlgListBoxArray "DropListBoxKey",         OthersDisplay()
+            Call FillDisplayStores( [Other keys], SelectedKey$ )
+          Case 4
+            DlgListBoxArray "DropListBoxKey",         NumPadDisplay()
+            Call FillDisplayStores( [Number keypad], SelectedKey$ )
+        End Select
+        DlgValue        "DropListBoxKey",         NewPageKeySelection%
+        DlgValue        "DropListBoxKeyGroup",    KeyGroupIndex%
+        DisplayShortcuts
+        If KeyboardEntry$ <> "" Then
+            KeyboardEntry$ = ""
+            DlgFocus        "KeyboardInputTextBox"
+        End If
+
+      Case "KeyboardInputButton"
+
+        DlgVisible      "MessageInput",           VISIBLE
+        MainDialogControlFunction = KEEP_DLG_OPEN
+        DlgFocus        "KeyboardInputTextBox"
+
+    End Select
+
+
+  Case FOCUS_CHANGE
+
+' As soon as the focus leaves the invisible input box for direct keyboard entry of
+' characters, take away the message about cursor position.
+
+    If Id$ <> "KeyboardInputTextBox" Then
+        DlgVisible      "MessageInput",           INVISIBLE
+    End If
+
+
+  Case IDLE_STATE
+
+' As soon as a character is entered into the invisible text box, exit the dialog box and
+' show the page of items for that character.
+
+    CurrentEntry$ = DlgText( "KeyboardInputTextBox" )
+    If CurrentEntry$ <> PreviousEntry$ Then
+        KeyboardEntry$ = CurrentEntry$
+        DlgText         "KeyboardInputTextBox",   ""
+        CurrentEntry$  = ""
+        PreviousEntry$ = ""
+        If DlgVisible( "MessageInput" ) Then
+            DlgVisible      "MessageInput",           INVISIBLE
+        End If
+        GoTo EntryFromKeyboard:
+    End If
+    PreviousEntry$            = CurrentEntry$
+    MainDialogControlFunction = KEEP_DLG_OPEN
+
+  End Select
+
+End Function
+
+'****************************************************************************************
+
+Function SearchDialogControlFunction( Id$, Action%, SValue& )
+
+' This function synchronizes the selections in the list boxes of character and shortcuts
+' in the search dialog.
+
+Dim ListSelection%
+
+Select Case Action%
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "DropListBoxCharNames"
+        ListSelection% = DlgValue( "DropListBoxCharNames" )
+        DlgValue        "DropListBoxCharKeys",    ListSelection%
+
+      Case  "DropListBoxCharKeys"
+        ListSelection% = DlgValue( "DropListBoxCharKeys" )
+        DlgValue        "DropListBoxCharNames",   ListSelection%
+
+    End Select
+
+End Select
+
+End Function
+'3340160509
+'
+'Macro name: ShortcutKeysIndex
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
+'Saved: 4/17/2023 10:02:06 AM using "MacroBookInspector" macro by Walter F. Nickeson.

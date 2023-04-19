@@ -1,0 +1,3257 @@
+'MacroName:Show006.2022.04
+'MacroDescription:Displays in user-friendly form existing 006 fields in a bibliographic
+' record for confirmation or editing, and helps in adding new 006 fields for all types of
+' material.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 27 June 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 20 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic record to view the contents of an 006
+' field, with textual explanations of the codes. If more than one 006 field is present,
+' view the contents of each one by selecting it from a drop-down list of all the possible
+' 006 forms, in which the fields already present in the record appear at the top. Put the
+' cursor in a specific 006 field to display its contents first. Add a new 006 field by
+' selecting an unused code from the drop-down list. Select appropriate values for the
+' elements of that field from the drop-down boxes listing valid codes for that type of
+' material. When done verifying or editing the codes, click "OK" to add a new 006 field
+' to the record, or to replace an existing field, if changes were made.
+'
+' When adding a new 006 field, the default values for each element are the same as those
+' presented by OCLC in the fixed field, which is essentially the 008 field. Each new 006
+' field is added after any existing 006 fields, and they appear in the dialog box in the
+' same order as in the bibliographic record.
+'
+' The macro enforces only a few logical rules for input. The most basic one is that it
+' won't allow input of a duplicate 006 field. (But it will allow editing of such.) A
+' duplicate field is not only one that repeats an existing field (so the macro prohibits
+' adding a second field for a kit, for example), but also one that describes the same
+' form of material as that coded in the fixed field element "Type". That means an 006
+' field for language material, for example, can't be added to a record for a book. The
+' other input restriction has to do with mixing of information for types of material that
+' share the same general form. Because the general form "music" encompasses both notated
+' music and two types of recorded sound, the macro shows three different sets of values
+' for music materials, even though the defined elements are the same. Similarly, the
+' macro separates the general form "visual materials" into four different sets of values.
+' For example, an 006 field for "Musical sound recording" can't have a value for the
+' element "Literary text for sound recordings," and the macro prohibits entering one.
+' Likewise, an 006 field for "Two-dimensional nonprojectable graphic" can't contain a
+' value for the element "Running time," and the macro disables the list box for that
+' element. But the macro doesn't check for things like the relation between frequency
+' and regularity for continuing resources, for example, which OCLC's validation rules
+' will check.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub Arrange006Fields( InString$ )
+Declare Sub ClearAllBoxes
+Declare Sub CompileField    ( InString$ )
+Declare Sub SetupDialogBox  ( InString$ )
+
+' The following arrangement is not alphabetical, but follows the order given in the MARC
+' documentation. These subroutines manage the dialog box controls for the seven Level I
+' "general forms of material."
+
+Declare Sub SubBooks
+Declare Sub SubComputerFiles
+Declare Sub SubMaps
+Declare Sub SubMusic
+Declare Sub SubContinuingResources
+Declare Sub SubVisualMaterials
+Declare Sub SubMixedMaterials
+
+Declare Function RemoveSpaces( InString$ ) As String
+Declare Function Sort        ( InString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const ADD                As Integer = 1   'The value to add a new 006 field.
+Global Const DISABLED           As Integer = 0   'The value to make a dialog box control disabled.
+Global Const ENABLED            As Integer = 1   'The value to make a dialog box control enabled.
+Global Const INVISIBLE          As Integer = 0   'The value to make a dialog box control invisible.
+Global Const LENGTH_006_FIELD   As Integer = 17  'The length in bytes of the data portion of the 006 field.
+Global Const LEVEL_2_FORM_COUNT As Integer = 15  'The count of the Level II forms of material in the MARC 21 bibliographic format.
+Global Const REPLACE            As Integer = 0   'The value to replace an existing 006 field.
+Global Const VISIBLE            As Integer = 1   'The value to make a dialog box control visible.
+
+' The 15 Level II forms of material, corresponding to the "Type of record" element in a
+' bibliographic record. Because whichever of these codes matches the fixed field element
+' "Type" will be removed from the list, and because the macro won't add duplicate 006
+' fields, the actual number of 006 fields the macro allows adding is 14.
+
+Global Const ARTIFACT_OBJECT_3D          As String = "r"
+Global Const CARTOGRAPHIC_MATERIAL       As String = "e"
+Global Const COMPUTER_FILE               As String = "m"
+Global Const KIT                         As String = "o"
+Global Const LANGUAGE_MATERIAL           As String = "a"
+Global Const MIXED_MATERIALS             As String = "p"
+Global Const MS_CARTOGRAPHIC_MATERIAL    As String = "f"
+Global Const MS_LANGUAGE_MATERIAL        As String = "t"
+Global Const MS_NOTATED_MUSIC            As String = "d"
+Global Const MUSICAL_RECORDING           As String = "j"
+Global Const NONPROJ_GRAPHIC_2D          As String = "k"
+Global Const NON_MUSICAL_RECORDING       As String = "i"
+Global Const NOTATED_MUSIC               As String = "c"
+Global Const PROJECTED_MEDIUM            As String = "g"
+Global Const SERIAL_INTEGRATING_RESOURCE As String = "s"
+
+Global AddOrReplace%
+Global All006Fields$
+Global CodeString         As String*LENGTH_006_FIELD
+Global Count006%
+Global Current006Type     As String*1
+Global CursorField$
+Global Index006%
+Global NewCodeString      As String*LENGTH_006_FIELD
+Global PreviousSelection%
+Global TMatSelection%
+Global WaltsMacros$
+
+Global DOUBLE_QUOTE       As String*1
+
+Global New006
+Global ValidLitText1
+Global ValidRunningTime
+
+Global Container006  ()     As String
+Global FormOfMaterial( 14 ) As String
+
+' The global (common across several forms of material) arrays of coded values for the
+' 006.
+
+Global Audn( 9 )  As String
+Global Conf( 2 )  As String
+Global Form( 10 ) As String
+Global GPub( 11 ) As String
+Global Indx( 2 )  As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE         As Integer = 16  'The value to display a "Critical message" (which includes the red button with
+                                                ' a big "X") in a message box; used to report the macro quitting.
+Const DIALOG_BUTTON_CANCEL     As Integer = 102 'The value returned by the dialog function when the "Cancel" button is clicked.
+Const DISPLAY_FF_AT_TOP        As Integer = 1   'The value to display the fixed field at the top of a record.
+Const INFORMATION_MESSAGE      As Integer = 64  'The value to display the "Information message" icon in a message box.
+Const MSGBOX_RETURN_YES        As Integer = 6   'The value returned by a message box when the "Yes" button is clicked.
+Const MSGBOX_SETBUTTONS_YES_NO As Integer = 4   'The value to set two buttons, "OK" and "Cancel," in a message box.
+Const WARNING_QUERY            As Integer = 32  'The value to display the "Warning query" icon in a message box.
+
+Dim CharT$
+Dim FFType$
+Dim FieldData$
+Dim NewField$
+Dim PosFF%
+Dim Row%
+Dim TypeOfWindow%
+Dim VisMatLegendA$           : VisMatLegendA$ = "Enter a time of up to 3 digits:"
+Dim VisMatLegendB$           : VisMatLegendB$ = "Or select a code from this list:"
+
+Dim FILL_CHAR As String*1    : FILL_CHAR      = Chr$( 252 )
+
+Dim ChangedFFView            : ChangedFFView  = FALSE
+
+Dim i As Integer, j As Integer, k As Integer
+
+WaltsMacros$ = "[Walt's macros] Extras1:Show006"
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' If a bibliographic record is displayed, continue by setting some variables and filling
+' arrays.
+
+Index006%        = 1
+New006           = FALSE
+DOUBLE_QUOTE            = Chr$( 034 )
+ValidLitText1    = TRUE
+ValidRunningTime = TRUE
+
+' The array of available types of 006 fields.
+
+FormOfMaterial( 0 )  = "a - Language material"
+FormOfMaterial( 1 )  = "c - Notated music"
+FormOfMaterial( 2 )  = "d - Manuscript notated music"
+FormOfMaterial( 3 )  = "e - Cartographic material"
+FormOfMaterial( 4 )  = "f - Manuscript cartographic material"
+FormOfMaterial( 5 )  = "g - Projected medium"
+FormOfMaterial( 6 )  = "i - Nonmusical sound recording"
+FormOfMaterial( 7 )  = "j - Musical sound recording"
+FormOfMaterial( 8 )  = "k - Two-dimensional nonprojectable graphic"
+FormOfMaterial( 9 )  = "m - Computer file/Electronic resource"
+FormOfMaterial( 10 ) = "o - Kit"
+FormOfMaterial( 11 ) = "p - Mixed material"
+FormOfMaterial( 12 ) = "r - Three-dimensional artifact or naturally occurring object"
+FormOfMaterial( 13 ) = "s - Serial/Integrating resource"
+FormOfMaterial( 14 ) = "t - Manuscript language material"
+
+' Find out what Type the bibliographic record is, and remove that type from the list of
+' available forms. Although OCLC will validate an 006 field that duplicates the record's
+' fixed field "Type", such duplication seems a nonsensical situation.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+
+If CS.GetFixedField( "Type", FFType$ ) = FALSE Then
+    MsgBox "Sorry, the macro could not find the fixed field value " & DOUBLE_QUOTE & "Type" & DOUBLE_QUOTE & _
+           " in this bibliographic record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+For i = 0 To 14
+  If FFType$ = Left$( FormOfMaterial( i ), 1 ) Then
+      For j = i To 1 Step -1
+        FormOfMaterial( j ) = FormOfMaterial( j - 1 )
+      Next j
+      Exit For
+  End If
+Next i
+FormOfMaterial( 0 ) = "  ---- [Select a code from the list below] ----"
+
+' Values of the common, or global, arrays.
+
+Audn( 0 )  = " [blank] - Unknown or not specified"
+Audn( 1 )  = "a - Preschool"
+Audn( 2 )  = "b - Primary"
+Audn( 3 )  = "c - Pre-adolescent"
+Audn( 4 )  = "d - Adolescent"
+Audn( 5 )  = "e - Adult"
+Audn( 6 )  = "f - Specialized"
+Audn( 7 )  = "g - General"
+Audn( 8 )  = "j - Juvenile"
+Audn( 9 )  = "| - No attempt to code"
+
+Conf( 0 )  = "0 - Not a conference publication"
+Conf( 1 )  = "1 - Conference publication"
+Conf( 2 )  = "| - No attempt to code"
+
+Form( 0 )  = " [blank] - None of the following"
+Form( 1 )  = "a - Microfilm"
+Form( 2 )  = "b - Microfiche"
+Form( 3 )  = "c - Microopaque"
+Form( 4 )  = "d - Large print"
+Form( 5 )  = "f - Braille"
+Form( 6 )  = "o - Online"
+Form( 7 )  = "q - Direct electronic"
+Form( 8 )  = "r - Regular print reproduction"
+Form( 9 )  = "s - Electronic"
+Form( 10 ) = "| - No attempt to code"
+
+GPub( 0 )  = " [blank] - Not a government publication"
+GPub( 1 )  = "a - Autonomous or semi-autonomous component"
+GPub( 2 )  = "c - Multilocal"
+GPub( 3 )  = "f - Federal/national"
+GPub( 4 )  = "i - International intergovernmental"
+GPub( 5 )  = "l - Local"
+GPub( 6 )  = "m - Multistate"
+GPub( 7 )  = "o - Government publication-level undetermined"
+GPub( 8 )  = "s - State, provincial, territorial, dependent, etc."
+GPub( 9 )  = "u - Unknown if item is government publication"
+GPub( 10 ) = "z - Other"
+GPub( 11 ) = "| - No attempt to code"
+
+Indx( 0 )  = "0 - No index "
+Indx( 1 )  = "1 - Index present"
+Indx( 2 )  = "| - No attempt to code"
+
+' Get the current cursor position. If it's in a row containing an 006 field, that field
+' is the one to display in the dialog box.
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) Then
+    If Left$( FieldData$, 3 ) = "006" Then
+        CursorField$ = Mid$( FieldData$, 6, 1 )
+    End If
+End If
+
+' Find all the 006 fields in the record. Assuming non-repeatability of any specific 006
+' field, limit the search to 15 fields. Build a string of the codes to represent the
+' occurence and order of the fields in the record.
+
+For i = 1 To LEVEL_2_FORM_COUNT
+  If CS.GetField( "006", i, FieldData$ ) Then
+      Current006Type = Mid$( FieldData$, 6, 1 )
+      All006Fields$  = All006Fields$ & Current006Type
+      CodeString     = Mid$( FieldData$, 7 )
+
+' If an 006 field is found, convert the fill character, if present, to the pipe so the
+' macro can properly display it.
+
+      For j = 1 To LENGTH_006_FIELD Step 1
+        CharT$ = Mid$( CodeString, j, 1 )
+        If CharT$ = FILL_CHAR Then
+            If j = 1 Then
+                CodeString = "|" & Mid$( CodeString, 2 )
+              ElseIf j = LENGTH_006_FIELD Then
+                CodeString = Left$( CodeString, LENGTH_006_FIELD - 1 ) & "|"
+              Else
+                CodeString = Left$( CodeString, j - 1 ) & "|" & Mid$( CodeString, j + 1 )
+            End If
+        End If
+      Next j
+
+' Add each field found to the array.
+
+      ReDim Preserve Container006( Count006% )
+      Container006( Count006% ) = Current006Type & CodeString
+      Count006%                 = Count006% + 1
+
+' If no 006 field is found, verify that one should be added.
+
+    Else
+      If Count006% = 0 Then
+          If MsgBox( "No 006 field found! Create one?", WARNING_QUERY + MSGBOX_SETBUTTONS_YES_NO, WaltsMacros$ ) = MSGBOX_RETURN_YES Then
+              CodeString = ""
+              New006     = TRUE
+              Exit For
+            Else
+              Exit Sub
+          End If
+        Else
+          Exit For
+      End If
+  End If
+Next i
+
+' When all the 006 fields in the record have been found, arrange the list in the drop-
+' down box so the codes found are at the top.
+
+If Count006% > 0 Then
+    Arrange006Fields( All006Fields$ )
+End If
+
+Begin Dialog newdlg  414, 302, WaltsMacros$, .Dialog1ControlFunction
+  OKButton      290, 278,  52,  14
+  CancelButton  350, 278,  52,  14
+  DropListBox    72,  12, 192, 144, FormOfMaterial(), .FormDropListBox
+  TextBox        88,  51,  36,  12,                   .TextBox
+  DropListBox    24,  46, 176, 160, "",               .DropListBox1
+  DropListBox    88,  71, 176,  56, "",               .DropListBox1A
+  DropListBox    24,  76, 176, 160, "",               .DropListBox2
+  DropListBox    24, 106, 176, 160, "",               .DropListBox3
+  DropListBox    24, 136, 176, 160, "",               .DropListBox4
+  DropListBox    24, 166, 176, 160, "",               .DropListBox5
+  DropListBox    24, 196, 176, 160, "",               .DropListBox6
+  DropListBox    24, 226, 176, 160, "",               .DropListBox7
+  DropListBox    24, 256, 176, 160, "",               .DropListBox8
+  DropListBox   226,  46, 176, 160, "",               .DropListBox9
+  DropListBox   226,  76, 176, 160, "",               .DropListBox10
+  DropListBox   226, 106, 176, 160, "",               .DropListBox11
+  DropListBox   226, 136, 176, 160, "",               .DropListBox12
+  DropListBox   226, 166, 176, 160, "",               .DropListBox13
+  DropListBox   226, 196, 176, 160, "",               .DropListBox14
+  DropListBox   226, 226, 176, 160, "",               .DropListBox15
+  DropListBox   226, 256, 176, 160, "",               .DropListBox16
+  Text           12,  14,  56,   8, "",               .Title
+  Text           12,  36, 200,   8, "",               .Position1
+  Text           24,  50,  48,  16, VisMatLegendA$,   .Position1A
+  Text           24,  70,  56,  16, VisMatLegendB$,   .Position1B
+  Text           12,  66, 176,   8, "",               .Position2
+  Text           12,  96, 176,   8, "",               .Position3
+  Text           12, 126, 176,   8, "",               .Position4
+  Text           12, 156, 176,   8, "",               .Position5
+  Text           12, 186, 176,   8, "",               .Position6
+  Text           12, 216, 176,   8, "",               .Position7
+  Text           12, 246, 176,   8, "",               .Position8
+  Text          214,  36, 176,   8, "",               .Position9
+  Text          214,  66, 176,   8, "",               .Position10
+  Text          214,  96, 176,   8, "",               .Position11
+  Text          214, 126, 176,   8, "",               .Position12
+  Text          214, 156, 176,   8, "",               .Position13
+  Text          214, 186, 176,   8, "",               .Position14
+  Text          214, 216, 176,   8, "",               .Position15
+  Text          214, 246, 176,   8, "",               .Position16
+  Text          272,  11, 120,  16, "",               .Options
+End Dialog
+
+Dim Dialog1 As newdlg
+On Error Resume Next
+Dialog Dialog1
+If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+' If no code has been selected for addition, exit the macro.
+
+If AddOrReplace% = -1 Then
+    Exit Sub
+End If
+
+' Otherwise, in the new 006 code string just created, put back the fill character, if
+' necessary.
+
+For i = 1 To LENGTH_006_FIELD Step 1
+  CharT$ = Mid$( NewCodeString, i, 1 )
+  If CharT$ = "|" Then
+      If i = 1 Then
+          NewCodeString = FILL_CHAR & Mid$( NewCodeString, 2 )
+        ElseIf i = LENGTH_006_FIELD Then
+          NewCodeString = Left$( NewCodeString, LENGTH_006_FIELD - 1 ) & FILL_CHAR
+        Else
+          NewCodeString = Left$( NewCodeString, i - 1 ) & FILL_CHAR & Mid$( NewCodeString, i + 1 )
+      End If
+  End If
+Next i
+
+' If an existing 006 field is being edited, but no change has been made, display that
+' message.
+
+If New006 = FALSE Then
+    If NewCodeString = CodeString Then
+        MsgBox "The 006 field was not changed.", INFORMATION_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' If a field was not able to be added or replaced, display a message to that effect.
+
+NewField$ = "006  " & Current006Type & NewCodeString
+If AddOrReplace% = ADD Then
+    If CS.AddField( Count006% + 1, NewField$ ) = FALSE Then
+        MsgBox "Sorry, the 006 field was not added.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+  Else
+    If CS.SetField( Index006%, NewField$ ) = FALSE Then
+        MsgBox "Sorry, the 006 field was not replaced.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub Arrange006Fields( InString$ )
+
+' This routine arranges the codes of the 006 fields so the existing 006 fields are put at
+' the top of the list, in the order found in the record, and clearly separated by a
+' dividing line from the codes still available for use.
+
+Dim PresentCode$
+Dim SelectedCode$
+
+Dim i As Integer, j As Integer, k As Integer
+
+For i = 1 To Count006%
+  PresentCode$ = Mid$( InString$, i, 1 )
+  For j = i To LEVEL_2_FORM_COUNT + 1
+    If PresentCode$ = Left$( FormOfMaterial( j ), 1 ) Then
+        SelectedCode$ = FormOfMaterial( j )
+        For k = j To i + 1 Step -1
+          FormOfMaterial( k ) = FormOfMaterial( k - 1 )
+        Next k
+        FormOfMaterial( i - 1 ) = SelectedCode$
+        FormOfMaterial( i )     = " ---------------------------------"
+        Exit For
+    End If
+  Next j
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub ClearAllBoxes
+
+' This routine re-initializes the dialog box, making every control invisible but enabled.
+' When controls get their arrays set in the population subprograms they are made visible
+' and, when necessary, disabled.
+
+DlgEnable       "DropListBox1",     ENABLED
+DlgVisible      "DropListBox1",     INVISIBLE
+DlgEnable       "DropListBox1A",    ENABLED
+DlgVisible      "DropListBox1A",    INVISIBLE
+DlgEnable       "DropListBox2",     ENABLED
+DlgVisible      "DropListBox2",     INVISIBLE
+DlgEnable       "DropListBox3",     ENABLED
+DlgVisible      "DropListBox3",     INVISIBLE
+DlgEnable       "DropListBox4",     ENABLED
+DlgVisible      "DropListBox4",     INVISIBLE
+DlgEnable       "DropListBox5",     ENABLED
+DlgVisible      "DropListBox5",     INVISIBLE
+DlgEnable       "DropListBox6",     ENABLED
+DlgVisible      "DropListBox6",     INVISIBLE
+DlgEnable       "DropListBox7",     ENABLED
+DlgVisible      "DropListBox7",     INVISIBLE
+DlgEnable       "DropListBox8",     ENABLED
+DlgVisible      "DropListBox8",     INVISIBLE
+DlgEnable       "DropListBox9",     ENABLED
+DlgVisible      "DropListBox9",     INVISIBLE
+DlgEnable       "DropListBox10",    ENABLED
+DlgVisible      "DropListBox10",    INVISIBLE
+DlgEnable       "DropListBox11",    ENABLED
+DlgVisible      "DropListBox11",    INVISIBLE
+DlgEnable       "DropListBox12",    ENABLED
+DlgVisible      "DropListBox12",    INVISIBLE
+DlgEnable       "DropListBox13",    ENABLED
+DlgVisible      "DropListBox13",    INVISIBLE
+DlgEnable       "DropListBox14",    ENABLED
+DlgVisible      "DropListBox14",    INVISIBLE
+DlgEnable       "DropListBox15",    ENABLED
+DlgVisible      "DropListBox15",    INVISIBLE
+DlgEnable       "DropListBox16",    ENABLED
+DlgVisible      "DropListBox16",    INVISIBLE
+DlgEnable       "Position1",        ENABLED
+DlgVisible      "Position1",        INVISIBLE
+DlgEnable       "Position1A",       ENABLED
+DlgVisible      "Position1A",       INVISIBLE
+DlgEnable       "Position1B",       ENABLED
+DlgVisible      "Position1B",       INVISIBLE
+DlgEnable       "Position2",        ENABLED
+DlgVisible      "Position2",        INVISIBLE
+DlgEnable       "Position3",        ENABLED
+DlgVisible      "Position3",        INVISIBLE
+DlgEnable       "Position4",        ENABLED
+DlgVisible      "Position4",        INVISIBLE
+DlgEnable       "Position5",        ENABLED
+DlgVisible      "Position5",        INVISIBLE
+DlgEnable       "Position6",        ENABLED
+DlgVisible      "Position6",        INVISIBLE
+DlgEnable       "Position7",        ENABLED
+DlgVisible      "Position7",        INVISIBLE
+DlgEnable       "Position8",        ENABLED
+DlgVisible      "Position8",        INVISIBLE
+DlgEnable       "Position9",        ENABLED
+DlgVisible      "Position9",        INVISIBLE
+DlgEnable       "Position10",       ENABLED
+DlgVisible      "Position10",       INVISIBLE
+DlgEnable       "Position11",       ENABLED
+DlgVisible      "Position11",       INVISIBLE
+DlgEnable       "Position12",       ENABLED
+DlgVisible      "Position12",       INVISIBLE
+DlgEnable       "Position13",       ENABLED
+DlgVisible      "Position13",       INVISIBLE
+DlgEnable       "Position14",       ENABLED
+DlgVisible      "Position14",       INVISIBLE
+DlgEnable       "Position15",       ENABLED
+DlgVisible      "Position15",       INVISIBLE
+DlgEnable       "Position16",       ENABLED
+DlgVisible      "Position16",       INVISIBLE
+DlgEnable       "TextBox",          ENABLED
+DlgVisible      "TextBox",          INVISIBLE
+
+End Sub
+
+'****************************************************************************************
+
+Sub CompileField( InString$ )
+
+' This subprogram takes the values in the dialog box and makes a valid 006 string out of
+' them. Only the 006 for books makes use of all 16 input controls in the dialog box; all
+' other forms use fewer controls, and require padding with at least one blank space for
+' undefined elements.
+
+Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+
+Dim AccM$
+Dim Cont$
+Dim Ills$
+Dim LitText2$
+Dim Relf$
+Dim RunningTimeWarning$
+Dim SelectedCode$
+Dim TempString    As String*LENGTH_006_FIELD
+Dim TextBoxInput$
+
+' The variables that add spaces for the undefined positions.
+
+Dim [BK 15]    As String : [BK 15]    = Space$( 1 )
+Dim [CF 1-4]   As String : [CF 1-4]   = Space$( 4 )
+Dim [CF 7-8]   As String : [CF 7-8]   = Space$( 2 )
+Dim [CF 10]    As String : [CF 10]    = Space$( 1 )
+Dim [CF 12-17] As String : [CF 12-17] = Space$( 6 )
+Dim [MP 7]     As String : [MP 7]     = Space$( 1 )
+Dim [MP 9-10]  As String : [MP 9-10]  = Space$( 2 )
+Dim [MP 13]    As String : [MP 13]    = Space$( 1 )
+Dim [MP 15]    As String : [MP 15]    = Space$( 1 )
+Dim [MU 15]    As String : [MU 15]    = Space$( 1 )
+Dim [MU 17]    As String : [MU 17]    = Space$( 1 )
+Dim [CR 3]     As String : [CR 3]     = Space$( 1 )
+Dim [CR 13-15] As String : [CR 13-15] = Space$( 3 )
+Dim [VM 4]     As String : [VM 4]     = Space$( 1 )
+Dim [VM 6-10]  As String : [VM 6-10]  = Space$( 5 )
+Dim [VM 13-15] As String : [VM 13-15] = Space$( 3 )
+Dim [MX 1-5]   As String : [MX 1-5]   = Space$( 5 )
+Dim [MX 7-17]  As String : [MX 7-17]  = Space$( 11 )
+
+Dim i As Integer, j As Integer, z As Integer
+
+Select Case InString$
+
+  Case ARTIFACT_OBJECT_3D, KIT, NONPROJ_GRAPHIC_2D, PROJECTED_MEDIUM 'abbreviation: "VM"
+
+' VM materials: Whereas for all other forms of materials the available values are
+' predetermined, so no invalid code can ever be entered, for visual materials, all
+' characters entered in the "running time" text box must be validated. If the entry is
+' invalid, declare "ValidRunningTime" to be false, and the dialog box will remain open
+' until something is fixed.
+
+    SelectedCode$ = Left$( DlgText( "DropListBox1A" ), 3 )
+    If InString$ = PROJECTED_MEDIUM Then
+        TextBoxInput$ = Trim$( DlgText( "TextBox" ) )
+        If SelectedCode$ = "[No" Then
+            If TextBoxInput$ = "" Then
+                RunningTimeWarning$ = DOUBLE_QUOTE & "Running Time" & DOUBLE_QUOTE & " (positions 1-3): Please enter a time of"
+                RunningTimeWarning$ = RunningTimeWarning$ & " up to three digits, or select a set of codes from the drop-down"
+                RunningTimeWarning$ = RunningTimeWarning$ & " list."
+                MsgBox RunningTimeWarning$, WARNING_MESSAGE, WaltsMacros$
+                ValidRunningTime = FALSE
+              Else
+                Select Case Len( TextBoxInput$ )
+
+                  Case 1
+                    If TextBoxInput$ Like "[0-9]" Then
+                        ValidRunningTime = TRUE
+                        TextBoxInput$    = "00" & TextBoxInput$
+                      Else
+                        RunningTimeWarning$ = DOUBLE_QUOTE & "Running Time" & DOUBLE_QUOTE & " (positions 1-3): Please enter"
+                        RunningTimeWarning$ = RunningTimeWarning$ & " only up to three digits."
+                        MsgBox RunningTimeWarning$, WARNING_MESSAGE, WaltsMacros$
+                        ValidRunningTime = FALSE
+                    End If
+
+                  Case 2
+                    If TextBoxInput$ Like "[0-9][0-9]" Then
+                        ValidRunningTime = TRUE
+                        TextBoxInput$    = "0" & TextBoxInput$
+                      Else
+                        RunningTimeWarning$ = DOUBLE_QUOTE & "Running Time" & DOUBLE_QUOTE & " (positions 1-3): Please enter"
+                        RunningTimeWarning$ = RunningTimeWarning$ & " only up to three digits."
+                        MsgBox RunningTimeWarning$, WARNING_MESSAGE, WaltsMacros$
+                        ValidRunningTime = FALSE
+                    End If
+
+                  Case 3
+                    If TextBoxInput$ Like "[0-9][0-9][0-9]" Then
+                        ValidRunningTime = TRUE
+                      Else
+                        RunningTimeWarning$ = DOUBLE_QUOTE & "Running Time" & DOUBLE_QUOTE & " (positions 1-3): Please enter"
+                        RunningTimeWarning$ = RunningTimeWarning$ & " only up to three digits."
+                        MsgBox RunningTimeWarning$, WARNING_MESSAGE, WaltsMacros$
+                        ValidRunningTime = FALSE
+                    End If
+
+                  Case Else
+                    RunningTimeWarning$ = DOUBLE_QUOTE & "Running Time" & DOUBLE_QUOTE & " (positions 1-3): The time entered"
+                    RunningTimeWarning$ = RunningTimeWarning$ & " is too long! Please enter only up to three digits."
+                    MsgBox RunningTimeWarning$, WARNING_MESSAGE, WaltsMacros$
+                    ValidRunningTime = FALSE
+
+                End Select
+            End If
+          Else
+            TextBoxInput$ = SelectedCode$
+        End If
+      Else
+        TextBoxInput$ = SelectedCode$
+    End If
+    If ValidRunningTime Then
+        TempString = TextBoxInput$ & [VM 4] & Left$( DlgText( "DropListBox3" ), 1 ) & [VM 6-10] & _
+                     Left$( DlgText( "DropListBox4" ), 1 ) & Left$( DlgText( "DropListBox5" ), 1 ) & [VM 13-15] & _
+                     Left$( DlgText( "DropListBox6" ), 1 ) & Left$( DlgText( "DropListBox7" ), 1 )
+      Else
+        Exit Sub
+    End If
+
+  Case LANGUAGE_MATERIAL, MS_LANGUAGE_MATERIAL 'abbreviation: "BK"
+
+' For books, the four characters in the string for "Ills" should be in alphabetical
+' order, with spaces at the end for unused positions. The four characters in the string
+' for "Cont" should be in order of importance, but must have empty spaces removed to
+' left-justify the string.
+
+    Ills$      = Left$( DlgText( "DropListBox1" ), 1 ) & Left$( DlgText( "DropListBox2" ), 1 ) & _
+                 Left$( DlgText( "DropListBox3" ), 1 ) & Left$( DlgText( "DropListBox4" ), 1 )
+    Ills$      = Sort( Ills$ )
+    Cont$      = Left$( DlgText( "DropListBox7" ), 1 ) & Left$( DlgText( "DropListBox8" ), 1 ) & _
+                 Left$( DlgText( "DropListBox9" ), 1 ) & Left$( DlgText( "DropListBox10" ), 1 )
+    Cont$      = RemoveSpaces( Cont$ )
+    TempString = Ills$ & Left$( DlgText( "DropListBox5" ), 1 ) & Left$( DlgText( "DropListBox6" ), 1 ) & _
+                 Cont$ & Left$( DlgText( "DropListBox11" ), 1 ) & Left$( DlgText( "DropListBox12" ), 1 ) & _
+                 Left$( DlgText( "DropListBox13" ), 1 ) & Left$( DlgText( "DropListBox14" ), 1 ) & [BK 15] & _
+                 Left$( DlgText( "DropListBox15" ), 1 ) & Left$( DlgText( "DropListBox16" ), 1 )
+
+  Case MS_NOTATED_MUSIC, MUSICAL_RECORDING, NOTATED_MUSIC, NON_MUSICAL_RECORDING 'abbreviation: "MU"
+
+' For music materials, the six characters in the string for "Accompanying matter" should
+' be in alphabetical order, with spaces at the end for unused positions. If the prompt
+' for values for the first "Literary text" position is present in the list box, the macro
+' warns that a value must be chosen, and the dialog box will remain open until the prompt
+' is made to go away.
+
+    If InString$ = NON_MUSICAL_RECORDING Then
+        If Left$( DlgText( "DropListBox12" ), 16 ) = " [blank - value " Then
+            ValidLitText1 = FALSE
+        End If
+    End If
+    If ValidLitText1 Then
+             AccM$ = Left$( DlgText( "DropListBox6" ), 1 ) & Left$( DlgText( "DropListBox7" ), 1 ) & _
+                     Left$( DlgText( "DropListBox8" ), 1 ) & Left$( DlgText( "DropListBox9" ), 1 ) & _
+                     Left$( DlgText( "DropListBox10" ), 1 ) & Left$( DlgText( "DropListBox11" ), 1 )
+             AccM$ = Sort( AccM$ )
+        TempString = Left$( DlgText( "DropListBox1" ), 2 ) & Left$( DlgText( "DropListBox2" ), 1 ) & _
+                     Left$( DlgText( "DropListBox3" ), 1 ) & Left$( DlgText( "DropListBox4" ), 1 ) & _
+                     Left$( DlgText( "DropListBox5" ), 1 ) & AccM$ & Left$( DlgText( "DropListBox12" ), 1 ) & _
+                     Left$( DlgText( "DropListBox13" ), 1 ) & [MU 15] & Left$( DlgText( "DropListBox14" ), 1 ) & [MU 17]
+      Else
+        MsgBox "Please select a value for 006/13, " & DOUBLE_QUOTE & "Literary Text for Sound Recordings" & DOUBLE_QUOTE & _
+               "!", WARNING_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+  Case CARTOGRAPHIC_MATERIAL, MS_CARTOGRAPHIC_MATERIAL 'abbreviation: "MP"
+
+' For maps, the four characters in the string for "Relf" must be in order of
+' importance, so the string is not sorted, it only has its blanks removed (or added at
+' the end to make the string four characters long).
+
+         Relf$ = Left$( DlgText( "DropListBox1" ), 1 ) & Left$( DlgText( "DropListBox2" ), 1 ) & _
+                 Left$( DlgText( "DropListBox3" ), 1 ) & Left$( DlgText( "DropListBox4" ), 1 )
+         Relf$ = RemoveSpaces( Relf$ )
+    TempString = Relf$ & Left$( DlgText( "DropListBox5" ), 2 ) & [MP 7] & Left$( DlgText( "DropListBox6" ), 1 ) & _
+                 [MP 9-10] & Left$( DlgText( "DropListBox7" ), 1 ) & Left$( DlgText( "DropListBox8" ), 1 ) & [MP 13] & _
+                 Left$( DlgText( "DropListBox9" ), 1 ) & [MP 15] & Left$( DlgText( "DropListBox10" ), 1 ) & _
+                 Left$( DlgText( "DropListBox11" ), 1 )
+
+  Case COMPUTER_FILE 'abbreviation: "CF"
+
+    TempString = [CF 1-4] & Left$( DlgText( "DropListBox1" ), 1 ) & Left$( DlgText( "DropListBox2" ), 1 ) & _
+                 [CF 7-8] & Left$( DlgText( "DropListBox3" ), 1 ) & [CF 10] & _
+                 Left$( DlgText( "DropListBox4" ), 1 ) & [CF 12-17]
+
+  Case MIXED_MATERIALS 'abbreviation: "MX"
+
+    TempString = [MX 1-5] & Left$( DlgText( "DropListBox1" ), 1 ) & [MX 7-17]
+
+  Case SERIAL_INTEGRATING_RESOURCE 'abbreviation: "CR"
+
+' For serials, the three characters of the "Cont" string must be in order of
+' importance.
+
+         Cont$ = Left$( DlgText( "DropListBox7" ), 1 ) & Left$( DlgText( "DropListBox8" ), 1 ) & _
+                 Left$( DlgText( "DropListBox9" ), 1 )
+         Cont$ = RemoveSpaces( Cont$ )
+    TempString = Left$( DlgText( "DropListBox1" ), 1 ) & Left$( DlgText( "DropListBox2" ), 1 ) & [CR 3] & _
+                 Left$( DlgText( "DropListBox3" ), 1 ) & Left$( DlgText( "DropListBox4" ), 1 ) & _
+                 Left$( DlgText( "DropListBox5" ), 1 ) & Left$( DlgText( "DropListBox6" ), 1 ) & _
+                 Cont$ & Left$( DlgText( "DropListBox10" ), 1 ) & Left$( DlgText( "DropListBox11" ), 1 ) & _
+                 [CR 13-15] & Left$( DlgText( "DropListBox12" ), 1 ) & Left$( DlgText( "DropListBox13" ), 1 )
+
+End Select
+
+NewCodeString = TempString
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetupDialogBox( GeneralForm$ )
+
+' Given a Level II form of material, set up the dialog box according to the codes valid
+' for it as determined by the broader, Level I form.
+
+ClearAllBoxes
+
+Select Case GeneralForm$
+
+  Case LANGUAGE_MATERIAL, MS_LANGUAGE_MATERIAL
+    SubBooks
+
+  Case MS_NOTATED_MUSIC, MUSICAL_RECORDING, NON_MUSICAL_RECORDING, NOTATED_MUSIC
+    SubMusic
+
+  Case CARTOGRAPHIC_MATERIAL, MS_CARTOGRAPHIC_MATERIAL
+    SubMaps
+
+  Case ARTIFACT_OBJECT_3D, KIT, NONPROJ_GRAPHIC_2D, PROJECTED_MEDIUM
+    SubVisualMaterials
+
+  Case COMPUTER_FILE
+    SubComputerFiles
+
+  Case MIXED_MATERIALS
+    SubMixedMaterials
+
+  Case SERIAL_INTEGRATING_RESOURCE
+    SubContinuingResources
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub SubBooks
+
+Dim Code$
+
+Dim i As Integer
+
+Dim Biog( 5 )  As String
+Dim Cont( 28 ) As String
+Dim Fest( 2 )  As String
+Dim Ills( 16 ) As String
+Dim LitF( 12 ) As String
+
+Biog( 0 )  = " [blank] - No biographical material"
+Biog( 1 )  = "a - Autobiography"
+Biog( 2 )  = "b - Individual biography"
+Biog( 3 )  = "c - Collective biography"
+Biog( 4 )  = "d - Contains biographical information"
+Biog( 5 )  = "| - No attempt to code"
+
+Cont( 0 )  = " [blank] - No specified nature of contents"
+Cont( 1 )  = "a - Abstracts/summaries"
+Cont( 2 )  = "b - Bibliographies"
+Cont( 3 )  = "c - Catalogs"
+Cont( 4 )  = "d - Dictionaries"
+Cont( 5 )  = "e - Encyclopedias"
+Cont( 6 )  = "f - Handbooks"
+Cont( 7 )  = "g - Legal articles"
+Cont( 8 )  = "i - Indexes"
+Cont( 9 )  = "j - Patent document"
+Cont( 10 ) = "k - Discographies"
+Cont( 11 ) = "l - Legislation"
+Cont( 12 ) = "m - Theses"
+Cont( 13 ) = "n - Surveys of literature in a subject area"
+Cont( 14 ) = "o - Reviews"
+Cont( 15 ) = "p - Programmed texts"
+Cont( 16 ) = "q - Filmographies"
+Cont( 17 ) = "r - Directories"
+Cont( 18 ) = "s - Statistics"
+Cont( 19 ) = "t - Technical reports"
+Cont( 20 ) = "u - Standards/specifications"
+Cont( 21 ) = "v - Legal cases and case notes"
+Cont( 22 ) = "w - Law reports and digests"
+Cont( 23 ) = "y - Yearbooks"
+Cont( 24 ) = "z - Treaties"
+Cont( 25 ) = "2 - Offprints"
+Cont( 26 ) = "5 - Calendars"
+Cont( 27 ) = "6 - Comics/graphic novels"
+Cont( 28 ) = "| - No attempt to code"
+
+Fest( 0 )  = "0 - Not a festschrift "
+Fest( 1 )  = "1 - Festschrift"
+Fest( 2 )  = "| - No attempt to code"
+
+Ills( 0 )  = " [blank] - No illustrations"
+Ills( 1 )  = "a - Illustrations"
+Ills( 2 )  = "b - Maps"
+Ills( 3 )  = "c - Portraits"
+Ills( 4 )  = "d - Charts"
+Ills( 5 )  = "e - Plans"
+Ills( 6 )  = "f - Plates"
+Ills( 7 )  = "g - Music"
+Ills( 8 )  = "h - Facsimiles"
+Ills( 9 )  = "i - Coats of arms"
+Ills( 10 ) = "j - Genealogical tables"
+Ills( 11 ) = "k - Forms"
+Ills( 12 ) = "l - Samples"
+Ills( 13 ) = "m - Phonodisc, phonowire, etc."
+Ills( 14 ) = "o - Photographs"
+Ills( 15 ) = "p - Illuminations"
+Ills( 16 ) = "| - No attempt to code"
+
+LitF( 0 )  = "0 - Not fiction (not further specified)"
+LitF( 1 )  = "1 - Fiction (not further specified)"
+LitF( 2 )  = "d - Dramas"
+LitF( 3 )  = "e - Essays"
+LitF( 4 )  = "f - Novels"
+LitF( 5 )  = "h - Humor, satires, etc."
+LitF( 6 )  = "i - Letters"
+LitF( 7 )  = "j - Short stories"
+LitF( 8 )  = "m - Mixed forms"
+LitF( 9 )  = "p - Poetry"
+LitF( 10 ) = "s - Speeches"
+LitF( 11 ) = "u - Unknown"
+LitF( 12 ) = "| - No attempt to code"
+
+DlgListBoxArray "DropListBox1",     Ills()
+DlgVisible      "DropListBox1",     VISIBLE
+DlgText         "Position1",        "/01, Illustrations"
+DlgVisible      "Position1",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox1",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 1, 1 )
+    For i = 0 To 16
+      If Code$ = Left$( Ills( i ), 1 ) Then
+          DlgValue        "DropListBox1",     i
+          Exit For
+        Else
+          If i = 16 Then
+              DlgValue        "DropListBox1",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox2",     Ills()
+DlgVisible      "DropListBox2",     VISIBLE
+DlgText         "Position2",        "/02, Illustrations"
+DlgVisible      "Position2",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox2",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 2, 1 )
+    For i = 0 To 16
+      If Code$ = Left$( Ills( i ), 1 ) Then
+          DlgValue        "DropListBox2",     i
+          Exit For
+        Else
+          If i = 16 Then
+              DlgValue        "DropListBox2",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox3",     Ills()
+DlgVisible      "DropListBox3",     VISIBLE
+DlgText         "Position3",        "/03, Illustrations"
+DlgVisible      "Position3",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox3",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 3, 1 )
+    For i = 0 To 16
+      If Code$ = Left$( Ills( i ), 1 ) Then
+          DlgValue        "DropListBox3",     i
+          Exit For
+        Else
+          If i = 16 Then
+              DlgValue        "DropListBox3",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox4",     Ills()
+DlgVisible      "DropListBox4",     VISIBLE
+DlgText         "Position4",        "/04, Illustrations"
+DlgVisible      "Position4",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox4",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 4, 1 )
+    For i = 0 To 16
+      If Code$ = Left$( Ills( i ), 1 ) Then
+          DlgValue        "DropListBox4",     i
+          Exit For
+        Else
+          If i = 16 Then
+              DlgValue        "DropListBox4",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox5",     Audn()
+DlgVisible      "DropListBox5",     VISIBLE
+DlgText         "Position5",        "/05, Target audience"
+DlgVisible      "Position5",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox5",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 5, 1 )
+    For i = 0 To 9
+      If Code$ = Left$( Audn( i ), 1 ) Then
+          DlgValue        "DropListBox5",     i
+          Exit For
+        Else
+          If i = 9 Then
+              DlgValue        "DropListBox5",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox6",     Form()
+DlgVisible      "DropListBox6",     VISIBLE
+DlgText         "Position6",        "/06, Form of item"
+DlgVisible      "Position6",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox6",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 6, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( Form( i ), 1 ) Then
+          DlgValue        "DropListBox6",     i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox6",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox7",     Cont()
+DlgVisible      "DropListBox7",     VISIBLE
+DlgText         "Position7",        "/07, Nature of contents"
+DlgVisible      "Position7",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox7",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 7, 1 )
+    For i = 0 To 28
+      If Code$ = Left$( Cont( i ), 1 ) Then
+          DlgValue        "DropListBox7",     i
+          Exit For
+        Else
+          If i = 28 Then
+              DlgValue        "DropListBox7",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox8",     Cont()
+DlgVisible      "DropListBox8",     VISIBLE
+DlgText         "Position8",        "/08, Nature of contents"
+DlgVisible      "Position8",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox8",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 8, 1 )
+    For i = 0 To 28
+      If Code$ = Left$( Cont( i ), 1 ) Then
+          DlgValue        "DropListBox8",     i
+          Exit For
+        Else
+          If i = 28 Then
+              DlgValue        "DropListBox8",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox9",     Cont()
+DlgVisible      "DropListBox9",     VISIBLE
+DlgText         "Position9",        "/09, Nature of contents"
+DlgVisible      "Position9",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox9",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 9, 1 )
+    For i = 0 To 28
+      If Code$ = Left$( Cont( i ), 1 ) Then
+          DlgValue        "DropListBox9",     i
+          Exit For
+        Else
+          If i = 28 Then
+              DlgValue        "DropListBox9",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox10",    Cont()
+DlgVisible      "DropListBox10",    VISIBLE
+DlgText         "Position10",       "/10, Nature of contents"
+DlgVisible      "Position10",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox10",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 10, 1 )
+    For i = 0 To 28
+      If Code$ = Left$( Cont( i ), 1 ) Then
+          DlgValue        "DropListBox10",    i
+          Exit For
+        Else
+          If i = 28 Then
+              DlgValue        "DropListBox10",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox11",    GPub()
+DlgVisible      "DropListBox11",    VISIBLE
+DlgText         "Position11",       "/11, Government publication"
+DlgVisible      "Position11",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox11",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 11, 1 )
+    For i = 0 To 11
+      If Code$ = Left$( GPub( i ), 1 ) Then
+          DlgValue        "DropListBox11",    i
+          Exit For
+        Else
+          If i = 11 Then
+              DlgValue        "DropListBox11",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox12",    Conf()
+DlgVisible      "DropListBox12",    VISIBLE
+DlgText         "Position12",       "/12, Conference publication"
+DlgVisible      "Position12",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox12",    0 '0 (zero)
+  Else
+    Code$ = Mid$( CodeString, 12, 1 )
+    For i = 0 To 2
+      If Code$ = Left$( Conf( i ), 1 ) Then
+          DlgValue        "DropListBox12",    i
+          Exit For
+        Else
+          If i = 2 Then
+              DlgValue        "DropListBox12",    0 '0 (zero)
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox13",    Fest()
+DlgVisible      "DropListBox13",    VISIBLE
+DlgText         "Position13",       "/13, Festschrift"
+DlgVisible      "Position13",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox13",    0 '0 (zero)
+  Else
+    Code$ = Mid$( CodeString, 13, 1 )
+    For i = 0 To 2
+      If Code$ = Left$( Fest( i ), 1 ) Then
+          DlgValue        "DropListBox13",    i
+          Exit For
+        Else
+          If i = 2 Then
+              DlgValue        "DropListBox13",    0 '0 (zero)
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox14",    Indx()
+DlgVisible      "DropListBox14",    VISIBLE
+DlgText         "Position14",       "/14, Index"
+DlgVisible      "Position14",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox14",    0 '0 (zero)
+  Else
+    Code$ = Mid$( CodeString, 14, 1 )
+    For i = 0 To 2
+      If Code$ = Left$( Indx( i ), 1 ) Then
+          DlgValue        "DropListBox14",    i
+          Exit For
+        Else
+          If i = 2 Then
+              DlgValue        "DropListBox14",    0 '0 (zero)
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox15",    LitF()
+DlgVisible      "DropListBox15",    VISIBLE
+DlgText         "Position15",       "/16, Literary form"
+DlgVisible      "Position15",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox15",    0 '0 (zero)
+  Else
+    Code$ = Mid$( CodeString, 16, 1 )
+    For i = 0 To 12
+      If Code$ = Left$( LitF( i ), 1 ) Then
+          DlgValue        "DropListBox15",    i
+          Exit For
+        Else
+          If i = 12 Then
+              DlgValue        "DropListBox15",    0 '0 (zero)
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox16",    Biog()
+DlgVisible      "DropListBox16",    VISIBLE
+DlgText         "Position16",       "/17, Biography"
+DlgVisible      "Position16",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox16",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 17, 1 )
+    For i = 0 To 5
+      If Code$ = Left$( Biog( i ), 1 ) Then
+          DlgValue        "DropListBox16",    i
+          Exit For
+        Else
+          If i = 5 Then
+              DlgValue        "DropListBox16",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub SubComputerFiles
+
+Dim Code$
+
+Dim i As Integer
+
+Dim File ( 13 ) As String
+Dim FormC( 3 )  As String
+
+File( 0 )  = "a - Numeric data"
+File( 1 )  = "b - Computer program"
+File( 2 )  = "c - Representational"
+File( 3 )  = "d - Document"
+File( 4 )  = "e - Bibliographic data"
+File( 5 )  = "f - Font"
+File( 6 )  = "g - Game"
+File( 7 )  = "h - Sound"
+File( 8 )  = "i - Interactive multimedia"
+File( 9 )  = "j - Online system or service"
+File( 10 ) = "m - Combination"
+File( 11 ) = "u - Unknown"
+File( 12 ) = "z - Other"
+File( 13 ) = "| - No attempt to code"
+
+FormC( 0 ) = " [blank] - Unknown or not specified"
+FormC( 1 ) = "o - Online"
+FormC( 2 ) = "q - Direct electronic"
+FormC( 3 ) = "| - No attempt to code"
+
+DlgListBoxArray "DropListBox1",     Audn()
+DlgVisible      "DropListBox1",     VISIBLE
+DlgText         "Position1",        "/05, Target audience"
+DlgVisible      "Position1",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox1",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 5, 1 )
+    For i = 0 To 9
+      If Code$ = Left$( Audn( i ), 1 ) Then
+          DlgValue        "DropListBox1",     i
+          Exit For
+        Else
+          If i = 9 Then
+              DlgValue        "DropListBox1",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox2",     FormC()
+DlgVisible      "DropListBox2",     VISIBLE
+DlgText         "Position2",        "/06, Form of item"
+DlgVisible      "Position2",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox2",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 6, 1 )
+    For i = 0 To 3
+      If Code$ = Left$( FormC( i ), 1 ) Then
+          DlgValue        "DropListBox2",     i
+          Exit For
+        Else
+          If i = 3 Then
+              DlgValue        "DropListBox2",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox3",     File()
+DlgVisible      "DropListBox3",     VISIBLE
+DlgText         "Position3",        "/09, Type of computer file"
+DlgVisible      "Position3",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox3",     11 'u
+  Else
+    Code$ = Mid$( CodeString, 9, 1 )
+    For i = 0 To 13
+      If Code$ = Left$( File( i ), 1 ) Then
+          DlgValue        "DropListBox3",     i
+          Exit For
+        Else
+          If i = 13 Then
+              DlgValue        "DropListBox3",     11 'u
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox4",     GPub()
+DlgVisible      "DropListBox4",     VISIBLE
+DlgText         "Position4",        "/11, Government publication"
+DlgVisible      "Position4",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox4",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 11, 1 )
+    For i = 0 To 11
+      If Code$ = Left$( GPub( i ), 1 ) Then
+          DlgValue        "DropListBox4",     i
+          Exit For
+        Else
+          If i = 11 Then
+              DlgValue        "DropListBox4",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox5",     INVISIBLE
+DlgVisible      "DropListBox6",     INVISIBLE
+DlgVisible      "DropListBox7",     INVISIBLE
+DlgVisible      "DropListBox8",     INVISIBLE
+DlgVisible      "DropListBox9",     INVISIBLE
+DlgVisible      "DropListBox10",    INVISIBLE
+DlgVisible      "DropListBox11",    INVISIBLE
+DlgVisible      "DropListBox12",    INVISIBLE
+DlgVisible      "DropListBox13",    INVISIBLE
+DlgVisible      "DropListBox14",    INVISIBLE
+DlgVisible      "DropListBox15",    INVISIBLE
+DlgVisible      "DropListBox16",    INVISIBLE
+DlgVisible      "Position5",        INVISIBLE
+DlgVisible      "Position6",        INVISIBLE
+DlgVisible      "Position7",        INVISIBLE
+DlgVisible      "Position8",        INVISIBLE
+DlgVisible      "Position9",        INVISIBLE
+DlgVisible      "Position10",       INVISIBLE
+DlgVisible      "Position11",       INVISIBLE
+DlgVisible      "Position12",       INVISIBLE
+DlgVisible      "Position13",       INVISIBLE
+DlgVisible      "Position14",       INVISIBLE
+DlgVisible      "Position15",       INVISIBLE
+DlgVisible      "Position16",       INVISIBLE
+
+End Sub
+
+'****************************************************************************************
+
+Sub SubContinuingResources
+
+Dim Code$
+
+Dim i As Integer
+
+Dim S_L  ( 3 )  As String
+Dim Orig ( 10 ) As String
+Dim Freq ( 19 ) As String
+Dim ContS( 27 ) As String
+Dim Alph ( 15 ) As String
+Dim Regl ( 4 )  As String
+Dim SrTp ( 7 )  As String
+
+Alph( 0 )   = " [blank] - No alphabet or script given/No key title"
+Alph( 1 )   = "a - Basic Roman"
+Alph( 2 )   = "b - Extended Roman"
+Alph( 3 )   = "c - Cyrillic"
+Alph( 4 )   = "d - Japanese"
+Alph( 5 )   = "e - Chinese"
+Alph( 6 )   = "f - Arabic"
+Alph( 7 )   = "g - Greek"
+Alph( 8 )   = "h - Hebrew"
+Alph( 9 )   = "i - Thai"
+Alph( 10 )  = "j - Devanagari"
+Alph( 11 )  = "k - Korean"
+Alph( 12 )  = "l - Tamil"
+Alph( 13 )  = "u - Unknown"
+Alph( 14 )  = "z - Other"
+Alph( 15 )  = "| - No attempt to code"
+
+ContS( 0 )  = " [blank] - Not specified"
+ContS( 1 )  = "a - Abstracts/summaries"
+ContS( 2 )  = "b - Bibliographies"
+ContS( 3 )  = "c - Catalogs"
+ContS( 4 )  = "d - Dictionaries"
+ContS( 5 )  = "e - Encyclopedias"
+ContS( 6 )  = "f - Handbooks"
+ContS( 7 )  = "g - Legal articles"
+ContS( 8 )  = "h - Biography"
+ContS( 9 )  = "i - Indexes"
+ContS( 10 ) = "k - Discographies"
+ContS( 11 ) = "l - Legislation"
+ContS( 12 ) = "m - Theses"
+ContS( 13 ) = "n - Surveys of literature in a subject area"
+ContS( 14 ) = "o - Reviews"
+ContS( 15 ) = "p - Programmed texts"
+ContS( 16 ) = "q - Filmographies"
+ContS( 17 ) = "r - Directories"
+ContS( 18 ) = "s - Statistics"
+ContS( 19 ) = "t - Technical reports"
+ContS( 20 ) = "u - Standards/specifications"
+ContS( 21 ) = "v - Legal cases and case notes"
+ContS( 22 ) = "w - Law reports and digests"
+ContS( 23 ) = "y - Yearbooks"
+ContS( 24 ) = "z - Treaties"
+ContS( 25 ) = "5 - Calendars"
+ContS( 26 ) = "6 - Comics/graphic novels"
+ContS( 27 ) = "| - No attempt to code"
+
+Freq( 0 )   = " [blank] - No determinable frequency"
+Freq( 1 )   = "a - Annual"
+Freq( 2 )   = "b - Bimonthly"
+Freq( 3 )   = "c - Semiweekly"
+Freq( 4 )   = "d - Daily"
+Freq( 5 )   = "e - Biweekly"
+Freq( 6 )   = "f - Semiannual"
+Freq( 7 )   = "g - Biennial"
+Freq( 8 )   = "h - Triennial"
+Freq( 9 )   = "i - Three times a week"
+Freq( 10 )  = "j - Three times a month"
+Freq( 11 )  = "k - Continuously updated"
+Freq( 12 )  = "m - Monthly"
+Freq( 13 )  = "q - Quarterly"
+Freq( 14 )  = "s - Semimonthly"
+Freq( 15 )  = "t - Three times a year"
+Freq( 16 )  = "u - Unknown"
+Freq( 17 )  = "w - Weekly"
+Freq( 18 )  = "z - Other"
+Freq( 19 )  = "| - No attempt to code"
+
+Orig( 0 )   = " [blank] - None of the following"
+Orig( 1 )   = "a - Microfilm"
+Orig( 2 )   = "b - Microfiche"
+Orig( 3 )   = "c - Microopaque"
+Orig( 4 )   = "d - Large print"
+Orig( 5 )   = "e - Newspaper format"
+Orig( 6 )   = "f - Braille"
+Orig( 7 )   = "o - Online"
+Orig( 8 )   = "q - Direct electronic"
+Orig( 9 )   = "s - Electronic"
+Orig( 10 )  = "| - No attempt to code"
+
+Regl( 0 )   = "n - Normalized irregular"
+Regl( 1 )   = "r - Regular"
+Regl( 2 )   = "u - Unknown"
+Regl( 3 )   = "x - Completely irregular"
+Regl( 4 )   = "| - No attempt to code"
+
+S_L( 0 )    = "0 - Successive entry"
+S_L( 1 )    = "1 - Latest entry"
+S_L( 2 )    = "2 - Integrated entry"
+S_L( 3 )    = "| - No attempt to code"
+
+SrTp( 0 )   = " [blank] - None of the following"
+SrTp( 1 )   = "d - Updating database"
+SrTp( 2 )   = "l - Updating loose-leaf"
+SrTp( 3 )   = "m - Monographic series"
+SrTp( 4 )   = "n - Newspaper"
+SrTp( 5 )   = "p - Periodical"
+SrTp( 6 )   = "w - Updating Web site"
+SrTp( 7 )   = "| - No attempt to code"
+
+DlgListBoxArray "DropListBox1",     Freq()
+DlgVisible      "DropListBox1",     VISIBLE
+DlgText         "Position1",        "/01, Frequency"
+DlgVisible      "Position1",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox1",     19 'fill character
+  Else
+    Code$ = Mid$( CodeString, 1, 1 )
+    For i = 0 To 19
+      If Code$ = Left$( Freq( i ), 1 ) Then
+          DlgValue        "DropListBox1",     i
+          Exit For
+        Else
+          If i = 19 Then
+              DlgValue        "DropListBox1",     19 'fill character
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox2",     Regl()
+DlgVisible      "DropListBox2",     VISIBLE
+DlgText         "Position2",        "/02, Regularity"
+DlgVisible      "Position2",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox2",     4 'fill character
+  Else
+    Code$ = Mid$( CodeString, 2, 1 )
+    For i = 0 To 4
+      If Code$ = Left$( Regl( i ), 1 ) Then
+          DlgValue        "DropListBox2",     i
+          Exit For
+        Else
+          If i = 4 Then
+              DlgValue        "DropListBox2",     4 'fill character
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox3",     SrTp()
+DlgVisible      "DropListBox3",     VISIBLE
+DlgText         "Position3",        "/04, Type of continuing resource"
+DlgVisible      "Position3",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox3",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 4, 1 )
+    For i = 0 To 7
+      If Code$ = Left$( SrTp( i ), 1 ) Then
+          DlgValue        "DropListBox3",     i
+          Exit For
+        Else
+          If i = 7 Then
+              DlgValue        "DropListBox3",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox4",     Orig()
+DlgVisible      "DropListBox4",     VISIBLE
+DlgText         "Position4",        "/05, Form of original item"
+DlgVisible      "Position4",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox4",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 5, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( Orig( i ), 1 ) Then
+          DlgValue        "DropListBox4",     i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox4",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox5",     Form()
+DlgVisible      "DropListBox5",     VISIBLE
+DlgText         "Position5",        "/06, Form of item"
+DlgVisible      "Position5",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox5",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 6, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( Form( i ), 1 ) Then
+          DlgValue        "DropListBox5",     i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox5",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox6",     ContS()
+DlgVisible      "DropListBox6",     VISIBLE  'Same as Nature of Work
+DlgText         "Position6",        "/07, Nature of entire work"
+DlgVisible      "Position6",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox6",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 7, 1 )
+    For i = 0 To 27
+      If Code$ = Left$( ContS( i ), 1 ) Then
+          DlgValue        "DropListBox6",     i
+          Exit For
+        Else
+          If i = 27 Then
+              DlgValue        "DropListBox6",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox7",     ContS()
+DlgVisible      "DropListBox7",     VISIBLE
+DlgText         "Position7",        "/08, Nature of contents"
+DlgVisible      "Position7",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox7",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 8, 1 )
+    For i = 0 To 27
+      If Code$ = Left$( ContS( i ), 1 ) Then
+          DlgValue        "DropListBox7",     i
+          Exit For
+        Else
+          If i = 27 Then
+              DlgValue        "DropListBox7",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox8",     ContS()
+DlgVisible      "DropListBox8",     VISIBLE
+DlgText         "Position8",        "/09, Nature of contents"
+DlgVisible      "Position8",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox8",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 9, 1 )
+    For i = 0 To 27
+      If Code$ = Left$( ContS( i ), 1 ) Then
+          DlgValue        "DropListBox8",     i
+          Exit For
+        Else
+          If i = 27 Then
+              DlgValue        "DropListBox8",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox9",     ContS()
+DlgVisible      "DropListBox9",     VISIBLE
+DlgText         "Position9",        "/10, Nature of contents"
+DlgVisible      "Position9",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox9",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 10, 1 )
+    For i = 0 To 27
+      If Code$ = Left$( ContS( i ), 1 ) Then
+          DlgValue        "DropListBox9",     i
+          Exit For
+        Else
+          If i = 27 Then
+              DlgValue        "DropListBox9",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox10",    GPub()
+DlgVisible      "DropListBox10",    VISIBLE
+DlgText         "Position10",       "/11, Government publication"
+DlgVisible      "Position10",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox10",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 11, 1 )
+    For i = 0 To 11
+      If Code$ = Left$( GPub( i ), 1 ) Then
+          DlgValue        "DropListBox10",    i
+          Exit For
+        Else
+          If i = 11 Then
+              DlgValue        "DropListBox10",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox11",    Conf()
+DlgVisible      "DropListBox11",    VISIBLE
+DlgText         "Position11",       "/12, Conference publication"
+DlgVisible      "Position11",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox11",    2 'fill character
+  Else
+    Code$ = Mid$( CodeString, 12, 1 )
+    For i = 0 To 2
+      If Code$ = Left$( Conf( i ), 1 ) Then
+          DlgValue        "DropListBox11",    i
+          Exit For
+        Else
+          If i = 2 Then
+              DlgValue        "DropListBox11",    2 'fill character
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox12",    Alph()
+DlgVisible      "DropListBox12",    VISIBLE
+DlgText         "Position12",       "/16, Original alphabet or script of title"
+DlgVisible      "Position12",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox12",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 16, 1 )
+    For i = 0 To 15
+      If Code$ = Left$( Alph( i ), 1 ) Then
+          DlgValue        "DropListBox12",    i
+          Exit For
+        Else
+          If i = 15 Then
+              DlgValue        "DropListBox12",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox13",    S_L()
+DlgVisible      "DropListBox13",    VISIBLE
+DlgText         "Position13",       "/17, S/L"
+DlgVisible      "Position13",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox13",    0 '0 (zero)
+  Else
+    Code$ = Mid$( CodeString, 17, 1 )
+    For i = 0 To 3
+      If Code$ = Left$( S_L( i ), 1 ) Then
+          DlgValue        "DropListBox13",    i
+          Exit For
+        Else
+          If i = 3 Then
+              DlgValue        "DropListBox13",    0 '0 (zero)
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox14",    INVISIBLE
+DlgVisible      "DropListBox15",    INVISIBLE
+DlgVisible      "DropListBox16",    INVISIBLE
+DlgVisible      "Position14",       INVISIBLE
+DlgVisible      "Position15",       INVISIBLE
+DlgVisible      "Position16",       INVISIBLE
+
+End Sub
+
+'****************************************************************************************
+
+Sub SubMaps
+
+Dim Code$
+
+Dim i As Integer
+
+Dim CrTp( 9 )  As String
+Dim Proj( 47 ) As String
+Dim Relf( 13 ) As String
+Dim SpFm( 10 ) As String
+
+CrTp( 0 )  = "a - Single map"
+CrTp( 1 )  = "b - Map series"
+CrTp( 2 )  = "c - Map serial"
+CrTp( 3 )  = "d - Globe"
+CrTp( 4 )  = "e - Atlas"
+CrTp( 5 )  = "f - Separate supplement to another work"
+CrTp( 6 )  = "g - Bound as part of another work"
+CrTp( 7 )  = "u - Unknown"
+CrTp( 8 )  = "z - Other"
+CrTp( 9 )  = "| - No attempt to code"
+
+Proj( 0 )  = "  [blank] - Proj not specified"
+Proj( 1 )  = "aa - Aitoff"
+Proj( 2 )  = "ab - Gnomic"
+Proj( 3 )  = "ac - Lambert's azimuthal equal area"
+Proj( 4 )  = "ad - Orthographic"
+Proj( 5 )  = "ae - Azimuthal equidistant"
+Proj( 6 )  = "af - Stereographic"
+Proj( 7 )  = "ag - General vertical near-sided"
+Proj( 8 )  = "am - Modified stereographic for Alaska"
+Proj( 9 )  = "an - Chamberlin trimetric"
+Proj( 10 ) = "ap - Polar stereographic"
+Proj( 11 ) = "au - Azimuthal, specific type unknown"
+Proj( 12 ) = "az - Azimuthal, other"
+Proj( 13 ) = "ba - Gall"
+Proj( 14 ) = "bb - Goode's homolographic"
+Proj( 15 ) = "bc - Lambert's cylindrical equal area"
+Proj( 16 ) = "bd - Mercator"
+Proj( 17 ) = "be - Miller"
+Proj( 18 ) = "bf - Mollweide"
+Proj( 19 ) = "bg - Sinusoidal"
+Proj( 20 ) = "bh - Transverse Mercator"
+Proj( 21 ) = "bi - Gauss-Kruger"
+Proj( 22 ) = "bj - Equirectangular"
+Proj( 23 ) = "bk - Krovak"
+Proj( 24 ) = "bl - Cassini-Soldner"
+Proj( 25 ) = "bo - Oblique Mercator"
+Proj( 26 ) = "br - Robinson"
+Proj( 27 ) = "bs - Space oblique Mercator"
+Proj( 28 ) = "bu - Cylindrical, specific type unknown"
+Proj( 29 ) = "bz - Cylindrical, other"
+Proj( 30 ) = "ca - Albers equal area"
+Proj( 31 ) = "cb - Bonne"
+Proj( 32 ) = "cc - Lambert's conformal conic"
+Proj( 33 ) = "ce - Equidistant conic"
+Proj( 34 ) = "cp - Polyconic"
+Proj( 35 ) = "cu - Conic, specific type unknown"
+Proj( 36 ) = "cz - Conic, other"
+Proj( 37 ) = "da - Armadillo"
+Proj( 38 ) = "db - Butterfly"
+Proj( 39 ) = "dc - Eckert"
+Proj( 40 ) = "dd - Goode's homolosine"
+Proj( 41 ) = "de - Miller's bipolar oblique conformal conic"
+Proj( 42 ) = "df - Van Der Grinten"
+Proj( 43 ) = "dg - Dimaxion"
+Proj( 44 ) = "dh - Cordiform"
+Proj( 45 ) = "dl - Lambert conformal"
+Proj( 46 ) = "zz - Other"
+Proj( 47 ) = "|| - No attempt to code"
+
+Relf( 0 )  = " [blank] - No relief shown"
+Relf( 1 )  = "a - Contours"
+Relf( 2 )  = "b - Shading"
+Relf( 3 )  = "c - Gradient and bathymetric tints"
+Relf( 4 )  = "d - Hachures"
+Relf( 5 )  = "e - Bathymetry/soundings"
+Relf( 6 )  = "f - Form lines"
+Relf( 7 )  = "g - Spot heights"
+Relf( 8 )  = "i - Pictorially"
+Relf( 9 )  = "j - Land forms"
+Relf( 10 ) = "k - Bathymetry/isolines"
+Relf( 11 ) = "m - Rock drawings"
+Relf( 12 ) = "z - Other"
+Relf( 13 ) = "| - No attempt to code"
+
+SpFm( 0 )  = " [blank] - No specified special format characteristics"
+SpFm( 1 )  = "e - Manuscript"
+SpFm( 2 )  = "j - Picture card, post card"
+SpFm( 3 )  = "k - Calendar"
+SpFm( 4 )  = "l - Puzzle"
+SpFm( 5 )  = "n - Game"
+SpFm( 6 )  = "o - Wall map"
+SpFm( 7 )  = "p - Playing cards"
+SpFm( 8 )  = "r - Loose-leaf"
+SpFm( 9 )  = "z - Other"
+SpFm( 10 ) = "| - No attempt to code"
+
+DlgListBoxArray "DropListBox1",     Relf()
+DlgVisible      "DropListBox1",     VISIBLE
+DlgText         "Position1",        "/01, Relief"
+DlgVisible      "Position1",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox1",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 1, 1 )
+    For i = 0 To 13
+      If Code$ = Left$( Relf( i ), 1 ) Then
+          DlgValue        "DropListBox1",     i
+          Exit For
+        Else
+          If i = 13 Then
+              DlgValue        "DropListBox1",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox2",     Relf()
+DlgVisible      "DropListBox2",     VISIBLE
+DlgText         "Position2",        "/02, Relief"
+DlgVisible      "Position2",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox2",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 2, 1 )
+    For i = 0 To 13
+      If Code$ = Left$( Relf( i ), 1 ) Then
+          DlgValue        "DropListBox2",     i
+          Exit For
+        Else
+          If i = 13 Then
+              DlgValue        "DropListBox2",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox3",     Relf()
+DlgVisible      "DropListBox3",     VISIBLE
+DlgText         "Position3",        "/03, Relief"
+DlgVisible      "Position3",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox3",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 3, 1 )
+    For i = 0 To 13
+      If Code$ = Left$( Relf( i ), 1 ) Then
+          DlgValue        "DropListBox3",     i
+          Exit For
+        Else
+          If i = 13 Then
+              DlgValue        "DropListBox3",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox4",     Relf()
+DlgVisible      "DropListBox4",     VISIBLE
+DlgText         "Position4",        "/04, Relief"
+DlgVisible      "Position4",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox4",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 4, 1 )
+    For i = 0 To 13
+      If Code$ = Left$( Relf( i ), 1 ) Then
+          DlgValue        "DropListBox4",     i
+          Exit For
+        Else
+          If i = 13 Then
+              DlgValue        "DropListBox4",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox5",     Proj()
+DlgVisible      "DropListBox5",     VISIBLE
+DlgText         "Position5",        "/05-06, Projection"
+DlgVisible      "Position5",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox5",     0 'blank-blank
+  Else
+    Code$ = Mid$( CodeString, 5, 2 )
+    For i = 0 To 47
+      If Code$ = Left$( Proj( i ), 2 ) Then
+          DlgValue        "DropListBox5",     i
+          Exit For
+        Else
+          If i = 47 Then
+              DlgValue        "DropListBox5",     0 'blank-blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox6",     CrTp()
+DlgVisible      "DropListBox6",     VISIBLE
+DlgText         "Position6",        "/08, Type of cartographic material"
+DlgVisible      "Position6",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox6",     0 'a
+  Else
+    Code$ = Mid$( CodeString, 8, 1 )
+    For i = 0 To 9
+      If Code$ = Left$( CrTp( i ), 1 ) Then
+          DlgValue        "DropListBox6",     i
+          Exit For
+        Else
+          If i = 9 Then
+              DlgValue        "DropListBox6",     0 'a
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox7",     GPub()
+DlgVisible      "DropListBox7",     VISIBLE
+DlgText         "Position7",        "/11, Government publication"
+DlgVisible      "Position7",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox7",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 11, 1 )
+    For i = 0 To 11
+      If Code$ = Left$( GPub( i ), 1 ) Then
+          DlgValue        "DropListBox7",     i
+          Exit For
+        Else
+          If i = 11 Then
+              DlgValue        "DropListBox7",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox8",     Form()
+DlgVisible      "DropListBox8",     VISIBLE
+DlgText         "Position8",        "/12, Form of item"
+DlgVisible      "Position8",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox8",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 12, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( Form( i ), 1 ) Then
+          DlgValue        "DropListBox8",     i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox8",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox9",     Indx()
+DlgVisible      "DropListBox9",     VISIBLE
+DlgText         "Position9",        "/14, Index"
+DlgVisible      "Position9",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox9",     0 '0 (zero)
+  Else
+    Code$ = Mid$( CodeString, 14, 1 )
+    For i = 0 To 2
+      If Code$ = Left$( Indx( i ), 1 ) Then
+          DlgValue        "DropListBox9",     i
+          Exit For
+        Else
+          If i = 2 Then
+              DlgValue        "DropListBox9",     0 '0 (zero)
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox10",    SpFm()
+DlgVisible      "DropListBox10",    VISIBLE
+DlgText         "Position10",       "/16, Special format characteristics"
+DlgVisible      "Position10",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox10",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 16, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( SpFm( i ), 1 ) Then
+          DlgValue        "DropListBox10",    i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox10",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox11",    SpFm()
+DlgVisible      "DropListBox11",    VISIBLE
+DlgText         "Position11",       "/17, Special format characteristics"
+DlgVisible      "Position11",       VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox11",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 17, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( SpFm( i ), 1 ) Then
+          DlgValue        "DropListBox11",    i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox11",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox12",    INVISIBLE
+DlgVisible      "DropListBox13",    INVISIBLE
+DlgVisible      "DropListBox14",    INVISIBLE
+DlgVisible      "DropListBox15",    INVISIBLE
+DlgVisible      "DropListBox16",    INVISIBLE
+DlgVisible      "Position12",       INVISIBLE
+DlgVisible      "Position13",       INVISIBLE
+DlgVisible      "Position14",       INVISIBLE
+DlgVisible      "Position15",       INVISIBLE
+DlgVisible      "Position16",       INVISIBLE
+
+End Sub
+
+'****************************************************************************************
+
+Sub SubMixedMaterials
+
+Dim Code$
+
+Dim i As Integer
+
+DlgListBoxArray "DropListBox1",     Form()
+DlgVisible      "DropListBox1",     VISIBLE
+DlgText         "Position1",        "/06, Form of item"
+DlgVisible      "Position1",        VISIBLE
+
+If New006 Then
+    DlgValue        "DropListBox1",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 6, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( Form( i ), 1 ) Then
+          DlgValue        "DropListBox1",     i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox1",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox2",     INVISIBLE
+DlgVisible      "DropListBox3",     INVISIBLE
+DlgVisible      "DropListBox4",     INVISIBLE
+DlgVisible      "DropListBox5",     INVISIBLE
+DlgVisible      "DropListBox6",     INVISIBLE
+DlgVisible      "DropListBox7",     INVISIBLE
+DlgVisible      "DropListBox8",     INVISIBLE
+DlgVisible      "DropListBox9",     INVISIBLE
+DlgVisible      "DropListBox10",    INVISIBLE
+DlgVisible      "DropListBox11",    INVISIBLE
+DlgVisible      "DropListBox12",    INVISIBLE
+DlgVisible      "DropListBox13",    INVISIBLE
+DlgVisible      "DropListBox14",    INVISIBLE
+DlgVisible      "DropListBox15",    INVISIBLE
+DlgVisible      "DropListBox16",    INVISIBLE
+DlgVisible      "Position2",        INVISIBLE
+DlgVisible      "Position3",        INVISIBLE
+DlgVisible      "Position4",        INVISIBLE
+DlgVisible      "Position5",        INVISIBLE
+DlgVisible      "Position6",        INVISIBLE
+DlgVisible      "Position7",        INVISIBLE
+DlgVisible      "Position8",        INVISIBLE
+DlgVisible      "Position9",        INVISIBLE
+DlgVisible      "Position10",       INVISIBLE
+DlgVisible      "Position11",       INVISIBLE
+DlgVisible      "Position12",       INVISIBLE
+DlgVisible      "Position13",       INVISIBLE
+DlgVisible      "Position14",       INVISIBLE
+DlgVisible      "Position15",       INVISIBLE
+DlgVisible      "Position16",       INVISIBLE
+
+End Sub
+
+'****************************************************************************************
+
+Sub SubMusic
+
+Dim Code$
+
+Dim i As Integer
+
+Dim AccM ( 14 ) As String
+Dim Comp ( 73 ) As String
+Dim FMus ( 15 ) As String
+Dim LTxtA( 20 ) As String
+Dim LTxtB( 20 ) As String
+Dim LTxtC( 1 )  As String
+Dim Part ( 6 )  As String
+Dim TrAr ( 6 )  As String
+
+AccM( 0 )   = " [blank] - No accompanying matter"
+AccM( 1 )   = "a - Discography"
+AccM( 2 )   = "b - Bibliography"
+AccM( 3 )   = "c - Thematic index"
+AccM( 4 )   = "d - Libretto or text"
+AccM( 5 )   = "e - Biography of composer or author"
+AccM( 6 )   = "f - Biography of performer or history of ensemble"
+AccM( 7 )   = "g - Technical and/or historical information on instruments"
+AccM( 8 )   = "h - Technical information on music"
+AccM( 9 )   = "i - Historical information"
+AccM( 10 )  = "k - Ethnological information"
+AccM( 11 )  = "r - Instructional materials"
+AccM( 12 )  = "s - Music"
+AccM( 13 )  = "z - Other"
+AccM( 14 )  = "| - No attempt to code"
+
+Comp( 0 )   = "  [blank] - No information supplied"
+Comp( 1 )   = "an - Anthems"
+Comp( 2 )   = "bd - Ballads"
+Comp( 3 )   = "bt - Ballets"
+Comp( 4 )   = "bg - Bluegrass music"
+Comp( 5 )   = "bl - Blues"
+Comp( 6 )   = "cn - Canons and rounds"
+Comp( 7 )   = "ct - Cantatas"
+Comp( 8 )   = "cz - Canzonas"
+Comp( 9 )   = "cr - Carols"
+Comp( 10 )  = "ca - Chaconnes"
+Comp( 11 )  = "cs - Chance compositions"
+Comp( 12 )  = "cp - Chansons, polyphonic"
+Comp( 13 )  = "cc - Chant, Christian"
+Comp( 14 )  = "cb - Chants, Other religions"
+Comp( 15 )  = "cl - Chorale preludes"
+Comp( 16 )  = "ch - Chorales"
+Comp( 17 )  = "cg - Concerti grossi"
+Comp( 18 )  = "co - Concertos"
+Comp( 19 )  = "cy - Country music"
+Comp( 20 )  = "df - Dance forms"
+Comp( 21 )  = "dv - Divertimentos, serenades, cassations, divertissements, and notturni"
+Comp( 22 )  = "ft - Fantasias"
+Comp( 23 )  = "fl - Flamenco"
+Comp( 24 )  = "fm - Folk music"
+Comp( 25 )  = "fg - Fugues"
+Comp( 26 )  = "gm - Gospel music"
+Comp( 27 )  = "hy - Hymns"
+Comp( 28 )  = "jz - Jazz"
+Comp( 29 )  = "md - Madrigals"
+Comp( 30 )  = "mr - Marches"
+Comp( 31 )  = "ms - Masses"
+Comp( 32 )  = "mz - Mazurkas"
+Comp( 33 )  = "mi - Minuets"
+Comp( 34 )  = "mo - Motets"
+Comp( 35 )  = "mp - Motion picture music"
+Comp( 36 )  = "mu - Multiple forms"
+Comp( 37 )  = "mc - Musical revues and comedies"
+Comp( 38 )  = "|| - No attempt to code"
+Comp( 39 )  = "nc - Nocturnes"
+Comp( 40 )  = "nn - Not applicable"
+Comp( 41 )  = "op - Operas"
+Comp( 42 )  = "or - Oratorios"
+Comp( 43 )  = "zz - Other"
+Comp( 44 )  = "ov - Overtures"
+Comp( 45 )  = "pt - Part-songs"
+Comp( 46 )  = "ps - Passacaglias"
+Comp( 47 )  = "pm - Passion music"
+Comp( 48 )  = "pv - Pavans"
+Comp( 49 )  = "po - Polonaises"
+Comp( 50 )  = "pp - Popular music"
+Comp( 51 )  = "pr - Preludes"
+Comp( 52 )  = "pg - Program music"
+Comp( 53 )  = "rg - Ragtime music"
+Comp( 54 )  = "rq - Requiems"
+Comp( 55 )  = "rp - Rhapsodies"
+Comp( 56 )  = "ri - Ricercars"
+Comp( 57 )  = "rc - Rock music"
+Comp( 58 )  = "rd - Rondos"
+Comp( 59 )  = "sn - Sonatas"
+Comp( 60 )  = "sg - Songs"
+Comp( 61 )  = "sd - Square dance music"
+Comp( 62 )  = "st - Studies and exercises"
+Comp( 63 )  = "su - Suites"
+Comp( 64 )  = "sp - Symphonic poems"
+Comp( 65 )  = "sy - Symphonies"
+Comp( 66 )  = "tl - Teatro lirico"
+Comp( 67 )  = "tc - Toccatas"
+Comp( 68 )  = "ts - Trio-sonatas"
+Comp( 69 )  = "uu - Unknown"
+Comp( 70 )  = "vr - Variations"
+Comp( 71 )  = "vi - Villancicos"
+Comp( 72 )  = "wz - Waltzes"
+Comp( 73 )  = "za - Zarzuelas"
+
+FMus( 0 )   = "a - Full score"
+FMus( 1 )   = "b - Full score, miniature or study size"
+FMus( 2 )   = "c - Accompaniment reduced for keyboard"
+FMus( 3 )   = "d - Voice score with accompaniment omitted"
+FMus( 4 )   = "e - Condensed score or piano-conductor score"
+FMus( 5 )   = "g - Close score"
+FMus( 6 )   = "h - Chorus score"
+FMus( 7 )   = "i - Condensed score"
+FMus( 8 )   = "j - Performer-conductor part"
+FMus( 9 )   = "k - Vocal score"
+FMus( 10 )  = "l - Score"
+FMus( 11 )  = "m - Multiple score formats"
+FMus( 12 )  = "n - Not applicable"
+FMus( 13 )  = "u - Unknown"
+FMus( 14 )  = "z - Other"
+FMus( 15 )  = "| - No attempt to code"
+
+LTxtA( 0 )  = " [blank] - Item is a music sound recording"
+LTxtA( 1 )  = "a - Autobiography"
+LTxtA( 2 )  = "b - Biography"
+LTxtA( 3 )  = "c - Conference proceedings"
+LTxtA( 4 )  = "d - Drama"
+LTxtA( 5 )  = "e - Essays"
+LTxtA( 6 )  = "f - Fiction"
+LTxtA( 7 )  = "g - Reporting"
+LTxtA( 8 )  = "h - History"
+LTxtA( 9 )  = "i - Instruction"
+LTxtA( 10 ) = "j - Language instruction"
+LTxtA( 11 ) = "k - Comedy"
+LTxtA( 12 ) = "l - Lectures, speeches"
+LTxtA( 13 ) = "m - Memoirs"
+LTxtA( 14 ) = "n - Not applicable"
+LTxtA( 15 ) = "o - Folktales"
+LTxtA( 16 ) = "p - Poetry"
+LTxtA( 17 ) = "r - Rehearsals"
+LTxtA( 18 ) = "s - Sounds"
+LTxtA( 19 ) = "t - Interviews"
+LTxtA( 20 ) = "z - Other"
+
+LTxtB( 0 )  = " [blank - value not selected]"
+LTxtB( 1 )  = "a - Autobiography"
+LTxtB( 2 )  = "b - Biography"
+LTxtB( 3 )  = "c - Conference proceedings"
+LTxtB( 4 )  = "d - Drama"
+LTxtB( 5 )  = "e - Essays"
+LTxtB( 6 )  = "f - Fiction"
+LTxtB( 7 )  = "g - Reporting"
+LTxtB( 8 )  = "h - History"
+LTxtB( 9 )  = "i - Instruction"
+LTxtB( 10 ) = "j - Language instruction"
+LTxtB( 11 ) = "k - Comedy"
+LTxtB( 12 ) = "l - Lectures, speeches"
+LTxtB( 13 ) = "m - Memoirs"
+LTxtB( 14 ) = "n - Not applicable"
+LTxtB( 15 ) = "o - Folktales"
+LTxtB( 16 ) = "p - Poetry"
+LTxtB( 17 ) = "r - Rehearsals"
+LTxtB( 18 ) = "s - Sounds"
+LTxtB( 19 ) = "t - Interviews"
+LTxtB( 20 ) = "z - Other"
+
+LTxtC( 0 )  = "n - Not applicable (item is a score)"
+LTxtC( 1 )  = " [blank] - Item is a score"
+
+Part( 0 )   = " [blank] - No parts in hand or not specified"
+Part( 1 )   = "d - Instrumental and vocal parts"
+Part( 2 )   = "e - Instrumental parts"
+Part( 3 )   = "f - Vocal parts"
+Part( 4 )   = "n - Not applicable"
+Part( 5 )   = "u - Unknown"
+Part( 6 )   = "| - No attempt to code"
+
+TrAr( 0 )   = " [blank] - Not arrangement or transposition or not specified"
+TrAr( 1 )   = "a - Transposition"
+TrAr( 2 )   = "b - Arrangement"
+TrAr( 3 )   = "c - Both transposed and arranged"
+TrAr( 4 )   = "n - Not applicable"
+TrAr( 5 )   = "u - Unknown"
+TrAr( 6 )   = "| - No attempt to code"
+
+DlgListBoxArray "DropListBox1",     Comp()
+DlgVisible      "DropListBox1",     VISIBLE
+DlgText         "Position1",        "/01-02, Form of composition"
+DlgVisible      "Position1",        VISIBLE
+If Current006Type = NON_MUSICAL_RECORDING Then
+    DlgEnable       "DropListBox1",     DISABLED
+    DlgEnable       "Position1",        DISABLED
+End If
+If New006 Then
+    If Current006Type = NON_MUSICAL_RECORDING Then
+        DlgValue        "DropListBox1",     40 'nn
+      Else
+        DlgValue        "DropListBox1",     69 'uu
+    End If
+  Else
+    Code$ = Mid$( CodeString, 1, 2 )
+    For i = 0 To 73
+      If Code$ = Left$( Comp( i ), 2 ) Then
+          DlgValue        "DropListBox1",     i
+          Exit For
+        Else
+          If i = 73 Then
+              If Current006Type = NON_MUSICAL_RECORDING Then
+                  DlgValue        "DropListBox1",     40 'nn
+                Else
+                  DlgValue        "DropListBox1",     69 'uu
+              End If
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox2",     FMus()
+DlgVisible      "DropListBox2",     VISIBLE
+DlgText         "Position2",        "/03, Format of music"
+DlgVisible      "Position2",        VISIBLE
+If Current006Type = MUSICAL_RECORDING Or Current006Type = NON_MUSICAL_RECORDING Then
+    DlgEnable       "DropListBox2",     DISABLED
+    DlgEnable       "Position2",        DISABLED
+End If
+If New006 Then
+    If Current006Type = NOTATED_MUSIC Or Current006Type = MS_NOTATED_MUSIC Then
+        DlgValue        "DropListBox2",     13 'u
+      Else
+        DlgValue        "DropListBox2",     12 'n
+    End If
+  Else
+    Code$ = Mid$( CodeString, 3, 1 )
+    For i = 0 To 15
+      If Code$ = Left$( FMus( i ), 1 ) Then
+          DlgValue        "DropListBox2",     i
+          Exit For
+        Else
+          If i = 15 Then
+              If Current006Type = NOTATED_MUSIC Or Current006Type = MS_NOTATED_MUSIC Then
+                  DlgValue        "DropListBox2",     13 'u
+                Else
+                  DlgValue        "DropListBox2",     12 'n
+              End If
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox3",     Part()
+DlgVisible      "DropListBox3",     VISIBLE
+DlgText         "Position3",        "/04, Music parts"
+DlgVisible      "Position3",        VISIBLE
+If Current006Type = MUSICAL_RECORDING Or Current006Type = NON_MUSICAL_RECORDING Then
+    DlgEnable       "DropListBox3",     DISABLED
+    DlgEnable       "Position3",        DISABLED
+End If
+If New006 Then
+    If Current006Type = NOTATED_MUSIC Or Current006Type = MS_NOTATED_MUSIC Then
+        DlgValue        "DropListBox3",     0 'blank
+      Else
+        DlgValue        "DropListBox3",     4 'n
+    End If
+  Else
+    Code$ = Mid$( CodeString, 4, 1 )
+    For i = 0 To 6
+      If Code$ = Left$( Part( i ), 1 ) Then
+          DlgValue        "DropListBox3",     i
+          Exit For
+        Else
+          If i = 6 Then
+              If Current006Type = NOTATED_MUSIC Or Current006Type = MS_NOTATED_MUSIC Then
+                  DlgValue        "DropListBox3",     0 'blank
+                Else
+                  DlgValue        "DropListBox3",     4 'n
+              End If
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox4",     Audn()
+DlgVisible      "DropListBox4",     VISIBLE
+DlgText         "Position4",        "/05, Target audience"
+DlgVisible      "Position4",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox4",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 5, 1 )
+    For i = 0 To 9
+      If Code$ = Left$( Audn( i ), 1 ) Then
+          DlgValue        "DropListBox4",     i
+          Exit For
+        Else
+          If i = 9 Then
+              DlgValue        "DropListBox4",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox5",     Form()
+DlgVisible      "DropListBox5",     VISIBLE
+DlgText         "Position5",        "/06, Form of item"
+DlgVisible      "Position5",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox5",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 6, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( Form( i ), 1 ) Then
+          DlgValue        "DropListBox5",     i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox5",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox6",     AccM()
+DlgVisible      "DropListBox6",     VISIBLE
+DlgText         "Position6",        "/07, Accompanying matter"
+DlgVisible      "Position6",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox6",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 7, 1 )
+    For i = 0 To 14
+      If Code$ = Left$( AccM( i ), 1 ) Then
+          DlgValue        "DropListBox6",     i
+          Exit For
+        Else
+          If i = 14 Then
+              DlgValue        "DropListBox6",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox7",     AccM()
+DlgVisible      "DropListBox7",     VISIBLE
+DlgText         "Position7",        "/08, Accompanying matter"
+DlgVisible      "Position7",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox7",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 8, 1 )
+    For i = 0 To 14
+      If Code$ = Left$( AccM( i ), 1 ) Then
+          DlgValue        "DropListBox7",     i
+          Exit For
+        Else
+          If i = 14 Then
+              DlgValue        "DropListBox7",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox8",     AccM()
+DlgVisible      "DropListBox8",     VISIBLE
+DlgText         "Position8",        "/09, Accompanying matter"
+DlgVisible      "Position8",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox8",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 9, 1 )
+    For i = 0 To 14
+      If Code$ = Left$( AccM( i ), 1 ) Then
+          DlgValue        "DropListBox8",     i
+          Exit For
+        Else
+          If i = 14 Then
+              DlgValue        "DropListBox8",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox9",     AccM()
+DlgVisible      "DropListBox9",     VISIBLE
+DlgText         "Position9",        "/10, Accompanying matter"
+DlgVisible      "Position9",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox9",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 10, 1 )
+    For i = 0 To 14
+      If Code$ = Left$( AccM( i ), 1 ) Then
+          DlgValue        "DropListBox9",     i
+          Exit For
+        Else
+          If i = 14 Then
+              DlgValue        "DropListBox9",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox10",    AccM()
+DlgVisible      "DropListBox10",    VISIBLE
+DlgText         "Position10",       "/11, Accompanying matter"
+DlgVisible      "Position10",       VISIBLE
+If New006 Then
+    DlgValue        "DropListBox10",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 11, 1 )
+    For i = 0 To 14
+      If Code$ = Left$( AccM( i ), 1 ) Then
+          DlgValue        "DropListBox10",    i
+          Exit For
+        Else
+          If i = 14 Then
+              DlgValue        "DropListBox10",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox11",    AccM()
+DlgVisible      "DropListBox11",    VISIBLE
+DlgText         "Position11",       "/12, Accompanying matter"
+DlgVisible      "Position11",       VISIBLE
+If New006 Then
+    DlgValue        "DropListBox11",    0 'blank
+  Else
+    Code$ = Mid$( CodeString, 12, 1 )
+    For i = 0 To 14
+      If Code$ = Left$( AccM( i ), 1 ) Then
+          DlgValue        "DropListBox11",    i
+          Exit For
+        Else
+          If i = 14 Then
+              DlgValue        "DropListBox11",    0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox12",    VISIBLE
+DlgText         "Position12",       "/13, Literary text for sound recordings"
+DlgVisible      "Position12",       VISIBLE
+If New006 = FALSE Then Code$ = Mid$( CodeString, 13, 1 )
+Select Case Current006Type
+  Case MUSICAL_RECORDING
+    DlgListBoxArray "DropListBox12",    LTxtA()
+    DlgValue        "DropListBox12",    0 'blank
+    DlgEnable       "DropListBox12",    DISABLED
+    DlgEnable       "Position12",       DISABLED
+  Case NON_MUSICAL_RECORDING
+    DlgListBoxArray "DropListBox12",    LTxtB()
+    If New006 Then
+        DlgValue        "DropListBox12",    0 'blank
+      Else
+        For i = 0 To 20
+          If Code$ = Left$( LTxtB( i ), 1 ) Then
+              DlgValue        "DropListBox12",    i
+              Exit For
+            Else
+              If i = 20 Then
+                  DlgValue        "DropListBox12",    0 'blank
+              End If
+          End If
+        Next i
+    End If
+  Case NOTATED_MUSIC, MS_NOTATED_MUSIC
+    DlgListBoxArray "DropListBox12",    LTxtC()
+    DlgValue        "DropListBox12",    0 'n
+    DlgEnable       "DropListBox12",    DISABLED
+    DlgEnable       "Position12",       DISABLED
+End Select
+
+DlgVisible      "DropListBox13",    VISIBLE
+DlgText         "Position13",       "/14, Literary text for sound recordings"
+DlgVisible      "Position13",       VISIBLE
+If New006 = FALSE Then Code$ = Mid$( CodeString, 14, 1 )
+Select Case Current006Type
+  Case MUSICAL_RECORDING
+    DlgListBoxArray "DropListBox13",    LTxtA()
+    DlgValue        "DropListBox13",    0 'blank
+    DlgEnable       "DropListBox13",    DISABLED
+    DlgEnable       "Position13",       DISABLED
+  Case NON_MUSICAL_RECORDING
+    DlgListBoxArray "DropListBox13",    LTxtB()
+    If New006 Then
+        DlgValue        "DropListBox13",    0 'blank
+      Else
+        For i = 0 To 20
+          If Code$ = Left$( LTxtB( i ), 1 ) Then
+              DlgValue        "DropListBox13",    i
+              Exit For
+            Else
+              If i = 20 Then
+                  DlgValue        "DropListBox13",    0 'blank
+              End If
+          End If
+        Next i
+    End If
+  Case NOTATED_MUSIC, MS_NOTATED_MUSIC
+    DlgListBoxArray "DropListBox13",    LTxtC()
+    DlgValue        "DropListBox13",    1 'blank
+    DlgEnable       "DropListBox13",    DISABLED
+    DlgEnable       "Position13",       DISABLED
+
+End Select
+
+DlgListBoxArray "DropListBox14",    TrAr()
+DlgVisible      "DropListBox14",    VISIBLE
+DlgText         "Position14",       "/16, Transposition and arrangement"
+DlgVisible      "Position14",       VISIBLE
+If Current006Type = MUSICAL_RECORDING Or Current006Type = NON_MUSICAL_RECORDING Then
+    DlgEnable       "DropListBox14",    DISABLED
+    DlgEnable       "Position14",       DISABLED
+End If
+If New006 Then
+    If Current006Type = NOTATED_MUSIC Or Current006Type = MS_NOTATED_MUSIC Then
+        DlgValue        "DropListBox14",    0 'blank
+      Else
+        DlgValue        "DropListBox14",    4 'n
+    End If
+  Else
+    Code$ = Mid$( CodeString, 16, 1 )
+    For i = 0 To 6
+      If Code$ = Left$( TrAr( i ), 1 ) Then
+          DlgValue        "DropListBox14",    i
+          Exit For
+        Else
+          If i = 6 Then
+              If Current006Type = NOTATED_MUSIC Or Current006Type = MS_NOTATED_MUSIC Then
+                  DlgValue        "DropListBox14",    0 'blank
+                Else
+                  DlgValue        "DropListBox14",    4 'n
+              End If
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox15",    INVISIBLE
+DlgVisible      "DropListBox16",    INVISIBLE
+DlgVisible      "Position15",       INVISIBLE
+DlgVisible      "Position16",       INVISIBLE
+
+End Sub
+
+'****************************************************************************************
+
+Sub SubVisualMaterials
+
+Dim Code$
+
+Dim i As Integer
+
+Dim RTime( 4 ) As String
+Dim Tech ( 6 ) As String
+Dim TMatG( 6 ) As String
+Dim TMatK( 8 ) As String
+Dim TMatO( 2 ) As String
+Dim TMatR( 9 ) As String
+
+RTime( 0 ) = "[No code selected--time entered in text box above]"
+RTime( 1 ) = "000 - Running time exceeds three characters"
+RTime( 2 ) = "nnn - Not applicable"
+RTime( 3 ) = "--- - Unknown"
+RTime( 4 ) = "||| - No attempt to code"
+
+Tech( 0 )  = "a - Animation"
+Tech( 1 )  = "c - Animation and live action"
+Tech( 2 )  = "l - Live action"
+Tech( 3 )  = "n - Not applicable"
+Tech( 4 )  = "u - Unknown"
+Tech( 5 )  = "z - Other"
+Tech( 6 )  = "| - No attempt to code"
+
+TMatG( 0 ) = "f - Filmstrip"
+TMatG( 1 ) = "m - Motion picture"
+TMatG( 2 ) = "s - Slide"
+TMatG( 3 ) = "t - Transparency"
+TMatG( 4 ) = "v - Videorecording"
+TMatG( 5 ) = "z - Other"
+TMatG( 6 ) = "| - No attempt to code"
+
+TMatK( 0 ) = "a - Art original"
+TMatK( 1 ) = "c - Art reproduction"
+TMatK( 2 ) = "i - Picture"
+TMatK( 3 ) = "k - Graphic"
+TMatK( 4 ) = "l - Technical drawing"
+TMatK( 5 ) = "n - Chart"
+TMatK( 6 ) = "o - Flash card"
+TMatK( 7 ) = "z - Other"
+TMatK( 8 ) = "| - No attempt to code"
+
+TMatO( 0 ) = "b - Kit"
+TMatO( 1 ) = "z - Other"
+TMatO( 2 ) = "| - No attempt to code"
+
+TMatR( 0 ) = "a - Art original"
+TMatR( 1 ) = "c - Art reproduction"
+TMatR( 2 ) = "d - Diorama"
+TMatR( 3 ) = "g - Game"
+TMatR( 4 ) = "p - Microscope slide"
+TMatR( 5 ) = "q - Model"
+TMatR( 6 ) = "r - Realia"
+TMatR( 7 ) = "w - Toy"
+TMatR( 8 ) = "z - Other"
+TMatR( 9 ) = "| - No attempt to code"
+
+DlgListBoxArray "DropListBox1A",    RTime()
+DlgVisible      "DropListBox1A",    VISIBLE
+DlgText         "Position1",        "/01-03, Running time for motion pictures and videorecordings"
+DlgVisible      "Position1",        VISIBLE
+DlgVisible      "Position1A",       VISIBLE
+DlgVisible      "Position1B",       VISIBLE
+DlgVisible      "TextBox",          VISIBLE
+If New006 Then
+    DlgText         "TextBox",          ""
+    DlgValue        "DropListBox1A",    0 'for entering digits
+  Else
+    Code$ = Mid$( CodeString, 1, 3 )
+    DlgText         "TextBox",          Code$
+    For i = 1 To 4
+      If Code$ = Left$( RTime( i ), 3 ) Then
+          DlgValue        "DropListBox1A",    i
+          DlgEnable       "TextBox",          DISABLED
+          Exit For
+        Else
+          If i = 4 Then
+              DlgValue        "DropListBox1A",    0 'for entering digits
+          End If
+      End If
+    Next i
+End If
+If Current006Type <> PROJECTED_MEDIUM Then
+    DlgEnable       "DropListBox1A",    DISABLED
+    DlgEnable       "Position1",        DISABLED
+    DlgEnable       "Position1A",       DISABLED
+    DlgEnable       "Position1B",       DISABLED
+    DlgEnable       "TextBox",          DISABLED
+    If New006 Then
+        DlgValue        "DropListBox1A",    2 'nnn
+    End If
+End If
+
+DlgListBoxArray "DropListBox3",     Audn()
+DlgVisible      "DropListBox3",     VISIBLE
+DlgText         "Position3",        "/05, Target audience"
+DlgVisible      "Position3",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox3",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 5, 1 )
+    For i = 0 To 9
+      If Code$ = Left$( Audn( i ), 1 ) Then
+          DlgValue        "DropListBox3",     i
+          Exit For
+        Else
+          If i = 9 Then
+              DlgValue        "DropListBox3",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox4",     GPub()
+DlgVisible      "DropListBox4",     VISIBLE
+DlgText         "Position4",        "/11, Government publication"
+DlgVisible      "Position4",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox4",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 11, 1 )
+    For i = 0 To 11
+      If Code$ = Left$( GPub( i ), 1 ) Then
+          DlgValue        "DropListBox4",     i
+          Exit For
+        Else
+          If i = 11 Then
+              DlgValue        "DropListBox4",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgListBoxArray "DropListBox5",     Form()
+DlgVisible      "DropListBox5",     VISIBLE
+DlgText         "Position5",        "/12, Form of item"
+DlgVisible      "Position5",        VISIBLE
+If New006 Then
+    DlgValue        "DropListBox5",     0 'blank
+  Else
+    Code$ = Mid$( CodeString, 12, 1 )
+    For i = 0 To 10
+      If Code$ = Left$( Form( i ), 1 ) Then
+          DlgValue        "DropListBox5",     i
+          Exit For
+        Else
+          If i = 10 Then
+              DlgValue        "DropListBox5",     0 'blank
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox6",     VISIBLE
+DlgText         "Position6",        "/16, Type of visual material"
+DlgVisible      "Position6",        VISIBLE
+If New006 = FALSE Then Code$ = Mid$( CodeString, 16, 1 )
+Select Case Current006Type
+  Case PROJECTED_MEDIUM
+    DlgListBoxArray "DropListBox6",     TMatG()
+    If New006 Then
+        DlgValue        "DropListBox6",     6 'fill character
+      Else
+        For i = 0 To 6
+          If Code$ = Left$( TMatG( i ), 1 ) Then
+              DlgValue        "DropListBox6",     i
+              Exit For
+            Else
+              If i = 6 Then
+                  DlgValue        "DropListBox6",     6 'fill character
+              End If
+          End If
+        Next i
+    End If
+  Case NONPROJ_GRAPHIC_2D
+    DlgListBoxArray "DropListBox6",     TMatK()
+    If New006 Then
+        DlgValue        "DropListBox6",     8 'fill character
+      Else
+        For i = 0 To 8
+          If Code$ = Left$( TMatK( i ), 1 ) Then
+              DlgValue        "DropListBox6",     i
+              Exit For
+            Else
+              If i = 8 Then
+                  DlgValue        "DropListBox6",     8 'fill character
+              End If
+          End If
+        Next i
+    End If
+  Case KIT
+    DlgListBoxArray "DropListBox6",     TMatO()
+    If New006 Then
+        DlgValue        "DropListBox6",     2 'fill character
+      Else
+        For i = 0 To 2
+          If Code$ = Left$( TMatO( i ), 1 ) Then
+              DlgValue        "DropListBox6",     i
+              Exit For
+            Else
+              If i = 2 Then
+                  DlgValue        "DropListBox6",     2 'fill character
+              End If
+          End If
+        Next i
+    End If
+  Case ARTIFACT_OBJECT_3D
+    DlgListBoxArray "DropListBox6",     TMatR()
+    If New006 Then
+        DlgValue        "DropListBox6",     9 'fill character
+      Else
+        For i = 0 To 9
+          If Code$ = Left$( TMatR( i ), 1 ) Then
+              DlgValue        "DropListBox6",     i
+              Exit For
+            Else
+              If i = 9 Then
+                  DlgValue        "DropListBox6",     9 'fill character
+              End If
+          End If
+        Next i
+    End If
+End Select
+If New006 = FALSE Then TMatSelection% = i
+
+DlgListBoxArray "DropListBox7",     Tech()
+DlgVisible      "DropListBox7",     VISIBLE
+DlgText         "Position7",        "/17, Technique"
+DlgVisible      "Position7",        VISIBLE
+If Current006Type = PROJECTED_MEDIUM Then
+    DlgEnable       "DropListBox7",     ENABLED
+  Else
+    DlgEnable       "DropListBox7",     DISABLED
+End If
+If New006 Then
+    Select Case Current006Type
+      Case PROJECTED_MEDIUM
+        DlgValue        "DropListBox7",     2 'l ("live action")
+      Case Else
+        DlgValue        "DropListBox7",     3 'n
+    End Select
+  Else
+    Code$ = Mid$( CodeString, 17, 1 )
+    For i = 0 To 6
+      If Code$ = Left$( Tech( i ), 1 ) Then
+          DlgValue        "DropListBox7",     i
+          Exit For
+        Else
+          If i = 6 Then
+              Select Case Current006Type
+                Case PROJECTED_MEDIUM
+                  DlgValue        "DropListBox7",     2 'l ("live action")
+                Case Else
+                  DlgValue        "DropListBox7",     3 'n
+              End Select
+          End If
+      End If
+    Next i
+End If
+
+DlgVisible      "DropListBox2",     INVISIBLE
+DlgVisible      "DropListBox8",     INVISIBLE
+DlgVisible      "DropListBox9",     INVISIBLE
+DlgVisible      "DropListBox10",    INVISIBLE
+DlgVisible      "DropListBox11",    INVISIBLE
+DlgVisible      "DropListBox12",    INVISIBLE
+DlgVisible      "DropListBox13",    INVISIBLE
+DlgVisible      "DropListBox14",    INVISIBLE
+DlgVisible      "DropListBox15",    INVISIBLE
+DlgVisible      "DropListBox16",    INVISIBLE
+DlgVisible      "Position2",        INVISIBLE
+DlgVisible      "Position8",        INVISIBLE
+DlgVisible      "Position9",        INVISIBLE
+DlgVisible      "Position10",       INVISIBLE
+DlgVisible      "Position11",       INVISIBLE
+DlgVisible      "Position12",       INVISIBLE
+DlgVisible      "Position13",       INVISIBLE
+DlgVisible      "Position14",       INVISIBLE
+DlgVisible      "Position15",       INVISIBLE
+DlgVisible      "Position16",       INVISIBLE
+
+End Sub
+
+'****************************************************************************************
+
+Function RemoveSpaces( InString$ ) As String
+
+' This function removes spaces from within a string so the remaining characters are left-
+' justified.
+
+Dim TempString$
+Dim TempStringLength%
+
+Dim p As Integer, z As Integer
+
+TempString$       = InString$
+TempStringLength% = Len( TempString$ )
+TempString$       = Trim$( TempString$ )
+Do
+  p = InStr( TempString$, " " )
+  If p <> 0 Then
+      TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
+  End If
+Loop Until p = 0
+
+z = Len( TempString$ )
+If z < TempStringLength% Then
+    TempString$ = TempString$ & Space$( TempStringLength% - z )
+End If
+
+RemoveSpaces = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Sort( InString$ ) As String
+
+' This function simply sorts a string, removing spaces but preserving the string's length
+' (putting the spaces back at the end).
+
+Dim CharT$
+Dim InputString$
+Dim InputStringLength%
+Dim TempString$
+Dim TempStringLength%
+
+Dim i As Integer, j As Integer, z As Integer
+
+InputString$       = InString$
+InputStringLength% = Len( InputString$ )
+InputString$       = Trim$( InputString$ )
+If InputString$ = "" Then
+    Sort = InString$
+    Exit Function
+End If
+For i = 1 To InputStringLength%
+  CharT$ = Mid$( InputString$, i, 1 )
+  If i = 1 Then
+      TempString$ = CharT$
+      If InputStringLength% = 1 Then Exit For
+    Else
+      If CharT$ <> " " Then
+          TempStringLength% = Len( TempString$ )
+          For j = 1 To TempStringLength%
+            If CharT$ < Mid$( TempString$, j, 1 ) Then
+                If j = 1 Then
+                    TempString$ = CharT$ & TempString$
+                  Else
+                    TempString$ = Left$( TempString$, j - 1 ) & CharT$ & Mid$( TempString$, j )
+                End If
+                Exit For
+              Else
+                If j = TempStringLength% Then
+                    TempString$ = TempString$ & CharT$
+                    Exit For
+                End If
+            End If
+          Next j
+      End If
+  End If
+Next i
+
+z = Len( TempString$ )
+
+If z < InputStringLength% Then
+    TempString$ = TempString$ & Space$( InputStringLength% - z )
+End If
+
+Sort = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' This is the function that controls the dialog box.
+
+Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const INITIALIZE     As Integer = 1   'The value of the dialog function parameter "Action%" when the dialog box opens.
+Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog function to keep a dialog box open.
+
+Dim Count006String$
+Dim Selection%
+
+Dim i As Integer
+
+Select Case Count006%
+  Case 2
+    Count006String$ = "two"
+  Case 3
+    Count006String$ = "three"
+  Case 4
+    Count006String$ = "four"
+  Case 5
+    Count006String$ = "five"
+  Case 6
+    Count006String$ = "six"
+  Case 7
+    Count006String$ = "seven"
+  Case 8
+    Count006String$ = "eight"
+  Case 9
+    Count006String$ = "nine"
+  Case 10
+    Count006String$ = "ten"
+  Case 11
+    Count006String$ = "eleven"
+  Case 12
+    Count006String$ = "twelve"
+  Case 13
+    Count006String$ = "thirteen"
+  Case 14
+    Count006String$ = "fourteen"
+  Case 15
+    Count006String$ = "fifteen"
+End Select
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    ClearAllBoxes
+    If New006 Then
+        DlgText         "Title",            "Add new 006:"
+      Else
+        DlgText         "Title",            "Edit existing 006:"
+        If Count006% = 1 Then
+            DlgText         "Options",          "Or select a code from the list to add a new 006 field."
+          Else
+            DlgText         "Options",          "Choose which of the " & Count006String$ & " 006 fields to edit from the drop-down list."
+        End If
+        If CursorField$ = "" Then
+            Current006Type = Left$( All006Fields$, 1 )
+          Else
+            Current006Type = CursorField$
+        End If
+        Index006%  = InStr( All006Fields$, Current006Type )
+        CodeString = Mid$( Container006( Index006% - 1 ), 2 )
+        DlgValue        "FormDropListBox",  Index006% - 1
+        SetupDialogBox( Current006Type )
+    End If
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' When a code is selected from the master drop-down list, the dialog box is re-
+' initialized, all the controls becoming invisible, so they can be populated
+' appropriately and made visible. Some wording in the dialog box changes, too.
+
+      Case "FormDropListBox"
+        Selection% = DlgValue( "FormDropListBox" )
+        If Selection% <> PreviousSelection% Then
+            Current006Type = Left$( FormOfMaterial( Selection% ), 1 )
+            If InStr( All006Fields$, Current006Type$ ) = 0 Then
+                New006     = TRUE
+                CodeString = ""
+                DlgText         "Title",            "Add new 006:"
+                DlgText         "Options",          ""
+              Else
+                New006     = FALSE
+                CodeString = Mid$( Container006( Selection% ), 2 )
+                Index006%  = Selection% + 1
+                DlgText         "Title",            "Edit existing 006:"
+                DlgText         "Options",          "Or select a code from the list to add a new 006 field."
+            End If
+            SetupDialogBox( Current006Type )
+            PreviousSelection% = Selection%
+        End If
+
+' If the drop-down list for "Running time" changes, the visibility of the text box to
+' enter a time changes. If it's available for input, set the focus of the dialog box to
+' it so numbers can be entered immediately.
+
+      Case "DropListBox1A"
+        If Left$( DlgText( "DropListBox1A" ), 3 ) = "[No" Then
+            DlgEnable       "TextBox",          ENABLED
+            DlgText         "TextBox",          ""
+            DlgFocus        "TextBox"
+          Else
+            DlgEnable       "TextBox",          DISABLED
+            DlgText         "TextBox",          Left$( DlgText( "DropListBox1A" ), 3 )
+        End If
+
+' On "OK," check to see that a form of material has been selected. If so, check that the
+' two conditions of valid input have been met--a running time of up to three digits, and,
+' for non-musical sound recordings, at least one value for the two-character element
+' "Literary text." If so, the field can be added or replaced. Otherwise, keep the dialog
+' box open for repair of the problem, and set the focus to the element requiring
+' attention.
+
+      Case "OK"
+        If Left$( DlgText( "FormDropListBox" ), 8 ) = "  ---- [" Then
+            AddOrReplace% = -1
+          Else
+            CompileField( Current006Type )
+            If ValidRunningTime And ValidLitText1 Then
+                If New006 Then
+                    AddOrReplace% = ADD
+                  Else
+                    AddOrReplace% = REPLACE
+                End If
+              Else
+                If ValidRunningTime = FALSE Then
+                    DlgEnable       "TextBox",          ENABLED
+                    DlgFocus        "TextBox"
+                    ValidRunningTime = TRUE
+                  ElseIf ValidLitText1 = FALSE Then
+                    DlgFocus        "DropListBox12"
+                    ValidLitText1    = TRUE
+                End If
+                Dialog1ControlFunction = KEEP_DLG_OPEN
+            End If
+        End If
+    End Select
+
+End Select
+
+End Function
+'3254112230
+'
+'Macro name: Show006
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 4/17/2023 9:54:09 AM using "MacroBookInspector" macro by Walter F. Nickeson.

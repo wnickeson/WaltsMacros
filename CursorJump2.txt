@@ -1,0 +1,571 @@
+'MacroName:CursorJump2.2023.01
+'MacroDescription:Jumps the cursor to a specified position in a bibliographic or authority
+' record.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic or authority record to move the cursor
+' to a specific position in the record.
+'
+' when it opens, the macro displays a list of all the fields in a record, in numeric
+' order (which will probably not be the displayed order). Select a field to have the
+' macro display all the subfields in that field. Enter a position to jump the cursor to
+' within that subfield. If no position is given, the cursor jumps to the beginning of
+' the subfield. If a position is entered, the cursor jumps to the position immediately
+' before, or in front of, the character at that position.
+'
+' This macro may not work accurately in fields with non-Latin scripts.
+'
+' The first version of this macro was written when the only character set available for
+' the Connexion client was MARC-8. Upon validation, any character in the record not
+' recognized as MARC-8 was identified by its position within a subfield within a field.
+' If the position was in a long field or subfield, it could be difficult to find it. I
+' wrote this macro to help by moving the cursor to the position entered in the dialog
+' box. Since then, "OCLC [has provided] the capability to include all Unicode characters
+' in bibliographic records" (from Bibliographic Formats and Standards, 2.2, "Creating
+' Bibliographic Records"). Validation and character verification should no longer find
+' any illegal characters. However, now and then a message will provide an alert that
+' something is amiss at a location in the record. This macro can still jump to that
+' position to make it easier to find. But perhaps it is most useful now to find one
+' instance of a field in the midst of multiple instances.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Text
+
+Declare Sub GetSubfields( SelTag$, SelOcc% )
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global CS As Object
+Global DELIMITER As String*1
+Global DestinationRow%
+Global InitialCol%
+Global InitialPos%
+Global InitialRow%
+Global InitialSub%
+Global StartOfSubfield%
+
+Global StartsWithSubfieldA
+
+Type SubfieldStructure
+ tCode       As String*1
+ tOccurrence As Integer
+ tPosition   As Integer
+End Type
+
+Type FieldInformation
+ tTag        As String*3
+ tRowLine    As Integer
+ tCount      As Integer
+ tCurrent    As Integer
+End Type
+
+Global AllFields()     As FieldInformation
+Global ListOfFields()  As String
+Global SubfieldList()  As String
+Global Subfields()     As SubfieldStructure
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim CountOfFields%
+Dim CurrentRow%
+Dim FieldData$
+Dim Incumbent$
+Dim JumpTarget%
+Dim Occurrences%
+Dim RecordLine%
+Dim RowCount%
+Dim Tag$
+Dim TempString$
+Dim TypeOfWindow%
+Dim UBAllFields%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:CursorJump2"
+
+Dim FoundField
+
+Dim i As Integer, j As Integer
+
+DELIMITER = Chr$( 223 )
+
+Erase Subfields
+Erase SubfieldList
+
+DestinationRow%     = 0
+StartOfSubfield%    = 1
+StartsWithSubfieldA = FALSE
+
+' Make sure this macro is running in a record, as opposed to a list.
+
+TypeOfWindow% = CS.ItemType
+
+Select Case TypeOfWindow%
+
+  Case 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only in bibliographic or authority records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End Select
+
+InitialRow% = CS.CursorRow
+InitialCol% = CS.CursorColumn
+
+' Go through the record, making an array of all its fields, sorting them
+' along the way.
+
+ReDim AllFields( 0 )
+If InitialCol% = 0 Then
+    AllFields( 0 ).tTag = "000"
+    AllFields( 0 ).tCurrent = 1
+    RowCount% = 1
+  Else
+    RowCount% = 0
+End If
+RecordLine% = 1
+Do
+  FoundField = CS.GetFieldLineUnicode( RecordLine%, FieldData$ )
+  If FoundField Then
+      FieldData$ = Trim$( FieldData$ )
+      Tag$       = Left$( FieldData$, 3 )
+      If RecordLine% = 1 Then
+          ReDim Preserve AllFields( RowCount% )
+          AllFields( RowCount% ).tTag     = Tag$
+          AllFields( RowCount% ).tRowLine = RecordLine%
+          AllFields( RowCount% ).tCount   = 0
+          If RecordLine% = InitialRow% Then
+              AllFields( RowCount% ).tCurrent = 1
+          End If
+        Else
+          RowCount% = RowCount% + 1
+          ReDim Preserve AllFields( RowCount% )
+          For i = 0 To RowCount%
+            Incumbent$ = AllFields( i ).tTag
+            If Tag$ < Incumbent$ Then
+                CurrentRow% = i + 1
+                For j = RowCount% To CurrentRow% Step -1
+                  AllFields( j  ).tTag     = AllFields( j - 1 ).tTag
+                  AllFields( j  ).tRowLine = AllFields( j - 1 ).tRowLine
+                  AllFields( j  ).tCount   = AllFields( j - 1 ).tCount
+                  AllFields( j  ).tCurrent = AllFields( j - 1 ).tCurrent
+                Next j
+                AllFields( i ).tTag     = Tag$
+                AllFields( i ).tRowLine = RecordLine%
+                AllFields( i ).tCount   = 0
+                If RecordLine% = InitialRow% Then
+                    AllFields( i ).tCurrent = 1
+                  Else
+                    AllFields( i ).tCurrent = 0
+                End If
+                Exit For
+              Else
+                If i = RowCount% Then
+                    AllFields( i ).tTag     = Tag$
+                    AllFields( i ).tRowLine = RecordLine%
+                    AllFields( i ).tCount   = 0
+                    If RecordLine% = InitialRow% Then
+                        AllFields( i ).tCurrent = 1
+                      Else
+                        AllFields( i ).tCurrent = 0
+                    End If
+                    Exit For
+                End If
+            End If
+          Next i
+      End If
+      If i > 0 Then
+          If AllFields( i - 1 ).tTag = Tag$ Then
+              Occurrences% = AllFields( i - 1 ).tCount
+              If Occurrences% = 0 Then
+                  AllFields( i - 1 ).tCount = 1
+                  Occurrences% = 1
+              End If
+              AllFields( i ).tCount = Occurrences + 1
+          End If
+      End If
+      CountOfFields% = CountOfFields% + 1
+      RecordLine%    = RecordLine% + 1
+  End If
+Loop Until FoundField = FALSE
+
+UBAllFields% = UBound( AllFields )
+ReDim ListOfFields( UBAllFields% )
+For i = 0 to UBAllFields%
+  TempString$ = AllFields( i ).tTag
+  If AllFields( i ).tCount > 0 Then
+      TempString$ = TempString$ & "  [" & Trim$( Str$( AllFields( i ).tCount ) ) & "]"
+  End If
+  ListOfFields( i ) = TempString$
+Next i
+
+If ListOfFields( 0 ) = "000" Then
+    ListOfFields( 0 ) = "Fixed field"
+End If
+
+' Run the dialog box, where the action happens.
+
+Begin Dialog Dialog1Definition  168, 116, WaltsMacros$, .Dialog1ControlFunction
+  OkButton       46, 92,  52,  14
+  CancelButton  106, 92,  52,  14
+  ListBox        10,  16,  52,  80, ListOfFields(), .FieldList_ListBox
+  ListBox        70,  16,  48,  80, "",             .SubfieldList_ListBox
+  TextBox       126,  16,  32,  12,                 .PositionTextBox
+  Text           10,   6,  28,   8, "Field:"
+  Text           66,   6,  28,   8, "Subfield:"
+  Text          122,   6,  28,   8, "Position:"
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+' If the cursor is in the fixed field and no field is selected to jump to, simply exit
+' the macro.
+
+If DestinationRow% = 0 Then
+    Exit Sub
+  Else
+
+' Send the cursor to the indicated position.
+
+    CS.CursorRow = DestinationRow%
+
+    If Dialog1.PositionTextBox = "" Then
+        JumpTarget% = 1
+      Else
+        JumpTarget% = Val( Dialog1.PositionTextBox )
+    End If
+
+    If StartsWithSubfieldA = TRUE Then
+        CS.CursorColumn = StartOfSubfield% + JumpTarget% + 1
+      Else
+        CS.CursorColumn = StartOfSubfield% + JumpTarget% + 4
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetSubfields( SelectedTag$, Occurrence% )
+
+Dim CountOfSubfields%
+Dim FILL_CHARACTER As String*1 : FILL_CHARACTER = Chr$( 252 )
+Dim FieldData$
+Dim FoundField
+Dim Incumbent$
+Dim Start%
+Dim SubfieldCode$
+Dim SubfieldInfo As SubfieldStructure
+Dim SubfieldLength%
+Dim TempOccurrence%
+Dim TempSubInfo  As SubfieldStructure
+Dim UBSubfields%
+Dim UniChar$
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer
+
+' If the cursor is in the fixed field, there is really nothing to calculate.
+
+If InitialCol% < 6 Then
+    ReDim SubfieldList( 0 )
+    SubfieldList( 0 ) = ""
+    InitialSub%       = 0
+    Exit Sub
+End If
+
+CountOfSubfields% = -1
+
+If Occurrence% = 0 Then Occurrence% = 1
+
+FoundField = CS.GetFieldUnicode( SelectedTag$, Occurrence%, FieldData$ )
+  If FoundField Then
+      FieldData$ = Trim$( FieldData$ )
+  End If
+
+' Replace each Numeric Character Reference, which is eight characters in length, with a
+' fill character (except the delimiter). This substitution will unfortunately fail for
+' combining and other characters (Unicode characters in the "Mark, Nonspacing" category),
+' which should be omitted entirely to keep positions accurate; but to take into account
+' all 1400+ of these special characters is beyond the scope of this simple macro.
+
+Do
+  p = InStr( " " & FieldData$, "&#x" )
+  If p <> 0 Then
+      UniChar$ = Mid$( FieldData$, p - 1, 8 )
+      If UniChar$ = "&#x01C2;" Then
+          FieldData$ = Left$( FieldData$, p - 2 ) & DELIMITER & Mid$( FieldData$, p + 7 )
+        ElseIf Right$( UniChar$, 1 ) = ";" Then
+          FieldData$ = Left$( FieldData$, p - 2 ) & FILL_CHARACTER & Mid$( FieldData$, p + 7 )
+      End If
+  End If
+Loop Until p = 0
+FieldData$ = Trim$( Mid$( FieldData$, 6 ) )
+
+' Since "$a" does not display, it must be added to the beginning of the string if it is
+' indeed the first subfield, just to make sure it's counted.
+
+If Left$( FieldData$, 1 ) <> DELIMITER Then
+    FieldData$  = DELIMITER & "a " & FieldData$
+    StartsWithSubfieldA = TRUE
+End If
+
+' Everything is now in place to find all the subfields in the field. For each subfield,
+' keep track of its code, its position in the field, and its length.
+
+Start% = 1
+Do
+  p = InStr( Start%, FieldData$, DELIMITER )
+  If p <> 0 Then
+      SubfieldCode$  = Mid$( FieldData$, p + 1, 1 )
+      CountOfSubfields% = CountOfSubfields% + 1
+      q = InStr( p + 1, FieldData$, DELIMITER )
+      If q <> 0 Then
+          SubfieldLength% = q - p - 4
+        Else
+          SubfieldLength% = Len( FieldData$ ) - p - 2
+      End If
+      SubfieldInfo.tCode       = SubfieldCode$
+      SubfieldInfo.tOccurrence = 0
+      SubfieldInfo.tPosition   = p + 3
+
+' Place the record containing information for each subfield in an array, inserting it
+' in alphabetical order by subfield code (this puts subfields with numeric codes first,
+' but that will get fixed later). As each subfield is added, adjust the sequence number,
+' if necessary; the default number is zero. It gets adjusted as subsequent subfields
+' sharing the same code are added.
+
+      ReDim Preserve Subfields( CountOfSubfields% )
+      For i = 0 To UBound( Subfields )
+
+' The first subfield found simply gets inserted into the first element of the array.
+
+        If CountOfSubfields% = 0 Then
+            Subfields( CountOfSubfields% ) = SubfieldInfo
+            Exit For
+          Else
+            Incumbent$ = Subfields( i ).tCode
+            Select Case SubfieldInfo.tCode
+
+' If the subfield code of the next subfield is less than that of the element of the array
+' it is being compared to, insert it there, moving all subsequent elements up one.
+
+              Case Is < Incumbent$
+                For j = UBound( Subfields ) To i + 1 Step -1
+                  Subfields( j ) = Subfields( j - 1 )
+                Next j
+                Subfields( i ) = SubfieldInfo
+
+' Compare the newly inserted subfield with the one preceding it in the array. If they
+' have the same subfield code, their occurrence numbers need to be adjusted. If the
+' preceding element had a number of zero, it is changed to 1. Whatever the value it had,
+' the newly inserted subfield has an occurrence number incremented by 1.
+
+                If i > 0 Then
+                    If Subfields( i ).tCode = Subfields( i - 1 ).tCode Then
+                        TempOccurrence% = Subfields( i - 1 ).tOccurrence
+                        If TempOccurrence% = 0 Then
+                            TempOccurrence% = 1
+                            Subfields( i - 1 ).tOccurrence = TempOccurrence%
+                        End If
+                        If Subfields( i - 1 ).tOccurrence > 0 Then
+                            Subfields( i ).tOccurrence     = TempOccurrence% + 1
+                        End If
+                    End If
+                End If
+                Exit For
+
+' If the next subfield has a code the same as or greater than that of the element it is
+' being compared to, then insert it into the array immediately, also moving any
+' subsequent subfields up one element; thus, subfields with the same code are added in
+' the order in which they appear in the field. Adjust the occurrence number of it and its
+' preceding element as described above.
+
+              Case Is >= Incumbent$
+                If i = UBound( Subfields ) - 1 Then
+                    Subfields( i + 1 ) = SubfieldInfo
+                    If Subfields( i + 1 ).tCode = Subfields( i ).tCode Then
+                        TempOccurrence% = Subfields( i ).tOccurrence
+                        If TempOccurrence% = 0 Then
+                            TempOccurrence%               = 1
+                            Subfields( i ).tOccurrence     = TempOccurrence%
+                        End If
+                        If Subfields( i ).tOccurrence > 0 Then
+                            Subfields( i + 1 ).tOccurrence = TempOccurrence% + 1
+                        End If
+                    End If
+                    Exit For
+                End If
+            End Select
+        End If
+      Next i
+      Start% = p + 3
+  End If
+
+Loop Until p = 0
+
+' Now move any numeric subfields to the end of the array. The reason for this is that it
+' is more likely an invalid character will be in an alphabetic subfield than in a numeric
+' subfield, so the alphabetic subfields should be presented first.
+
+UBSubfields% = UBound( Subfields )
+Do
+  SubfieldCode$ = Subfields( 0 ).tCode
+  If SubfieldCode$ Like "[!a-z]" Then
+      TempSubInfo = Subfields( 0 )
+      For i = 0 To UBSubfields% - 1
+        Subfields( i ) = Subfields( i + 1 )
+      Next i
+      Subfields( UBSubfields% ) = TempSubInfo
+  End If
+Loop Until SubfieldCode$ Like "[a-z]"
+
+' Fill the array for display of the subfield codes in the dialog box. If the occurrence
+' number assigned earlier is not zero, add it to the subfield code within brackets.
+
+ReDim SubfieldList( UBSubfields% )
+For i = 0 To UBSubfields%
+  If Subfields( i ).tOccurrence = 0 Then
+      SubfieldList( i ) = Subfields( i ).tCode
+    Else
+      SubfieldList( i ) = Subfields( i ).tCode & "  [" & CStr( Subfields( i ).tOccurrence ) & "]"
+  End If
+Next i
+
+For i = 0 To UBSubfields%
+  If InitialCol% > Subfields(i).tPosition Then
+      InitialPos% = InitialCol% - Subfields(i).tPosition
+      InitialSub% = i
+    Else
+      Exit For
+  End If
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const INITIALIZE     As Integer = 1
+
+Dim FieldOccurrence%
+Dim FieldSelection%
+Dim InitialOccurrence%
+Dim InitialTag$
+Dim SelectedField$
+Dim SelectedSubfield%
+Dim SelectedTag$
+
+Dim FieldCountList() As String
+
+Dim i As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+' When the dialog box opens, display information about the field in which the cursor is
+' placed. That field is identified by the value in the "Current" field of the
+' "FieldInformation" variable.
+
+     For i = 0 To UBound( AllFields )
+       If AllFields( i ).tCurrent = 1 Then
+           InitialTag$        = AllFields( i ).tTag
+           InitialOccurrence% = AllFields( i ).tCount
+           DlgValue        "FieldList_ListBox",       i
+           Exit For
+       End If
+     Next i
+     Call GetSubfields( InitialTag$, InitialOccurrence% )
+     DlgListBoxArray "SubfieldList_ListBox", SubfieldList()
+     DlgValue        "SubfieldList_ListBox", InitialSub%
+
+' If the cursor is in the fixed field, or a tag or indicator cell, its column position is
+' less than 6. If those cases, the boxes for subfield and position will both be blank.
+
+     If InitialCol% < 6 Then
+         DlgText         "PositionTextBox",      ""
+       Else
+         DlgText         "PositionTextBox",      Trim$( Str$( InitialPos% - 1 ) )
+     End If
+     InitialCol% = 6
+     DlgFocus        "FieldList_ListBox"
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' When a field is selected from the drop-down list, show the array of its subfields. If
+' that field contains only one subfield, make the focus of the dialog box the textbox
+' for the position in that subfield to jump to. Otherwise, put the focus on the list of
+' subfields.
+
+      Case "FieldList_ListBox"
+
+        FieldSelection% = DlgValue( "FieldList_ListBox" )
+        DestinationRow% = AllFields( FieldSelection% ).tRowLine
+        SelectedField$ = DlgText( "FieldList_ListBox" )
+        SelectedTag$   = Left$( SelectedField$, 3 )
+        FieldOccurrence% = AllFields( FieldSelection% ).tCount
+        If FieldOccurrence% = 0 Then FieldOccurrence% = 1
+        Call GetSubfields( SelectedTag$, FieldOccurrence% )
+        DlgListBoxArray "SubfieldList_ListBox", SubfieldList()
+        DlgValue        "SubfieldList_ListBox", 0
+        If UBound( SubfieldList ) = 0 Then
+            DlgFocus        "PositionTextBox"
+          Else
+            DlgFocus        "SubfieldList_ListBox"
+        End If
+        DlgText         "PositionTextBox", ""
+
+
+      Case "SubfieldList_ListBox"
+
+        FieldSelection%  = DlgValue( "SubfieldList_ListBox" )
+        StartOfSubfield% = Subfields( FieldSelection% ).tPosition
+        DlgText         "PositionTextBox", ""
+        DlgFocus        "PositionTextBox"
+
+      Case "OK"
+
+        SelectedTag$      = Left$( DlgText( "FieldList_ListBox" ), 3 )
+        If SelectedTag$ = "Fix" Then
+            DestinationRow% = 0
+            DlgEnd 0
+        End If
+        SelectedSubfield% = DlgValue( "SubfieldList_ListBox" )
+        StartOfSubfield%  = Subfields( SelectedSubfield% ).tPosition
+    End Select
+
+End Select
+
+End Function
+'56819974
+'
+'Macro name: CursorJump2
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 4/17/2023 10:00:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,539 @@
+'MacroName:SearchFrom670.2022.05
+'MacroDescription:Searches for a bibliographic record from an authority record, using the
+' authorized heading as the name portion of the search and selected text in the 670 field
+' as the title portion and date qualifier.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 1 July 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro while viewing an authority record for a personal or
+' corporate name to search for the title cited in a 670 field. The macro uses the 1XX
+' field of the record, with the cited title, to retrieve a bibliographic record. Identify
+' the title to be searched in either of these two ways, then run the macro:
+'
+' 1. Select text in a field (any text may be selected; it doesn't have to be in a 670
+'    field). When selecting text, don't include words that aren't part of the title, like
+'    an initial article, and keep the selection within subfield $a only. If the date that
+'    usually follows the title is included in the selection, the macro uses it to qualify
+'    the search.
+' 2. Put the cursor at the beginning of the title in subfield $a of a 670 field. Place it
+'    after words that aren't part of the title, like an initial article. The macro
+'    considers all the text from that point to the end of subfield $a as the title. If a
+'    date is the last element of subfield $a (as is commonly the case), the macro uses it
+'    to qualify the search.
+'
+' If the title is not identified--if the macro is run with no text selected, or with the
+' cursor placed anywhere in the record but a 670 field--the macro tries to find a title
+' in the first 670 field. However, if the cursor is in another 670 field, the macro will
+' look for a searchable title in subfield $a of that field. Although making no selection
+' and not choosing to position the cursor precisely is the simplest way to run the macro,
+' and will search successfully in many authority records, this method may fail if words
+' precede the title, although the macro knows to ignore an initial possessive pronoun
+' ("his," "her," "its," and "author's", as allowed in MARC21) and the English articles
+' "A," "An," and "The." Further, if the record contains more than one 670 field, not
+' identifying a title means only the first such field is analyzed. Really, selecting text
+' is much the best way to identify the title.
+'
+' The search string is placed on the Windows Clipboard, so if the search fails, the
+' search string may be pasted into the Connexion search dialog for editing and
+' refinement.
+'
+' The heading in the 1XX field is searched by the macro as a whole phrase name search,
+' meaning the whole heading--including all indexed subfields, except title and subject
+' subfields--is searched as a string, rather than as a collection of keywords. Such a
+' search will of course not retrieve records in which the name appears in other than the
+' authorized form, as will likely be the case for non-English language records. The name
+' search is joined to a title phrase search for the selection; this kind of a search
+' includes a subtitle, and may also be known as a left-anchored search--it starts from
+' the beginning of the title, not from any point after that. Both name and title are
+' normalized for proper searching, which means punctuation and diacritical marks are
+' omitted, etc. Information in brackets (such as "[SR]" that indicates a sound recording)
+' is removed. A year of publication, if included in the selection or that appears at the
+' end of subfield $a if text is not selected, is the third element of the search. No
+' other qualifiers are added. If the last part of the title before the date is an
+' ellipsis, the title string is considered to be truncated, and an asterisk is appended
+' to the search string to retrieve longer forms of the title.
+'
+' Note that the authorized heading is searched only as a name, and not as a subject.
+' Bibliographic records that don't contain the heading in a 1XX or 7XX field won't be
+' retrieved. In other words, the relationship of the name to the title should be that of
+' some form of creator--author, composer, editor, etc. For example, if a cited title is a
+' bibliography or dictionary, or a website, it won't be retrieved by this macro. In
+' addition, the title portion of a name/title heading is ignored in searching. However,
+' such a title can be selected for searching, as long as the selection is within only one
+' subfield.
+'
+' Guidelines for entering data in subfield $a of 670 fields are given in Descriptive
+' Cataloging Manual, section Z1, Name and Series Authority Records. The guidelines
+' require 1) a "title proper of the resource being cited, complete enough for later
+' identification in an online catalog," but that "abbreviations and ellipses may be
+' used," and "Punctuation and style need not be consistent from record to record as long
+' as the information is clear and accurate," and 2) a date. Because of inconsistencies,
+' abbreviations, and errors, search failures are unfortunately common for this macro.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function Normalize( InString$, Tag$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim DELIMITER    As String*1 : DELIMITER            = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE         = Chr$( 034 )
+Dim TITLE_TAG    As String*3 : TITLE_TAG            = "245"
+
+Dim Col%
+Dim DateCandidate$
+Dim DateQualifier$
+Dim DateStart%
+Dim Field1XXData$
+Dim FieldData$
+Dim NameHeading$
+Dim NumRecords&
+Dim Remainder$
+Dim Row%
+Dim SearchLabel$
+Dim SearchString$
+Dim SelectedText$
+Dim SelectionLength%
+Dim SubjectSubdivisions$     : SubjectSubdivisions$ = "vxyz"
+Dim Tag$
+Dim TestChar$
+Dim TestString$
+Dim Title$
+Dim TypeOfWindow%
+Dim ValDateCandidate%
+Dim WaltsMacros$             : WaltsMacros$         = "[Walt's macros] Extras2:SearchFrom670"
+
+Dim DateFound As Variant
+Dim Selection                : Selection            = FALSE
+Dim Truncate                 : Truncate             = FALSE
+
+Dim i As Integer, p As Integer, q As Integer
+
+' First, make sure an authority record is open. If it is, get the cursor location.
+
+TypeOfWindow% = CS.ItemType
+
+Select Case TypeOfWindow%
+  Case 3 To 4, 14, 18, 20
+    Row% = CS.CursorRow
+    Col% = CS.CursorColumn
+  Case Else
+    MsgBox "Sorry, this macro works only in an authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then, make sure the heading is a personal or corporate name.
+
+If CS.GetField( "1..", 1, Field1XXData$ ) Then
+    Tag$ = Left$( Field1XXData$, 3 )
+    Select Case Tag$
+      Case "100"
+        SearchLabel$ = "pnw="
+      Case "110"
+        SearchLabel$ = "cnw="
+      Case Else
+        MsgBox "Sorry, this macro can search only from personal or corporate name headings.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End Select
+  Else
+    MsgBox "Sorry, could not retrieve the 1XX field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If the heading is suitable for searching, discover what to search. Selected text will
+' be searched without further manipulation, except for normalization. A selection within
+' the tag or indicator cell columns (clicking in those columns selects their contents
+' automatically) is taken to mean that nothing is selected, but that a title will be
+' sought in that row.
+
+If CS.GetSelectedText( SelectedText$ ) Then
+    If Col% > 5 Then
+        SelectedText$ = Trim$( SelectedText$ )
+        Selection     = TRUE
+      Else
+        If CS.GetFieldLine( Row%, FieldData$ ) Then
+            Selection = FALSE
+            Col%      = 6
+          Else
+            MsgBox "Sorry, an unknown failure was encountered.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+End If
+
+' If no text has been selected, get the whole field. Remove tag and indicators to get a
+' base string.
+
+If Selection = FALSE Then
+    If CS.GetFieldLine( Row%, FieldData$ ) Then
+        If Left$( FieldData$, 3 ) = "670" Then
+            SelectedText$ = Mid$( FieldData$, 6 )
+          Else
+            If CS.GetField( "670", 1, FieldData$ ) Then
+                SelectedText$ = Mid$( FieldData$, 6 )
+                If Col% < 6 Then Col% = 6
+              Else
+                MsgBox "Sorry, no 670 field was found to search from.", CRITICAL_MESSAGE, WaltsMacros$
+                Exit Sub
+            End If
+        End If
+    End If
+End If
+
+' If the cursor was placed at the beginning of the title, remove any preceding
+' characters. Otherwise, remove everything following the end of the content of subfield
+' $a.
+
+p = InStr( SelectedText$, DELIMITER )
+If p > 0 Then
+    SelectedText$ = Trim$( Left$( SelectedText$, p - 1 ) )
+    If Col% < p Then
+        SelectedText$ = Mid$( SelectedText$, Col% - 5 )
+    End If
+End If
+
+' Remove initial possessive pronouns and English articles.
+
+TestString$ = Left$( SelectedText$, 4 )
+If TestString$ = "His " Or TestString$ = "Her " Or TestString$ = "Its " Then
+    SelectedText$ = Trim$( Mid$( SelectedText$, 5 ) )
+  Else
+    TestString$  = Left$( SelectedText$, 9 )
+    If TestString$ = "Author's " Then
+        SelectedText$ = Trim$( Mid$( SelectedText$, 10 ) )
+    End If
+End If
+
+If Left$( SelectedText$, 2 ) = "A " Then
+    SelectedText$ = Trim$( Mid$( SelectedText$, 3 ) )
+  ElseIf Left$( SelectedText$, 3 ) = "An " Then
+    SelectedText$ = Trim$( Mid$( SelectedText$, 4 ) )
+  ElseIf Left$( SelectedText$, 4 ) = "The " Then
+    SelectedText$ = Trim$( Mid$( SelectedText$, 5 ) )
+End If
+
+' If a string of exactly four digits at or near the end of the selection is found, assume
+' it represents a publication date.
+
+SelectionLength% = Len( SelectedText$ )
+For i = Len( SelectedText$ ) - 4 To 1 Step -1
+  DateCandidate$ = Mid$( SelectedText$, i, 5 )
+  If DateCandidate$ Like "[!0-9][12][0-9][0-9][0-9]" Then
+      DateCandidate$ = Mid$( DateCandidate$, 2 )
+      ValDateCandidate% = Val( DateCandidate$ )
+      If ValDateCandidate% < Year( Now ) + 2 and ValDateCandidate% > 1600 Then
+          DateStart% = i + 1
+          Exit For
+      End If
+  End If
+Next i
+
+' If no text follows the potential publication date, consider it to be an actual
+' publication date. Otherwise (text characters are present), assume it is part of the
+' title.
+
+If DateStart% > 0 Then
+    If i < SelectionLength% - 4 Then
+        Remainder$ = Trim$( Mid$( SelectedText$, DateStart% + 4 ) )
+        For i = 1 To Len( Remainder$ )
+          TestChar$ = Mid$( Remainder$, i, 1 )
+          Select Case TestChar$
+            Case ":", ".", DELIMITER
+              DateFound = TRUE
+              Exit For
+            Case "A" To "Z", "a" To "z"
+              DateFound = FALSE
+              Exit For
+          End Select
+        Next i
+        If IsEmpty( DateFound ) Then DateFound = TRUE
+      Else
+        DateFound = TRUE
+    End If
+End If
+
+If DateFound Then
+
+' Remove a publication date from the title string, as well as any other characters
+' between it and the first space that precedes it, such as the "c" for "copyright".
+
+    i = DateStart% - 1
+    Do
+      TestChar$ = Mid$( SelectedText$, i, 1 )
+      If TestChar$ = " " Then
+          Exit Do
+        Else
+          i = i - 1
+      End If
+    Loop Until i = 1
+    If i > 1 Then
+        SelectedText$  = Trim$( Left$( SelectedText$, i ) )
+        DateQualifier$ = Trim$( DateCandidate$ )
+    End If
+End If
+
+' An ellipsis will be eliminated, but if it is at the end of the title string, flag that
+' the search string has been truncated.
+
+If Right$( SelectedText$, 3 ) = "..." Then Truncate = TRUE
+
+' Remove bracketed information.
+
+p = InStr( SelectedText$, "[" )
+If p > 0 Then
+    q = InStr( SelectedText$, "]" )
+    If q > p Then
+        SelectedText$ = Left$( SelectedText$, p - 1 ) & Mid$( SelectedText$, q + 1 )
+    End If
+End If
+
+' Normalize the selection for proper searching.
+
+Title$ = Normalize( SelectedText$, TITLE_TAG )
+
+' For the name portion: Remove title and subject subdivision subfields. Then normalize
+' it.
+
+p = InStr( Field1XXData$, DELIMITER & "t" )
+If p = 0 Then
+    For i = 1 To 4
+      p = InStr( Field1XXData$, DELIMITER & Mid$( SubjectSubdivisions$, i, 1 ) )
+      If p > 0 Then
+          Exit For
+      End If
+    Next i
+End If
+If p = 0 Then
+    NameHeading$ = Normalize( Mid$( Field1XXData$, 6 ), Tag$ )
+  Else
+    NameHeading$ = Normalize( Mid$( Field1XXData$, 6, p - 6 ), Tag$ )
+End If
+
+' Construct the search string and send it.
+
+SearchString$ = SearchLabel$ & DOUBLE_QUOTE & NameHeading$ & DOUBLE_QUOTE & " AND ti=" & Title$
+If Truncate Then SearchString$ = SearchString$ & "*"
+If DateQualifier$ <> "" Then
+    SearchString$ = SearchString$ & " AND yr:" & DateQualifier$
+End If
+
+Clipboard.Clear
+Clipboard.SetText SearchString$
+
+NumRecords& = CS.Search( "WC", SearchString$ )
+
+If NumRecords& = 0 Then
+
+    Begin Dialog Dialog1Definition  288, 96, WaltsMacros$, .Dialog1ControlFunction
+      PushButton    226,  72,  52,  14, "Close"
+      CancelButton  226,  72,  52,  14
+      Text           10,   6, 236,   8, "Sorry, the system reports either no records found, or too many were found."
+      Text           10,  18, 236,   8, "This search string has been placed on the Clipboard:"
+      Text           10,  30, 268,  32, SearchString$
+    End Dialog
+
+    Dim Dialog1 As Dialog1Definition
+    On Error Resume Next
+    Dialog Dialog1
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function Normalize( InString$, Tag$ ) As String
+
+' This function makes the string searchable, following OCLC's rules in "Searching
+' WorldCat Indexes: Special characters in Latin script searches."
+' https://help.oclc.org/Librarian_Toolbox/Searching_WorldCat_Indexes/Get_started/Searching_WorldCat_indexes_guidelines_and_requirements#Special_characters_in_Latin_script_searches
+
+Const ASCII_DIFF_CASE        As Integer = 32  'The difference between ASCII values of upper and lower case of a letter.
+Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The difference between ASCII values of subscript and normal numbers.
+Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  'The difference between ASCII values of superscript and normal numbers.
+
+Dim CharA%
+Dim CharT$
+Dim Index%
+Dim InStringLength%
+Dim NormalizedString$
+
+Dim CommaFound               : CommaFound = FALSE
+
+Dim p As Integer
+
+InStringLength% = Len( InString$ )
+Index%          = 1
+
+' Examine each character in the field or selection to determine whether to add it to the
+' search string.
+
+Do While Index% <= InStringLength%
+  CharT$ = Mid$( InString$, Index%, 1 )
+  CharA% = Asc( CharT$ )
+
+  Select Case CharA%
+
+' Omit every character not accounted for below.
+
+' Numbers and text characters: Include; convert lowercase to uppercase.
+
+    Case 48 to 57, 65 to 90
+      NormalizedString$ = NormalizedString$ & CharT$
+
+    Case 97 to 122
+      NormalizedString$ = NormalizedString$ & Chr$( CharA% - ASCII_DIFF_CASE )
+
+' Characters to include:
+
+    Case 38, 43, 169, 185
+      NormalizedString$ = NormalizedString$ & CharT$
+
+' Characters converted to space:
+
+    Case 32 To 34, 36 To 37, 42, 45, 47, 58 To 64, 92, 140 To 141, 156 To 157, 160, _
+         169 To 171, 185, 204
+      NormalizedString$ = NormalizedString$ & " "
+
+' Period: Convert to a space, except if it is surrounded by digits.
+
+    Case 46
+      If Index% > 1 And Index% < InStringLength% - 1 Then
+          If Mid$( InString$, Index% - 1, 1 ) Like "[!0-9]" Or Mid$( InString$, Index% + 1, 1 ) Like "[!0-9]" Then
+              NormalizedString$ = NormalizedString$ & " "
+          End If
+      End If
+
+' Comma: Delete it if is surrounded by digits; keep the first comma in a personal name
+' heading; otherwise, convert all to blanks. If the first comma is at the end of a
+' subfield, it must be removed--but that happens below when a delimiter is found.
+
+    Case 44
+      If Index% > 1 And Index% < InStringLength% - 1 Then
+          If Mid$( InString$, Index% - 1, 1 ) Like "[!0-9]" Or Mid$( InString$, Index% + 1, 1 ) Like "[!0-9]" Then
+              If Tag$ = "100" Then
+                  If CommaFound = FALSE Then
+                      NormalizedString$ = NormalizedString$ & CharT$
+                      CommaFound        = TRUE
+                    Else
+                      NormalizedString$ = NormalizedString$ & " "
+                  End If
+                Else
+                  NormalizedString$ = NormalizedString$ & " "
+              End If
+          End If
+      End If
+
+' Parentheses: Keep in names.
+
+    Case 40, 41
+      If Tag$ = "100" Or Tag$ = "110" Then
+          NormalizedString$ = NormalizedString$ & CharT$
+      End If
+
+' Superscript, subscript numbers: Convert to normal.
+
+    Case 128 to 137
+      CharT$            = Chr$( CharA% - ASCII_DIFF_SUPERSCRIPT )
+      NormalizedString$ = NormalizedString$ & CharT$
+
+    Case 144 to 153
+      CharT$            = Chr$( CharA% - ASCII_DIFF_SUBSCRIPT )
+      NormalizedString$ = NormalizedString$ & CharT$
+
+' Special characters: Substitute.
+
+    Case 159
+      NormalizedString$ = NormalizedString$ & "SS"
+    Case 161, 177, 190
+      NormalizedString$ = NormalizedString$ & "L"
+    Case 162, 172, 178, 188
+      NormalizedString$ = NormalizedString$ & "O"
+    Case 163, 179, 186
+      NormalizedString$ = NormalizedString$ & "D"
+    Case 164, 180
+      NormalizedString$ = NormalizedString$ & "TH"
+    Case 165, 181
+      NormalizedString$ = NormalizedString$ & "AE"
+    Case 166, 182
+      NormalizedString$ = NormalizedString$ & "OE"
+    Case 173, 189
+      NormalizedString$ = NormalizedString$ & "U"
+    Case 184
+      NormalizedString$ = NormalizedString$ & "I"
+
+' Delimiter: Omit it, along with its accompanying subfield code. If the non-blank
+' character preceding it is a comma, as in a heading consisting only of a forename
+' followed by a date, remove that comma also.
+
+    Case 223
+      NormalizedString$ = Trim$( NormalizedString$ )
+      If Right$( NormalizedString$, 1 ) = "," Then
+          NormalizedString$ = Left$( NormalizedString$, Len( NormalizedString$ ) - 1 )
+      End If
+      Index%            = Index% + 1
+
+  End Select
+
+  Index% = Index% + 1
+
+Loop
+
+NormalizedString$ = Trim$( NormalizedString$ )
+
+' Remove any introduced double spaces.
+
+Do
+  p = InStr( NormalizedString$, "  " )
+  If p > 0 Then
+      NormalizedString$ = Trim$( Left$( NormalizedString$, p ) ) & " " & Trim$( Mid$( NormalizedString$, p + 1 ) )
+  End If
+Loop Until p = 0
+
+Normalize = Trim$( NormalizedString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const INITIALIZE As Integer = 1
+Const INVISIBLE  As Integer = 0
+
+If Action% = INITIALIZE Then
+    DlgVisible "Cancel",   INVISIBLE
+End If
+
+End Function
+'53620216
+'
+'Macro name: SearchFrom670
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:58:24 AM using "MacroBookInspector" macro by Walter F. Nickeson.

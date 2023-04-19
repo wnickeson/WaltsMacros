@@ -1,0 +1,1730 @@
+'MacroName:CollationCheck.2022.04
+'MacroDescription:Compares leaf and page counts in the statement of extent (300 subfield
+' $a) and a standard signature statement.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 28 June 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro in a bibliographic record for a book to calculate the
+' total pagination as given in the statement of extent in field 300 subfield $a, and the
+' pagination implied by the signature count in a 500 field. Compare these totals to
+' verify the accuracy of the record's description of the volume. Or, simply use those
+' totals to verify complex statements of extent or signature statements. Cataloging rules
+' are ignored in the calculations, but punctuation, especially spacing and comma
+' placement, is critical for accurate results. The macro may produce better answers if
+' some information is temporarily altered or removed from a field, especially when
+' checking an older record. It is the only way the macro will work when dealing with a
+' multi-volume set. Results are given in drop-down lists so each element of each field
+' can be reviewed. Note that in the dialog box and its elements only the superscript
+' characters "1", "2", and "3" will display properly; all others display as filled boxes.
+'
+' The macro begins by adding up all the pieces of an extent statement. A "piece" of an
+' extent statement is a sequence of pagination or foliation which is delimited by commas
+' (except, of course, for the first and last pieces). An extent statement of volumes or
+' parts will be ignored, even if pagination of the separate volumes or parts is given.
+' The macro will take into account corrections indicated by "[i.e.]" and "that is", and
+' convert numbers in Roman numerals to Arabic. The total count will be reported in terms
+' of pages unless the extent statement is given exclusively in terms of leaves, in which
+' case the leaf count is given also.
+'
+' The macro continues by calculating the number of leaves in a standard signature
+' statement, if one is found. Such a statement must be in a 500 field beginning with the
+' word "Signatures:". Each piece of the signature statement is defined as a signed
+' gathering or range of gatherings with a leaf count (or "index figure") in superscript
+' (except for singletons), separated from other pieces by a space, comma, or semicolon.
+' Signings that cause problems display the message "CHECK THIS SIGNING" in their entry in
+' the drop-down list of signings. Clicking on a problematic entry shows a brief
+' explanation of the problem.
+'
+' The macro recognizes signatures using the standard 23-letter Latin and the 24-letter
+' Greek (transliterated) alphabets, numbers, and most other characters and bracketed
+' terms. Some signatures will stump the macro (e.g., "A[para]-G[para]²"). A number
+' indicating a doubled, etc. signature must be carried over into the second half of a
+' range: "3A-G" is seen as mistake (although "A-3G" or "3A-5G" isn't); the macro will
+' suggest prefixing the "G" with "3". Brackets indicating supplied signings must not
+' surround a range, e.g., the macro can understand "[a]-[g]²" but not "[a-g]²". Index
+' figures that are not even numbers generate a warning, although their leaf counts will
+' be calculated. Superscript numbers that indicate duplicated signings are ignored
+' unless two of them in a sequence don't match. The macro can generally figure out
+' alternating gatherings if the "dot in middle of line" character or the slash is used to
+' separate the two (not three, sorry) gathering numbers. Everything that is not a signed
+' gathering or range of gatherings should be enclosed by parentheses; added text not in
+' parentheses, or enclosed by square brackets, such as the explanation "leaf dd2 signed
+' cc ii," or additional description "[horizontal chain lines]", will be treated as
+' problematic gatherings, with nonsensical results. Parenthetical information qualifying
+' a preceding gathering, such as "(-A8)", is also problematic. If such information
+' contains plus or minus signs, showing inserted or missing leaves, the macro modifies
+' the leaf count for that gathering by one, because it can't tell when more than one leaf
+' is being described. Counts for signings that use parentheses should be checked
+' manually. Temporarily editing the field by replacing problem signature characters, or
+' by adding or removing parentheses and brackets, may be necessary to get good results.
+' Changing "A[para]-G[para]²" to "A-G²" will enable the macro to calculate the leaf
+' count.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Text
+
+Declare Sub PageCount
+Declare Sub SigCount
+
+Declare Function CalcExtent ( InString$ )  As Integer
+Declare Function GetPosition( SigString$ ) As Integer
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global CS As Object
+
+Global DisplayExtentPieces$
+Global ExtentLeafCount%
+Global ExtentPageCount%
+Global GatheringCount%
+Global MultiplierString$
+Global PageCountFromLeafCount%
+Global PaginationError$
+Global SignatureError$
+Global TotalLeafCount%
+
+Global DELIMITER As String*1
+Global TAB_CHAR  As String*1
+
+Global ExtentTermSupplied
+
+Global PagePieces() As String
+Global SigErrors()  As String
+Global SigPieces()  As String
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DISPLAY_AT_TOP       As Integer = 1
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Const LEAVES               As Integer = 2
+Const PAGES                As Integer = 1
+Const RAW                  As Integer = 0
+Const WARNING_MESSAGE      As Integer = 48
+
+Dim FieldData$
+Dim ParenthesisError$
+Dim PosFF%
+Dim RecType$
+Dim TotalCountExtent$
+Dim TotalCountSignatures$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:CollationCheck"
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer
+
+DELIMITER          = Chr$( 223 )
+ExtentLeafCount%   = 0
+ExtentTermSupplied = FALSE
+TAB_CHAR           = Chr$( 009 )
+
+' First, make sure that a bibliographic record is open.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then make sure the language of cataloging of the record is English. Non-English
+' cataloging introduces overwhelming complexity.
+
+If CS.GetField( "040", 1, FieldData$ ) Then
+    p = InStr( FieldData$, DELIMITER & "b" )
+    If p <> 0 Then
+        If Mid$( FieldData$, p + 3, 3 ) <> "eng" Then
+            MsgBox "Sorry, this macro works only in English-language records.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+    FieldData$ = ""
+End If
+
+' Finally, check that the record is for printed language material (including scores).
+' There are no signatures in sound recordings!
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
+
+If CS.GetFixedField( "Type", RecType$ ) Then
+    If RecType$ Like "[!acdt]" Then
+        MsgBox "Sorry, this macro works only in records for printed language material!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+CS.FixedFieldPosition = PosFF%
+
+' Now jump into the two subroutines that do the work of producing numbers which will be
+' used in the final comparison.
+
+Call PageCount
+
+Call SigCount
+
+' If neither an extent nor a signature statement are found, the macro is done.
+
+If SignatureError$ = "NEITHER" Then
+    MsgBox "This macro could find neither pagination in a 300 field nor a signature statement in a 500 field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Also produce warning errors (but continue with the macro) if one or the other of the
+' two fields sought is not found.
+
+If ExtentLeafCount% = -1 Then
+    TotalCountExtent$ = "No pagination was found."
+  ElseIf ExtentLeafCount% = 0 Then
+    If ExtentTermSupplied Then
+        TotalCountExtent$ = Trim( Str$( ExtentPageCount% ) ) & " [pages?]"
+        PaginationError$  = "Extent term not given, so pagination has been chosen."
+      Else
+        TotalCountExtent$ = Trim( Str$( ExtentPageCount% ) ) & " pages"
+    End If
+  Else
+    TotalCountExtent$ = Trim( Str$( ExtentLeafCount% ) ) & " leaves = " & Trim( Str$( ExtentPageCount% ) ) & " pages"
+End If
+
+' A problem in determining the leaf count of a gathering trumps the parenthetical warning message.
+
+If ParenthesisError$ <> "" Then
+    SignatureError$ = "()"
+  Else
+    If GatheringCount% > 0 Then
+        p = UBound( SigErrors )
+        For i = 0 To p
+          If SigErrors( i ) <> "" Then
+              SignatureError$ = "1"
+              Exit For
+          End If
+        Next i
+    End If
+End If
+
+' Adjust the display for parenthetical warning messages.
+
+If TotalLeafCount% > 0 Then
+    TotalCountSignatures$ = Trim( Str$( TotalLeafCount% ) ) & " leaves"
+    If SignatureError$ <> "" Then
+        If InStr( SignatureError$, "ignored" ) = 0 Then
+            TotalCountSignatures$ = TotalCountSignatures$ & "*"
+        End If
+    End If
+    TotalCountSignatures$ = TotalCountSignatures$ & " = " & Trim( Str$( PageCountFromLeafCount% ) ) & " pages"
+  Else
+    TotalCountSignatures$ = "No signature statement was found."
+End If
+
+' End up with the dialog box to show the two counts for comparison.
+
+Begin Dialog Dialog1Definition 360, 106, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      300,  84,  52,  14
+  CancelButton    1,   1,   1,   1
+  Text           12,   8, 108,   8, "Page count from extent of text:"
+  Text          126,   8, 168,   8, "Page count from signature statement:"
+  Text           12,  22, 108,   8, TotalCountExtent$
+  Text          126,  22, 136,   8, TotalCountSignatures$
+  DropListBox    12,  40, 104,  72, DisplayExtentPieces$, .ListBox1
+  DropListBox   126,  40, 222,  96, SigPieces(),          .ListBox2
+  Text           12,  54, 102,  16, "",                   .PageWarning
+  Text          126,  54, 222,  16, "",                   .SigWarning
+  GroupBox        8,  15, 344,  20, ""
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+End Sub
+
+'****************************************************************************************
+
+Sub PageCount
+
+' This routine does half the work of the macro: Calculating a total page count from the
+' extent in the 300 field.
+
+Const LEAVES As Integer = 2
+Const PAGES  As Integer = 1
+Const RAW    As Integer = 0
+
+Dim CharT$
+Dim ExtentLoopCount%
+Dim ExtentPiece$
+Dim ExtentPieceLeafCount%
+Dim ExtentPiecePageCount%
+Dim ExtentPieceValue%
+Dim ExtentRangeLeft$
+Dim ExtentRangeLeftValue%
+Dim ExtentRangeRight$
+Dim ExtentRangeRightValue%
+Dim ExtentString$
+Dim ExtentTerm$
+Dim ExtentTermChange%
+Dim ExtentTermStart%
+Dim FieldData$
+Dim PreviousExtentTerm$
+Dim SplitExtentString%
+Dim Start%
+Dim Substitute$
+Dim TempString$
+
+Dim ExtentLeaves             : ExtentLeaves = FALSE
+Dim ExtentPages              : ExtentPages  = FALSE
+Dim ExtentRange              : ExtentRange  = FALSE
+
+Dim ExtentCounts() As Integer
+
+Dim i As Integer, p As Integer, q As Integer
+
+' If there is no 300 field, or the 300 field contains no subfield $a, no page count can
+' be calculated. In that case, exit the sub, and then look for a signature statement in a
+' 500 field.
+
+If CS.GetField( "300", 1, FieldData$ ) Then
+    p = InStr( FieldData$, DELIMITER )
+    If p <> 0 Then
+        If p = 6 And Mid$( FieldData$, 7, 1 ) <> "a" Then
+            PaginationError$ = "The 300 field lacks subfield $a."
+            Exit Sub
+        End If
+        ExtentString$ = Trim$( Left$( FieldData$, p - 1 ) )
+        ExtentString$ = Mid$( ExtentString$, 6 )
+      Else
+        ExtentString$ = Mid$( FieldData$, 6 )
+    End If
+  Else
+    ExtentLeafCount% = -1
+    Exit Sub
+End If
+
+ExtentString$ = LCase$( ExtentString$ )
+
+If Left$( ExtentString$, 19 ) = "1 online resource (" Then
+    ExtentString$ = Mid$( ExtentString$, 20 )
+End If
+
+' If the extent statement includes indications of volumes, columns, parts, etc., skip
+' ahead to counting the signatures.
+
+If InStr( 1, ExtentString$, "v.", 1 ) Then
+    ExtentLeafCount% = -1
+    Exit Sub
+  ElseIf InStr( ExtentString$, "volume" ) Then
+    ExtentLeafCount% = -1
+    Exit Sub
+  ElseIf InStr( ExtentString$, "pt." ) Then
+    ExtentLeafCount% = -1
+    Exit Sub
+  ElseIf InStr( ExtentString$, "part" ) Then
+    ExtentLeafCount% = -1
+    Exit Sub
+  ElseIf InStr( ExtentString$, "col" ) Then
+    ExtentLeafCount% = -1
+    Exit Sub
+End If
+
+' Strip terminal punctuation.
+
+For i = Len( ExtentString$ ) To 1 Step -1
+  CharT$ = Mid$( ExtentString$, i, 1 )
+  If CharT$ Like "[! ,;:)]" Then
+      ExtentString$ = Left$( ExtentString$, i )
+      Exit For
+  End If
+Next i
+
+' Because analysis of the extent statement depends upon proper placement of commas, check
+' that all commas are in place. Look for spaces between numbers, and insert commas where
+' lacking.
+
+Start% = 1
+Do
+  p = InStr( Start%, ExtentString$, " " )
+  If p <> 0 Then
+      If Mid$( ExtentString$, p - 1, 3 ) Like "[0-9] [0-9]" Then
+          ExtentString$ = Left$( ExtentString$, p - 1 ) & ", " & Mid$( ExtentString$, p + 2 )
+      End If
+      Start% = p + 2
+  End If
+Loop Until p = 0
+
+' Convert an RDA-style "that is" to the AACR-style "[i.e.]".
+
+p = InStr( ExtentString$, ", that is," )
+If p <> 0 Then
+    TempString$   = Trim$( Mid$( ExtentString$, p + 10 ) )
+    ExtentString$ = Left$( ExtentString$, p - 1 ) & " [i.e."
+    For i = 1 To Len( TempString$ )
+      CharT$ = Mid$( TempString$, i, 1 )
+      If CharT$ Like "[!0-9cdijlmvx]" Then
+          TempString$ = Left$( TempString$, i - 1 ) & "]" & Mid$( TempString$, i )
+          Exit For
+      End If
+    Next i
+    ExtentString$ = ExtentString$ & " " & TempString$
+End If
+
+' Each piece of the subfield is a string bounded by commas. The simplest piece of a
+' statement of extent is a single number. But the piece may contain more than a number:
+' It may include brackets, the term of extent ("82 leaves", "[9] p."), a clarification
+' ("380 [i.e. 384]"), or other information ("14 p. l.", "(last p. blank)"). Loop through
+' the string. Split it at the first comma. Remove that first piece and process it; repeat
+' until the whole statement has gone through the loop. Within the loop, reduce each piece
+' to a number, in the process replacing corrected numbers, converting numbers in Roman
+' numerals to Arabic, and discarding all other information but the term of extent.
+
+ExtentLoopCount%    = 0
+ExtentTermStart%    = 0
+ExtentTermChange%   = -1
+PreviousExtentTerm$ = "NA"
+
+Do
+  SplitExtentString% = InStr( ExtentString$, "," )
+  If SplitExtentString% <> 0 Then
+      ExtentPiece$  = Trim$( Left$( ExtentString$, SplitExtentString% - 1 ) )
+      ExtentString$ = Trim$( Mid$ ( ExtentString$, SplitExtentString% + 1 ) )
+    Else
+      ExtentPiece$  = Trim$( ExtentString$ )
+      ExtentString$ = ""
+  End If
+
+' Check for extent. First, remove from consideration any piece containing the word
+' "plates," as plates do not constitute part of the pagination.
+
+  p = InStr( ExtentPiece$, "plates" )
+  If p <> 0 Then
+      ExtentPiece$ = ""
+      GoTo CalculateExtentPieceCount:
+  End If
+
+' Then check for preliminary leaves. They will be included in the page count.
+
+  p = InStr( ExtentPiece$, " p.l." )
+  If p <> 0 Then
+      ExtentPiece$ = Trim$( Left$( ExtentPiece$, p ) )
+      ExtentTerm$  = "leaves"
+    Else
+      p = InStr( ExtentPiece$, " p. l." )
+      If p <> 0 Then
+          ExtentPiece$ = Trim$( Left$( ExtentPiece$, p ) )
+          ExtentTerm$  = "leaves"
+        Else
+          p = InStr( ExtentPiece$, " p." & Chr$( 190 ) )
+          If p <> 0 Then
+              ExtentPiece$ = Trim$( Left$( ExtentPiece$, p ) )
+              ExtentTerm$  = "leaves"
+            Else
+              p = InStr( ExtentPiece$, " p. " & Chr$( 190 ) )
+              If p <> 0 Then
+                  ExtentPiece$ = Trim$( Left$( ExtentPiece$, p ) )
+                  ExtentTerm$  = "leaves"
+              End If
+          End If
+      End If
+  End If
+
+' Check for corrections ("[i.e. ...]").
+
+  p = InStr( ExtentPiece$, "[i.e." )
+  If p <> 0 Then
+      Substitute$  = Trim$( Mid$( ExtentPiece$, p + 5 ) )
+      ExtentPiece$ = Trim$( Left$( ExtentPiece$, p - 1 ) )
+    Else
+      p = InStr( ExtentPiece$, "[i. e." )
+      If p <> 0 Then
+          Substitute$  = Trim$( Mid$( ExtentPiece$, p + 6 ) )
+          ExtentPiece$ = Trim$( Mid$( ExtentPiece$, p - 1 ) )
+      End If
+  End If
+  If p <> 0 Then
+      q = InStr( Substitute$, "]" )
+      If q <> 0 Then
+          Substitute$ = Trim$( Left$( Substitute$, q - 1 ) ) & " " & Trim$( Mid$ ( Substitute$, q + 1 ) )
+          For i = Len( ExtentPiece$ ) To 1 Step -1
+            CharT$ = Mid$( ExtentPiece$, i, 1 )
+            If CharT$ Like "[!0-9cdijlmvx]" Then
+                Exit For
+            End If
+          Next i
+          ExtentPiece$ = Trim$( Left$( ExtentPiece$, i ) ) & Substitute$
+        Else
+          PaginationError$ = "WARNING! There is a misplaced bracket in the extent."
+      End If
+  End If
+
+' Check for the extent term (leaves or pages). An extent statement may contain many such
+' terms, but each piece of the statement will contain at most one. A piece lacking a term
+' of extent will have it supplied later.
+
+  If Left$( ExtentPiece$, 2 ) = "p." Then
+      ExtentTerm$  = "pages"
+      ExtentPiece$ = Mid$ (ExtentPiece$, 3 )
+    ElseIf Left$( ExtentPiece$, 3 ) = "pp." Then
+      ExtentTerm$  = "pages"
+      ExtentPiece$ = Mid$ (ExtentPiece$, 3 )
+    ElseIf Left$( ExtentPiece$, 5 ) = "pages" Then
+      ExtentTerm$  = "pages"
+      ExtentPiece$ = Mid$ (ExtentPiece$, 3 )
+    Else
+      p = InStr( ExtentPiece$, " p." )
+      If p <> 0 Then
+          ExtentTerm$ = "pages"
+        Else
+          p = InStr( ExtentPiece$, " page" )
+          If p <> 0 Then
+              ExtentTerm$ = "pages"
+            Else
+              p = InStr( ExtentPiece$, " l." )
+              If p <> 0 Then
+                  ExtentTerm$ = "leaves"
+                Else
+                  p = InStr( ExtentPiece$, " " & Chr$( 190 ) )
+                  If p <> 0 Then
+                      ExtentTerm$ = "leaves"
+                    Else
+                      p = InStr( ExtentPiece$, "lea" )
+                      If p <> 0 Then
+                          ExtentTerm$ = "leaves"
+                      End If
+                  End If
+              End If
+          End If
+      End If
+  End If
+  If ExtentTerm$ <> "" Then
+      ExtentTermChange% = ExtentLoopCount%
+  End If
+
+CalculateExtentPieceCount:
+
+  If ExtentPiece$ <> "" Then
+      ReDim Preserve PagePieces( ExtentLoopCount% )
+
+' A hyphen in a piece of the extent statement indicates a range. Separate the piece into
+' two smaller pieces, calculate the value of each, and subtract the first, or smaller,
+' from the second. Add 1 to complete the count. The string version of the range is
+' derived from the calculations, rather than being simply the extent piece string itself,
+' in order to eliminate everything not a number, such as the term of extent--because that
+' gets added back later.
+
+      p = InStr( ExtentPiece$, "-" )
+      If p <> 0 Then
+          ExtentRangeLeftValue%          = CalcExtent( Left$( ExtentPiece$, p - 1 ) )
+          ExtentRangeRightValue%         = CalcExtent( Mid$( ExtentPiece$, p + 1 ) )
+          ExtentRangeLeft$               = Trim$( Str$( ExtentRangeLeftValue% ) )
+          ExtentRangeRight$              = Trim$( Str$( ExtentRangeRightValue% ) )
+          ExtentPieceValue%              = ExtentRangeRightValue% - ExtentRangeLeftValue% + 1
+          PagePieces( ExtentLoopCount% ) = ExtentRangeLeft$ & " to " & ExtentRangeRight$ & " = " & Trim$( Str$( ExtentPieceValue% ) )
+        Else
+          ExtentPieceValue%              = ExtentPieceValue% + CalcExtent( ExtentPiece$ )
+      End If
+      If ExtentPieceValue% = 0 Then
+          PaginationError$ = "WARNING! There may be a problem with the pagination."
+      End If
+
+' The raw count must be adjusted for pagination and foliation, because both will display
+' in the final summation. In the array, the first dimension holds the number of the
+' piece. The second dimension holds the page count and the third, the leaf count.
+
+      ReDim Preserve ExtentCounts( 2, ExtentLoopCount% )
+      ExtentCounts( RAW, ExtentLoopCount% ) = ExtentPieceValue%
+
+' In most extent statements the extent term is given only in the last of the sequences,
+' or pieces, that share that term. That means that the pieces of the statement recorded
+' until that sequence are unit-less numbers. These are the contents of the RAW dimension
+' of the array. Once the term is given, however, those numbers can be assigned a unit and
+' placed in either the PAGES dimension or the PAGES and the LEAVES dimensions of the
+' array. "StartExtentTerm" is the iteration of the loop where the current unit of extent
+' began. For most statements of extent, that will be the first execution of the loop,
+' which has a count of zero (to match the base of the array). "ExtentTermSwitch" is the
+' current iteration of the loop, when the term of extent was explicitly stated--most
+' often at the end of the subfield; but the term of extent may switch back and forth
+' throughout the whole statement. The term of extent modifies the previously recorded raw
+' numbers. A count of leaves is multiplied by 2 for a page count. A count of pages is
+' recorded as 0 leaves because a leaf count can't be reliably derived from odd-numbered
+' page counts. In the array, therefore, while every raw count has a corresponding page
+' count--because every leaf is equal to two pages--not every raw count has a
+' corresponding leaf count.
+
+      If ExtentString$ = "" And ExtentTerm$ = "" Then
+          ExtentTerm$        = "pages"
+          ExtentTermSupplied = TRUE
+          ExtentTermChange%  = ExtentLoopCount%
+      End If
+      If ExtentTerm$ = "pages" Then
+          ExtentPages = TRUE
+          For i = ExtentTermStart% To ExtentTermChange%
+            ExtentCounts( PAGES, i )  = ExtentCounts( RAW, i )
+            ExtentCounts( LEAVES, i ) = 0
+            ExtentPiece$ = PagePieces( i )
+            If ExtentPiece$ <> "" Then
+                If InStr( ExtentPiece$, "-" ) Then
+                    PagePieces( i ) = "pages " & ExtentPiece$ & " pages"
+                End If
+            End If
+          Next i
+        ElseIf ExtentTerm$ = "leaves" Then
+          ExtentLeaves = TRUE
+          For i = ExtentTermStart% To ExtentTermChange%
+            ExtentCounts( LEAVES, i ) = ExtentCounts( RAW, i )
+            ExtentCounts( PAGES, i )  = 2 * ExtentCounts( RAW, i )
+            ExtentPiece$ = PagePieces( i )
+            If ExtentPiece$ <> "" Then
+                If InStr( ExtentPiece$, "-" ) Then
+                    PagePieces( i ) = "leaves " & ExtentPiece$ & " leaves"
+                End If
+            End If
+          Next i
+      End If
+  End If
+  If ExtentTermChange% = ExtentLoopCount% Then
+      ExtentTermStart% = ExtentLoopCount% + 1
+  End If
+
+' Reset some values for the next iteration of the loop.
+
+  ExtentPieceValue%   = 0
+  ExtentLoopCount%    = ExtentLoopCount% + 1
+  PreviousExtentTerm$ = ExtentTerm$
+  ExtentTerm$         = ""
+Loop Until ExtentString$ = ""
+
+' After the entire statement of extent has been analyzed, and each piece's calculated
+' value stored in the array, add up the numbers for some totals. Every sequence has a
+' page count to be added. If some sequences are paginated and some foliated, convert the
+' leaf count to a page count for addition to the total. But if the entire statement is
+' given in terms of leaves, add them up for a leaf count. This number will be multiplied
+' by 2 at the end for display.
+
+For i = 0 To UBound( ExtentCounts, 2 )
+  ExtentPageCount% = ExtentPageCount% + ExtentCounts( PAGES, i )
+  If ExtentPages = FALSE And ExtentLeaves = TRUE Then
+      ExtentLeafCount% = ExtentLeafCount% + ExtentCounts( LEAVES, i )
+  End If
+Next i
+
+' To make the display string for the dialog box, add the appropriate term of extent to
+' each entry of the array. For each piece, if the page count matches the raw count, add
+' "pages" or "page"; otherwise, if the leaf count is the number that matches the raw
+' count, add "leaves" or "leaf."
+
+For i = 0 To UBound( ExtentCounts, 2 )
+  ExtentPiecePageCount% = ExtentCounts( PAGES, i )
+  ExtentPieceLeafCount% = ExtentCounts( LEAVES, i )
+  If ExtentPiecePageCount% = ExtentCounts( RAW, i ) Then
+      If ExtentPiecePageCount% = 1 Then
+          DisplayExtentPieces$ = DisplayExtentPieces$ & Trim$( Str$( ExtentPiecePageCount% ) ) & " page"
+        Else
+          DisplayExtentPieces$ = DisplayExtentPieces$ & Trim$( Str$( ExtentPiecePageCount% ) ) & " pages"
+      End If
+    ElseIf ExtentPieceLeafCount% = ExtentCounts( RAW, i ) Then
+      If ExtentPieceLeafCount% = 1 Then
+          DisplayExtentPieces$ = DisplayExtentPieces$ & Trim$( Str$( ExtentPieceLeafCount% ) ) & " leaf"
+        Else
+          DisplayExtentPieces$ = DisplayExtentPieces$ & Trim$( Str$( ExtentPieceLeafCount% ) ) & " leaves"
+      End If
+      If ExtentPages = TRUE Then
+          DisplayExtentPieces$ = DisplayExtentPieces$ & " = " & Trim$( Str$( ExtentPiecePageCount% ) ) & " pages"
+      End If
+  End If
+  DisplayExtentPieces$ = DisplayExtentPieces$ & TAB_CHAR
+  ExtentRange          = FALSE
+Next i
+
+If Right$( DisplayExtentPieces$, 1 ) = TAB_CHAR Then
+    DisplayExtentPieces$ = Left$( DisplayExtentPieces$, Len( DisplayExtentPieces$ ) - 1 )
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub SigCount
+
+' The other half of the macro is the calculation of the number of leaves/pages implied by
+' the signature statement, in order to compare it with the count produced by the other
+' major subroutine.
+
+Dim Adjustment%
+Dim AlternateCountLeft$
+Dim AlternateCountRight$
+Dim CharA%
+Dim CharNext%
+Dim CharPrev%
+Dim Distance%
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE         = Chr$( 034 )
+Dim DuplicateLeft%
+Dim DuplicateRight%
+Dim FieldData$
+Dim GatheringLeft$
+Dim GatheringRight$
+Dim LeafCountNumber%
+Dim LeafCountString$
+Dim LeafMinus%
+Dim LeafPlus%
+Dim MIDDLE_DOT As String*1   : MIDDLE_DOT           = Chr$( 183 )
+Dim MULTIPLY As String*1     : MULTIPLY             = Chr$( 215 )
+Dim Parenthetical$
+Dim RunningCount%
+Dim SignatureLoopCount%
+Dim SignaturePiece$
+Dim SignaturePieceCount%
+Dim SignatureString$
+Dim SubCount%
+Dim TempString$
+Dim xHyphen%
+Dim xLeftParen%
+Dim xPlus%
+
+Dim Alternate                : Alternate            = FALSE
+Dim GatheringComplete        : GatheringComplete    = FALSE
+Dim LeftBracket              : LeftBracket          = FALSE
+Dim LeftParen                : LeftParen            = FALSE
+Dim NotText                  : NotText              = FALSE
+Dim RightBracket             : RightBracket         = FALSE
+Dim RightParen               : RightParen           = FALSE
+Dim SignatureSuperscript     : SignatureSuperscript = FALSE
+
+Dim SignaturePieces() As String
+
+Dim i As Integer, j As Integer, p As Integer
+
+' Look through the first 50 500 fields to find a signature statement. If one is found,
+' check the length. A field with the proper introductory term but lacking any data
+' won't be processed.
+
+For i = 1 To 50
+  If CS.GetField( "500", i, FieldData$ ) Then
+      If Left$( FieldData$, 16 ) = "500  Signatures:" Then
+          SignatureString$ = Trim$( Mid$( FieldData$, 17 ) )
+          If Len( SignatureString$ ) < 2 Then
+              FieldData$ = ""
+          End If
+          Exit For
+      End If
+    Else
+      Exit For
+  End If
+Next i
+If FieldData$ = "" Then
+    If ExtentLeafCount% = -1 Then
+        SignatureError$ = "NEITHER"
+    End If
+    Exit Sub
+End If
+
+' Once a field has been identified, start by cleaning it up, with the first step being
+' removal of a terminal period.
+
+If Right$( SignatureString$, 1 ) = "." Then
+    SignatureString$ = Trim$( Left$( SignatureString$, Len( SignatureString$ ) - 1 ) )
+End If
+
+' If the whole statement is within parentheses, remove them.
+
+If Left$( SignatureString$, 1 ) = "(" Then
+    If Right$( SignatureString$, 1 ) = ")" Then
+        SignatureString$ = Trim$( Mid$( SignatureString$, 2, Len( SignatureString$ ) - 2 ) )
+    End If
+End If
+
+' Divide the signature string into its constituent pieces at spaces, commas, or
+' semicolons. Keep together information contained within parentheses; it will be removed
+' after checking for indications of added or subtracted leaves. Remove diacritics and
+' modifying characters from signatures. Processing is accomplished by examining each
+' character and its neighbors in the string, from beginning to end, to determine
+' appropriate actions.
+
+xLeftParen% = 0
+TempString$ = ""
+
+For i = 1 To Len( SignatureString$ )
+  CharA% = Asc( Mid$( SignatureString$, i, 1 ) )
+  If i < Len( SignatureString$ ) Then
+      CharNext% = Asc( Mid$( SignatureString$, i + 1, 1 ) )
+    Else
+      CharNext% = 0
+  End If
+  If i > 1 Then
+      CharPrev% = Asc( Mid$( SignatureString$, i - 1, 1 ) )
+    Else
+      CharPrev% = 0
+  End If
+  Select Case CharA%
+
+    Case 40
+
+' Left parenthesis. If a right parenthesis has already been found, this left parenthesis
+' most likely concludes a signature symbol, such as "):(". Check the next character. A
+' hyphen or a superscript verifies that the parenthesis is part of a special signature
+' symbol and not the beginning of parenthetical information. Otherwise, note the position
+' of this left parenthesis, as it marks the start of a section of the string to be
+' removed.
+
+      xLeftParen% = i
+      LeftParen   = TRUE
+      If RightParen = TRUE Then
+          If CharNext% = 45 Or ( CharNext% > 127 And CharNext% < 138 ) Then
+              LeftParen   = FALSE
+              RightParen  = FALSE
+              xLeftParen% = 0
+'            Else
+'              MsgBox "Misplaced parenthesis", WARNING_MESSAGE, WaltsMacros$
+          End If
+      End If
+
+    Case 41
+
+' Right parenthesis. If a left parenthesis has already been found, this right parenthesis
+' most likely is the closing of a piece of parenthetical information. But check first for
+' a following hyphen or superscript. Their presence means this is probably part of a
+' special signature symbol.
+
+      RightParen = TRUE
+      If LeftParen = TRUE Then
+          If CharNext% = 45 Or ( CharNext% > 127 And CharNext% < 138 ) Then
+              xLeftParen% = 0
+              LeftParen   = FALSE
+              RightParen  = FALSE
+            Else
+              Parenthetical$ = Mid$( SignatureString$, xLeftParen%, i - xLeftParen% + 1 )
+
+' If the right parenthesis is now closing a parenthetical expression, determine whether
+' it is a modifying (e.g., "( -E4)", meaning leaf E4 is absent) or an explanatory (e.g.,
+' "(²O4 blank)", meaning leaf O4 in the second signing "O" is blank) element by looking
+' for plus and minus signs. If a hyphen follows any character other than a number, assume
+' it means a missing or removed leaf. Otherwise, assume it is a hyphen indicating a
+' range. Determining how many missing leaves are being described is impossible for this
+' macro, so it will stop after finding only one such leaf per parenthetical expression.
+
+              xHyphen%       = InStr( Parenthetical$, "-" )
+              If xHyphen% <> 0 Then
+                  If Mid$( Parenthetical$, xHyphen% - 1, 1 ) Like "[!0-9]" Then
+                      LeafMinus% = -1
+                  End If
+              End If
+
+' A plus sign is unambiguous; it will be taken to mean a leaf has been added. (Detecting
+' the addition of multiple leaves is beyond the abilities of this macro; as with the
+' minus, it stops after counting only one. So the expression "(A3 + *^6)", meaning a
+' 6-leaf gathering signed with an asterisk or star is inserted following leaf A3, will be
+' interpreted as a single added leaf.)
+
+              xPlus%         = InStr( Parenthetical$, "+" )
+              If xPlus% <> 0 Then
+                  LeafPlus% = 1
+              End If
+              LeftParen      = FALSE
+              RightParen     = FALSE
+
+' Add the string indicating a plus or minus modification to the preceding element of the
+' array. Separate it from the information already there with the tab character.
+
+              If LeafMinus% <> 0 Or LeafPlus% <> 0 Then
+                  If SignaturePieceCount% > 0 Then
+                      SignaturePieces( SignaturePieceCount% - 1 ) = SignaturePieces( SignaturePieceCount% - 1 ) & TAB_CHAR & Trim$( Str$( LeafMinus% + LeafPlus% ) )
+                  End If
+              End If
+              LeafMinus%        = 0
+              LeafPlus%         = 0
+              GatheringComplete = TRUE
+          End If
+      End If
+
+    Case 91
+
+' Left bracket. This begins a check for a pair of brackets that might enclose a supplied
+' signature or range of signatures.
+
+      LeftBracket = TRUE
+
+    Case 93
+
+' Right bracket. This ends a check for a pair of brackets that might enclose a supplied
+' signature or range of signatures.
+
+      RightBracket = TRUE
+
+    Case 128 To 137
+
+' Superscript characters are most likely the leaf count for the preceding gathering, but
+' they may also be the indication of duplicated signing. Their function in the latter
+' role is revealed by the preceding character, which will be a delimiter of some kind.
+' Otherwise, they function as a leaf count. Since leaf counts conclude a gathering
+' statement, the test for conclusion is that the superscript is not followed by a hyphen,
+' another superscript character, or a dot or slash indicating alternating gatherings. If
+' a left parenthesis is still open, however, the signing is not complete.
+
+      Select Case CharPrev%
+
+        Case 0, 32, 44, 45, 59
+
+        Case Else
+          SignatureSuperscript = TRUE
+
+          Select Case CharNext%
+
+            Case 45, 47, 128 To 137, 168
+              GatheringComplete = FALSE
+
+            Case Else
+              If LeftParen = FALSE Then
+                  GatheringComplete = TRUE
+                  LeftBracket       = FALSE
+                  RightBracket      = FALSE
+              End If
+
+          End Select
+
+      End Select
+
+    Case 44, 59
+
+' Commas and semicolons are delimiters. If they follow a superscript, the gathering
+' statement is complete, unless a left parenthesis is still open.
+
+      If LeftParen = FALSE Then
+          GatheringComplete = TRUE
+          LeftBracket       = FALSE
+          RightBracket      = FALSE
+      End If
+  End Select
+
+' If the next character is null, the end of the signature statement has been reached.
+
+  If CharNext% = 0 Then
+      GatheringComplete = TRUE
+      LeftBracket       = FALSE
+      RightBracket      = FALSE
+  End If
+
+' Add all characters found to the string except for modifying characters like diacritics.
+' If the string contains the strings "pi1" or "chi1" (with or without brackets), the
+' piece is complete.
+
+  Select Case CharA%
+
+    Case 223 To 252
+      TempString$ = TempString$ & ""
+
+    Case 32, 44, 59
+      TempString$ = TempString$ & " "
+      If InStr( TempString$, "pi" ) <> 0 And InStr( TempString$, "1" ) <> 0 And LeftParen = FALSE Then
+          GatheringComplete = TRUE
+          LeftBracket       = FALSE
+          RightBracket      = FALSE
+      End If
+      If InStr( TempString$, "chi" ) <> 0 And InStr( TempString$, "1" ) <> 0 And LeftParen = FALSE Then
+          GatheringComplete = TRUE
+          LeftBracket       = FALSE
+          RightBracket      = FALSE
+      End If
+      If LeftBracket And RightBracket Then
+          GatheringComplete = TRUE
+          LeftBracket       = FALSE
+          RightBracket      = FALSE
+      End If
+
+    Case Else
+      TempString$ = TempString$ & Chr$( CharA% )
+
+  End Select
+
+' A complete piece of an extent statement is added to the array for the next step in the
+' processing, which is to calculate the leaf counts. Then reset some variables for the
+' next iteration of the loop.
+
+  If GatheringComplete = TRUE Then
+      If LeftParen Then
+          TempString$ = "(" & Trim$( TempString$ )
+      End If
+
+' Before adding the string, check for pieces not enclosed within parentheses that are likely text. Don't
+' add them. If there is one superscript, or one digit, or one bracket, consider the string to not be text.
+
+      If NotText = FALSE Then
+          For j = 128 To 137
+            p = InStr( TempString$, Chr$( j ) )
+            If p <> 0 Then
+                NotText = TRUE
+                Exit For
+            End If
+          Next j
+      End If
+      If NotText = FALSE Then
+          For j = 48 To 57
+            p = InStr( TempString$, Chr$( j ) )
+            If p <> 0 Then
+                NotText = TRUE
+                Exit For
+            End If
+          Next j
+      End If
+      If NotText = FALSE Then
+          If InStr( TempString$, "[" ) <> 0 Or InStr( TempString$, "[" ) <> 0 Then
+              NotText = TRUE
+          End If
+      End If
+      If NotText = FALSE Then
+          If InStr( TempString$, "-" ) <> 0 Then
+              NotText = TRUE
+          End If
+      End If
+      If NotText = TRUE then
+          ReDim Preserve SignaturePieces( SignaturePieceCount% )
+          SignaturePieces( SignaturePieceCount% ) = Trim$( TempString$ )
+          SignaturePieceCount% = SignaturePieceCount% + 1
+      End If
+      TempString$          = ""
+      GatheringComplete    = FALSE
+      SignatureSuperscript = FALSE
+      NotText              = FALSE
+  End If
+
+Next i
+
+' Now process each element of the array. Omit those elements that begin with a left
+' parenthesis, unless that parenthesis seems to be a part of a signature symbol.
+' Remove an embedded leaf count adjustment for later.
+
+For SignatureLoopCount% = 0 To UBound( SignaturePieces )
+  SignaturePiece$ = Trim$( SignaturePieces( SignatureLoopCount% ) )
+  If Left$( SignaturePiece$, 1 ) <> "(" Or ( Left$( SignaturePiece$, 1 ) = "(" And _
+     Asc( Right$( SignaturePiece$, 1 ) ) > 127 And Asc( Right$( SignaturePiece$, 1 ) ) < 138 ) Then
+      p = InStr( SignaturePiece$, TAB_CHAR )
+      If p <> 0 Then
+          Adjustment%     = Val( Mid$( SignaturePiece$, p + 1 ) )
+          SignaturePiece$ = Left$( SignaturePiece$, p - 1 )
+      End If
+
+' Check that the rightmost characters in each piece are superscript. If they are,
+' separate them from the rest of the string. A regular "1" is acceptable as marking a
+' singleton. A dot in the middle of the line (OCLC-MARC 168, ASCII 183), or a slash,
+' separates the numbers of alternating gatherings; replace it with a space for
+' manipulation, but set the flag "Alternate" to mark the occasion. This loop starts at
+' the rightmost character and works left until a regular low ASCII character is found,
+' except for the exceptions noted ("1" and slash).
+
+      i                = Len( SignaturePiece$ )
+      LeafCountString$ = ""
+      Do
+        CharA% = Asc( Mid$( SignaturePiece$, i, 1 ) )
+        Select Case CharA%
+          Case 128 To 137
+            LeafCountString$ = Chr$( CharA% - 80 ) & LeafCountString$
+          Case 49
+            If LeafCountString$ = "" Then
+                LeafCountString$ = "1"
+              Else
+                Exit Do
+            End If
+          Case 59
+            SignaturePiece$ = Left$( SignaturePiece$, i - 1 )
+            CharA%      = 128
+          Case 47, 168
+            Alternate  = TRUE
+            LeafCountString$ = MIDDLE_DOT & LeafCountString$
+          Case Else
+
+' If no superscript characters are found at the end of the piece, and the rightmost
+' character is not "1", an error message is generated.
+
+            If LeafCountString$ = "" Then
+                SignatureError$ = "This signing is not followed by a leaf count."
+            End If
+          Exit Do
+        End Select
+        i = i - 1
+
+' If the signature piece consists of an orphaned superscript character, generate an error
+' message.
+
+        If i = 0 Then
+            SignaturePiece$  = "?" & SignaturePiece$
+            SignatureError$  = "Leaf count " & DOUBLE_QUOTE & LeafCountString$ & DOUBLE_QUOTE & " does not follow a signed gathering."
+            LeafCountString$ = ""
+            LeafCountNumber% = 0
+            i = 2
+            Exit Do
+        End If
+      Loop Until CharA% < 128 And CharA% <> 47
+      SignaturePiece$ = Left$( SignaturePiece$, i )
+
+' If gatherings alternate, average the two numbers, and use that as the number of leaves
+' per gathering. Put brackets around the two numbers to show that this is a special case
+' requiring further analysis that the macro can't do.
+
+      If Alternate = TRUE Then
+          p = InStr( LeafCountString$, MIDDLE_DOT )
+          If p <> 0 Then
+              AlternateCountLeft$  = Left$( LeafCountString$, p - 1 )
+              AlternateCountRight$ = Mid$( LeafCountString$, p + 1 )
+              LeafCountNumber%     = ( Val( AlternateCountLeft$ ) + Val( AlternateCountRight$ ) ) / 2
+              LeafCountString$     = "[" & AlternateCountLeft$ & "." & AlternateCountRight$ & "]"
+          End If
+        Else
+          LeafCountNumber%     = Val( LeafCountString$ )
+      End If
+
+' Within each piece, check for a hyphen, as that indicates a range of gatherings. If
+' found, break the piece into two signings at the hyphen. Send all signings to the
+' function "GetPosition". If the signatures are letters, that function returns their
+' positions in the alphabet, and the distance between them is part of the information
+' needed to calculate a leaf count. The "distance" of a single signing is defined as 1.
+' The distance between a range of non-alphabetic signings will be the number of times
+' that symbol is repeated; so "[dagger]-2[dagger]" is the distance between 1 and 2, or
+' two gatherings.
+
+      xHyphen% = InStr( SignaturePiece$, "-" )
+      If xHyphen% = 0 Then
+          SubCount%       = LeafCountNumber%
+          Distance%       = 1
+        Else
+          GatheringLeft$  = Left$( SignaturePiece$, xHyphen% - 1 )
+          GatheringRight$ = Mid$ ( SignaturePiece$, xHyphen% + 1 )
+          Distance%       = GetPosition( GatheringRight$ ) - GetPosition( GatheringLeft$ ) + 1
+
+' If the position of the signature for the end of the range is less than that for the
+' beginning (e.g., "2A-N"), generate an error message. In the error message suggest a
+' corrected distance (for this example, it would suggest adding "2" to "N"). Otherwise,
+' use the distance between the two signatures to calculate the number of leaves in the
+' range.
+
+          If Distance% < 1 Then
+              Distance%       = 0
+              SignatureError$ = "There is a problem with the range, possibly a missing " & DOUBLE_QUOTE & MultiplierString$ & DOUBLE_QUOTE & " in the end gathering."
+          End If
+          SubCount% = Distance% * LeafCountNumber%
+      End If
+
+' If alternating gatherings are encountered, count the number of gatherings. An odd
+' number means the leaf count can't be known, as there won't be the same number of each
+' kind of gathering in the range. The signature statement by itself can't tell which
+' gathering starts the range. Using the average of the two gathering counts means the
+' result will be off by only one leaf. Using either of the two counts means the result
+' has even chances of being off by two.
+
+      If Alternate = TRUE And Distance% Mod 2 = 1 Then
+          SignatureError$ = "This count of gatherings with alternating leaf counts is off by a leaf. Check item and adjust total."
+      End If
+
+' Prepare the signing for entry into the array. First, superscript characters 2 and 3 are
+' available for duplicated signing--that is, they display in the dialog box, which is
+' true of no other superscripts except for 1--so put them into the string if applicable.
+' Only one figure indicating duplication is necessary, and that one must precede the
+' whole sequence. If such is the case, consider the second signing to have the same value
+' as the first.
+
+      DuplicateLeft% = Asc( Left$( SignaturePiece$, 1 ) )
+
+      Select Case DuplicateLeft%
+
+        Case 130
+          SignaturePiece$ = Chr$( 178 ) & Mid$( SignaturePiece$, 2 )
+
+        Case 131
+          SignaturePiece$ = Chr$( 179 ) & Mid$( SignaturePiece$, 2 )
+
+        Case 128 To 137
+          SignaturePiece$ = "^" & Chr$( CharA% - 80 ) & " " & Mid$( SignaturePiece$, 2 )
+
+        Case Else
+          DuplicateLeft% = 0
+
+      End Select
+
+      p = InStr( SignaturePiece$, "-" )
+      If p <> 0 Then
+          DuplicateRight% = Asc( Mid$( SignaturePiece$, p + 1, 1 ) )
+
+          Select Case DuplicateRight%
+
+            Case 130
+              Mid$( SignaturePiece$, p + 1, 1 ) = Chr$( 178 )
+
+            Case 131
+              Mid$( SignaturePiece$, p + 1, 1 ) = Chr$( 179 )
+
+            Case 128 To 137
+              Mid$( SignaturePiece$, p + 1, 1 ) = "^" & Chr$( CharA% - 80 )
+
+            Case Else
+              DuplicateRight% = 0
+              If DuplicateLeft% <> 0 Then
+                  DuplicateLeft% = 0
+              End If
+
+          End Select
+
+        Else
+          DuplicateRight% = DuplicateLeft%
+      End If
+
+' ReDim the arrays to add each formatted piece.
+
+      ReDim Preserve SigPieces( GatheringCount% )
+      ReDim Preserve SigErrors( GatheringCount% )
+
+' When constructing the piece to add to the signature array, add warnings to problematic
+' entries, and error messages to the matching element of the error array. The first
+' warning is of a range with an improper distance (such as "2A-B") or a gathering with no
+' leaf count. In both cases, a leaf count can't be given, so no number is added.
+
+      If Distance% = 0 Or LeafCountNumber% = 0 Then
+          SignaturePiece$ = SignaturePiece$ & " = CHECK THIS SIGNING"
+          SigPieces( GatheringCount% ) = SignaturePiece$
+          SigErrors( GatheringCount% ) = SignatureError$
+
+' Pieces for which a leaf count is possible are constructed by adding the gathering or
+' range, the leaf count preceded by a carat ^ to suggest superscript (since only
+' superscript digits 1, 2, and 3 display in the dialog box), an equals sign to show the
+' distance multiplied by the leaf count, and then the total.
+
+        Else
+          SignaturePiece$ = SignaturePiece$ & " ^" & LeafCountString$ & " = " & Trim$( Str$( Distance% ) ) & " " & MULTIPLY & " "
+          SignaturePiece$ = SignaturePiece$ & LeafCountString$ & " = " & Trim$( Str$( SubCount% ) )
+          SubCount%       = SubCount% + Adjustment%
+
+' If a gathering is described as having added or missing leaves, concatenate that
+' modification and the string.
+
+          If Adjustment% > 0 Then
+              SignaturePiece$ = SignaturePiece$ & " + " & Trim$( Str$( Adjustment% ) ) & " = " & Trim$( Str$( SubCount%  ) )
+            ElseIf Adjustment% < 0 Then
+              SignaturePiece$ = SignaturePiece$ & " - " & Trim$( Str$( Adjustment% * -1 ) ) & " = " & Trim$( Str$( SubCount%  ) )
+              If SubCount% = 1 Then
+                  LeafCountString$ = "1"
+              End If
+          End If
+
+' Conclude the string by adding the term in the appropriate singular or plural form.
+
+          If LeafCountString$ = "1" Then
+              SignaturePiece$ = SignaturePiece$ & " leaf"
+            Else
+              SignaturePiece$ = SignaturePiece$ & " leaves"
+          End If
+
+' Various problems warrant the addition of the warning to the string that a check of the
+' signing is in order, and the corresponding display of an error message. These problems
+' are: Alternating leaf counts; an odd index figure; the addition or subtraction of
+' leaves; and a mismatch of numbers showing duplicated signings.
+
+          If Alternate = TRUE And Distance% Mod 2 = 1 Then
+              SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
+            ElseIf LeafCountNumber% > 1 And LeafCountNumber% Mod 2 = 1 Then
+              SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
+              SignatureError$ = "The leaf count for this gathering, " & DOUBLE_QUOTE & LeafCountString$ & DOUBLE_QUOTE & ", is an odd number."
+            ElseIf Adjustment% > 0 Then
+              SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
+              SignatureError$ = "One or more leaves have been added to this gathering total. Please verify the number of added leaves."
+            ElseIf Adjustment% < 0 Then
+              SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
+              SignatureError$ = "One or more leaves have been subtracted from this gathering total. Please verify the number of missing leaves."
+            ElseIf DuplicateLeft% <> DuplicateRight% Then
+              SignaturePiece$ = SignaturePiece$ & " ! CHECK THIS SIGNING"
+              SignatureError$ = "The number for duplicated gatherings is not the same."
+          End If
+
+' Add the complete signature piece and its accompanying error message (if any) to the
+' arrays.
+
+          SigPieces( GatheringCount% ) = SignaturePiece$
+          SigErrors( GatheringCount% ) = SignatureError$
+      End If
+
+' Add to the running total.
+
+      RunningCount% = RunningCount% + SubCount%
+
+' Reset some variables for the next iteration of the loop.
+
+      If Alternate = TRUE Then Alternate = FALSE
+      SignatureError$ = ""
+      Adjustment%     = 0
+      GatheringCount% = GatheringCount% + 1
+
+  End If
+
+Next SignatureLoopCount%
+
+' Finish by displaying the results.
+
+TotalLeafCount% = RunningCount%
+PageCountFromLeafCount% = 2 * TotalLeafCount%
+If Parenthetical$ <> "" And LeafPlus% = 0 And LeafMinus% = 0 Then
+    If CharNext% = 0 Or CharNext% = 32 Then
+        SignatureError$ = "Parenthetical information ignored."
+      Else
+        SignatureError$ = "*Verify parenthetical information."
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function CalcExtent( InString$ )
+
+' This function is used by the subprogram "PageCount" to calculate the number value of
+' each chunk of data given it. A number in Arabic numerals is returned as it was. A
+' number in Roman numerals is converted to Arabic. A text string of all non-numeric
+' values that is not a Roman numeral returns a value of 0.
+
+Dim ArVal%
+Dim Char$
+Dim TempString$
+Dim TempVal%
+Dim TestString$
+Dim UBRoVals%
+Dim WorkString$
+
+Dim Digits
+Dim Romans
+Dim Text
+
+Dim i As Integer, p As Integer
+
+Dim RoVals() As Long
+
+WorkString$ = InString$
+
+If WorkString$ <> "" Then
+    Do
+      Digits = FALSE
+      Romans = FALSE
+      Text   = FALSE
+      p = InStr( WorkString$, " " )
+      If p <> 0 Then
+          TestString$ = Trim$( Left$( WorkString$, p - 1 ) )
+          WorkString$ = Trim$( Mid$( WorkString$, p + 1 ) )
+        Else
+          TestString$ = WorkString$
+          WorkString$ = ""
+      End If
+      For i = 1 To Len( TestString$ )
+        Char$ = Mid$( TestString$, i, 1 )
+
+        Select Case Char$
+
+          Case "0" To "9"
+            If Romans = TRUE Or Text = TRUE Then
+                CalcExtent = TempVal%
+                PaginationError$ = "WARNING! There is a problem with the page count!"
+                Exit Function
+              Else
+                Digits = TRUE
+            End If
+            TempString$ = TempString$ & Char$
+
+          Case "c", "d", "i", "j", "l", "m", "v", "x"
+            If Digits = TRUE Then
+                CalcExtent = TempVal%
+                PaginationError$ = "WARNING! There is a problem with the page count!"
+                Exit Function
+              ElseIf Text = FALSE And Digits = FALSE Then
+                Romans = TRUE
+                ReDim Preserve RoVals( Len( TestString$ ) )
+
+' The array is zero-based, but the For loop running through the input string is one-
+' based, so adjustment needs to be made.
+
+                 Select Case Char$
+
+                   Case "m"
+                     RoVals( i - 1 ) = 1000
+
+                   Case "d"
+                     RoVals( i - 1 ) = 500
+
+                   Case "c"
+                     RoVals( i - 1 ) = 100
+
+                   Case "l"
+                     RoVals( i - 1 ) = 50
+
+                   Case "x"
+                     RoVals( i - 1 ) = 10
+
+                   Case "v"
+                     RoVals( i - 1 ) = 5
+
+                   Case "i", "j"
+                     RoVals( i - 1 ) = 1
+
+                 End Select
+            End If
+
+          Case "a" To "z"
+            Text = TRUE
+            If Romans = TRUE Then Romans = FALSE
+
+        End Select
+
+      Next i
+
+      If Romans = TRUE Then
+          UBRoVals% = UBound( RoVals )
+
+' Since the value of a character depends on the succeeding character, add a dummy value
+' as the last piece in the array for correctly evaluating the last character in the
+' string.
+
+          RoVals( UBRoVals% ) = 0
+
+' Evaluate the arabic equivalent. If a character is greater in value than the one
+' following it, its value is simply added to the running total; if not, its value is
+' subtracted from the value of the following character, and that subtotal then added to
+' the running total.
+
+          For i = 0 To UBRoVals% - 1
+            If RoVals( i ) < RoVals( i + 1 ) Then
+                ArVal% = ArVal% + ( RoVals( i + 1 ) - RoVals( i ) )
+                i = i + 1
+              Else
+                ArVal% = ArVal% + RoVals( i )
+            End If
+          Next i
+'          CalcExtent = ArVal%
+'          Exit Function
+      End If
+      If TempVal% <> 0 Then
+          If WorkString$ = "" Then
+              CalcExtent = TempVal%
+              Exit Function
+          End If
+        Else
+          If ArVal% <> 0 Then
+              TempVal% = ArVal%
+            Else
+              TempVal% = Val( TempString$ )
+          End If
+      End If
+    Loop Until WorkString$ = ""
+End If
+
+CalcExtent = TempVal%
+
+End Function
+
+'****************************************************************************************
+
+Function GetPosition( SigString$ ) As Integer
+
+' This function calculate the position of a signing in the alphabet for counting the
+' number of signings in a range.
+
+Dim CharA%
+Dim CharT$
+Dim Multiplier%
+Dim Position%
+Dim Signing$
+Dim TempString$
+
+Dim Greek                    : Greek    = FALSE
+Dim Repeated                 : Repeated = FALSE
+
+Dim i As Integer, p As Integer, q As Integer
+
+TempString$ = SigString$
+
+' First, remove any superscript numbers at the beginning of the string, which indicate
+' duplicated signings.
+
+For i = 1 To Len( TempString$ )
+  CharA% = Asc( Mid$( TempString$, i, 1 ) )
+  If CharA% > 127 And CharA% < 142 Then
+      TempString$ = Mid$( TempString$, i + 1 )
+      i = i - 1
+    Else
+      Exit For
+  End If
+Next i
+TempString$ = Mid$( TempString$, i )
+
+' Then remove brackets.
+
+p = InStr( TempString$, "[" )
+If p <> 0 Then
+    q = InStr( TempString$, "]" )
+    If q <> 0 Then
+        If p = 1 Then
+            TempString$ = Mid$( TempString$, p + 1, q - p - 1 )
+          Else
+            TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1, q - p - 1 )
+        End If
+    End If
+End If
+
+' Greek letters used as signatures come from a different alphabet than the 23-letter
+' Latin alphabet used for most signatures. To get the proper position between signings,
+' map the Greek letters to Latin letters.
+
+Select Case TempString$
+  Case "alpha"
+    Signing$ = "A"
+    Greek    = TRUE
+  Case "beta"
+    Signing$ = "B"
+    Greek    = TRUE
+  Case "gamma"
+    Signing$ = "C"
+    Greek    = TRUE
+  Case "delta"
+    Signing$ = "D"
+    Greek    = TRUE
+  Case "epsilon"
+    Signing$ = "E"
+    Greek    = TRUE
+  Case "zeta"
+    Signing$ = "F"
+    Greek    = TRUE
+  Case "eta"
+    Signing$ = "G"
+    Greek    = TRUE
+  Case "theta"
+    Signing$ = "H"
+    Greek    = TRUE
+  Case "iota"
+    Signing$ = "I"
+    Greek    = TRUE
+  Case "kappa"
+    Signing$ = "J"
+    Greek    = TRUE
+  Case "lambda"
+    Signing$ = "K"
+    Greek    = TRUE
+  Case "mu"
+    Signing$ = "L"
+    Greek    = TRUE
+  Case "nu"
+    Signing$ = "M"
+    Greek    = TRUE
+  Case "xi"
+    Signing$ = "N"
+    Greek    = TRUE
+  Case "omicron"
+    Signing$ = "O"
+    Greek    = TRUE
+  Case "pi"
+    Signing$ = "P"
+    Greek    = TRUE
+  Case "rho"
+    Signing$ = "Q"
+    Greek    = TRUE
+  Case "sigma"
+    Signing$ = "R"
+    Greek    = TRUE
+  Case "tau"
+    Signing$ = "S"
+    Greek    = TRUE
+  Case "upsilon"
+    Signing$ = "T"
+    Greek    = TRUE
+  Case "phi"
+    Signing$ = "U"
+    Greek    = TRUE
+  Case "chi"
+    Signing$ = "V"
+    Greek    = TRUE
+  Case "psi"
+    Signing$ = "W"
+    Greek    = TRUE
+  Case "omega"
+    Signing$ = "X"
+    Greek    = TRUE
+End Select
+
+' For signings using the 23-character Latin alphabet, the letters J, V, and W must be
+' converted to I and U.
+
+If Greek = FALSE Then
+    For i = 1 To Len( TempString$ )
+      If Mid$( TempString$, i, 1 ) = "J" Then
+          Mid$( TempString$, i, 1 ) = "I"
+        ElseIf Mid$( TempString$, i, 1 ) = "U" Then
+          Mid$( TempString$, i, 1 ) = "V"
+        ElseIf Mid$( TempString$, i, 1 ) = "W" Then
+          Mid$( TempString$, i, 1 ) = "V"
+      End If
+    Next i
+End If
+
+' Doubled (or tripled, etc.) alphabetic signings tell how many times to cycle through the
+' alphabet, and are indicated either by repeated letters (e.g., "BBB") or by a number
+' giving the repetition (e.g., "3B"). If the string passed to this function is prefixed
+' with a number, that number becomes the multiplier.
+
+Multiplier% = Val( TempString$ )
+
+If Multiplier% = 0 Then
+    If Len( TempString$ ) > 1 Then
+        Multiplier% = 1
+        CharT$   = Left$( TempString$, 1 )
+        For i = 1 To Len( TempString$ ) - 1
+          If CharT$ = Mid$( TempString$, i + 1, 1 ) Then
+              Multiplier% = Multiplier% + 1
+              Repeated = TRUE
+            Else
+              Exit For
+              Repeated = FALSE
+          End If
+        Next i
+        If Repeated = TRUE Then
+            TempString$ = Trim$( Str$( Multiplier% ) ) & CharT$
+        End If
+    End If
+End If
+
+' For signings of Greek letters, the position of the letter in the alphabet, times the
+' multiplier, gives a number to use for calculating the distance from another signing.
+
+If Greek = TRUE Then
+    Position%   = InStr( "ABCDEFGHIJKLMNOPQRSTUVWX", Signing$ )
+    If Multiplier% = 0 Then
+        Multiplier% = 1
+    End If
+    GetPosition = Position% + ( ( Multiplier% - 1 ) * 24 )
+
+' If brackets were removed then the string must be treated as a unit and position is
+' irrelevant.
+
+  Else
+    If p = 0 Then
+        Signing$ = UCase$( Right$( TempString$, 1 ) )
+      Else
+        If Len( TempString$ ) = 1 Then
+            Signing$ = UCase$( TempString$ )
+          Else
+            Signing$ = "*"
+        End If
+    End If
+
+' An incoming alphabetic string may consist simply of repeated characters, or a number
+' indicating the repeats of the following character. Lacking a number, the length of the
+' alphabetic string becomes its count. "HHHHH" is thus equivalent to "5H". In this
+' example, each form means four complete cycles through the alphabet (giving a count of
+' 92), plus another 8 for the position in the alphabet of "H," giving a position of 100.
+' Such a number has meaning only in relation to another number with which it defines a
+' range, and from which a distance can be calculated to find the number of leaves in that
+' range.
+
+    If Signing$ Like "[A-Z]" Then
+        Position%   = InStr( "ABCDEFGHIKLMNOPQRSTVXYZ", Signing$ )
+        If Multiplier% = 0 Then
+            Multiplier% = Len( TempString$ )
+        End If
+        GetPosition = Position% + ( ( Multiplier% - 1 ) * 23 )
+
+' Non-alphabetic signings are simply counted. Since their alphabet is effectively a
+' single character, they require an explicit multiplier.
+
+      Else
+        If Multiplier% = 0 Then
+            Multiplier% = 1
+        End If
+        GetPosition = Multiplier%
+    End If
+End If
+
+MultiplierString$ = Trim$( Str$( Multiplier% ) )
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const INITIALIZE     As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const VISIBLE        As Integer = 1
+
+Dim z As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible "Cancel",      INVISIBLE
+
+    If DisplayExtentPieces$ = "" Or InStr( DisplayExtentPieces$, TAB_CHAR ) = FALSE Then
+        DlgVisible "ListBox1",    INVISIBLE
+        DlgVisible "PageWarning", INVISIBLE
+      Else
+        DlgVisible "ListBox1",    VISIBLE
+    End If
+
+    If GatheringCount% = 0 Then
+        DlgVisible "ListBox2",    INVISIBLE
+        DlgVisible "SigWarning",  INVISIBLE
+      Else
+        DlgVisible "ListBox2",    VISIBLE
+    End If
+
+    If SignatureError$ = "" Then
+        DlgVisible "SigWarning",  INVISIBLE
+      ElseIf SignatureError$ = "()" Then
+        DlgVisible "SigWarning",  VISIBLE
+        DlgText    "SigWarning",  "WARNING! There is a missing right parenthesis! Please check results very carefully."
+      ElseIf InStr( SignatureError$, "parenthetical" ) Then
+        DlgVisible "SigWarning",  VISIBLE
+        DlgText    "SigWarning",  SignatureError$
+      Else
+        DlgVisible "SigWarning",  VISIBLE
+        DlgText    "SigWarning",  "WARNING! The signature statement may contain errors. Select a signing above to view details."
+    End If
+
+    If PaginationError$ <> "" Then
+        DlgVisible "PageWarning", VISIBLE
+        DlgText    "PageWarning", PaginationError$
+    End If
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "ListBox1"
+        z = DlgValue( "ListBox1" )
+        DlgText    "PageWarning", PagePieces( z )
+        DlgVisible "PageWarning", VISIBLE
+
+      Case "ListBox2"
+        z = DlgValue( "ListBox2" )
+        DlgText    "SigWarning",  SigErrors( z )
+        DlgVisible "SigWarning",  VISIBLE
+
+    End Select
+
+End Select
+
+End Function
+'172764110
+'
+'Macro name: CollationCheck
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:57:18 AM using "MacroBookInspector" macro by Walter F. Nickeson.

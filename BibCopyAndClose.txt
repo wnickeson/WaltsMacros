@@ -1,0 +1,122 @@
+'MacroName:BibCopyAndClose.2022.11
+'MacroDescription:Makes a copy of a bibliographic record and closes the original.
+
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 14 November 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'***************************************************************************************#
+' How it works: Run the macro while viewing a bibliographic record you want to make a
+' copy of (cursor position is irrelevant). The macro makes a copy of the record, using
+' the "DeriveNewRecord" command. By default, it transfers the fixed field values to the
+' copy, but that action can be changed by changing the variable "CopyFixedField" on line
+' 41 below to "FALSE". The macro then closes the window with the original record. If
+' other windows are present, the macro finishes by making the window with the copied
+' record the topmost window.
+'
+' The macro works by getting the title of the window of the original record. After making
+' a copy of that record, it then goes through all the Client windows, comparing the title
+' of each one to the title of the window it started with. When it finds that original
+' window it closes it and quits. All other windows are simply ignored.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+'########################################################################################
+' Set the default choice for whether to copy the fixed field values to the derived     '#
+' record ("TRUE" to copy them, "FALSE" to not):                                        '#
+                                                                                       '#
+Dim CopyFixedField : CopyFixedField = TRUE                                             '#
+                                                                                       '#
+'########################################################################################
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const MSGBOX_RETURN_CANCEL As Integer = 2
+
+Dim CurrentWindowTitle$
+Dim NewWindowTitle$
+Dim OriginalWindowTitle$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walts Macros] Extras2:CopyAndClose"
+Dim WindowCount%
+Dim WindowIndex%
+
+Dim ListClosed
+Dim WindowClosed
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Get the window title of that original record, so it can be identified and closed. Then
+' make a copy the record (with the "DeriveNewRecord" command) and get the new record's
+' window title, so as to avoid closing it later.
+
+If CS.GetWindowTitle( -1, OriginalWindowTitle$ ) Then
+    If CS.DeriveNewRecord( CopyFixedField ) Then
+        If CS.GetWindowTitle( -1, NewWindowTitle$ ) = FALSE Then
+            MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+      Else
+        MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Go through all the windows, bringing them to the top, one by one, starting with the
+' first one, which has an index value of zero. If the window title matches that of the
+' original, close it and quit the cycle.
+
+WindowCount% = CS.WindowCount
+For WindowIndex% = 0 To WindowCount% - 1
+  If CS.SetTopWindow( WindowIndex% ) Then
+          If CS.GetWindowTitle( WindowIndex%, CurrentWindowTitle$ ) Then
+              If CurrentWindowTitle$ = OriginalWindowTitle$ Then
+                  CS.CloseRecord( FALSE )
+                  WindowClosed = TRUE
+                  Exit For
+              End If
+          End If
+  End If
+Next WindowIndex%
+
+' When the original record has been closed, make sure the copy appears on top of the
+' stack of windows. As the most recently opened window, its index number will be the
+' original window count minus two.
+
+If CS.SetTopWindow( WindowCount% - 2 ) Then
+End If
+
+End Sub
+'1194924
+'
+'Macro name: BibCopyAndClose
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:57:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.

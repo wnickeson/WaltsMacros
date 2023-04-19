@@ -1,0 +1,201 @@
+'MacroName:OCLCCNQuickSearch.2023.01
+'MacroDescription:Searches WorldCat for the number string selected in a Connexion window
+' or copied to the Windows Clipboard.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 10 April 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Select an OCLC number in a Connexion window, or copy an OCLC number from
+' any source onto the Windows Clipboard, and run the macro to search WorldCat for that
+' control number. A little extra text following or preceding the number won't affect the
+' search as long as a valid number appears within the first 32 characters of the string.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE        As Integer = 16
+Const DIALOG_BUTTON_CANCEL    As Integer = 102
+Const INFORMATION_MESSAGE     As Integer = 64
+
+Const MAX_LENGTH_OCLCCN       As Integer = 10
+Const MAX_LENGTH_INPUT_STRING As Integer = 32
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE       = Chr$( 034 )
+
+Dim Message$
+Dim NonSearchableOffline$
+Dim NonSearchableOnline$
+Dim NonSearchableReason$
+Dim RawString$
+Dim Results%
+Dim SearchString$
+Dim SelectedText$
+Dim Source$
+Dim TestChar$
+Dim WaltsMacros$             : WaltsMacros$       = "[Walt's macros] Essentials:OCLCCNQuickSearch"
+
+Dim DigitsFound              : DigitsFound        = FALSE
+Dim NonDigitsFollowing       : NonDigitsFollowing = FALSE
+Dim SelectionMade            : SelectionMade      = FALSE
+
+Dim i As Integer
+
+' First, see if any text has been selected.
+
+If CS.GetSelectedText( SelectedText$ ) Then
+    RawString$ = Trim$( SelectedText$ )
+End If
+
+' Disregard a selection made in the tag or indicator cells, which can be identified by
+' the cursor position; consider such a selection an accident.
+
+If CS.CursorColumn < 6 Then RawString$ = ""
+
+' If nothing in the Connexion window has been selected, see if the Clipboard has anything on it,
+' and if so, test it for valid input.
+
+If RawString$ = "" Then
+    RawString$ = Trim$( Clipboard.GetText )
+    If RawString$ = "" Then
+        If CS.IsOnline Then
+            MsgBox "There is no number to search! Select or copy a number to search.", CRITICAL_MESSAGE, WaltsMacros$
+          Else
+            MsgBox "There is no number copied to the Clipboard to search, and you are not logged on to Connexion!", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+  Else
+    SelectionMade = TRUE
+End If
+
+If SelectionMade = TRUE Then
+    Source$ = "Selection: "
+  Else
+    Source$ = "Text on Clipboard: "
+End If
+
+If Len( RawString$ ) > MAX_LENGTH_INPUT_STRING Then
+    RawString$ = Left$( RawString$, MAX_LENGTH_INPUT_STRING ) & " ..."
+End If
+
+NonSearchableOffline$ = "The copied string, " & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE & ", is not a searchable number, and"
+NonSearchableOffline$ = NonSearchableOffline$ & " you are not logged on to Connexion!"
+
+' Strip all non-digits from the string. Extra characters can be ignored except if they
+' come between digits, in which case they make the string invalid.
+
+For i = 1 To Len( RawString$ )
+  TestChar$ = Mid$( RawString$, i, 1 )
+  If TestChar$ Like "[0-9]" Then
+      If NonDigitsFollowing = TRUE And DigitsFound = TRUE Then
+          If CS.IsOnline Then
+              NonSearchableReason$ = "The string mixes digits and other characters!" & Chr$( 013 )
+              NonSearchableOnline$ = NonSearchableReason$ & Source$ & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE
+              MsgBox NonSearchableOnline$, CRITICAL_MESSAGE, WaltsMacros$
+            Else
+              MsgBox NonSearchableOffline$, CRITICAL_MESSAGE, WaltsMacros$
+          End If
+          Exit Sub
+        Else
+          DigitsFound   = TRUE
+          SearchString$ = SearchString$ & TestChar$
+      End If
+    Else
+      If DigitsFound = TRUE Then NonDigitsFollowing = TRUE
+  End If
+Next i
+
+' Strip leading zeroes (just to make sure the string doesn't exceed the maximum length).
+
+For i = 1 To Len( SearchString$ )
+  TestChar$ = Mid$( SearchString$, i, 1 )
+  If TestChar$ = "0" Then
+      SearchString$ = Mid$( SearchString$, 2 )
+      i = i - 1
+    Else
+      Exit For
+  End If
+Next i
+
+' Test the edited string for length.
+
+If Len( SearchString$ ) > MAX_LENGTH_OCLCCN Then
+    If CS.IsOnline Then
+        NonSearchableReason$ = "The number string is too long!" & Chr$( 013 )
+        NonSearchableOnline$ = NonSearchableReason$ & Source$ & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE
+        MsgBox NonSearchableOnline$, CRITICAL_MESSAGE, WaltsMacros$
+      Else
+        MsgBox NonSearchableOffline$, CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+  ElseIf SearchString$ = "" Then
+    If CS.IsOnline Then
+        NonSearchableReason$ = "There is no number to search!" & Chr$( 013 )
+        NonSearchableOnline$ = NonSearchableReason$ & Source$ & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE
+        MsgBox NonSearchableOnline$, CRITICAL_MESSAGE, WaltsMacros$
+      Else
+        MsgBox NonSearchableOffline$, CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+End If
+
+' If the string passes the input checks, search WorldCat for the record with that control
+' number. But make sure the Client is logged on first!
+
+If CS.IsOnline = FALSE Then
+
+    Begin Dialog Dialog1Definition  192,  72, WaltsMacros$
+      OkButton        70,  50,  52,  14
+      CancelButton   130,  50,  52,  14
+      Text            10,   4, 137,  12, "You are not logged on! What now?"
+      OptionGroup                                                                           .OptionGroup1
+       OptionButton   16,  16, 160,  12, "&Log on with default authorization and continue"
+       OptionButton   16,  30, 108,  12, "Log on &only"
+    End Dialog
+
+    Dim Dialog1 As Dialog1Definition
+    On Error Resume Next
+    Dialog Dialog1
+    If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+    If CS.Logon( "", "", "" ) Then
+        If Dialog1.OptionGroup1 = 1 Then
+            Exit Sub
+        End If
+      Else
+        MsgBox "Sorry, the macro could not log you on.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+End If
+
+If CS.Search( "WC", "#" & SearchString$ ) = 0 Then
+    MsgBox "No record was found for this control number: #" & SearchString$, INFORMATION_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'1987204
+'
+'Macro name: OCLCCNQuickSearch
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:52:08 AM using "MacroBookInspector" macro by Walter F. Nickeson.

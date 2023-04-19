@@ -1,0 +1,71 @@
+'MacroName:CloseAllButBibs.2023.01
+'MacroDescription:Closes all windows in the Client except those containing bibliographic
+' records.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro closes all open non-bibliographic records and lists.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const INFORMATION_MESSAGE As Integer = 64
+
+Dim CountOfWindows%
+Dim OtherWindowsClosed%
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:CloseAllButBibs"
+
+Dim i As Integer
+
+CountOfWindows% = CS.WindowCount
+i = 0
+
+Do
+  If CS.SetTopWindow( i ) = TRUE Then
+      TypeOfWindow% = CS.ItemType
+      Select Case TypeOfWindow%
+        Case 5 To 11, 13, 15 To 16, 21 To 25
+          CS.CloseList
+          OtherWindowsClosed% = OtherWindowsClosed% + 1
+          i = i - 1
+        Case 3 To 4, 14, 18, 20
+          CS.CloseRecord( False )
+          OtherWindowsClosed% = OtherWindowsClosed% + 1
+          i = i - 1
+      End Select
+  End If
+  i = i + 1
+Loop Until i = CountOfWindows% - OtherWindowsClosed%
+
+If OtherWindowsClosed% = 0 Then
+    MsgBox "There are no non-bibliographic records to close!", INFORMATION_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'682116
+'
+'Macro name: CloseAllButBibs
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 4/17/2023 9:59:47 AM using "MacroBookInspector" macro by Walter F. Nickeson.

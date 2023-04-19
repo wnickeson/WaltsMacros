@@ -1,0 +1,138 @@
+'MacroName:GetWindowData.2022.06
+'MacroDescription:Gets data about the current window.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 5 November 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro while viewing a Connexion window to view some information
+' about the current window. The data is also copied to the Clipboard for pasting.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const INFORMATION_MESSAGE As Integer = 64
+Const CRITICAL_MESSAGE    As Integer = 16
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Dim CRLF As String*2         : CRLF         = Chr$( 013 ) & Chr$( 010 )
+
+Dim OCLCCN$
+Dim TotalWindowsOpen%
+Dim TypeOfWindow$
+Dim WindowData$
+Dim WindowTitle$
+Dim WindowType%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] MacroTools:GetWindowData"
+
+' The online documentation doesn't account for NEW records, that is, workforms.
+
+If CS.GetWindowTitle( -1, WindowTitle$ ) Then
+    WindowType% = CS.ItemType
+    Select Case WindowType%
+      Case 0
+        TypeOfWindow$ = "Online bibliographic record (WorldCat)"
+      Case 1
+        TypeOfWindow$ = "Online bibliographic save file record"
+      Case 2
+        TypeOfWindow$ = "Online bibliographic constant data record"
+      Case 3
+        TypeOfWindow$ = "Online authority record (Authority file)"
+      Case 4
+        TypeOfWindow$ = "Online authority save file record"
+      Case 5
+        TypeOfWindow$ = "WorldCat group list"
+      Case 6
+        TypeOfWindow$ = "WorldCat brief list"
+      Case 7
+        TypeOfWindow$ = "Online bibliographic save file list"
+      Case 8
+        TypeOfWindow$ = "Online bibliographic constant data list"
+      Case 9
+        TypeOfWindow$ = "WorldCat browse list"
+      Case 10
+        TypeOfWindow$ = "Authority brief list"
+      Case 11
+        TypeOfWindow$ = "Authority browse list"
+      Case 12 'Formerly news list; obsolete with version 3.0
+        TypeOfWindow$ = "Unidentified item"
+      Case 13
+        TypeOfWindow$ = "Online authority save file list"
+      Case 14
+        TypeOfWindow$ = "Online authority constant data record"
+      Case 15
+        TypeOfWindow$ = "Online authority constant data list"
+      Case 16
+        TypeOfWindow$ = "Authority expanded browse list"
+      Case 17
+        CS.CopyControlNumber
+        OCLCCN$ = Clipboard.GetText()
+        If OCLCCN$ = "NEW" Then
+            TypeOfWindow$ = "Bibliographic workform"
+          Else
+            TypeOfWindow$ = "Local bibliographic save file record"
+        End iF
+      Case 18
+        CS.CopyControlNumber
+        OCLCCN$ = Clipboard.GetText()
+        If OCLCCN$ = "NEW" Then
+            TypeOfWindow$ = "Authority workform"
+          Else
+            TypeOfWindow$ = "Local authority save file record"
+        End If
+      Case 19
+        TypeOfWindow$ = "Local bibliographic constant data record"
+      Case 20
+        TypeOfWindow$ = "Local authority constant data record"
+      Case 21
+        TypeOfWindow$ = "Local bibliographic save file list"
+      Case 22
+        TypeOfWindow$ = "Local authority save file list"
+      Case 23
+        TypeOfWindow$ = "Local bibliographic constant data list"
+      Case 24
+        TypeOfWindow$ = "Local authority constant data list"
+      Case 25
+        TypeOfWindow$ = "WorldCat truncated list"
+      Case 25  'UNCONFIRMED
+        TypeOfWindow$ = "Online bibliographic institution list"
+      Case 26  'UNCONFIRMED
+        TypeOfWindow$ = "Unidentified item"
+    End Select
+
+    TotalWindowsOpen% = CS.WindowCount
+    WindowData$ = "Window title: " & WindowTitle$ & CRLF
+    WindowData$ = WindowData$ & "Window type: " & Trim$( Str$( WindowType% ) ) & " [" & TypeOfWindow$ & "]" & CRLF
+    WindowData$ = WindowData$ & "Number of windows open: " & Trim$( Str$( TotalWindowsOpen% ) )
+
+    MsgBox WindowData$, INFORMATION_MESSAGE, WaltsMacros$
+    Clipboard.Clear
+    Clipboard.SetText WindowData$
+  Else
+    MsgBox "No window displayed (item type: -1).", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'1354872
+'
+'Macro name: GetWindowData
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
+'Saved: 4/17/2023 10:01:37 AM using "MacroBookInspector" macro by Walter F. Nickeson.

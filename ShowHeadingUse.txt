@@ -1,0 +1,280 @@
+'MacroName:ShowHeadingUse.2022.03
+'MacroDescription:Shows what the fixed field codes governing heading use in an authority
+' record are.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 6 January 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro in an authority record to see what the codes for heading
+' use mean.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global NameUse$
+Global SeriesUse$
+Global SubjUse$
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim AuthRef$
+Dim CatSource$
+Dim GeoSubd$
+Dim Juvenile$
+Dim LCCN$
+Dim PersonalName$
+Dim Prefix$
+Dim Rules$
+Dim Series$
+Dim SerNum$
+Dim Subject$
+Dim TypeOfWindow%
+Dim Use$
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:ShowHeadingUse"
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case 3 To 4, 14, 18, 20
+  Case Else
+    MsgBox "Sorry, this macro works only in an authority record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+If CS.GetFixedField( "Name use", NameUse$ ) Then
+    Select Case NameUse$
+      Case "a"
+        NameUse$ = "YES"
+      Case "b"
+        NameUse$ = " NO"
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Name", PersonalName$ ) Then
+    Select Case PersonalName$
+      Case "a"
+        PersonalName$ = "Differentiated personal name."
+      Case "b"
+        PersonalName$ = "Undifferentiated personal name."
+      Case "n"
+        PersonalName$ = "Not a personal name."
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Subj", Subject$ ) Then
+    If Subject$ = "b" Then
+        Juvenile$ = " JUVENILE"
+      Else
+        Juvenile$ = ""
+    End If
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Subj use", SubjUse$ ) Then
+    Select Case SubjUse$
+      Case "a", "c"
+        SubjUse$ = "YES"
+      Case "b"
+        SubjUse$ = " NO"
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Geo subd", GeoSubd$ ) = TRUE Then
+    Select Case GeoSubd$
+      Case "d", "i"
+        GeoSubd$ = "YES"
+      Case "n"
+        GeoSubd$ = "[Not applicable]"
+      Case ""
+        GeoSubd$ = " NO"
+      Case Chr$( 252 )
+        GeoSubd$ = "[No attempt to code]"
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Ser use", SeriesUse$ ) Then
+    Select Case SeriesUse$
+      Case "a"
+        SeriesUse$ = "YES"
+      Case "b", "c"
+        SeriesUse$ = " NO"
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Series", Series$ ) = TRUE Then
+    Select Case Series$
+      Case "a"
+        Series$ = "Monographic series"
+      Case "b"
+        Series$ = "Multipart item"
+      Case "c"
+        Series$ = "Series-like phrase"
+      Case "n"
+        Series$ = "[Not applicable]"
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Ser num", SerNum$ ) = TRUE Then
+    Select Case SerNum$
+      Case "a"
+        SerNum$ = "Numbered"
+      Case "b"
+        SerNum$ = "Unnumbered"
+      Case "c"
+        SerNum$ = "Numbering varies"
+      Case "n"
+        SerNum$ = "[Not applicable]"
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If SeriesUse$ = "YES" Then
+    Use$ = "series"
+  ElseIf NameUse$ = "YES" Then
+    Use$ = "name"
+  Else
+    Use$ = "subject"
+End If
+
+If CS.GetFixedField( "Auth/Ref", AuthRef$ ) = TRUE Then
+    Select Case AuthRef$
+      Case "a"
+        AuthRef$ = "Kind of record: Established" & Juvenile$ & " " & Use$ & " heading record"
+      Case "b"
+        AuthRef$ = "Kind of record: Untraced reference record"
+      Case "c"
+        AuthRef$ = "Kind of record: Traced reference record"
+      Case "d"
+        AuthRef$ = "Kind of record: Subject subdivision record"
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+If CS.GetFixedField( "Rules", Rules$ ) = TRUE Then
+    Select Case Rules$
+      Case "a"
+        Rules$ = "Descriptive cataloging rules: Earlier rules"
+      Case "b"
+        Rules$ = "Descriptive cataloging rules: AACR1"
+      Case "c"
+        Rules$ = "Descriptive cataloging rules: AACR2"
+      Case "d"
+        Rules$ = "Descriptive cataloging rules: AACR2 compatible"
+      Case "n"
+        Rules$ = "Descriptive cataloging rules: [Not applicable]"
+      Case "z"
+        If CS.GetField( "040", 1, CatSource$ ) Then
+            If InStr( CatSource$, "rda" ) Then
+                Rules$ = "Descriptive cataloging rules: RDA"
+              Else
+                Rules$ = "Descriptive cataloging rules: Other"
+            End If
+        End If
+    End Select
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+Begin Dialog Dialog1Definition  216, 196, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      152, 172,  52,  14
+  CancelButton  152, 172,  52,  14
+  Text           12,   6, 180,   8, AuthRef$
+  Text           12,  16, 180,  18, Rules$
+  Text           24,  41, 144,   8, "Appropriate for use as a main or added entry?"
+  Text          174,  41,  16,   8, NameUse$
+  Text           32,  51, 156,   8, PersonalName$,                                   .PersName
+  Text           24,  85, 144,   8, "Appropriate for use as a subject added entry?"
+  Text          174,  85,  16,   8, SubjUse$
+  Text           32,  95, 112,   8, "Subdividable geographically?",                  .Geog1
+  Text          128,  95,  68,   8, GeoSubd$,                                        .Geog2
+  Text           24, 129, 144,   8, "Appropriate for use as a series added entry?"
+  Text          174, 129,  16,   8, SeriesUse$
+  Text           32, 139,  56,   8, "Type of series:",                               .Series1
+  Text           94, 139,  56,   8, Series$,                                         .Series2
+  Text           32, 149,  56,   8, "Series numbering:",                             .Series3
+  Text           94, 149,  56,   8, SerNum$,                                         .Series4
+  GroupBox       12,  30, 192,  37, "Name/title use"
+  GroupBox       12,  74, 192,  37, "Subject use"
+  GroupBox       12, 118, 192,  47, "Series use"
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const DISABLED   As Integer = 0
+Const INITIALIZE As Integer = 1
+Const INVISIBLE  As Integer = 0
+
+If Action% = INITIALIZE Then
+
+    DlgVisible "Cancel",   INVISIBLE
+
+    If NameUse$ = " NO" Then
+        DlgEnable  "PersName", DISABLED
+    End If
+
+    If SeriesUse$ = " NO" Then
+        DlgEnable  "Series1",  DISABLED
+        DlgEnable  "Series2",  DISABLED
+        DlgEnable  "Series3",  DISABLED
+        DlgEnable  "Series4",  DISABLED
+    End If
+
+    If SubjUse$ = " NO" Then
+        DlgEnable  "Geog1",    DISABLED
+        DlgEnable  "Geog2",    DISABLED
+    End If
+
+End If
+
+End Function
+'2778490
+'
+'Macro name: ShowHeadingUse
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:58:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.

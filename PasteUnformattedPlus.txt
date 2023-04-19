@@ -1,0 +1,1586 @@
+'MacroName:PasteUnformattedPlus.2022.08
+'MacroDescription:Removes formatting from text placed on the Windows Clipboard for
+' pasting into a bibliographic record. Clears typographical formatting and converts many
+' Windows-1252 characters to OCLC-MARC. Allows adding a multi-line selection to the
+' record as a simple string or as one or more new fields.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 25 October 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Use this macro to paste text copied to the Windows Clipboard from outside
+' Connexion into a Connexion bibliographic record, with some formatting removed and some
+' special characters converted. The text may be copied from the Web (as from a MARC
+' record display), a document produced by a word processor, MarcEdit's editor, and other
+' sources. In the bibliographic record, place the cursor where the copied material should
+' go, and run the macro. Or, if several lines have been copied, they can be added as
+' multiple fields to the record; in that case, cursor position is not important.
+'
+' Specifically, this macro:
+'  + Collapses white space, by deleting consecutive space characters, tabs, and line
+'    breaks. Single line breaks may be changed to either spaces or dashes, or they may be
+'    retained, in order to paste in the copied text as multiple new fields.
+'  + Changes proper quotation marks (also known as "curly" or "smart" quotes) into
+'    simple, straight slashes.
+'  + Converts em and en dashes to double hyphens.
+'  + Expands an ellipsis character into three dots with a space preceding and following.
+'  + Combines two single quotation marks (including the grave accent (`) used as a
+'    quotation mark) into one double quotation mark.
+'  + Converts extended ASCII characters (chiefly letters modified by diacritical marks)
+'    to OCLC-MARC.
+'
+' In text copied from MARC or staff views in an online catalog, the macro:
+'  + Converts the underscore, backslash, and sharp sign representations of blank
+'    indicator values to actual blank spaces.
+'  + Attempts to change delimiter characters, such as the dollar sign or pipe character,
+'    into the standard OCLC delimiter character (the "alveolar click").
+'
+' Also removed by this macro: The characteristic formatting from fields copied from
+' MarcEdit's editor.
+'
+' The macro will probably not work well, if at all, with non-Latin characters. Also,
+' because different systems display MARC records in different ways, indicator placement
+' in the copied lines from an OPAC MARC view may be incorrect. This is likely to be the
+' case when the display doesn't distinguish between an indicator value of "blank" and a
+' space character. And because the macro expects indicators to be present, copying 00X
+' fields will probably be unsuccessful (not to mention that HTML condenses whitespace,
+' which renders a copied 008 field, for example, unreadable).
+'
+' When the macro runs, it presents a dialog box showing the options for adding the text
+' to the record. The unformatted text can be inserted into an existing field at the
+' cursor position as a simple string, or it can be added in one or more new fields. When
+' adding new fields, you can supply a tag and indicators for those fields in the dialog
+' box (all fields will receive the same tag and indicators). Lines copied from a MARC
+' record that already begin with the three digits of a tag may be pasted just as copied,
+' except that the macro will still remove formatting from the content of the field(s).
+' All new fields are inserted into the record by means of the OML "AddField" command,
+' which places new fields in the record according to their tag. If no tag is detected in
+' the copied text or supplied in the dialog box, the macro will add the fields
+' immediately following the row in which the cursor is placed, just as they were copied
+' (minus formatting). Not entering anything in the dialog box for an indicator is the
+' same as entering a blank space. The dialog box includes a preview of the copied,
+' modified text, but because of the limitations of OML, the preview may not display some
+' characters properly. Delimiters are shown as dollar signs, but they will appear
+' correctly when pasted into the record.
+'
+' A line break in the copied text may be represented by different characters--typically,
+' the carriage return (decimal character 13), the line feed (decimal 10), or the two
+' together. Use of both characters is standard in Windows, but Connexion requires only
+' the carriage return to create a new field. Therefore, the macro converts any line break
+' to a single carriage return character for ease of manipulation. If line breaks are
+' found, the macro can change them, to either spaces or dashes (space-hyphen-hyphen-
+' space, as used in contents notes). Or the line breaks can be retained, in order to
+' paste the copied text in as new fields. (However, blank or empty lines are removed as
+' part of the process of cleaning up whitespace.) The dialog box is how you choose to
+' treat all line breaks. Because MARC record displays differ from system to system, how
+' fields are handled also differ, and text copied from such a display may not paste as
+' desired. Often manual cleanup will be required.
+'
+' The delimiter character in MARC21 is decimal 31, the "unit separator." As a non-
+' printing character, it must be represented on the screen by other characters. Common
+' representations include the pipe (decimal 124), double dagger (decimal 135), and dollar
+' characters. The macro considers them all to be potential delimiters, as well as two
+' consecutive dollar signs, and even the question mark, which is how the Connexion
+' delimiter is copied to the Clipboard as text. If the copied text contains such a
+' character (or characters, in the case of the double dollar) which is followed by a
+' lowercase alphanumeric character or a digit, and then a space, the macro will treat it
+' as a delimiter and convert it to the standard Connexion glyph. However, this character,
+' represented in OCLC-MARC by decimal 223 (the "sharp s" or "eszett"), can't be pasted
+' properly into a record from the Windows Clipboard. In order to add the correct
+' character to the record, the macro replaces the whole field, containing the modified
+' copied text, with the OML "SetField" command. If the macro does not properly recognize
+' a delimiter, such as if spacing around it is not present, the results may be
+' unexpected. An initial "$a" in a field will show up in the dialog box, but won't be
+' added to the record--and Connexion will eliminate it anyway upon reformatting.
+'
+' To copy and paste text entirely within Connexion, use the Windows Clipboard or the
+' Client's built-in copying features. To copy multiple fields between records, use my
+' macro "CopyFields." The Client has a built-in "Paste Unformatted" menu command which
+' simply removes white space but does nothing more. To convert characters with diacritics
+' within a single line of a record, if pasting hasn't worked properly, use Joel Hahn's
+' macro "CvtDiacritics," which replaces, a field at a time, all Latin-1/Unicode single-
+' character letter + diacritic combinations with the proper MARC21 separate letters and
+' diacritic characters. Joel's macro is available at
+' <http://www.hahnlibrary.net/libraries/oml/macros/CvtDiacritics.txt>.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub InitialDialogSetup  ( OptionButtonChoice% )
+
+Declare Function ChangeDelimiter( InString$, WhichDelimiter$ )          As String
+Declare Function Convert1252    ( InputString$ )                        As String
+Declare Function GetIndicator   ( WhichIndicator$ )                     As String
+Declare Function Replace        ( InputString$, Replacement$, Remove$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const DISABLED        As Integer = 0
+Global Const ENABLED         As Integer = 1
+
+Global Const aDASH           As Integer = 1
+Global Const aMULTI_FIELDS   As Integer = 1
+Global Const aNO_CR          As Integer = 0
+Global Const aSINGLE_FIELD   As Integer = 0
+Global Const aSPACE          As Integer = 0
+Global Const MULTI_FIELDS    As Integer = 2
+Global Const SIMPLE_STRING   As Integer = 0
+Global Const SINGLE_FIELD    As Integer = 1
+
+Global BLANK_TAG_INDICATORS  As String*5
+Global CR                    As String*1
+Global DOLLAR_DELIMITER      As String*1
+Global DOUBLE_QUOTE          As String*1
+Global FIELD_TERMINATOR      As String*1
+Global MARC21_DELIMITER      As String*1
+Global OCLC_MARC_DELIMITER   As String*1
+Global SINGLE_QUOTE          As String*1
+Global TWO_SPACES            As String*2
+
+Global CursorPosition%
+Global DefaultAddFieldOption%
+Global PreviewString$
+Global SpaceOrDash%
+
+Global BlankTag
+Global CRFound
+Global TaggedFieldsLikely
+
+Global FieldStore() As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const DLG_STATEMENT_CANCEL   As Integer = 102
+Const CRITICAL_MESSAGE       As Integer = 16
+Const MSGBOX_RETURN_YES      As Integer = 6
+
+Const CR_CHAR                As Integer = 13
+Const DBL_DAGGER_CHAR        As Integer = 135
+Const DOLLAR_CHAR            As Integer = 36
+Const LF_CHAR                As Integer = 10
+Const PIPE_CHAR              As Integer = 124
+Const QUESTION_CHAR          As Integer = 63
+
+Dim BLANK_TAG_FLAG           As String*1
+Dim CR_SPACE_AFTER           As String*2
+Dim CR_SPACE_BEFORE          As String*2
+Dim TWO_CRs                  As String*2
+Dim TWO_SINGLE_QUOTES        As String*2
+
+Dim AddFieldFailure%
+Dim ArrayDimension%
+Dim CharA%
+Dim Character$
+Dim CharT$
+Dim ConvertedToDash$
+Dim ConvertedToSpace$
+Dim CRsNotConverted$
+Dim CurrentField$
+Dim CurrentFieldLength%
+Dim DeformattedString$
+Dim Indicator1$
+Dim Indicator2$
+Dim IndicatorString$
+Dim MsgBoxReturn%
+Dim NextChar$
+Dim PotentialFields%
+Dim PrevChar$
+Dim RawString$
+Dim Row%
+Dim Start%
+Dim Tag$
+Dim TaggedFields%
+Dim TagTest$
+Dim TempField$
+Dim TempString$
+Dim TypeOfWindow%
+Dim WaltsMacros$
+Dim WorkString$
+
+Dim DelimFound               : DelimFound        = FALSE
+Dim MarcEdit                 : MarcEdit          = FALSE
+Dim PossibleMARCField        : PossibleMARCField = FALSE
+Dim TagFound
+
+Dim i As Integer, j As Integer, p As Integer
+
+BLANK_TAG_FLAG       = Chr$( 009 )
+BLANK_TAG_INDICATORS = "     "
+CR                   = Chr$( 013 )
+CR_SPACE_AFTER       = CR & " "
+CR_SPACE_BEFORE      = " " & CR
+DOLLAR_DELIMITER     = "$"
+DOUBLE_QUOTE         = Chr$( 034 )
+FIELD_TERMINATOR     = Chr$( 182 )
+MARC21_DELIMITER     = Chr$( 031 )
+OCLC_MARC_DELIMITER  = Chr$( 223 )
+SINGLE_QUOTE         = Chr$( 039 )
+TWO_CRs              = CR & CR
+TWO_SINGLE_QUOTES    = SINGLE_QUOTE & SINGLE_QUOTE
+TWO_SPACES           = "  "
+WaltsMacros$         = "[Walt's macros] Essentials:PasteUnformattedPlus"
+
+BlankTag             = FALSE
+CRFound              = FALSE
+
+' First, make sure there is text on the Clipboard to paste. But not too much text!
+
+On Error Resume Next
+RawString$ = Trim$( Clipboard.GetText( ) )
+If Err > 0 Then
+    If Err = 14 Then
+        MsgBox "There is too much data on the Clipboard!", CRITICAL_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "Sorry, an unexpected error occurred.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+End If
+
+If RawString$ = "" Then
+    MsgBox "Sorry, this macro works only when there is text on the Clipboard to paste in a bibliographic record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Then, make sure a bibliographic record is available for the copied data to be pasted
+' into.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only when a bibliographic record is available to paste the copied text into.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' If there is text on the Clipboard and a record to paste it into, begin by getting the
+' cursor position.
+
+Row%            = CS.CursorRow
+CursorPosition% = CS.CursorColumn
+If CS.GetFieldLine( Row%, CurrentField$ ) Then
+    CurrentFieldLength% = Len( CurrentField$ )
+End If
+
+' Then start the de-formatting process by removing extraneous spaces and carriage
+' return/line feeds (and any other non-printing characters, that is, characters with
+' ASCII values below 32) from the beginning and the end of the string.
+
+For i = 1 To Len( RawString$ )
+  CharT$ = Mid$( RawString$, i, 1 )
+  CharA% = Asc( CharT$ )
+  If CharA% > 31 Then
+      RawString$ = Mid$( RawString$, i )
+      Exit For
+  End If
+Next i
+
+For i = Len( RawString$ ) To 1 Step -1
+  CharT$ = Mid$( RawString$, i, 1 )
+  CharA% = Asc( CharT$ )
+  If CharA% > 31 Then
+      RawString$ = Left$( RawString$, i )
+      Exit For
+  End If
+Next i
+
+' Go through the text on the Clipboard, substituting plain text characters for characters
+' not allowed. This is a preliminary go-through, mostly to get rid of extra white space
+' and help make a nice display in the dialog box. The string must be gone through again
+' when pasting the text in as a new field. The characters substituted in this part of the
+' macro will, except for the delimiter, paste from the Clipboard successfully.
+
+For i = 1 To Len( RawString$ )
+  CharT$ = Mid$( RawString$, i, 1 )
+  CharA% = Asc( CharT$ )
+  If i < Len( RawString$ ) Then
+      NextChar$ = Mid$( RawString$, i + 1, 1 )
+    Else
+      NextChar$ = ""
+  End If
+  Select Case CharA%
+    Case 0 To 9, 11 To 12, 14 To 30
+      Character$ = " "
+
+' If line breaks don't get converted to spaces or dashes, they will mark the ends of
+' fields added to the record. If they are kept as field terminators, they will get
+' converted, if need be, to single carriage return characters for ease of processing.
+' Omit a line feed character following a carriage return, but convert it to a carriage
+' return if it's on its own, so only carriage returns indicate a new line or field. The
+' presence of carriage returns determines what default options the dialog box offers when
+' it opens.
+
+    Case LF_CHAR
+      If PrevChar$ = CR Then
+          Character$ = ""
+        Else
+          Character$ = CR
+          CRFound    = TRUE
+          DefaultAddFieldOption% = MULTI_FIELDS
+      End If
+
+    Case CR_CHAR
+      Character$ = CR
+      CRFound    = TRUE
+      DefaultAddFieldOption% = MULTI_FIELDS
+
+' If a potential delimiter character is found (dollar, pipe, double dagger, and question
+' mark), check if the character following is a digit or a lowercase letter that is
+' in turn followed by a space. If all those conditions are met, consider the character to
+' be a delimiter, and add it to the string as the OCLC delimiter character. If the
+' character following the delimiter is the letter "a", or if the first character copied
+' is a delimiter, the dialog box will default to showing the paste option as a new field,
+' rather than as a simple string. The question mark is included here because that's how
+' the Windows Clipboard copies the Connexion delimiter as text. If spacing in the copied
+' text is not as expected, the pasted results may not be, either.
+
+    Case DOLLAR_CHAR, PIPE_CHAR, DBL_DAGGER_CHAR, QUESTION_CHAR
+      If NextChar$ Like "[a-z]" Then
+          DelimFound = TRUE
+          Character$ = MARC21_DELIMITER
+          If i = 1 Or NextChar$ = "a" Then
+              If DefaultAddFieldOption% = 0 Then
+                  DefaultAddFieldOption% = SINGLE_FIELD
+              End If
+          End If
+        ElseIf NextChar$ Like "[0-9]" Then
+          If i + 1 < Len( RawString$ ) Then
+              If Mid$( RawString$, i + 2, 1 ) Like "[!0-9]" Then
+                  DelimFound = TRUE
+                  Character$ = MARC21_DELIMITER
+                Else
+                  DelimFound = FALSE
+                  Character$ = CharT$
+              End If
+          End If
+        ElseIf NextChar$ = "$" Then
+          Character$ = ""
+        Else
+          Character$ = CharT$
+      End If
+
+' Most characters in the copied text are retained.
+
+    Case 32 To 35, 37 To 62, 64 To 95, 97 To 123, 125, 128, 130 To 132, 138, 140, 142, 154
+      Character$ = CharT$
+    Case 156, 158 To 159, 163, 169, 174, 176 To 179, 185, 186, 191 To 255
+      Character$ = CharT$
+
+' The grave accent sometimes appears as part of a left double quotation mark. If it
+' appears to be used that way, replace it with a double quotation mark.
+
+    Case 96
+      If PrevChar$ = SINGLE_QUOTE Or NextChar$ = Chr$( 096 ) Then
+          Character$ = SINGLE_QUOTE
+        Else
+          Character$ = CharT$
+      End If
+
+' Typographical characters to convert to plain text ...
+
+    Case 133
+      Character$ = "..."
+    Case 145 To 146
+      Character$ = SINGLE_QUOTE
+    Case 147 To 148
+      Character$ = DOUBLE_QUOTE
+    Case 150
+      Character$ = "-"
+    Case 151
+      Character$ = "--"
+
+' Diacritical marks, or characters that look like them, to omit (^~^~¨¯´¸) ...
+
+    Case 94, 126, 136, 152, 168, 175, 180, 184
+      Character$ = ""
+
+' Everything else ...
+
+    Case Else
+      Character$ = ""
+  End Select
+
+  WorkString$ = WorkString$ & Character$
+  PrevChar$   = Character$
+
+Next i
+
+WorkString$ = Trim$( WorkString$ )
+
+' Collapse consecutive occurrences of a carriage return to a single occurrence.
+
+WorkString$ = Replace( (WorkString$), CR$, TWO_CRs )
+
+' Start working on the processed string by cleaning up fields copied from the MarcEdit
+' editor. These fields are identified in part by the characteristic equals sign at the
+' beginning of the line. If an equals sign is followed by three digits and then two
+' spaces, consider that sufficient evidence that the copied text is from MarcEdit. Delete
+' the equals sign and the two spaces following the potential tag.
+
+If Left$( WorkString$, 1 ) = "=" Then
+    WorkString$ = CR & WorkString$
+End If
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, "=" )
+  If p > 0 Then
+      If Mid$( WorkString$, p + 1, 5 ) Like "[0-9][0-9][0-9]  " Then
+          WorkString$ = Left$( WorkString$, p - 1 ) & Mid$( WorkString$, p + 1, 3 ) & _
+                        Mid$( WorkString$, p + 6, 2 ) & Trim$( Mid$( WorkString$, p + 8 ) )
+      End If
+  End If
+  Start% = p + 1
+Loop Until p = 0
+If Left$( WorkString$, 1 ) = CR Then
+    WorkString$ = Mid$( WorkString$, 2 )
+End If
+
+' For a string copied from MarcEdit, replace the mnemonic "{dollar}" with the actual
+' dollar sign. All other mnemonics are retained.
+
+p = InStr( WorkString$, "{dollar}" )
+If p > 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & "$" & Mid$( WorkString$, p + 8 )
+End If
+
+' Strings copied from a Voyager MARC display sometimes use carriage returns to separate
+' tag and indicators. If a string seems to be a MARC field, eliminate interior carriage
+' returns, so the only ones that remain are line breaks, or field separators. The clue
+' the macro follows is that a carriage return should only be followed by a string of
+' three digits. Start this part of the processing by adding a carriage return to the
+' beginning and end of the field, simply to aid in the manipulation. Then examine the
+' three characters that follow the carriage return. If they seem to form a tag, then
+' delete every subsequent carriage return that is not followed by three digits, assuming
+' that they are artifacts of the display. If no tag is found, then carriage returns are
+' kept.
+
+If InStr( WorkString$, CR ) > 0 Then
+    WorkString$ = CR & WorkString$ & CR
+    Start%      = 1
+    Do
+      p = InStr( Start%, WorkString$, CR )
+      If p > 0 Then
+          If p < Len( WorkString$ ) - 2 Then
+              For i = p To p + 2
+                TagTest$ = Mid$( WorkString$, i + 1, 3 )
+                If TagTest$ Like "[0-9][0-9][0-9]" Then
+                    TagFound          = TRUE
+                    PossibleMARCField = TRUE
+                    PotentialFields%  = PotentialFields% + 1
+                    Exit For
+                  Else
+                    TagFound = FALSE
+                End If
+              Next i
+              If PossibleMARCField Then
+                  If TagFound = FALSE Then
+                      WorkString$ = Left$( WorkString$, p - 1 ) & Mid$( WorkString$, p + 1 )
+                      Start%      = p
+                    Else
+                      Start%      = p + 2
+                  End If
+                Else
+                  PotentialFields% = PotentialFields% + 1
+                  Start%           = p + 1
+              End If
+            Else
+              Start% = p + 1
+          End If
+        Else
+          Exit Do
+      End If
+    Loop Until p = 0
+
+    If Left$( WorkString$, 1 ) = CR Then
+        WorkString$ = Mid$( WorkString$, 2 )
+    End If
+    If Right$( WorkString$, 1 ) = CR Then
+        WorkString$ = Left$( WorkString$, Len( WorkString$ ) - 1 )
+    End If
+End If
+
+' Count the number of potential fields in the string to determine the default paste
+' operation to offer in the dialog box. Any copied text can be added as a string to an
+' existing field, or as a new field. Multiple copied lines can be added as a string or a
+' single new field (converting the line breaks into spaces or dashes, as instructed), or
+' as several new fields.
+
+Select Case PotentialFields%
+  Case 0
+    DefaultAddFieldOption% = SIMPLE_STRING
+    CRFound                = FALSE
+  Case 1
+    DefaultAddFieldOption% = SINGLE_FIELD
+    CRFound                = FALSE
+  Case Else
+    DefaultAddFieldOption% = MULTI_FIELDS
+    CRFound                = TRUE
+End Select
+
+' Add a space before each delimiter.
+
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, MARC21_DELIMITER )
+  Select Case p
+    Case 0
+      Exit Do
+    Case 1
+    Case Else
+      WorkString$ = Left$( WorkString$, p - 1 ) & " " & Mid$( WorkString$, p )
+  End Select
+  Start% = p + 2
+Loop Until p = 0
+
+' Do a first round of eliminating extra white space.
+
+WorkString$ = Replace( (WorkString$), " ", TWO_SPACES )
+
+' Combine consecutive single quotation marks into one double quotation mark.
+
+WorkString$ = Replace( (WorkString$), DOUBLE_QUOTE, TWO_SINGLE_QUOTES )
+
+' Add a space after subfield codes.
+
+WorkString$ = Replace( (WorkString$), MARC21_DELIMITER, MARC21_DELIMITER )
+
+' Create separate strings to accommodate the three ways to deal with carriage returns:
+'  - Change them to spaces, to add a single field to the record.
+'  - Change them to dashes, also to add a single field to the record.
+'  - Keep them, to add new fields to the record.
+
+' Prepare the array to accommodate at least two rows in each of two dimensions.
+
+ReDim FieldStore( 1, 1 )
+
+If CRFound = TRUE Then
+
+' Eliminate spaces preceding and following carriage returns.
+
+    WorkString$ = Replace( (WorkString$), CR, CR_SPACE_BEFORE )
+    WorkString$ = Replace( (WorkString$), CR, CR_SPACE_AFTER )
+
+' Keep the current string that contains carriage returns.
+
+    CRsNotConverted$  = WorkString$
+
+' Create a text string with carriage returns converted to spaces.
+
+    ConvertedToSpace$ = Replace( (WorkString$), " ", CR )
+
+' Create a second text string with carriage returns converted to space-dash-space (i.e.,
+' space-hyphen-hyphen-space).
+
+    ConvertedToDash$  = Replace( (WorkString$), " -- ", CR )
+
+' As the last step, clean up any remaining or introduced double spaces in the converted
+' strings.
+
+    ConvertedToSpace$ = Replace( ConvertedToSpace$, " ", TWO_SPACES )
+    ConvertedToDash$  = Replace( ConvertedToDash$, " ", TWO_SPACES )
+
+' Store the two strings in which the carriage returns have been converted in the first
+' two rows of the first dimension of the array. Store each string terminated by a
+' carriage return in the rows of the second dimension of the array.
+
+    FieldStore( aSINGLE_FIELD, aSPACE ) = ConvertedToSpace$
+    FieldStore( aSINGLE_FIELD, aDASH )  = ConvertedToDash$
+    If MarcEdit = FALSE Then
+        CRsNotConverted$ = Replace( CRsNotConverted$, " ", TWO_SPACES )
+    End If
+    Start% = 1
+    i = 0
+    Do
+      p = InStr( Start%, CRsNotConverted$, CR )
+      If p > 0 Then
+          If i = 0 Then
+              ReDim Preserve FieldStore( 1, 1 )
+            Else
+              ReDim Preserve FieldStore( 1, i )
+          End If
+          FieldStore( aMULTI_FIELDS, i ) = Mid$( CRsNotConverted$, Start%, p - Start% )
+          Start% = p + 1
+        Else
+          If Start% < Len( CRsNotConverted$ ) Then
+              ReDim Preserve FieldStore( aMULTI_FIELDS, i )
+          FieldStore( aMULTI_FIELDS, i ) = Mid$( CRsNotConverted$, Start% )
+          End If
+      End If
+      i = i + 1
+    Loop Until p = 0
+  Else
+    FieldStore( aSINGLE_FIELD, aNO_CR ) = WorkString$
+
+End If
+
+' Examine the first three characters of each separate string in the array. If all three
+' characters are digits, assume they form MARC tags and thus could be pasted into the
+' record as new fields. In each such string, try to find the indicators and convert the
+' characters representing the value "blank," if necessary, so they paste into the record
+' properly.
+
+For ArrayDimension% = aSINGLE_FIELD To aMULTI_FIELDS
+  For i = 0 To UBound( FieldStore, 2 )
+    TempString$ = FieldStore( ArrayDimension%, i )
+    If TempString$ <> "" Then
+        If ArrayDimension% = aMULTI_FIELDS Then
+            TempString$ = TempString$ & FIELD_TERMINATOR
+        End If
+        TagTest$ = Left$( TempString$, 3 )
+        If TagTest$ Like "[0-9][0-9][0-9]" Then
+            TaggedFields% = TaggedFields% + 1
+
+' Extract the string of characters between the tag and the first delimiter (or end of the
+' field, if there are no subfields) and examine it to see if it could contain a pair of
+' indicators. If the copied text uses blank spaces both for layout and for indicators,
+' the macro can't distinguish between the two, and may paste invalid values into the
+' record. Other non-digit indicator characters--specifically, the underscore, sharp or
+' hashtag sign, and backslash--can be changed to spaces for Connexion. If "$a" is not
+' present at the beginning of the field (if subfield $a is the first subfield), the macro
+' may not be able to display the indicators and beginning of the field data correctly.
+
+            p = InStr( TempString$, MARC21_DELIMITER )
+            If p > 0 Then
+                IndicatorString$ = Trim$( Mid$( TempString$, 4, p - 4 ) )
+                If IndicatorString$ = "" Then
+                    IndicatorString$ = "  "
+                  ElseIf IndicatorString$ Like "[0-9_#\]" Then
+                    IndicatorString$ = IndicatorString$ & " "
+                  Else
+                    For j = 1 To 2
+                      CharT$ = Mid$( IndicatorString$, j, 1 )
+                      If CharT$ Like "[_#\]" Then
+                          Mid$( IndicatorString$, j, 1 ) = " "
+                        ElseIf CharT$ Like "[!0-9]" Then
+                          IndicatorString$ = ""
+                          Exit For
+                      End If
+                    Next j
+                End If
+                If IndicatorString$ <> "" Then
+                    TempString$ = Left$( TempString$, 3 ) & IndicatorString$ & Mid$( TempString$, p )
+                End If
+'                FieldStore( ArrayDimension%, i ) = TempString$
+
+' If there is no delimiter, check the two characters following the potential tag. If the
+' first is a space and the second is not a digit, assume the second indicator was a blank
+' but was discarded in an earlier round of eliminating double spaces, and restore it.
+' This means some fields will be pasted incorrectly, but that may be unavoidable.
+
+              Else
+                If Mid$( TempString$, 4, 1 ) = " " And Mid$( TempString$, 5, 1 ) Like "[!0-9]" Then
+                    TempString$ = Left$( TempString$, 4 ) & " " & Mid$( TempString$, 5 )
+                End If
+            End If
+          Else
+'            FieldStore( ArrayDimension%, i ) = TempString$
+        End If
+    End If
+    FieldStore( ArrayDimension%, i ) = TempString$
+  Next i
+Next ArrayDimension%
+
+'If the majority of the strings in the array seem to be tagged fields, the focus when the
+' dialog box opens is the OK button, to add the fields as copied. Otherwise, the focus
+' will be on the input box, to prefix a tag and indicators when adding the new fields.
+
+If TaggedFields% >= i / 2 Then
+    TaggedFieldsLikely = TRUE
+  Else
+    TaggedFieldsLikely = FALSE
+End If
+
+' The dialog box for decisions to be made: To convert carriage returns (if present) to
+' spaces or to dashes, and how to paste the text--as a string anywhere, or as a new
+' field; or to keep carriage returns and paste each line in as a separate field; and if
+' new fields are to be added, what their tags are.
+
+Begin Dialog Dialog1Definition  268, 196, WaltsMacros$, .Dialog1ControlFunction
+  OkButton       146, 172,  52,  14
+  CancelButton   206, 172,  52,  14
+  OptionGroup                                                       .OBGroup_PasteChoices
+   OptionButton   18,  18,  96,  12, "",                            .OB1_PasteAsString
+   OptionButton   18,  32,  44,  12, "&New field",                  .OB2_PasteAsField
+   OptionButton   18,  46,  96,  12, "&Multiple new fields",        .OB3_PasteFields
+  OptionGroup                                                       .OBGroup_ConvertOrAddTag
+   OptionButton  148,  28,  36,  12, "&Spaces",                     .OB4_ConvertToSpaces
+   OptionButton  194,  28,  36,  12, "&Dashes",                     .OB5_ConvertToDashes
+  TextBox        162,  44,  18,  12,                                .TB1_Tag
+  TextBox        183,  44,   8,  12,                                .TB2_Indicator1
+  TextBox        194,  44,   8,  12,                                .TB3_Indicator2
+  CheckBox       208,  44,  48,  12, "&Blank tag",                  .CB_BlankTag
+  GroupBox        10,   6, 108,  58, "Paste copied text in as ..."
+  GroupBox       126,   6, 132,  58, "Options",                     .GB_Options
+  GroupBox        10,  68, 248,  97, "Deformatted text:",           .GB_Preview
+  Text           148,  17,  80,   8, "Convert line breaks to ...",  .ConvertPrompt
+  Text           132,  47,  30,   8, "Add tag:",                    .TagPrompt
+  Text            18,  80, 232,  72, "",                            .PreviewTextArea
+  Text            10, 174,  64,   8, "",                            .Troubleshooting
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+Select Case Dialog1.OBGroup_PasteChoices
+
+  Case SIMPLE_STRING
+
+' To paste text into an existing field, as a simple string, get the text of that field,
+' insert the unformatted text at the cursor position, and then put it back into the
+' record with the "SetField" command. This preserves any characters converted from
+' Windows 1252 to MARC. The decision to be made here is to how to convert carriage
+' returns, if present.
+
+    If Dialog1.OBGroup_ConvertOrAddTag = aSPACE Then
+        TempField$ = FieldStore( aSINGLE_FIELD, aSPACE )
+      Else
+        TempField$ = FieldStore( aSINGLE_FIELD, aDASH )
+    End If
+    TempField$ = Convert1252( TempField$ )
+    DeformattedString$ = ChangeDelimiter( TempField$, OCLC_MARC_DELIMITER )
+    If CursorPosition% > 5 Then
+        CurrentField$ = Left$( CurrentField$, CursorPosition% - 1 ) & DeformattedString$ & Mid$( CurrentField$, CursorPosition% )
+      Else
+        CurrentField$ = CurrentField$ & DeformattedString$
+    End If
+    If CS.SetFieldLine( Row%, CurrentField$ ) = FALSE Then
+        MsgBox "Sorry, the copied text was not added to the record.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+' When pasting in text as fields, if the first delimiter is for subfield $a, delete it.
+' To add the de-formatted text as a new field, the user must specify how to convert
+' carriage returns. The new field is added with the "AddField" command, which places it
+' in the record according to its tag. If the tag is blank, such as might be chosen when
+' the copied text seems to contain no tag, the macro uses the "AddFieldLine" to add the
+' new field immediately following the field in which the cursor is placed.
+
+  Case SINGLE_FIELD
+
+    If BlankTag Then
+        Tag$        = BLANK_TAG_FLAG
+        TempField$  = Tag$
+      Else
+        Tag$        = Dialog1.TB1_Tag
+        Indicator1$ = Dialog1.TB2_Indicator1
+        If Indicator1$ = "" Then Indicator1$ = " "
+        Indicator2$ = Dialog1.TB3_Indicator2
+        If Indicator2$ = "" Then Indicator2$ = " "
+        TempField$ = Tag$ & Indicator1$ & Indicator2$
+    End If
+    If Dialog1.OBGroup_ConvertOrAddTag = aSPACE Then
+        TempString$ = FieldStore( aSINGLE_FIELD, aSPACE )
+      Else
+        TempString$ = FieldStore( aSINGLE_FIELD, aDASH )
+    End If
+    If Left$( TempString$, 3 ) Like "[0-9][0-9][0-9]" And Mid$( TempString$, 6, 2 ) = MARC21_DELIMITER & "a" Then
+        TempString$ = Left$( TempString$, 5 ) & Mid$( TempString$, 8 )
+      ElseIf Left$( TempString$, 2 ) = MARC21_DELIMITER & "a" Then
+        TempString$ = Trim$( Mid$( TempString$, 3 ) )
+    End If
+    TempField$ = TempField$ & TempString$
+    TempField$ = Convert1252( TempField$ )
+    TempField$ = ChangeDelimiter( TempField$, OCLC_MARC_DELIMITER )
+    If BlankTag Then
+        DeformattedString$ = BLANK_TAG_INDICATORS & Mid$( TempField$, 2 )
+        If CS.AddFieldLine( Row% + i, DeformattedString$ ) = FALSE Then
+            MsgBox "Sorry, the field could not be added.", CRITICAL_MESSAGE, WaltsMacros$
+        End If
+      Else
+        DeformattedString$ = TempField$
+        If CS.AddField( 1, DeformattedString$ ) = FALSE Then
+            MsgBox "Sorry, the field could not be added.", CRITICAL_MESSAGE, WaltsMacros$
+        End If
+    End If
+
+  Case MULTI_FIELDS
+
+    For i = 0 To UBound( FieldStore, 2 )
+      If i = 0 Then
+          If BlankTag Then
+              Tag$        = BLANK_TAG_FLAG
+              Indicator1$ = ""
+              Indicator2$ = ""
+            Else
+              Tag$        = Dialog1.TB1_Tag
+              Indicator1$ = Dialog1.TB2_Indicator1
+              If Indicator1$ = "" Then Indicator1$ = " "
+              Indicator2$ = Dialog1.TB3_Indicator2
+              If Indicator2$ = "" Then Indicator2$ = " "
+          End If
+      End If
+      TempField$  = Tag$ & Indicator1$ & Indicator2$
+      TempString$ = FieldStore( aMULTI_FIELDS, i )
+      If Mid$( TempString$, 6, 2 ) = MARC21_DELIMITER & "a" Then
+          TempString$ = Left$( TempString$, 5 ) & Trim$( Mid$( TempString$, 8 ) )
+      End If
+      TempField$  = TempField$ & TempString$
+      TempField$  = Convert1252( TempField$ )
+      TempField$  = ChangeDelimiter( TempField$, OCLC_MARC_DELIMITER )
+      If BlankTag Then
+          DeformattedString$ = BLANK_TAG_INDICATORS & Mid$( TempField$, 2 )
+          If CS.AddFieldLine( Row% + i, DeformattedString$ ) = FALSE Then
+              AddFieldFailure% = AddFieldFailure% = 1
+          End If
+        Else
+          DeformattedString$ = TempField$
+          If CS.AddField( 99 + i, DeformattedString$ ) = FALSE Then
+              AddFieldFailure% = AddFieldFailure% = 1
+          End If
+      End If
+    Next i
+
+    If AddFieldFailure% > 0 Then
+        MsgBox "Sorry, " & Trim$( Str$( AddFieldFailure% ) ) & " fields could not be added.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+End Select
+
+Done:
+
+End Sub
+
+'****************************************************************************************
+
+Sub InitialDialogSetup( DefaultAddFieldOption% )
+
+' The initial setup of the dialog box is determined chiefly by whether or not carriage
+' returns are present in the de-formatted text. If none have been found, the default
+' option is to add the copied text as a string; but the choice of adding the text as a
+' single new field is also available. If at least one carriage return has been found, the
+' default option is to add the copied lines as new fields; but of course the choice of
+' adding the copied text as a string or a single new field, converting line breaks, is
+' always available.
+
+Dim TempString$
+
+Dim i As Integer
+
+DlgValue   "OBGroup_ConvertOrAddTag", SpaceOrDash%
+
+DlgText    "TB1_Tag",                 ""
+DlgText    "TB2_Indicator1",          ""
+DlgText    "TB3_Indicator2",          ""
+
+If CursorPosition% = 0 Then
+    DlgText    "OB1_PasteAsString",       "S&tring, at cursor position"
+    DlgEnable  "OB1_PasteAsString",       DISABLED
+    DefaultAddFieldOption% = SINGLE_FIELD
+  ElseIf CursorPosition% < 6 Then
+    DlgText    "OB1_PasteAsString",       "S&tring, at end of field"
+  Else
+    DlgText    "OB1_PasteAsString",       "S&tring, at cursor position"
+End If
+
+Select Case DefaultAddFieldOption%
+
+  Case SIMPLE_STRING, SINGLE_FIELD
+
+    If CRFound Then
+        DlgEnable  "ConvertPrompt",           ENABLED
+        DlgEnable  "OB4_ConvertToSpaces",     ENABLED
+        DlgEnable  "OB5_ConvertToDashes",     ENABLED
+      Else
+        DlgEnable  "ConvertPrompt",           DISABLED
+        DlgEnable  "OB4_ConvertToSpaces",     DISABLED
+        DlgEnable  "OB5_ConvertToDashes",     DISABLED
+    End If
+
+    If SpaceOrDash% = aSPACE Then
+        PreviewString$ = FieldStore( aSINGLE_FIELD, aSPACE )
+      Else
+        PreviewString$ = FieldStore( aSINGLE_FIELD, aDASH )
+    End If
+
+    If DefaultAddFieldOption% = SIMPLE_STRING Then
+        DlgEnable  "CB_BlankTag",             DISABLED
+        DlgEnable  "TB1_Tag",                 DISABLED
+        DlgEnable  "TB2_Indicator1",          DISABLED
+        DlgEnable  "TB3_Indicator2",          DISABLED
+        DlgFocus   "OB1_PasteAsString"
+      Else
+        DlgEnable  "CB_BlankTag",             ENABLED
+        DlgEnable  "TagPrompt",               ENABLED
+        DlgEnable  "TB1_Tag",                 ENABLED
+        DlgEnable  "TB2_Indicator1",          ENABLED
+        DlgEnable  "TB3_Indicator2",          ENABLED
+        DlgValue   "OBGroup_PasteChoices",    SINGLE_FIELD
+        If TaggedFieldsLikely Then
+            DlgFocus   "OK"
+          Else
+            DlgFocus   "TB1_Tag"
+        End If
+    End If
+
+  Case MULTI_FIELDS
+
+    DlgEnable  "ConvertPrompt",           DISABLED
+    DlgEnable  "OB3_PasteFields",         ENABLED
+    DlgEnable  "OB4_ConvertToSpaces",     DISABLED
+    DlgEnable  "OB5_ConvertToDashes",     DISABLED
+    DlgValue   "OBGroup_PasteChoices",    MULTI_FIELDS
+    DlgEnable  "TagPrompt",               ENABLED
+    DlgEnable  "TB1_Tag",                 ENABLED
+    DlgEnable  "TB2_Indicator1",          ENABLED
+    DlgEnable  "TB3_Indicator2",          ENABLED
+    If TaggedFieldsLikely Then
+        DlgFocus   "OK"
+      Else
+        DlgFocus   "TB1_Tag"
+    End If
+
+    PreviewString$ = ""
+    For i = 0 To UBound( FieldStore, 2 )
+      TempString$    = FieldStore( aMULTI_FIELDS, i )
+      PreviewString$ = PreviewString$ & TempString$ & CR
+    Next i
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Function ChangeDelimiter( InString$, WhichDelimiter$ ) As String
+
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = InString$
+
+Do
+  p = InStr( TempString$, MARC21_DELIMITER )
+  If p > 0 Then
+      If WhichDelimiter$ = DOLLAR_DELIMITER Then
+          Mid$( TempString$, p, 1 ) = DOLLAR_DELIMITER
+        Else
+          Mid$( TempString$, p, 1 ) = OCLC_MARC_DELIMITER
+      End If
+  End If
+Loop Until p = 0
+
+ChangeDelimiter = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Convert1252( InputString$ ) As String
+
+' Since Connexion mangles characters when it adds a new field, this function attempts to
+' fix that mangling by translating Windows-1252 to MARC21.
+
+Dim CharA%
+Dim Character$
+Dim CharT$
+Dim FixString$
+
+Dim FILL_CHAR As String*1    : FILL_CHAR = Chr$( 252 )
+
+Dim i As Integer
+
+For i = 1 To Len( InputString$ )
+  CharT$ = Mid$( InputString$, i, 1 )
+  CharA% = Asc( CharT$ )
+
+  Select Case CharA%
+
+    Case 31
+      Character$ = OCLC_MARC_DELIMITER
+    Case 0 To 30, 32 To 127
+      Character$ = CharT$
+    Case 128
+      Character$ = Chr$( 160 )
+    Case 130
+      Character$ = SINGLE_QUOTE
+    Case 131
+      Character$ = "f"
+    Case 132
+      Character$ = DOUBLE_QUOTE
+    Case 133
+      Character$ = "..."
+    Case 138
+      Character$ = "S" & Chr$( 233 )
+    Case 140
+      Character$ = Chr$( 166 )
+    Case 142
+      Character$ = "Z" & Chr$( 233 )
+    Case 154
+      Character$ = "s" & Chr$( 233 )
+    Case 156
+      Character$ = FIELD_TERMINATOR
+    Case 158
+      Character$ = "z" & Chr$( 233 )
+    Case 159
+      Character$ = "Y" & Chr$( 232 )
+    Case 163
+      Character$ = Chr$( 185 )
+    Case 169
+      Character$ = Chr$( 202 )
+    Case 174
+      Character$ = Chr$( 170 )
+    Case 176
+      Character$ = Chr$( 158 )
+    Case 177
+      Character$ = Chr$( 171 )
+    Case 178
+      Character$ = Chr$( 130 )
+    Case 179
+      Character$ = Chr$( 131 )
+    Case 185
+      Character$ = Chr$( 129 )
+    Case 186
+      Character$ = Chr$( 158 )
+    Case 191
+      Character$ = CharT$
+    Case 192
+      Character$ = "A" & Chr$( 225 )
+    Case 193
+      Character$ = "A" & Chr$( 226 )
+    Case 194
+      Character$ = "A" & Chr$( 227 )
+    Case 195
+      Character$ = "A" & Chr$( 227 )
+    Case 196
+      Character$ = "A" & Chr$( 227 )
+    Case 197
+      Character$ = "A" & Chr$( 234 )
+    Case 198
+      Character$ = Chr$( 165 )
+    Case 199
+      Character$ = "C" & Chr$( 227 )
+    Case 200
+      Character$ = "E" & Chr$( 225 )
+    Case 201
+      Character$ = "E" & Chr$( 226 )
+    Case 202
+      Character$ = "E" & Chr$( 227 )
+    Case 203
+      Character$ = "E" & Chr$( 227 )
+    Case 204
+      Character$ = "I" & Chr$( 225 )
+    Case 205
+      Character$ = "I" & Chr$( 226 )
+    Case 206
+      Character$ = "I" & Chr$( 227 )
+    Case 207
+      Character$ = "I" & Chr$( 227 )
+    Case 208
+      Character$ = Chr$( 163 )
+    Case 209
+      Character$ = "N" & Chr$( 227 )
+    Case 210
+      Character$ = "O" & Chr$( 225 )
+    Case 211
+      Character$ = "O" & Chr$( 226 )
+    Case 212
+      Character$ = "O" & Chr$( 227 )
+    Case 213
+      Character$ = "O" & Chr$( 227 )
+    Case 214
+      Character$ = "O" & Chr$( 227 )
+    Case 215
+      Character$ = FILL_CHAR
+    Case 216
+      Character$ = "O"  & Chr$( 162 )
+    Case 217
+      Character$ = "U" & Chr$( 225 )
+    Case 218
+      Character$ = "U" & Chr$( 226 )
+    Case 219
+      Character$ = "U" & Chr$( 227 )
+    Case 220
+      Character$ = "U" & Chr$( 227 )
+    Case 221
+      Character$ = "Y" & Chr$( 226 )
+    Case 222
+      Character$ = Chr$( 164 )
+    Case 223
+      Character$ = CharT$
+    Case 224
+      Character$ = "a" & Chr$( 225 )
+    Case 225
+      Character$ = "a" & Chr$( 226 )
+    Case 226
+      Character$ = "a" & Chr$( 227 )
+    Case 227
+      Character$ = "a" & Chr$( 227 )
+    Case 228
+      Character$ = "a" & Chr$( 227 )
+    Case 229
+      Character$ = "a" & Chr$( 234 )
+    Case 230
+      Character$ = Chr$( 181 )
+    Case 231
+      Character$ = "c" & Chr$( 240 )
+    Case 232
+      Character$ = "e" & Chr$( 225 )
+    Case 233
+      Character$ = "e" & Chr$( 226 )
+    Case 234
+      Character$ = "e" & Chr$( 227 )
+    Case 235
+      Character$ = "e" & Chr$( 227 )
+    Case 236
+      Character$ = "i" & Chr$( 225 )
+    Case 237
+      Character$ = "i" & Chr$( 226 )
+    Case 238
+      Character$ = "i" & Chr$( 227 )
+    Case 239
+      Character$ = "i" & Chr$( 227 )
+    Case 240
+      Character$ = Chr$( 186 )
+    Case 241
+      Character$ = "n" & Chr$( 227 )
+    Case 242
+      Character$ = "o" & Chr$( 225 )
+    Case 243
+      Character$ = "o" & Chr$( 226 )
+    Case 244
+      Character$ = "o" & Chr$( 227 )
+    Case 245
+      Character$ = "o" & Chr$( 227 )
+    Case 246
+      Character$ = "o" & Chr$( 227 )
+    Case 247
+      Character$ = FILL_CHAR
+    Case 248
+      Character$ = "o" & Chr$( 178 )
+    Case 249
+      Character$ = "u" & Chr$( 225 )
+    Case 250
+      Character$ = "u" & Chr$( 226 )
+    Case 251
+      Character$ = "u" & Chr$( 227 )
+    Case 252
+      Character$ = "u" & Chr$( 227 )
+    Case 253
+      Character$ = "y" & Chr$( 226 )
+    Case 254
+      Character$ = Chr$( 181 )
+    Case 255
+      Character$ = "y" & Chr$( 227 )
+    Case Else
+      Character$ = ""
+
+  End Select
+
+  FixString$ = FixString$ & Character$
+
+Next i
+
+FixString$  = Trim$( FixString$ )
+Convert1252 = FixString$
+
+End Function
+
+'****************************************************************************************
+
+Function GetIndicator( WhichIndicator$ ) As String
+
+Dim TempString$
+
+Select Case WhichIndicator$
+  Case "TB2_Indicator1"
+    TempString$ = Trim$( DlgText( "TB2_Indicator1" ) )
+  Case "TB3_Indicator2"
+    TempString$ = Trim$( DlgText( "TB3_Indicator2" ) )
+End Select
+
+If TempString$ = "" Then
+    TempString$ = " "
+  Else
+    If TempString$ Like "[! 0-9]" Then
+        TempString$ = "#"
+    End If
+End If
+
+GetIndicator = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Replace( InputString$, Replacement$, Remove$ ) As String
+
+' This function replaces "Remove$" in "InputString" with "Replacement$," except in the
+' special case when a delimiter is passed to it. In that case, add a space after any
+' subfield code.
+
+Dim Start%
+
+Dim p As Integer
+
+Start% = 1
+
+If Remove$ = MARC21_DELIMITER Then
+    Do
+      p = InStr( Start%, InputString$, Remove$ )
+      If p <> 0 Then
+          InputString$ = Left$( InputString$, p + 1 ) & " " & Mid$( InputString$, p + 2 )
+      End If
+      Start% = p + 2
+    Loop Until p = 0
+    InputString$ = Replace( InputString$, " ", TWO_SPACES )
+  Else
+    Do
+      p = InStr( InputString$, Remove$ )
+      If p <> 0 Then
+          InputString$ = Left$( InputString$, p - 1 ) & Replacement$ & Mid$( InputString$, p + Len( Remove$ ) )
+      End If
+    Loop Until p = 0
+End If
+
+Replace = InputString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' This function sets up the dialog box for choosing whether to add the copied text as a
+' string in an existing field or as a new field, and also whether to convert carriage
+' returns to spaces or to dashes. It also manages input for adding new fields.
+
+Const CHECKED         As Integer = 1
+Const CONTROL_CHANGE  As Integer = 2
+Const FOCUS_CHANGE    As Integer = 4
+Const IDLE_STATE      As Integer = 5
+Const INITIALIZE      As Integer = 1
+Const KEEP_DLG_OPEN   As Integer = -1
+Const UNCHECKED       As Integer = 0
+
+Dim CharT$
+Dim ControlWithFocus$
+Dim Indicator1$
+Dim Indicator2$
+Dim MultipleFieldsString$
+Dim TempField$
+
+Dim i As Integer, x As Integer
+
+Static CurrVal$
+Static Indicators$
+Static LastValidInd1$
+Static LastValidInd2$
+Static LastValidTag$
+Static PrevPasteAsChoice%
+Static PrevPreviewString$
+Static PrevVal$
+Static Tag$
+
+Static BadInput              : BadInput = FALSE
+
+Select Case Action%
+
+  Case INITIALIZE
+
+' If multiple lines have been copied, the dialog box opens with the default option being
+' to add new fields. Otherwise, that option is disabled, and the choices offered are to
+' add the copied text as a string or as a new field, and whether to change any line
+' breaks to spaces or dashes.
+
+    DlgValue   "OBGroup_ConvertOrAddTag", SpaceOrDash%
+    If DefaultAddFieldOption% < 2 And CRFound = FALSE Then
+        DlgEnable  "OB3_PasteFields",         DISABLED
+      Else
+        DlgEnable  "OB3_PasteFields",         ENABLED
+    End If
+    InitialDialogSetup( DefaultAddFieldOption% )
+    PrevPasteAsChoice% = DefaultAddFieldOption%
+
+
+  Case CONTROL_CHANGE
+
+' For any change in the dialog box, the first action is to get the values from the input
+' text boxes.
+
+    Tag$        = DlgText( "TB1_Tag" )
+    Indicator1$ = DlgText( "TB2_Indicator1" )
+    Indicator2$ = DlgText( "TB3_Indicator2" )
+    If Tag$ <> "" Then
+        If Indicator1$ = "" Then Indicator1$ = " "
+        If Indicator2$ = "" Then Indicator2$ = " "
+    End If
+
+    Select Case Id$
+
+      Case "CB_BlankTag"
+
+' Putting a check in the checkbox automatically adds a blank set of tag and indicators,
+' and clears anything already entered in those text boxes. Removing the check deletes the
+' blank set and restores the copied text to its original state when the macro was
+' invoked.
+
+        DlgText    "TB1_Tag",                 ""
+        DlgText    "TB2_Indicator1",          ""
+        DlgText    "TB3_Indicator2",          ""
+        If DlgValue( "CB_BlankTag" ) = CHECKED Then
+            BlankTag = TRUE
+            Tag$        = "   "
+            Indicators$ = "  "
+            If DlgValue( "OBGroup_PasteChoices" ) = 1 Then
+                If DlgValue( "OBGroup_ConvertOrAddTag" ) = 0 Then
+                    SpaceOrDash% = aSPACE
+                  Else
+                    SpaceOrDash% = aDASH
+                End If
+                PreviewString$ = BLANK_TAG_INDICATORS & FieldStore( aSINGLE_FIELD, SpaceOrDash% )
+              Else
+                For i = 0 To UBound( FieldStore, 2 )
+                  TempField$            = BLANK_TAG_INDICATORS & FieldStore( aMULTI_FIELDS, i )
+                  MultipleFieldsString$ = MultipleFieldsString$ & TempField$ & CR
+                Next i
+                If Right$( MultipleFieldsString$, 1 ) = CR Then
+                    MultipleFieldsString$ = Left$( MultipleFieldsString$, Len( MultipleFieldsString$ ) - 1 )
+                End If
+                PreviewString$ = MultipleFieldsString$
+            End If
+          Else
+            BlankTag    = FALSE
+            Tag$        = ""
+            Indicators$ = ""
+            InitialDialogSetup( PrevPasteAsChoice% )
+        End If
+
+      Case "OB1_PasteAsString"
+        InitialDialogSetup( SIMPLE_STRING )
+        DlgEnable  "TagPrompt",               DISABLED
+        DlgEnable  "TB1_Tag",                 DISABLED
+        DlgEnable  "TB2_Indicator1",          DISABLED
+        DlgEnable  "TB3_Indicator2",          DISABLED
+        PrevPasteAsChoice% = SIMPLE_STRING
+
+      Case "OB2_PasteAsField"
+        InitialDialogSetup( SINGLE_FIELD )
+        LastValidTag$      = ""
+        LastValidInd1$     = ""
+        PrevPasteAsChoice% = SINGLE_FIELD
+
+      Case "OB3_PasteFields"
+        InitialDialogSetup( MULTI_FIELDS )
+        LastValidTag$      = ""
+        LastValidInd1$     = ""
+        PrevPasteAsChoice% = MULTI_FIELDS
+
+      Case "OB4_ConvertToSpaces"
+        SpaceOrDash%   = aSPACE
+        PreviewString$ = Tag$ & Indicator1$ & Indicator2$ & FieldStore( aSINGLE_FIELD, SpaceOrDash% )
+
+      Case "OB5_ConvertToDashes"
+        SpaceOrDash%   = aDASH
+        PreviewString$ = Tag$ & Indicator1$ & Indicator2$ & FieldStore( aSINGLE_FIELD, SpaceOrDash% )
+
+    End Select
+
+    If Tag$ = "" Then LastValidTag$ = ""
+
+
+  Case FOCUS_CHANGE
+
+' When a text box has the focus, empty any content.
+
+    Select Case Id$
+
+      Case "TB1_Tag"
+        DlgText    "TB1_Tag",                 ""
+        DlgValue   "CB_BlankTag",             UNCHECKED
+        BlankTag = FALSE
+        If SValue& > 6 Then LastValidTag$ =   ""
+
+      Case "TB2_Indicator1"
+        DlgText    "TB2_Indicator1",          ""
+
+      Case "TB3_Indicator2"
+        DlgText    "TB3_Indicator2",          ""
+
+    End Select
+
+
+  Case IDLE_STATE
+
+' Continuously monitor input in the text boxes to accept only digits and spaces. As valid
+' characters are entered in the text boxes, display the results in the preview string.
+
+    ControlWithFocus$ = DlgFocus()
+
+    Select Case ControlWithFocus$
+
+      Case "TB1_Tag"
+
+        CurrVal$ = Trim$( DlgText( "TB1_Tag" ) )
+        If CurrVal$ <> "" Then
+            If BlankTag Then
+                CurrVal$ = "   "
+                x        = 3
+                BlankTag = TRUE
+                DlgEnable  "TB2_Indicator1",          DISABLED
+                DlgEnable  "TB3_Indicator2",          DISABLED
+              Else
+                x = Len( CurrVal$ )
+                For i = 1 To x
+                  CharT$ = Mid$( CurrVal$, i, 1 )
+                  If CharT$ Like "[! 0-9]" Then
+                      BadInput = TRUE
+                      Exit For
+                  End If
+                Next i
+            End If
+        End If
+        If x < 4 And BadInput = FALSE Then
+            If CurrVal$ <> PrevVal$ Then
+                If DlgValue( "OBGroup_PasteChoices" ) = 1 Then
+                    If DlgValue( "OBGroup_ConvertOrAddTag" ) = 0 Then
+                        SpaceOrDash% = aSPACE
+                      Else
+                        SpaceOrDash% = aDASH
+                    End If
+                    TempField$     = FieldStore( aSINGLE_FIELD, SpaceOrDash% )
+                    If CurrVal$ <> "" Then
+                        TempField$ = CurrVal$ & GetIndicator( "TB2_Indicator1" ) & GetIndicator( "TB3_Indicator2" ) & TempField$
+                    End If
+                    PreviewString$ = TempField$
+                  Else
+                    If CurrVal$ = "" Then
+                        For i = 0 To UBound( FieldStore, 2 )
+                          TempField$            = FieldStore( aMULTI_FIELDS, i )
+                          MultipleFieldsString$ = MultipleFieldsString$ & TempField$ & CR
+                        Next i
+                      Else
+                        For i = 0 To UBound( FieldStore, 2 )
+                          TempField$            = CurrVal$ & GetIndicator( "TB2_Indicator1" ) & GetIndicator( "TB3_Indicator2" ) & FieldStore( aMULTI_FIELDS, i )
+                          MultipleFieldsString$ = MultipleFieldsString$ & TempField$ & CR
+                        Next i
+                    End If
+                    If Right$( MultipleFieldsString$, 1 ) = CR Then
+                        MultipleFieldsString$ = Left$( MultipleFieldsString$, Len( MultipleFieldsString$ ) - 1 )
+                    End If
+                    PreviewString$ = MultipleFieldsString$
+                End If
+            End If
+          Else
+            DlgText    "TB1_Tag",                 PrevVal$
+            CurrVal$ = PrevVal$
+            x = x - 1
+        End If
+        If LastValidTag$ = "" Then
+            PrevVal$ = CurrVal$
+            If x = 3 Then
+                Tag$ = CurrVal$
+                LastValidTag$ = CurrVal$
+                If BlankTag = FALSE Then
+                    DlgEnable  "TB2_Indicator1",          ENABLED
+                    DlgEnable  "TB3_Indicator2",          ENABLED
+                    DlgFocus   "TB2_Indicator1"
+                End If
+            End If
+        End If
+
+      Case "TB2_Indicator1", "TB3_Indicator2"
+
+        If ControlWithFocus$ = "TB2_Indicator1" Then
+
+            CurrVal$ = Trim$( DlgText( "TB2_Indicator1" ) )
+            If CurrVal$ Like "[ 0-9]" Then
+                Indicator1$ = CurrVal$
+              ElseIf CurrVal$ = "" Then
+                Indicator1$ = " "
+              Else
+                Indicator1$ = "#"
+            End If
+            If Indicator1$ = "#" Then
+                DlgText    "TB2_Indicator1",          ""
+              Else
+                Indicators$ = Indicator1$ & GetIndicator( "TB3_Indicator2" )
+                If LastValidInd1$ <> CurrVal$ And CurrVal$ <> "" Then
+                    DlgFocus   "TB3_Indicator2"
+                End If
+                LastValidInd1$ = CurrVal$
+            End If
+
+          Else
+
+            CurrVal$ = Trim$( DlgText( "TB3_Indicator2" ) )
+            If CurrVal$ Like "[ 0-9]" Then
+                Indicator2$ = CurrVal$
+              ElseIf CurrVal$ = "" Then
+                Indicator2$ = " "
+              Else
+                Indicator2$ = "#"
+            End If
+            If Indicator2$ = "#" Then
+                DlgText    "TB3_Indicator2",          ""
+              Else
+                Indicators$ = GetIndicator( "TB2_Indicator1" ) & Indicator2$
+                If LastValidInd2$ <> CurrVal$ And CurrVal$ <> "" Then
+                    DlgFocus   "OK"
+                End If
+                LastValidInd1$ = CurrVal$
+            End If
+
+        End If
+
+        If DlgValue( "OBGroup_PasteChoices" ) = SINGLE_FIELD Then
+            If InStr( Indicators$, "#" ) = 0 Then
+                If DlgValue( "OBGroup_ConvertOrAddTag" ) = 0 Then
+                    SpaceOrDash% = aSPACE
+                  Else
+                    SpaceOrDash% = aDASH
+                End If
+                TempField$     = Tag$ & Indicators$ & FieldStore( aSINGLE_FIELD, SpaceOrDash% )
+                PreviewString$ = TempField$
+              Else
+                PreviewString$ = PrevPreviewString$
+            End If
+          ElseIf DlgValue( "OBGroup_PasteChoices" ) = MULTI_FIELDS Then
+            If InStr( Indicators$, "#" ) = 0 Then
+               For i = 0 To UBound( FieldStore, 2 )
+                 TempField$            = Tag$ & Indicators$ & FieldStore( aMULTI_FIELDS, i )
+                 MultipleFieldsString$ = MultipleFieldsString$ & TempField$ & CR
+               Next i
+               If Right$( MultipleFieldsString$, 1 ) = CR Then
+                   MultipleFieldsString$ = Left$( MultipleFieldsString$, Len( MultipleFieldsString$ ) - 1 )
+               End If
+               PreviewString$ = MultipleFieldsString$
+             Else
+               PreviewString$ = PrevPreviewString$
+            End If
+        End If
+
+    End Select
+
+    PreviewString$ = ChangeDelimiter( PreviewString$, "$" )
+    If PreviewString$ <> PrevPreviewString$ Then
+        DlgText    "PreviewTextArea",           PreviewString$
+        PrevPreviewString$ = PreviewString$
+    End If
+
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'158359566
+'
+'Macro name: PasteUnformattedPlus
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:52:14 AM using "MacroBookInspector" macro by Walter F. Nickeson.

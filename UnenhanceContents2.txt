@@ -1,0 +1,379 @@
+'MacroName:UnenhanceContents2.2023.02
+'MacroDescription:Removes subfield coding from an enhanced contents note, and optionally
+' removes all instances of subfield $g.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 12 January 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic record with an enhanced contents note to
+' unenhance it--that is, to remove all subfield coding. If the cursor is placed in a
+' field containing such a note, the macro will enenhance the field; otherwise, the macro
+' will unenhance the first enhanced contents note it finds. It pastes the unenhanced
+' field directly following the original field for comparison, as sometimes the macro may
+' lose or garble information, depending on how the original field was input. If the
+' record contains several enhanced contents fields the macro should be run on each one
+' separately.
+'
+' The macro removes only the subfield codes $t, $r, and $g, leaving the content of the
+' subfields intact. However, it can also remove the contents of every subfield $g in the
+' field. If the option to retain that content is chosen, the macro presents the further
+' option to change the dashes that normally separate titles between each instance of
+' subfield $g to semicolons, considering subfield $g to contain titles of sections.
+' Otherwise, the macro attempts to preserve proper punctuation between titles and
+'statements of responsibility. Its success at those attempts depends in part on how the
+' field was input.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CHECKED              As Integer = 1
+Const CRITICAL_MESSAGE     As Integer = 16
+Const WARNING_QUERY        As Integer = 32
+
+Const CHANGE_DASH          As Integer = 2
+Const DELETE_G             As Integer = -1
+Const KEEP_G               As Integer = 1
+
+Dim DELIMITER As String*1    : DELIMITER      = Chr$ ( 223 )
+
+Dim AddFieldByLine%
+Dim AddFieldBySequence%
+Dim FieldContents$
+Dim FieldData$
+Dim Indicator1$
+Dim Row%
+Dim SubfieldCode$
+Dim SubfieldG_Action%
+Dim SubfieldG_FieldContents$
+Dim SubfieldR_FieldContents$
+Dim TestChar$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$   = "[Walt's macros] Extras2:UnenhanceContents2"
+
+Dim FirstSubGFound           : FirstSubGFound = TRUE
+Dim FoundField
+
+Dim i As Integer, p As Integer, q As Integer
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then check to see if the cursor is in a contents field. If it is, and the note is
+' enhanced, begin processing it. If the note is not enhanced, quit. But if the cursor is
+' not in a contents field, search the record for one. Keep searching until all contents
+' fields have been found or an enhanced field is found. Unenhance only the first one
+' encountered.
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) Then
+    If Left$( FieldData$, 3 ) = "505" Then
+        If Mid$( FieldData$, 5, 1 ) <> "0" Then
+            MsgBox "This field does not contain an enhanced contents note!", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+      Else
+        i = 1
+        Do
+          FoundField = CS.GetField( "505", i, FieldData$ )
+          If FoundField Then
+              If Mid$( FieldData$, 5, 1 ) = "0" Then
+                  Exit Do
+                Else
+                  i = i + 1
+              End If
+          End If
+        Loop Until FoundField = FALSE Or i = 20
+        If FoundField = FALSE Then
+            If i = 2 Then
+                MsgBox "The contents note in this record is not enhanced!", CRITICAL_MESSAGE, WaltsMacros$
+              Else
+                MsgBox "No enhanced contents note fields were found in this record!", CRITICAL_MESSAGE, WaltsMacros$
+            End If
+            Exit Sub
+        End If
+    End If
+End If
+
+' The new field will be added either on the line following the original field, or as the
+' next 505 field, depending on how the original field was found.
+
+If i = 0 Then
+    AddFieldByLine% = Row% + 1
+  Else
+    If i = 1 Then
+         AddFieldBySequence% = 2
+      Else
+         AddFieldBySequence% = i + 1
+    End If
+End If
+
+Indicator1$    = Mid$( FieldData$, 4, 1 )
+FieldContents$ = Mid$( FieldData$, 6 )
+
+Do
+  p = InStr( FieldContents$, DELIMITER )
+  If p > 0 Then
+      SubfieldCode$ = Mid$( FieldContents$, p + 1, 1 )
+      Select Case SubfieldCode$
+
+' The contents of subfield $g may be significant or trivial. The first subfield $g found
+' as the macro analyzes the field triggers a message box asking if the subfield should be
+' deleted. If it should be kept, it may be that it identifies a section or group of
+' titles, and if so, the question is posed whether titles in that section should be
+' separated with dashes or semicolons. If dashes are discarded between titles, they are
+' retained before each subfield $g.
+
+        Case "g"
+
+          If FirstSubGFound Then
+              Begin Dialog Dialog1Definition  192, 100, WaltsMacros$, .Dialog1ControlFunction
+                OkButton        70,  76,  52,  14
+                CancelButton   130,  76,  52,  14
+                Text            10,   6, 166,   8, "Delete contents of every subfield $g in this field?"
+                OptionGroup                                                                               .OptionGroup1
+                 OptionButton   16,  18,  32,  12, "&Yes",                                                .OptionButton1
+                 OptionButton   16,  32,  32,  12, "&No",                                                 .OptionButton2
+                CheckBox        28,  44, 154,  12, "&Change dashes between titles in subfield $t",        .CheckBox1
+                Text            40,  56,  76,   8, "(if found) to semicolons",                            .TextLine2
+              End Dialog
+              Dim Dialog1 As Dialog1Definition
+
+              SubfieldG_Action% = Dialog( Dialog1 )
+
+              If SubfieldG_Action% = 0 Then
+                  Exit Sub
+                Else
+                  If Dialog1.OptionGroup1 = 0 Then
+                      SubfieldG_Action% = DELETE_G
+                    Else
+                      SubfieldG_Action% = KEEP_G
+                      If Dialog1.CheckBox1 = CHECKED Then
+                          SubfieldG_Action% = CHANGE_DASH
+                      End If
+                  End If
+              End If
+              FirstSubGFound = FALSE
+          End If
+
+          q = InStr( p + 1, FieldContents$, DELIMITER )
+
+' If no delimiter is found after this occurrence, the end of the field has been reached.
+' If this last subfield $g is to be eliminated, check for remaining ISBD punctuation
+' preceding it, and delete it.
+
+          If q = 0 Then
+              SubfieldG_FieldContents$ = Trim$( Mid$( FieldContents$, p + 2 ) )
+              If SubfieldG_Action% = DELETE_G Then
+                  FieldContents$ = Left$( FieldContents$, p - 1 )
+                Else
+                  FieldContents$ = Left$( FieldContents$, p - 1 ) & Mid$( FieldContents$, p + 2 )
+              End If
+              For i = Len( FieldContents$ ) To 1 Step -1
+                TestChar$ = Mid$( FieldContents$, i, 1 )
+                If TestChar$ Like "[!- ;:]" Or TestChar$ = Chr$( 034 ) Or TestChar$ = Chr$( 039 ) Then
+                    FieldContents$ = Left$( FieldContents$, i )
+                    Exit For
+                End If
+              Next i
+            Else
+              If p = 1 Then
+                  SubfieldG_FieldContents$ = Mid$( FieldContents$, p, q - 1 )
+                  If SubfieldG_Action% = DELETE_G Then
+                      FieldContents$ = Trim$( Mid$( FieldContents$, q - 1 ) )
+                    Else
+                      FieldContents$ = Trim$( Left$( FieldContents$, p - 1 ) ) & Mid$( FieldContents$, p + 2, q - 3 ) & Mid$( FieldContents$, q + 2 )
+                  End If
+                Else
+                  SubfieldG_FieldContents$ = Trim$( Mid$( FieldContents$, p, q - p ) )
+                  If SubfieldG_Action% = DELETE_G Then
+
+' If the content of subfield $g is also to be deleted but it contains punctuation that
+' should be retained, keep that punctuation.
+
+                      If Right$( SubfieldG_FieldContents$, 2 ) = "--" Then
+                          FieldContents$ = Trim$( Left$( FieldContents$, p - 1 ) ) & " -- " & Trim$( Mid$( FieldContents$, q - 1 ) )
+                        ElseIf Right$( SubfieldG_FieldContents$, 1 ) = "/" Then
+                          FieldContents$ = Trim$( Left$( FieldContents$, p - 1 ) ) & " / " & Trim$( Mid$( FieldContents$, q - 1 ) )
+                        ElseIf Right$( SubfieldG_FieldContents$, 1 ) = ";" Then
+                          FieldContents$ = Trim$( Left$( FieldContents$, p - 1 ) ) & " ; " & Trim$( Mid$( FieldContents$, q - 1 ) )
+                        Else
+                          FieldContents$ = Left$( FieldContents$, p - 1 ) & Trim$( Mid$( FieldContents$, q - 1 ) )
+                      End If
+                    Else
+                      FieldContents$ = Trim$( Left$( FieldContents$, p - 1 ) ) & Mid$( FieldContents$, p + 2, ( q - p ) - 3 ) & Mid$( FieldContents$, q + 2 )
+                  End If
+              End If
+          End If
+
+        Case "t"
+
+          If p = 1 Then
+              FieldContents$ = Trim$( Mid$( FieldContents$, p + 2 ) )
+            Else
+
+' Title subfields should normally be preceded by a dash (space-hyphen-space), but a
+' semicolon or colon may be found instead. Add the dash if the other punctuation is not
+' found, but replace the dash with a semicolon if that option has been chosen.
+
+              For i = p - 1 To 1 Step -1
+                TestChar$ = Mid$( FieldContents$, i, 1 )
+                Select Case TestChar$
+                  Case " "
+                  Case "-"
+                    If SubfieldG_Action% = CHANGE_DASH Then
+                        FieldContents$ = Left$( FieldContents$, i - 2 ) & ";" & Mid$( FieldContents$, p + 2 )
+                      Else
+                        FieldContents$ = Left$( FieldContents$, i ) & Mid$( FieldContents$, p + 2 )
+                    End If
+                    Exit For
+                  Case ";", ":"
+                    FieldContents$ = Left$( FieldContents$, i ) & Mid$( FieldContents$, p + 2 )
+                    Exit For
+                  Case Else
+                    FieldContents$ = Left$( FieldContents$, i ) & " -- " & Mid$( FieldContents$, p + 2 )
+                    Exit For
+                End Select
+              Next i
+          End If
+
+' The statement of responsibility in subfield $r is normally preceded by a forward slash,
+' but sometimes the subfield is surrounded by parentheses, as in the performer of a
+' musical work. Make sure the slash appears before the subfield if no parentheses are
+' found.
+
+        Case "r"
+
+          q = InStr( p + 1, FieldContents$, DELIMITER )
+          If q = 0 Then
+              SubfieldR_FieldContents$ = Mid$( FieldContents$, p + 2 )
+              FieldContents$           = Left$( FieldContents$, p - 1 ) & Mid$( FieldContents$, p + 2 )
+            Else
+              SubfieldR_FieldContents$ = Mid$( FieldContents$, p + 2, ( q - p ) - 2 )
+              FieldContents$           = Left$( FieldContents$, p - 1 ) & Mid$( FieldContents$, p + 2, ( q - p ) - 3 ) & Mid$( FieldContents$, q - 1 )
+          End If
+          If Left$( SubfieldR_FieldContents$, 1 ) <> "(" Then
+              For i = p - 1 To 1 Step -1
+                TestChar$ = Mid$( FieldContents$, i, 1 )
+                Select Case TestChar$
+                  Case " "
+                  Case "/"
+                    Exit For
+                  Case Else
+                    FieldContents$ = Left$( FieldContents$, i ) & " / " & Mid$( FieldContents$, p + 2 )
+                    Exit For
+                End Select
+              Next i
+          End If
+
+        Case Else
+
+          FieldContents$ = Left$( FieldContents$, p - 1 ) & Trim$( Mid$( FieldContents, p + 2 ) )
+      End Select
+
+  End If
+Loop Until p = 0
+
+FieldContents$ = Trim$( FieldContents$ )
+
+' Remove double spaces.
+
+Do
+  p = InStr( FieldContents$, "  " )
+  If p > 0 Then
+      FieldContents$ = Left$( FieldContents, p ) & Mid$( FieldContents$, p + 2 )
+  End If
+Loop Until p = 0
+
+FieldContents$ = "505" & Indicator1$ & " " & FieldContents$
+
+' Check terminal punctuation.
+
+TestChar$ = Right$( FieldContents$, 1 )
+If TestChar$ <> "." Then
+    If TestChar$ <> "!" And TestChar$ <> ")" Then
+        FieldContents$ = FieldContents$ & "."
+    End If
+End If
+
+' Add the unenhanced field following the original, enhanced one, so it can be compared
+' for correctness.
+
+If AddFieldByLine% > 0 Then
+    If CS.AddFieldLine( AddFieldByLine%, FieldContents$ ) = FALSE Then
+        MsgBox "Sorry, could not add the unenhanced contents note.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+  Else
+    If CS.AddField( AddFieldBySequence%, FieldContents$ ) = FALSE Then
+        MsgBox "Sorry, could not add the unenhanced contents note.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const INITIALIZE     As Integer = 1
+Const CONTROL_CHANGE As Integer = 2
+Const CHECKED        As Integer = 1
+Const DISABLED       As Integer = 0
+Const ENABLED        As Integer = 1
+Const UNCHECKED      As Integer = 0
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgEnable "CheckBox1", DISABLED
+    DlgEnable "TextLine2", DISABLED
+    DlgValue  "CheckBox1", 0
+
+
+  Case CONTROL_CHANGE
+
+    If DlgValue( "OptionGroup1" ) = 0 Then
+        DlgEnable "CheckBox1", DISABLED
+        DlgValue  "CheckBox1", UNCHECKED
+        DlgEnable "TextLine2", DISABLED
+      Else
+        DlgEnable "CheckBox1", ENABLED
+        DlgEnable "TextLine2", ENABLED
+    End If
+
+End Select
+
+End Function
+'37615256
+'
+'Macro name: UnenhanceContents2
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:59:16 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,1808 @@
+'MacroName:MapCalculatorTool.2023.30
+'MacroDescription:Calculates scales and scaled lengths and areas for cataloging
+' cartographic resources.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 22 February 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works. Run the macro to calculate the scale of a map; or, given a scale, run the
+' macro to calculate the scaled length or area. You do not need to be viewing a
+' bibliographic record for a map, or even be logged on to Connexion, to use this macro,
+' but it is designed to help add information to a record, or to check the information
+' given.
+'
+' TO CALCULATE A SCALE, select the tab "Calculate scale." If the macro is invoked while a
+' bibliographic record is displayed, this tab will automatically open, unless a scale is
+' given in fields 034, 255, or 507. (In that case, the tab to "Calculate length/area"
+' will automatically open.) For each of these fields, the macro looks at only the first
+' instance, if there is more than one. Select whether the scale is to be based on a ratio
+' of lengths, which is the default choice, or of areas. Enter the two parts of the ratio
+' in the input text boxes, and choose the appropriate unit for each part. Although the
+' macro always calculates the scale as the ratio of the smaller unit to the larger, the
+' order of entry of the measurements doesn't matter. Metric and United States customary
+' units can be mixed, so ratios like "1.4 cm" for "35 miles" are also valid inputs. Click
+' the "Calculate" button (which is disabled until all valid input numbers are entered) to
+' find the scale. The result is given as a series of numbers in a drop-down list box, in
+' which each successive entry in the list may be understood as containing one fewer
+' significant figure than the entry preceding it, or as being a degree of magnitude less
+' precise. The first entry in the list is the calculated ratio of the two entered
+' numbers, minus any decimal digits; the rest of the entries in the list represent
+' greater degrees of uncertainty, and are qualified by the term "approximately." The
+' selection of the result with the appropriate precision is, of course, the
+' responsibility of the cataloger. The macro can also add the selected scale to the
+' bibliographic record in fields 034 and 255, if they are not present, or to replace the
+' scale data in those fields if the calculated number does not exactly match the scale
+' data present. It can also place this information on the Windows Clipboard for further
+' manipulation.
+'
+' TO CALCULATE A DISTANCE OR AREA BASED ON A SCALE, make sure a scale number is displayed
+' in the scale box. If the macro is still running after having calculated a scale, that
+' scale is automatically displayed in the scale box. Otherwise, the box displays the
+' first scale found in fields 034, 255, and 507, which are examined in that order, if
+' present; but any number can be input into, or edited in, the text box. When inputting a
+' scale, enter the denominator of the scale ratio (e.g., "2500") or the ratio as found on
+' the resource (e.g., "1:2,500"). Select whether to calculate an area or a distance, and
+' enter a measurement in the first text box along with an appropriate unit. Select the
+' unit of the output and click the "Calculate" button. If the output unit is inches or
+' centimeters, the macro's calculation is of the length on the map that represents a
+' distance in the real world area that is being mapped. For example, given a scale of
+' 1:126,720, if the measurement is entered as "1 mile" and the output unit is "inches",
+' the macro's answer is "0.5"--indicating that a distance of one mile is represented by a
+' half inch on the map. Otherwise, the macro's answer is a length or distance in the real
+' world corresponding to a measurement on the map. This should be the same (allowing for
+' rounding) as if the scale were given in verbal form. For example, given a scale of
+' 1:1,140,000, if "1 inch" were entered as input and "miles" chosen as the output unit,
+' the macro calculates 17.99262--which is essentially the same as the scale presented on
+' the map: "Scale ca. 18 miles = 1 inch." That is, one inch on the map represents about
+' 18 miles in the region shown on the map. The precise answer calculated by the macro can
+' be rounded by clicking the "Round" button. Rounding trims the answer to two significant
+' digits for all results less than 10, or simply to whole numbers for all other results.
+'
+' Areas can be selected in the macro in the same way as lengths or distances for both
+' operations--to calculate a scale by comparing two areas, or to scale up or down an area
+' given the ratio on the map. Metric and non-metric units can also be mixed when areas
+' are being used in the calculation.
+'
+' ENTERING NUMBERS: Enter only the digits 0-9 and these other characters: decimal point,
+' space, forward slash, comma, and colon. In a measurement, the decimal point, or full
+' stop, is the only valid decimal separator. Separate a whole number and the first digit
+' of a fraction with a space; enter a forward slash to separate the two parts of a
+' fraction. The format of fractional numbers in a measurement input can be mixed. For
+' example, ".25" and "1 13/16" are both valid inputs in any input box except the scale.
+' The macro has no trouble calculating a scale from an entry such as "1 3/32 inches =
+' 34.6 kilometers." An extra space, or any character other than those listed above,
+' disables the "Calculate" button, so the macro will wait patiently for the input to be
+' corrected before proceeding. Similarly, the "Calculate" button is not enabled if
+' inappropriate units are selected. In a scale statement, either omit the colon, or enter
+' it between the two parts, with no space on either side. Thousands separators are
+' optional in a scale statement; if included, valid separators are commas, decimal points,
+' and spaces. Figuring a scale using inputs of the same unit, or scaling a distance in the
+' same unit as the input, is not possible.
+'
+' The formulas for converting between units are taken from the results of basic Google
+' searches, and although I believe the macro's calculations are adequate for most
+' purposes, I can make no guarantees of their reliability or accuracy in any given
+' situation.
+'
+' Because the calculations can involve very large and very small numbers, many of the
+' variables used in the macro are declared as variants, so they can contain whatever type
+' of number is most appropriate.
+'
+' The appearance of tabs in the dialog box is created by trickery, because OCLC's macro
+' language doesn't have the capability of natively drawing such things. Tabs can be
+' approximated by using push buttons that contain the labels, group boxes that outline
+' the folder-like areas, and blank or empty text areas that overlap and hide or reveal
+' the push buttons and group box lines to join or separate each push button tab with its
+' contents. The resulting dialog box is rarely drawn smoothly, unfortunately, but that
+' awkwardness is outweighed, in my view, by the usefulness of a tabbed box.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillArrays
+Declare Sub HelpBox
+Declare Sub SetDefaultUnits( List1%, List2% )
+Declare Sub SetTabLines    ( SelectedTab% )
+
+Declare Function AreaUnitAdjustment( InUnit% )               As Integer
+Declare Function CheckInput        ( InString$, InputType$ ) As String
+Declare Function CheckInputWarning ( InString$ )             As Integer
+Declare Function ConvertStrToNum   ( CandidateString$ )      As Variant
+Declare Function FormatScaleString ( ScaleNum As Variant )   As String
+Declare Function RoundUp           ( NumInput As Variant )   As Variant
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global Const DLG_BUTTON_EDIT_RECORD As Integer = 6
+
+Global Const INVISIBLE              As Integer = 0
+Global Const VISIBLE                As Integer = 1
+
+Global Const CHECK_INPUT_BAD        As String = "X"
+Global Const CHECK_INPUT_INVALID    As String = "?"
+Global Const CHECK_INPUT_NONE       As String = "_"
+Global Const MEASUREMENT_INPUT      As String = "M"
+Global Const SCALE_INPUT            As String = "S"
+Global Const WARNING_BAD_INPUT      As Integer = 0
+Global Const WARNING_INPUT_PROBLEM  As Integer = 1
+Global Const WARNING_NO_INPUT       As Integer = -1
+
+Global Const NO_SCALE               As Integer = 0
+Global Const TAB_FIND_LENGTH        As Integer = -2
+Global Const TAB_FIND_SCALE         As Integer = -1
+
+Global Const ACRES                  As Integer = 9
+Global Const CENTIMETERS            As Integer = 4
+Global Const CHAINS                 As Integer = 8
+Global Const FEET                   As Integer = 1
+Global Const HECTARES               As Integer = 10
+Global Const INCHES                 As Integer = 0
+Global Const KILOMETERS             As Integer = 6
+Global Const METERS                 As Integer = 5
+Global Const MILES                  As Integer = 3
+Global Const RODS                   As Integer = 7
+Global Const SQUARE_MILES           As Integer = 4
+Global Const YARDS                  As Integer = 2
+
+Global DOUBLE_QUOTE As String*1
+
+Global BadInputCharacter$
+Global Field034$
+Global OriginalScale$
+Global OriginalScaleDisplay$
+Global ScaleSource$
+Global ScaleString$
+Global ScaleVal&
+Global SelectedTab%
+Global TypeOfRecord$
+Global WaltsMacros$
+
+Global BibRecord
+
+Global ScaleStatements()            As String
+Global UnitsListArea  ( 10 )        As String
+Global UnitsListDist  ( 8 )         As String
+Global XFactorTable   ( 10, 10 )    As Variant
+
+'****************************************************************************************
+'31697334
+'39315583
+'454440235
+
+Sub Main
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DISPLAY_FF_AT_TOP    As Integer = 1
+Const DLG_FUNCTION_CANCEL  As Integer = 0
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Dim CLEAR_X   As String*1    : CLEAR_X        = Chr$( 215 )
+Dim DELIMITER As String*1    : DELIMITER      = Chr$( 223 )
+
+Dim AddFailure%
+Dim CatLangEnglish           : CatLangEnglish = TRUE
+Dim DialogBox1Result%
+Dim Field040$
+Dim Field255$
+Dim Field507$
+Dim NewField034Left$
+Dim NewField034Right$
+Dim NewField255$
+Dim NewField255Right$
+Dim PosFF%
+Dim ScaleStatement$
+Dim TempString$
+Dim TestChar$
+Dim TypeOfWindow%
+
+Dim ChangedFFView            : ChangedFFView  = FALSE
+
+Dim i As Integer, p As Integer, q As Integer
+
+DOUBLE_QUOTE          = Chr$( 034 )
+Field034$             = ""
+OriginalScale$        = ""
+OriginalScaleDisplay$ = ""
+ScaleSource$          = "Scale from "
+ScaleString$          = ""
+ScaleVal&             = 0
+SelectedTab%          = 0
+WaltsMacros$          = "[Walt's macros] Extras2:MapCalculatorTool"
+
+' First, determine if a map record is displayed; if it is, try to get a scale from either
+' the first 034 or the first 255 field, or a 507 field. The macro will run even without a
+' bibliographic record being displayed, just to provide a calculating tool.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case 0 To 1, 17
+    BibRecord = TRUE
+    PosFF%    = CS.FixedFieldPosition
+    If PosFF% <> DISPLAY_FF_AT_TOP Then
+        CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+        ChangedFFView         = TRUE
+    End If
+    If CS.GetFixedField( "Type", TypeOfRecord$ ) Then
+    End If
+    If ChangedFFView Then
+        CS.FixedFieldPosition = PosFF%
+    End If
+
+' For the 034 field, look for a subfield $b containing a scale string. Whether or not
+' it's found, get the beginning of the field (tag through subfield $a) and the end (from
+' subfield $d on) to put together a whole field after a (new) scale is calculate.
+
+    If CS.GetField( "034", 1, Field034$ ) Then
+        p = InStr( Field034$, DELIMITER & "b" )
+        If p > 0 Then
+            q = InStr( p + 1, Field034$, DELIMITER )
+            If q > 0 Then
+                ScaleString$      = Trim$( Mid$( Field034$, p + 2, ( q - p ) - 2 ) )
+                NewField034Left$  = Trim$( Left$( Field034$, p + 2 ) )
+                NewField034Right$ = Trim$( Mid$( Field034$, q - 1 ) )
+              Else
+                ScaleString$      = Trim$( Mid$( Field034$, p + 2 ) )
+                NewField034Left$  = Trim$( Left$( Field034$, p + 2 ) )
+                NewField034Right$ = ""
+            End If
+          Else
+            p = InStr( Field034$, DELIMITER )
+            NewField034Left$  = Trim$( Left$( Field034$, p - 1 ) )
+            NewField034Right$ = Trim$( Mid$( Field034$, p ) )
+        End If
+        If ScaleSource$ = "Scale from " Then
+            ScaleSource$ = ScaleSource$ & "034:"
+        End If
+    End If
+
+' Similarly for the 255 field: If there is information following a scale statement in
+' subfield $a, identify it for reconstructing the field after a calculation is performed.
+
+    If CS.GetField( "255", 1, Field255$ ) Then
+        p = InStr( Field255$, DELIMITER )
+        If p > 0 Then
+            NewField255Right$ = Trim$( Mid$( Field255$, p - 1 ) )
+            ScaleStatement$   = Trim$( Mid$( Field255$, 6, p - 7 ) )
+          Else
+            ScaleStatement$   = Trim$( Mid$( Field255$, 6 ) )
+        End If
+        p = InStr( Field255$, ":" )
+        If p > 0 Then
+            For i = p + 1 To Len( Field255$ )
+              TestChar$ = Mid$( Field255$, i, 1 )
+              If TestChar$ Like "[!0-9 ,]" XOr _
+                 TestChar$ = "." And ( ( i = Len( Field255$ ) Or Mid$( Field255$, i + 1, 1 ) Like "[0-9]" ) ) Then
+                  Exit For
+              End If
+            Next i
+            If ScaleString$ = "" Then
+                ScaleString$ = Trim$( Mid$( Field255$, p + 1, i - p - 1 ) )
+            End If
+            If ScaleSource$ = "Scale from " Then
+                ScaleSource$ = ScaleSource$ & "255:"
+            End If
+        End If
+    End If
+
+' If all else fails, look for a scale in a 507 field.
+
+    If ScaleString$ = "" Then
+        If CS.GetField( "507", 1, Field507$ ) Then
+            p = InStr( Field507$, "1:" )
+            If p > 0 Then
+                For i = p + 2 To Len( Field507$ )
+                  TestChar$ = Mid$( Field507$, i, 1 )
+                  If TestChar$ Like "[!0-9 ,]" Then
+                      Exit For
+                  End If
+                Next i
+                ScaleString$ = Trim$( Mid$( Field507$, p + 2, i - p - 2 ) )
+                ScaleSource$ = ScaleSource$ & "507:"
+            End If
+        End If
+    End If
+  Case Else
+    BibRecord = FALSE
+End Select
+
+' If the scale statement contains commas or spaces, remove them.
+
+For i = 1 To Len( ScaleString$ )
+  TestChar$ = Mid$( ScaleString$, i, 1 )
+  If TestChar$ Like "[! .,]" Then
+      TempString$ = TempString$ & TestChar$
+  End If
+Next i
+
+ScaleVal& = Val( TempString$ )
+
+If ScaleVal& = NO_SCALE Then
+    SelectedTab% = TAB_FIND_SCALE
+  Else
+    SelectedTab% = TAB_FIND_LENGTH
+End If
+
+' Get the language of the catalog record, as that will determine if a 255 field can be
+' added.
+
+If CS.GetField( "040", 1, Field040$ ) Then
+    If InStr( Field040$, DELIMITER & "b eng" ) = 0 Then
+        CatLangEnglish = FALSE
+    End If
+End If
+
+' Format the original scale so it can be re-used if the "Reset" button is clicked.
+
+If ScaleString$ <> "" Then
+    ScaleString$   = CheckInput( ScaleString$, SCALE_INPUT )
+    OriginalScale$ = ScaleString$
+    If OriginalScale$ <> "" Then
+        OriginalScaleDisplay$ = FormatScaleString( OriginalScale$ )
+    End If
+  Else
+    ScaleSource$ = "Enter scale:"
+End If
+
+FillArrays
+
+Begin Dialog Dialog1Definition  346, 144, WaltsMacros$, .Dialog1ControlFunction
+  TextBox         26,  60,  56,  12,                                 .NumberInputTextBox1
+  DropListBox     86,  60,  80, 104, UnitsListDist(),                .UnitsInputListBox1
+  TextBox         26,  76,  56,  12,                                 .NumberInputTextBox2
+  DropListBox     86,  76,  80, 104, "",                             .UnitsInputListBox2
+  TextBox         86,  76,  66,  12,                                 .ScaleInputTextBox
+  DropListBox    203,  76, 104,  64, ScaleStatements(),              .ScaleOutputDropListBox
+  TextBox        190,  76,  46,  12,                                 .NumberOutputTextBox
+  DropListBox    240,  76,  80, 104, "",                             .UnitsOutputListBox
+  PushButton     203,  42, 104,  18, "",                             .CalculateButton
+  PushButton     198, 112,  70,  14, "",                             .CopyButton
+  CancelButton   276, 112,  52,  14
+  PushButton      12,   6, 161,  16, "Calculate &scale",             .CalculateScaleTab
+  PushButton     173,   6, 161,  16, "Calculate &length/area",       .CalculateLengthAreaTab
+  PushButton      78, 112,  52,  14, "&Reset",                       .ResetButton
+  PushButton     138, 112,  52,  14, "",                             .AddUpdateFieldsButton
+  PushButton     194,  96,  38,  12, "Ro&und",                       .RoundupButton
+  PushButton      18, 112,  52,  14, "&?",                           .Help
+  PushButton     155,  77,   9,   9, CLEAR_X,                        .ClearScaleInputBoxButton
+  OptionGroup                                                        .OptionGroupLengthArea
+   OptionButton   89,  46,  36,  12, "L&ength",                      .OptionButtonLength
+   OptionButton  131,  46,  28,  12, "&Area",                        .OptionButtonArea
+  GroupBox        18,  38, 156,  57, "Input"
+  GroupBox       182,  64, 146,  31, "",                             .OutputBoxLegend
+  Text            26,  78,  56,   8, "",                             .ScaleSourceLegend
+  Text            16,  26, 272,   8, "",                             .Instructions
+  GroupBox        10,  17, 326, 118, "",                             .TabOutlineGroupBox
+  Text            11,  20, 160,   4, "",                             .HideCalcScaleGroupLine
+  Text           173,  20, 160,   4, "",                             .HideCalcLengthGroupLine
+  Text            18,  98, 104,   8, "",                             .InputProblemWarning
+  Text           208,  98,  96,   8, "Scale does not match record!", .ScaleMismatchWarning
+  Text           124,  98,  38,   8, "",                             .TroubleshootingTextBox1
+  Text           162,  98,  38,   8, "",                             .TroubleshootingTextBox2
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+
+DialogBox1Result% = Dialog( Dialog1 )
+
+Select Case DialogBox1Result%
+
+  Case DLG_FUNCTION_CANCEL
+
+    Exit Sub
+
+  Case DLG_BUTTON_EDIT_RECORD
+
+    TempString$      = FormatScaleString( ScaleString$ )
+    NewField034Left$ = "0341 a " & DELIMITER & "b " & TempString$
+    If Field034$ = "" Then
+        If CS.AddField( 1, NewField034Left$ ) = FALSE Then
+            AddFailure% = AddFailure% + 1
+        End If
+
+' The macro won't add a 255 field to a record for other than a cartographic resource, and
+' even for eligible records, it won't add a phrase containing the English word "Scale" to
+' a record whose language of cataloging is not English.
+
+        If TypeOfRecord$ Like "[ef]" Then
+            If CatLangEnglish Then
+                NewField255$ = "255  Scale " & ScaleString$
+                If CS.AddField( 1, NewField255$ ) = FALSE Then
+                    AddFailure% = AddFailure% + 1
+                End If
+            End If
+        End If
+      Else
+        Field034$ = NewField034Left$ & " " & NewField034Right$
+        If CS.SetField( 1, Field034$ ) = FALSE Then
+            AddFailure% = AddFailure% + 1
+        End If
+        If CatLangEnglish Then
+            NewField255$ = "255  Scale " & ScaleString$ & " " & NewField255Right$
+            If CS.SetField( 1, NewField255$ ) = FALSE Then
+                AddFailure% = AddFailure% + 1
+            End If
+        End If
+    End If
+
+' Display an error message, if somehow the new fields aren't added.
+
+    Select Case AddFailure%
+      Case 1
+        MsgBox "Sorry, could not add the 034 field.", CRITICAL_MESSAGE, WaltsMacros$
+      Case 2
+        MsgBox "Sorry, could not add the scale statement.", CRITICAL_MESSAGE, WaltsMacros$
+      Case 3
+        MsgBox "Sorry, could not add the 034 and 255 fields.", CRITICAL_MESSAGE, WaltsMacros$
+    End Select
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrays
+
+UnitsListDist( 0 )  = "inches"
+UnitsListDist( 1 )  = "feet"
+UnitsListDist( 2 )  = "yards"
+UnitsListDist( 3 )  = "miles"
+UnitsListDist( 4 )  = "centimeters"
+UnitsListDist( 5 )  = "meters"
+UnitsListDist( 6 )  = "kilometers"
+UnitsListDist( 7 )  = "rods"
+UnitsListDist( 8 )  = "chains"
+
+UnitsListArea( 0  ) = "square inches"
+UnitsListArea( 1  ) = "square feet"
+UnitsListArea( 2  ) = "square yards"
+UnitsListArea( 3  ) = "acres"
+UnitsListArea( 4  ) = "square miles"
+UnitsListArea( 5  ) = "square centimeters"
+UnitsListArea( 6  ) = "square meters"
+UnitsListArea( 7  ) = "hectares"
+UnitsListArea( 8  ) = "square kilometers"
+UnitsListArea( 9  ) = "square rods"
+UnitsListArea( 10 ) = "square chains"
+
+' These factors are taken from Google.
+
+XFactorTable( INCHES,      INCHES )      = 1
+XFactorTable( INCHES,      FEET )        = 0.0833333
+XFactorTable( INCHES,      YARDS )       = 0.0277778
+XFactorTable( INCHES,      MILES )       = 1.5783e-5
+XFactorTable( INCHES,      CENTIMETERS ) = 2.54
+XFactorTable( INCHES,      METERS )      = 0.0254
+XFactorTable( INCHES,      KILOMETERS )  = 2.54e-5
+XFactorTable( INCHES,      RODS )        = 0.00505051
+XFactorTable( INCHES,      CHAINS )      = 0.00126263
+XFactorTable( INCHES,      ACRES )       = 3.9927e-4
+XFactorTable( INCHES,      HECTARES )    = 0.000254
+XFactorTable( FEET,        INCHES )      = 12
+XFactorTable( FEET,        FEET )        = 1
+XFactorTable( FEET,        YARDS )       = 0.333333
+XFactorTable( FEET,        MILES )       = 0.000189394
+XFactorTable( FEET,        CENTIMETERS ) = 30.48
+XFactorTable( FEET,        METERS )      = 0.3048
+XFactorTable( FEET,        KILOMETERS )  = 0.0003048
+XFactorTable( FEET,        RODS )        = 0.0606061
+XFactorTable( FEET,        CHAINS )      = 0.0151515
+XFactorTable( FEET,        ACRES )       = 0.0047913464
+XFactorTable( FEET,        HECTARES )    = 0.0030479993
+XFactorTable( YARDS,       INCHES )      = 36
+XFactorTable( YARDS,       FEET )        = 3
+XFactorTable( YARDS,       YARDS )       = 1
+XFactorTable( YARDS,       MILES )       = 0.000568182
+XFactorTable( YARDS,       CENTIMETERS ) = 91.44
+XFactorTable( YARDS,       METERS )      = 0.9144
+XFactorTable( YARDS,       KILOMETERS )  = 0.0009144
+XFactorTable( YARDS,       RODS )        = 0.181818
+XFactorTable( YARDS,       CHAINS )      = 0.0454545
+XFactorTable( YARDS,       ACRES )       = 0.014374004
+XFactorTable( YARDS,       HECTARES )    = 0.0091440144
+XFactorTable( MILES,       INCHES )      = 63360
+XFactorTable( MILES,       FEET )        = 5280
+XFactorTable( MILES,       YARDS )       = 1760
+XFactorTable( MILES,       MILES )       = 1
+XFactorTable( MILES,       CENTIMETERS ) = 160934
+XFactorTable( MILES,       METERS )      = 1609.34
+XFactorTable( MILES,       KILOMETERS )  = 1.60934
+XFactorTable( MILES,       RODS )        = 320
+XFactorTable( MILES,       CHAINS )      = 80
+XFactorTable( MILES,       ACRES )       = 25.298221
+XFactorTable( MILES,       HECTARES )    = 16.093446
+XFactorTable( CENTIMETERS, INCHES )      = 0.393701
+XFactorTable( CENTIMETERS, FEET )        = 0.0328084
+XFactorTable( CENTIMETERS, YARDS )       = 0.0109361
+XFactorTable( CENTIMETERS, MILES )       = 6.213712e-6
+XFactorTable( CENTIMETERS, CENTIMETERS ) = 1
+XFactorTable( CENTIMETERS, METERS )      = 0.01
+XFactorTable( CENTIMETERS, KILOMETERS )  = 1.0e-5
+XFactorTable( CENTIMETERS, RODS )        = 0.00198839
+XFactorTable( CENTIMETERS, CHAINS )      = 0.000497097
+XFactorTable( CENTIMETERS, ACRES )       = 0.00015719732
+XFactorTable( CENTIMETERS, HECTARES )    = 0.0001
+XFactorTable( METERS,      INCHES )      = 39.3701
+XFactorTable( METERS,      FEET )        = 3.28084
+XFactorTable( METERS,      YARDS )       = 1.09361
+XFactorTable( METERS,      MILES )       = 0.000621371
+XFactorTable( METERS,      CENTIMETERS ) = 100
+XFactorTable( METERS,      METERS )      = 1
+XFactorTable( METERS,      KILOMETERS )  = 0.001
+XFactorTable( METERS,      RODS )        = 0.198839
+XFactorTable( METERS,      CHAINS )      = 0.0497097
+XFactorTable( METERS,      ACRES )       = 0.015719574
+XFactorTable( METERS,      HECTARES )    = 0.01
+XFactorTable( KILOMETERS,  INCHES )      = 39370.1
+XFactorTable( KILOMETERS,  FEET )        = 3280.84
+XFactorTable( KILOMETERS,  YARDS )       = 1093.61
+XFactorTable( KILOMETERS,  MILES )       = 0.621371
+XFactorTable( KILOMETERS,  CENTIMETERS ) = 100000
+XFactorTable( KILOMETERS,  METERS )      = 1000
+XFactorTable( KILOMETERS,  KILOMETERS )  = 1
+XFactorTable( KILOMETERS,  RODS )        = 198.839
+XFactorTable( KILOMETERS,  CHAINS )      = 49.7097
+XFactorTable( KILOMETERS,  ACRES )       = 15.719574
+XFactorTable( KILOMETERS,  HECTARES )    = 10
+XFactorTable( RODS,        INCHES )      = 198
+XFactorTable( RODS,        FEET )        = 16.5
+XFactorTable( RODS,        YARDS )       = 5.5
+XFactorTable( RODS,        MILES )       = 0.003125
+XFactorTable( RODS,        CENTIMETERS ) = 502.92
+XFactorTable( RODS,        METERS )      = 5.0292
+XFactorTable( RODS,        KILOMETERS )  = 0.0050292
+XFactorTable( RODS,        RODS )        = 1
+XFactorTable( RODS,        CHAINS )      = 4
+XFactorTable( RODS,        ACRES )       = 0.079056942
+XFactorTable( RODS,        HECTARES )    = 0.050292047
+XFactorTable( CHAINS,      INCHES )      = 792
+XFactorTable( CHAINS,      FEET )        = 66
+XFactorTable( CHAINS,      YARDS )       = 22
+XFactorTable( CHAINS,      MILES )       = 0.0125
+XFactorTable( CHAINS,      CENTIMETERS ) = 2011.68
+XFactorTable( CHAINS,      METERS )      = 20.1168
+XFactorTable( CHAINS,      KILOMETERS )  = 0.0201168
+XFactorTable( CHAINS,      RODS )        = 0.25
+XFactorTable( CHAINS,      CHAINS )      = 1
+XFactorTable( CHAINS,      ACRES )       = 0.31622777
+XFactorTable( CHAINS,      HECTARES )    = 0.20116809
+XFactorTable( ACRES,       INCHES )      = 2504.595776
+XFactorTable( ACRES,       FEET )        = 208.710325
+XFactorTable( ACRES,       YARDS )       = 69.570109
+XFactorTable( ACRES,       MILES )       = 0.0395284708
+XFactorTable( ACRES,       CENTIMETERS ) = 6361.603571
+XFactorTable( ACRES,       METERS )      = 63.6149354
+XFactorTable( ACRES,       KILOMETERS )  = 0.0636149354
+XFactorTable( ACRES,       RODS )        = 12.6491106
+XFactorTable( ACRES,       CHAINS )      = 3.162278
+XFactorTable( ACRES,       ACRES )       = 1
+XFactorTable( ACRES,       HECTARES )    = 0.636149354
+XFactorTable( HECTARES,    INCHES )      = 3937.003937
+XFactorTable( HECTARES,    FEET )        = 328.0838308
+XFactorTable( HECTARES,    YARDS )       = 109.361328
+XFactorTable( HECTARES,    MILES )       = 0.062137106
+XFactorTable( HECTARES,    CENTIMETERS ) = 10000
+XFactorTable( HECTARES,    METERS )      = 100
+XFactorTable( HECTARES,    KILOMETERS )  = 0.1
+XFactorTable( HECTARES,    RODS )        = 19.883888
+XFactorTable( HECTARES,    CHAINS )      = 4.9709657
+XFactorTable( HECTARES,    ACRES )       = 1.5719574
+XFactorTable( HECTARES,    HECTARES )    = 1
+
+End Sub
+
+'****************************************************************************************
+
+Sub HelpBox
+
+Dim HelpText1$
+Dim HelpText2$
+Dim HelpText3$
+Dim HelpText4$
+Dim HelpText5$
+
+HelpText1$ = "CALCULATE A SCALE. Choose whether to calculate the scale by comparing lengths or areas. Enter a measurement in "
+HelpText1$ = HelpText1$ & "each of the two input boxes and select the unit from the drop-down lists next to them. Click the "
+HelpText1$ = HelpText1$ & DOUBLE_QUOTE & "Calculate" & DOUBLE_QUOTE & " button to calculate the scale. The result is given as "
+HelpText1$ = HelpText1$ & "a set of ratios in a drop-down list. Choose the result whose precision most appropriately matches "
+HelpText1$ = HelpText1$ & "that of the inputs. If the resulting scale is not the same as that given in existing 034 or 255 "
+HelpText1$ = HelpText1$ & "fields in the bibliographic record, the macro can quickly add one or both fields."
+
+HelpText2$ = "CALCULATE A DISTANCE OR AREA. A scale must be appear in the scale box to calculate a distance or an area based "
+HelpText2$ = HelpText2$ & "on that scale. The macro will use the scale found in fields 034, 255, or 507 in a displayed map "
+HelpText2$ = HelpText2$ & "bibliographic record; if there is none, it must be supplied. A scale number can be a simple "
+HelpText2$ = HelpText2$ & "denominator (e.g., " & DOUBLE_QUOTE & "20000" & DOUBLE_QUOTE & " or the complete ratio fraction "
+HelpText2$ = HelpText2$ & "(e.g., " & DOUBLE_QUOTE & "1:20,000" & DOUBLE_QUOTE & "). The colon is optional, as are commas and "
+HelpText2$ = HelpText2$ & "spaces. Select whether to calculate a distance or an area. Enter a measurement in the first input "
+HelpText2$ = HelpText2$ & "box and select its unit from the drop-down list next to it. Select the unit of measurement you "
+HelpText2$ = HelpText2$ & "want for the result from the drop-down list next to the output text box and click the "
+HelpText2$ = HelpText2$ & DOUBLE_QUOTE & "Calculate" & DOUBLE_QUOTE & " button. Click the " & DOUBLE_QUOTE & "Round result"
+HelpText2$ = HelpText2$ & DOUBLE_QUOTE & " button to round the result to two significant digits for numbers less than 10, or "
+HelpText2$ = HelpText2$ & "to a whole number for a larger result."
+
+HelpText3$ = "ENTERING NUMBERS. The " & DOUBLE_QUOTE & "Calculate" & DOUBLE_QUOTE & " button is disabled until all inputs "
+HelpText3$ = HelpText3$ & "required for either function are valid. Valid inputs consist of numbers only, except that "
+HelpText3$ = HelpText3$ & "fractions (e.g., " & DOUBLE_QUOTE & "1 5/8" & DOUBLE_QUOTE & ") and decimals (e.g., " & DOUBLE_QUOTE
+HelpText3$ = HelpText3$ & "1.625" & DOUBLE_QUOTE & ") are allowed in a ""measurement, and a colon and commas and spaces to "
+HelpText3$ = HelpText3$ & "separate thousands are allowed (but not required) in a scale statement. Metric and non-metric "
+HelpText3$ = HelpText3$ & "units can be mixed in both input and output. Selecting the same unit for input and output is "
+HelpText3$ = HelpText3$ & "invalid."
+
+HelpText4$ = "Click the " & DOUBLE_QUOTE & "Reset" & DOUBLE_QUOTE & " button at any time to return the macro to its initial "
+HelpText4$ = HelpText4$ & "state."
+
+Begin Dialog Dialog2Definition  288, 262, WaltsMacros$
+  CancelButton  226, 238,  52,  14
+  PushButton    226, 238,  52,  14, "&Close"
+  Text           10,   6, 268,  56, HelpText1$
+  Text           10,  68, 268,  88, HelpText2$
+  Text           10, 162, 268,  48, HelpText3$
+  Text           10, 216, 268,   8, HelpText4$
+End Dialog
+
+Dim Dialog2 As Dialog2Definition
+On Error Resume Next
+Dialog Dialog2
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetDefaultUnits( List1%, List2% )
+
+' When certain units are selected for use in a calculation, the macro offers default
+' units for other input. Inches and miles are associated, and centimeters and kilometers,
+' and in general customary and metric units are not mixed. But that default behavior can
+' be simply overridden. The only restriction the macro places on selection of units for
+' each of the input boxes is that they be different.
+
+Select Case List1%
+  Case INCHES
+    List2% = MILES
+  Case FEET To MILES, RODS To CHAINS
+    List2% = INCHES
+  Case CENTIMETERS
+    List2% = KILOMETERS
+  Case METERS To KILOMETERS
+    List2% = CENTIMETERS
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetTabLines( SelectedTab% )
+
+If SelectedTab% = TAB_FIND_SCALE Then
+    DlgVisible      "HideCalcScaleGroupLine",     VISIBLE
+    DlgVisible      "HideCalcLengthGroupLine",    INVISIBLE
+  Else
+    DlgVisible      "HideCalcScaleGroupLine",     INVISIBLE
+    DlgVisible      "HideCalcLengthGroupLine",    VISIBLE
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function AreaUnitAdjustment( InUnit% ) As Integer
+
+' The list of units presented in the drop-down lists in the dialog box is always in
+' alphabetical order--but the number of terms in the list of areas is larger than the
+' list of lengths, so the two lists don't correspond. However, they both need to use the
+' single array of conversion factors, or XFactors. This function adjusts the indexes so
+' as to in effect synchronize the lists.
+
+Select Case InUnit%
+  Case 3
+    InUnit% = ACRES
+  Case 4 To 6
+    InUnit% = InUnit% - 1
+  Case 7
+    InUnit% = HECTARES
+  Case 8 To 10
+    InUnit% = InUnit% - 2
+End Select
+
+AreaUnitAdjustment = InUnit%
+
+End Function
+
+'****************************************************************************************
+
+Function CheckInput( InString$, InputType$ ) As String
+
+' This function checks the input for existence (SOMETHING needs to be entered) and
+' validity (only numbers and a decimal point, comma, colon, or slash are acceptable). It
+' also converts fractions into decimal equivalents.
+
+Dim DecimalEquivalent
+Dim Denominator%
+Dim InputString$
+Dim LengthStrInput%
+Dim Numerator%
+Dim SlashPos%
+Dim SpacePos%
+Dim TempString$
+Dim TestChar$
+Dim WholeNum$
+
+Dim i As Integer
+
+InputString$ = InString$
+
+If InputString$ = "" Then
+    CheckInput = CHECK_INPUT_NONE
+    Exit Function
+  Else
+    LengthStrInput% = Len( InputString$ )
+    For i = 1 To LengthStrInput%
+      TestChar$ = Mid$( InputString$, i, 1 )
+
+      Select Case TestChar$
+
+        Case "A" To "Z", "a" To "z"
+          CheckInput         = CHECK_INPUT_BAD
+          BadInputCharacter$ = TestChar$
+          Exit Function
+
+        Case "0" To "9"
+          TempString$ = TempString$ & TestChar$
+
+        Case ".", "/"
+          If InputType$ <> SCALE_INPUT Then
+              TempString$ = TempString$ & TestChar$
+            Else
+              CheckInput  = CHECK_INPUT_INVALID
+              Exit Function
+          End If
+
+        Case ":"
+          If InputType$ <> SCALE_INPUT Then
+              CheckInput  = CHECK_INPUT_INVALID
+              Exit Function
+            Else
+              If TempString$ <> "1" Then
+                  CheckInput  = CHECK_INPUT_INVALID
+                  Exit Function
+                Else
+                  TempString$ = ""
+              End If
+          End If
+
+        Case " "
+          If InputType$ <> SCALE_INPUT Then
+              TempString$ = TempString$ & TestChar$
+          End If
+
+'The presence of a comma does not invalidate the input, so it must be on the list of
+' allowed characters for a scale statement, but it is simply ignored.
+
+        Case ","
+          If InputType$ <> SCALE_INPUT Then
+              CheckInput  = CHECK_INPUT_INVALID
+              Exit Function
+          End If
+
+        Case Else
+          CheckInput         = CHECK_INPUT_BAD
+          BadInputCharacter$ = TestChar$
+          Exit Function
+
+      End Select
+
+    Next i
+End If
+
+If InputType$ = SCALE_INPUT Then
+    CheckInput = TempString$
+    Exit Function
+  Else
+
+' Check for the presence of a fraction, indicated by the fraction slash. The slash must
+' have only digits on each side of it; the only space allowed in the string is after the
+' whole number and before the numerator.
+
+    SlashPos% = InStr$( TempString$, "/" )
+    If SlashPos% > 0 Then
+        If InStr$( SlashPos% + 1, TempString$, "/" ) Then
+            CheckInput = CHECK_INPUT_INVALID
+            Exit Function
+          ElseIf SlashPos% = Len( TempString$ ) Then
+            CheckInput = CHECK_INPUT_NONE
+            Exit Function
+        End If
+    End If
+    SpacePos% = InStr$( TempString$, " " )
+    If SpacePos% > 0 Then
+        If InStr$( SpacePos% + 1, TempString$, " " ) Then
+            CheckInput = CHECK_INPUT_INVALID
+            Exit Function
+        End If
+      Else
+
+' If the string contains neither a space nor a slash, and the rest of the input has
+' passed validation tests, this routine is finished.
+
+        If SlashPos% = 0 Then
+            GoTo Validate:
+        End If
+    End If
+
+' However, if the both a slash and a space are present, make sure they are in the correct
+' relationship within the string.
+
+    If SlashPos% > 0 then
+        If SpacePos% > SlashPos% Then
+            CheckInput = CHECK_INPUT_INVALID
+            Exit Function
+          ElseIf SlashPos% - SpacePos% = 1 Then
+            CheckInput = CHECK_INPUT_INVALID
+            Exit Function
+          ElseIf ( SlashPos% > SpacePos% ) And ( SlashPos% < Len( TempString$ ) ) Then
+            WholeNum$    = Trim$( Left$( TempString$, SpacePos% ) )
+            If SpacePos% = 0 Then
+                Numerator% = Val( Trim$( Left$( TempString$, SlashPos% - 1 ) ) )
+              Else
+                Numerator% = Val( Trim$( Mid$( TempString$, SpacePos%, SlashPos% - SpacePos% ) ) )
+            End If
+            Denominator% = Val( Trim$( Mid$( TempString$, SlashPos% + 1 ) ) )
+            If Numerator% = 0 And Denominator% = 0 Then
+                DecimalEquivalent = 0
+              Else
+                If ( Numerator% = Denominator% ) Or ( Numerator% > Denominator% ) Then
+                    CheckInput        = CHECK_INPUT_INVALID
+                    Exit Function
+                  Else
+                    DecimalEquivalent = Numerator% / Denominator%
+                End If
+            End If
+            If DecimalEquivalent = 0 Then
+                TempString$ = WholeNum$
+              Else
+                TempString$ = WholeNum$ & Trim$( Str$( DecimalEquivalent ) )
+            End If
+        End If
+      Else
+        CheckInput = CHECK_INPUT_NONE
+        Exit Function
+    End If
+End If
+
+Validate:
+
+CheckInput = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function CheckInputWarning( InString$ ) As Integer
+
+Select Case InString$
+
+  Case CHECK_INPUT_BAD, CHECK_INPUT_INVALID
+    CheckInputWarning = WARNING_BAD_INPUT
+
+  Case CHECK_INPUT_NONE
+    CheckInputWarning = WARNING_NO_INPUT
+
+  Case Else
+    CheckInputWarning = WARNING_INPUT_PROBLEM
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function ConvertStrToNum( CandidateString$ ) As Variant
+
+' Converts a string to a number, preserving a decimal.
+
+Dim DecimalPart
+Dim InputString$
+Dim IntegerPart
+Dim NumString$
+Dim TempChar$
+
+Dim Decimal                  : Decimal = FALSE
+
+Dim i As Integer
+
+InputString$ = CandidateString$
+
+For i = 1 To Len( InputString$ )
+  TempChar$ = Mid$( InputString$, i, 1 )
+  If TempChar$ Like "[0-9]" Then
+      NumString$  = NumString$ & TempChar$
+    ElseIf TempChar$ = "." Then
+      IntegerPart = Val( NumString$ )
+      Decimal     = TRUE
+      NumString$  = ""
+  End If
+Next i
+
+If Decimal = FALSE Then
+    IntegerPart = Val( NumString$ )
+  Else
+    DecimalPart = Val( NumString$ )/(10 ^ Len( NumString$ ) )
+End If
+
+ConvertStrToNum = IntegerPart + DecimalPart
+
+End Function
+
+'****************************************************************************************
+
+Function FormatScaleString( ScaleNum As Variant ) As String
+
+' This function toggles a scale string between display mode (with commas between
+' thousands, and the prefix "1:") and calculation mode, which is a simple string of
+' digits only.
+
+Const CALC_NUMBER As Integer = 1
+
+Dim CommaPos%
+Dim FormattedString$
+Dim LenString%
+Dim ScaleType%
+Dim TempString$
+
+Dim p As Integer
+
+' Convert the input to a string, if necessary.
+
+If VarType( ScaleNum ) = 8 Then
+    TempString$ = ScaleNum
+  Else
+    TempString$ = Trim$( Str$( ScaleNum ) )
+End If
+
+' No scale means the function is done, and it returns a blank value. Since the "Val"
+' function stops when it finds a space in the string, a scale that begins with
+' "approximately" must be removed from consideration when testing for a number, because
+' the function won't find a number in that first word of the string.
+
+If Left$( TempString$, 3 ) <> "app" Then
+    If Val( TempString$ ) = 0 Then '= " " Or TempString$ = "-2" Then
+        FormatScaleString = ""
+        Exit Function
+    End If
+End If
+
+' A scale string which is a ratio will have the first part, the numerator, stripped.
+
+p = InStr( TempString$, ":")
+If p > 0 Then
+    TempString$ = Mid$( TempString$, p + 1 )
+    ScaleType% = CALC_NUMBER
+End If
+
+' The presence or absence of a comma in the string determines the function's output. If a
+' comma is found, it means the string is formatted for display, and must be unformatted
+' for calculation. No commas present means the string has been used for calculation and
+' now must be formatted for display, unless the string is three or fewer characters in
+' length. In that case, the output has to be the opposite of the input: If the input is a
+' ratio, the output is a simple number; if the input is a number, the output is a ratio.
+
+LenString% = Len( TempString$ )
+If LenString% < 4 Then
+    If ScaleType% = CALC_NUMBER Then
+        FormatScaleString = TempString$
+      Else
+        FormatScaleString = "1:" & TempString$
+    End If
+    Exit Function
+  Else
+    p = InStr( TempString$, "," )
+    If p = 0 Then
+        CommaPos% = LenString% Mod 3
+        If CommaPos% > 0 Then
+            FormattedString$ = Left$( TempString$, CommaPos% )
+            TempString$      = Mid$( TempString$, CommaPos% + 1 )
+        End If
+        Do
+          FormattedString$ = FormattedString$ & "," & Left$( TempString$, 3 )
+          TempString$      = Mid$( TempString$, 4 )
+        Loop Until TempString$ = ""
+        If Left$( FormattedString$, 1 ) = "," Then
+            FormattedString$ = Mid$( FormattedString$, 2 )
+        End If
+        FormattedString$ = "1:" & FormattedString$
+      Else
+        Do
+          p = InStr( TempString$, "," )
+          If p > 0 Then
+              TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
+          End If
+        Loop Until p = 0
+        FormattedString$ = TempString$
+    End If
+End If
+
+FormatScaleString = FormattedString$
+
+End Function
+
+'****************************************************************************************
+
+Function RoundUp( NumInput As Variant ) As Variant
+
+' Rounds up numbers.
+
+Dim TempNum
+
+TempNum = Fix( NumInput )
+If NumInput - TempNum >= .5 Then
+    TempNum = TempNum + 1
+End If
+
+RoundUp = TempNum
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const DISABLED       As Integer = 0
+Const ENABLED        As Integer = 1
+Const IDLE_STATE     As Integer = 5
+Const INITIALIZE     As Integer = 1
+Const KEEP_DLG_OPEN  As Integer = -1
+
+Const FIND_AREA      As Integer = 1
+Const FIND_LENGTH    As Integer = 0
+Const FIND_SCALE     As Integer = 2
+Const WAITING        As Integer = 4
+
+Static Operation%
+Static PrevInputWarning$
+Static TB1InputPrev$
+Static TB1InputText$
+Static TB2InputPrev$
+Static TB2InputText$
+Static TB3InputPrev$
+Static UnitsInputListBox1Selection%
+Static UnitsInputListBox2Selection%
+Static UnitsOutputListBoxSelection%
+
+Static CalculationPerformed
+Static TB1InputWarning%
+Static TB2InputWarning%
+Static TB3InputWarning%
+Static UnitChanged
+
+Dim CopiedOutput$
+Dim CurrInputWarning$
+Dim Exponent%
+Dim InputUnits1%
+Dim InputUnits2%
+Dim InstructionsFindLength$
+Dim InstructionsFindScale$
+Dim OutputUnits%
+Dim Result$
+Dim TempString$
+
+Dim ChangedInput
+Dim ChangedScale
+Dim ResetButtonClicked       : ResetButtonClicked = FALSE
+
+' The variables in the following group are declared as variants, so they can hold numbers
+' of any magnitude.
+
+Static Calculation
+Static TB3InputText
+
+Dim InputValue1
+Dim InputValue2
+Dim IntegerPart
+Dim MultiplierAndDivider
+Dim NumberToRound
+Dim RoundedNumber
+Dim ScaleValue
+Dim TempCalc
+Dim XFactor
+
+Dim i As Integer, j As Integer, p As Integer
+
+Dim RoundedCalculations() As Variant
+
+Select Case Action%
+
+'########################################################################################
+
+  Case INITIALIZE
+
+ResetMacro:
+
+    ScaleString$ = FormatScaleString( ScaleVal& )
+
+    InstructionsFindScale$ = "Enter two lengths or areas of different units in the input boxes to calculate a scale."
+    If ScaleVal& = NO_SCALE Then
+        InstructionsFindLength$ = "Enter a scale and a length or area in the input box to scale (up or down) the input."
+      Else
+        InstructionsFindLength$ = "Enter a length or area in the input box to scale (up or down) the input."
+    End If
+
+    DlgVisible      "InputProblemWarning",        INVISIBLE
+    DlgEnable       "CalculateButton",            DISABLED
+    DlgText         "CopyButton",                 "Cl&ose"
+    DlgVisible      "ScaleMismatchWarning",       INVISIBLE
+
+'##### FIND SCALE TAB ###################################################################
+
+    If SelectedTab% = TAB_FIND_SCALE Then
+
+'Input box:
+        DlgVisible      "ClearScaleInputBoxButton",   INVISIBLE
+        DlgText         "Instructions",               InstructionsFindScale$
+        DlgVisible      "NumberInputTextBox2",        VISIBLE
+        DlgVisible      "ScaleInputTextBox",          INVISIBLE
+        DlgVisible      "ScaleSourceLegend",          INVISIBLE
+        DlgVisible      "UnitsInputListBox2",         VISIBLE
+        If DlgValue( "OptionGroupLengthArea" ) = 0 Then
+            DlgListBoxArray "UnitsInputListBox2",         UnitsListDist()
+            UnitsInputListBox2Selection% = MILES
+          Else
+            DlgListBoxArray "UnitsInputListBox2",         UnitsListArea()
+            UnitsInputListBox2Selection% = SQUARE_MILES
+        End If
+        DlgValue        "UnitsInputListBox2",         UnitsInputListBox2Selection%
+
+'Other controls:
+        If BibRecord Then
+            DlgVisible      "AddUpdateFieldsButton",      VISIBLE
+            DlgEnable       "AddUpdateFieldsButton",      DISABLED
+          Else
+            DlgVisible      "AddUpdateFieldsButton",      INVISIBLE
+        End If
+        If Field034$ = "" Then
+            If TypeOfRecord$ Like "[ef]" Then
+                DlgText         "AddUpdateFieldsButton",      "A&dd field(s)"
+              Else
+                DlgText         "AddUpdateFieldsButton",      "A&dd field"
+            End If
+          Else
+            DlgText         "AddUpdateFieldsButton",      "U&pdate field(s)"
+        End If
+        DlgText         "CalculateButton",            "&Calculate scale"
+        DlgVisible      "NumberOutputTextBox",        INVISIBLE
+        DlgText         "OutputBoxLegend",            "Output: Scale"
+        DlgVisible      "RoundupButton",              INVISIBLE
+        DlgVisible      "ScaleOutputDropListBox",     VISIBLE
+        DlgVisible      "UnitsOutputListBox",         INVISIBLE
+        Operation% = FIND_SCALE
+
+      Else
+
+'##### FIND LENGTH/AREA TAB ###############################################################
+
+'Input box:
+        DlgVisible      "ClearScaleInputBoxButton",   VISIBLE
+        If Trim$( DlgText( "ScaleInputTextBox" ) ) = "" Then
+            DlgEnable       "ClearScaleInputBoxButton",   DISABLED
+          Else
+            DlgEnable       "ClearScaleInputBoxButton",   ENABLED
+        End If
+        DlgText         "NumberInputTextBox2",        ""
+        DlgVisible      "NumberInputTextBox2",        INVISIBLE
+        DlgVisible      "ScaleInputTextBox",          VISIBLE
+        DlgVisible      "ScaleSourceLegend",          VISIBLE
+        DlgVisible      "UnitsInputListBox2",         INVISIBLE
+
+'Other controls:
+        DlgVisible      "AddUpdateFieldsButton",      INVISIBLE
+        DlgText         "CalculateButton",            "&Calculate length/area"
+        DlgVisible      "NumberOutputTextBox",        VISIBLE
+        DlgEnable       "RoundupButton",              DISABLED
+        DlgVisible      "RoundupButton",              VISIBLE
+        DlgText         "ScaleInputTextBox",          ScaleString$
+        DlgVisible      "ScaleOutputDropListBox",     INVISIBLE
+        DlgVisible      "UnitsOutputListBox",         VISIBLE
+        If DlgValue( "OptionGroupLengthArea" ) = 0 Then
+            DlgListBoxArray "UnitsOutputListBox",         UnitsListDist()
+            UnitsOutputListBoxSelection% = MILES
+            Operation%                   = FIND_LENGTH
+            DlgText         "OutputBoxLegend",            "Output: Length"
+          Else
+            DlgListBoxArray "UnitsOutputListBox",         UnitsListArea()
+            UnitsOutputListBoxSelection% = SQUARE_MILES
+            Operation%                   = FIND_AREA
+            DlgText         "OutputBoxLegend",            "Output: Area"
+        End If
+        DlgText         "Instructions",               InstructionsFindLength$
+        DlgValue        "UnitsOutputListBox",         UnitsOutputListBoxSelection%
+
+    End If
+
+'##### OTHER INITIALIZATION ACTIONS #####################################################
+
+    UnitsInputListBox1Selection% = INCHES
+    DlgValue        "UnitsInputListBox1",         UnitsInputListBox1Selection%
+    ReDim RoundedCalculations( 0 )
+    ReDim ScaleStatements( 0 )
+    DlgFocus        "NumberInputTextBox1"
+    DlgText         "NumberInputTextBox1",        ""
+    DlgText         "NumberInputTextBox2",        ""
+    DlgText         "NumberOutputTextBox",        ""
+    DlgEnable       "ResetButton",                DISABLED
+    DlgListBoxArray "ScaleOutputDropListBox",     ScaleStatements()
+    DlgValue        "ScaleOutputDropListBox",     0
+    DlgText         "ScaleSourceLegend",          ScaleSource$
+
+    CalculationPerformed = FALSE
+    TB3InputPrev$        = ""
+    UnitChanged          = FALSE
+    If Action% = INITIALIZE Then
+        If ScaleVal& = NO_SCALE Then
+            SelectedTab% = TAB_FIND_SCALE
+            DlgValue        "UnitsInputListBox2",         UnitsInputListBox2Selection%
+          Else
+            SelectedTab% = TAB_FIND_LENGTH
+            DlgValue        "UnitsOutputListBox",         UnitsOutputListBoxSelection%
+        End If
+    End If
+    SetTabLines( SelectedTab% )
+    Exponent%            = 0
+    InputUnits1%         = 0
+    InputUnits2%         = 0
+    InputValue1          = 0
+    InputValue2          = 0
+    IntegerPart          = 0
+    MultiplierAndDivider = 0
+    NumberToRound        = 0
+    OutputUnits%         = 0
+    Result$              = ""
+    RoundedNumber        = 0
+    TB1InputPrev$        = "_"
+    TB2InputPrev$        = "_"
+    TB3InputText         = ScaleString$
+    TB3InputPrev$        = CheckInput( TB3InputText, SCALE_INPUT )
+    TempCalc             = 0
+    TempString$          = ""
+    XFactor              = 0
+    If ResetButtonClicked Then
+        ResetButtonClicked     = FALSE
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+    End If
+
+'##### CHANGES IN THE DIALOG BOX ########################################################
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+'########################################################################################
+
+      Case "AddUpdateFieldsButton"
+
+        ScaleString$ = DlgText( "ScaleOutputDropListBox" )
+        DlgEnd DLG_BUTTON_EDIT_RECORD
+
+'########################################################################################
+
+      Case "CalculateButton"
+
+ReCalc:
+        ScaleValue   = Val( TB3InputText )
+        InputUnits1% = DlgValue( "UnitsInputListBox1" )
+        InputUnits2% = DlgValue( "UnitsInputListBox2" )
+        InputValue1  = ConvertStrToNum( TB1InputText$ )
+        InputValue2  = ConvertStrToNum( TB2InputText$ )
+        Calculation  = 0
+
+        Select Case Operation%
+
+          Case FIND_AREA, FIND_LENGTH
+
+            OutputUnits% = DlgValue( "UnitsOutputListBox" )
+            If Operation% = FIND_AREA Then
+
+' The array of output units has two extra rows, which must be accounted for in matching
+' to the array of input units.
+
+                OutputUnits%                 = AreaUnitAdjustment( OutputUnits% )
+                UnitsOutputListBoxSelection% = OutputUnits%
+                XFactor                      = XFactorTable( InputUnits1%, OutputUnits% )
+                XFactor                      = XFactor ^2
+              Else
+                XFactor                      = XFactorTable( InputUnits1%, OutputUnits% )
+                UnitsOutputListBoxSelection% = OutputUnits%
+            End If
+
+' When calculating from a smaller unit to a larger (e.g., given a measurement of inches,
+' find out what the distance is in miles), the operation is multiplying; the other way
+' round is dividing.
+
+            If ( OutputUnits% = INCHES And InputUnits1% <> CENTIMETERS ) Or ( OutputUnits% = CENTIMETERS ) Then
+                Calculation = ( InputValue1 / ScaleValue ) * XFactor
+              Else
+                Calculation = ( InputValue1 * ScaleValue ) * XFactor
+            End If
+            If Calculation < 1 Then
+                Result$ = "0" & Trim$( Str$( Calculation ) )
+                DlgEnable       "RoundupButton",              ENABLED
+              Else
+                IntegerPart = Fix( Calculation )
+                If Calculation - IntegerPart > 0 Then
+                    DlgEnable       "RoundupButton",              ENABLED
+                End If
+                Result$ = Trim$( Str$( Calculation ) )
+            End If
+            DlgText         "NumberOutputTextBox",        Result$
+
+          Case FIND_SCALE
+
+' When calculating the scale, the smaller unit is always the divisor. Rearrange the input
+' if needed so it doesn't matter how the numbers are entered.
+
+            If DlgValue( "OptionGroupLengthArea" ) = FIND_LENGTH Then
+                XFactor      = XFactorTable( InputUnits2%, InputUnits1% )
+                If Fix( XFactor ) = 0 Then
+                    Calculation = ( InputValue1 / XFactor ) / InputValue2
+                  Else
+                    Calculation = ( InputValue2 * XFactor ) / InputValue1
+                End If
+              Else
+                InputUnits1% = AreaUnitAdjustment( InputUnits1% )
+                InputUnits2% = AreaUnitAdjustment( InputUnits2% )
+                XFactor      = XFactorTable( InputUnits2%, InputUnits1% )
+                XFactor      = XFactor ^2
+                If Fix( XFactor ) = 0 Then
+                    Calculation = ( InputValue1 / XFactor ) / InputValue2
+                  Else
+                    Calculation = ( InputValue2 * XFactor ) / InputValue1
+                End If
+            End If
+            Calculation  = RoundUp( Calculation )
+
+' Put the result in the first row of an array. Add additional rows, each one storing the
+' result with one fewer significant numbers. This is done by dividing the number in the
+' previous row by a multiple of 10 to get a decimal number that can be rounded to a whole
+' number, then multiplying the number by the same multiple of 10 to return the it to its
+' original magnitude. Stop with a number of one or two significant digits.
+
+            ReDim RoundedCalculations( 0 )
+            RoundedCalculations( 0 ) = Calculation
+
+            i = 1
+            Do
+              MultiplierAndDivider     = 10 ^ i
+              ReDim Preserve RoundedCalculations( i )
+              NumberToRound            = RoundedCalculations( i - 1 ) / MultiplierAndDivider
+              RoundedNumber            = RoundUp( NumberToRound ) * MultiplierAndDivider
+              RoundedCalculations( i ) = RoundedNumber
+              i                        = i + 1
+            Loop Until NumberToRound < 100
+
+' Convert each row of the number array to a string for the string array; omit duplicate
+' rows. In each string, add commas as thousands separators, and prefix the string with
+' the ratio indicator "1:". All rows after the first are "approximate" ratios. Put the
+' first row of the array on the Clipboard.
+
+            If Calculation > 10 Then
+                ReDim ScaleStatements( 0 )
+                TempString$          = Trim$( Str$( RoundedCalculations( 0 ) ) )
+                ScaleStatements( 0 ) = FormatScaleString( TempString$ )
+                j = 1
+                For i = 1 To UBound( RoundedCalculations )
+                  If RoundedCalculations( i ) <> RoundedCalculations( i - 1 ) Then
+                      ReDim Preserve ScaleStatements( j )
+                      TempString$          = Trim$( Str$( RoundedCalculations( i ) ) )
+                      TempString$          = FormatScaleString( TempString$ )
+                      ScaleStatements( j ) = "approximately " & TempString$
+                      j                    = j + 1
+                  End If
+                Next i
+                DlgListBoxArray "ScaleOutputDropListBox",     ScaleStatements()
+                DlgValue        "ScaleOutputDropListBox",     0
+                Clipboard.Clear
+                Clipboard.SetText DlgText( "ScaleOutputDropListBox" )
+            End If
+            ScaleString$ = Trim$( Str$( Calculation ) )
+        End Select
+
+        DlgEnable       "CalculateButton",            DISABLED
+        If Operation% = FIND_SCALE Then
+            DlgFocus        "ScaleOutputDropListBox"
+            If OriginalScale$ <> "" Then
+                DlgVisible      "ScaleMismatchWarning",       VISIBLE
+                If ScaleString$ <> OriginalScale$ Then
+                    DlgEnable       "AddUpdateFieldsButton",      ENABLED
+                    DlgText         "ScaleMismatchWarning",       "Scale does not match record!"
+                  Else
+                    DlgText         "ScaleMismatchWarning",       "Scale is same as in record!"
+                End If
+              Else
+                DlgEnable       "AddUpdateFieldsButton",      ENABLED
+            End If
+          Else
+            DlgFocus        "NumberOutputTextBox"
+        End If
+        CalculationPerformed   = TRUE
+        UnitChanged            = FALSE
+        SetTabLines( SelectedTab% )
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+'########################################################################################
+
+      Case "CalculateScaleTab", "CalculateLengthAreaTab"
+
+        If Id$ = "CalculateScaleTab" Then
+            SelectedTab%    = TAB_FIND_SCALE
+          Else
+            SelectedTab%    = TAB_FIND_LENGTH
+            ScaleSource$ = "Calculated scale:"
+            ScaleVal&    = Val( FormatScaleString( DlgText( "ScaleOutputDropListBox" ) ) )
+        End If
+        SetTabLines( SelectedTab% )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+        GoTo ResetMacro:
+
+'########################################################################################
+
+      Case "ClearScaleInputBoxButton"
+
+        DlgEnable       "ClearScaleInputBoxButton",   DISABLED
+        DlgEnable       "ResetButton",                ENABLED
+        DlgText         "ScaleInputTextBox",          ""
+        DlgText         "ScaleSourceLegend",          "Enter scale:"
+        DlgValue        "UnitsInputListBox2",         UnitsInputListBox2Selection%
+        TB3InputText            = ""
+        TB3InputPrev$           = ""
+        ScaleVal&               = NO_SCALE
+        InstructionsFindLength$ = "Enter a scale and a length or area in the input box to scale (up or down) the input."
+        DlgText         "Instructions",               InstructionsFindLength$
+        ScaleString$            = ""
+        SetTabLines( TAB_FIND_LENGTH )
+        DlgFocus        "ScaleInputTextBox"
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+'########################################################################################
+
+      Case "CopyButton"
+
+        If DlgText( "CopyButton" ) <> "Cl&ose" Then
+            If Operation% = FIND_SCALE Then
+                CopiedOutput$ = DlgText( "ScaleOutputDropListBox" )
+              Else
+                CopiedOutput$ = DlgText( "NumberOutputTextBox" )
+            End If
+            Clipboard.Clear
+            Clipboard.SetText CopiedOutput$
+        End If
+        DlgEnd 0
+
+'########################################################################################
+
+      Case "Help"
+
+        HelpBox
+        DlgFocus        "NumberInputTextBox1"
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+'########################################################################################
+
+      Case "OptionButtonArea"
+
+        DlgText         "OutputBoxLegend",            "Output: Area"
+        DlgListBoxArray "UnitsInputListBox1",         UnitsListArea()
+        DlgListBoxArray "UnitsInputListBox2",         UnitsListArea()
+        DlgListBoxArray "UnitsOutputListBox",         UnitsListArea()
+        DlgValue        "UnitsInputListBox1",         INCHES
+        DlgValue        "UnitsInputListBox2",         SQUARE_MILES
+        DlgValue        "UnitsOutputListBox",         SQUARE_MILES
+
+      Case "OptionButtonLength"
+
+        DlgText         "OutputBoxLegend",            "Output: Length"
+        DlgListBoxArray "UnitsInputListBox1",         UnitsListDist()
+        DlgListBoxArray "UnitsInputListBox2",         UnitsListDist()
+        DlgListBoxArray "UnitsOutputListBox",         UnitsListDist()
+        DlgValue        "UnitsInputListBox1",         INCHES
+        DlgValue        "UnitsInputListBox2",         MILES
+        DlgValue        "UnitsOutputListBox",         MILES
+
+'########################################################################################
+
+      Case "ResetButton"
+
+' Restore everything to the way it was when the macro was invoked.
+
+        If OriginalScaleDisplay$ <> "" Then
+            TB3InputText = OriginalScale$
+          Else
+            TB3InputText = ""
+        End If
+        UnitsInputListBox1Selection% = 0
+        UnitsInputListBox2Selection% = 0
+        UnitsOutputListBoxSelection% = 0
+        ScaleString$                 = CheckInput( TB3InputText, SCALE_INPUT )
+        ScaleVal&                    = Val( ScaleString$ )
+        DlgEnable       "ScaleSourceLegend",          ENABLED
+        DlgEnable       "ResetButton",                DISABLED
+        ResetButtonClicked           = TRUE
+        GoTo ResetMacro:
+
+'########################################################################################
+
+      Case "RoundupButton"
+
+' The "RoundUp" button rounds up what may be over-precise results. It rounds numbers less
+' than 10 to two significant digits. Thus, "0.06250068" is rounded to "0.063", and
+' "4.050044064" is rounded to "4.1". Numbers greater than or equal to 10 are rounded to
+' whole numbers.
+
+        IntegerPart = Fix( Calculation )
+        If IntegerPart < 10 Then
+             Exponent% = 0
+            Do
+              Exponent% = Exponent% + 1
+              TempCalc  = Calculation * 10 ^ Exponent%
+            Loop Until TempCalc > 10
+            TempCalc = RoundUp( TempCalc )
+            TempCalc = TempCalc / 10 ^ Exponent%
+          Else
+            TempCalc = RoundUp( Calculation )
+        End If
+        Select Case TempCalc
+          Case Is < 1
+            Result$ = "0" & Trim$( Str$( TempCalc ) )
+          Case Is >= 10
+            Result$ = Trim$( Str$( TempCalc ) )
+          Case Else
+            If TempCalc - Fix( TempCalc ) = 0 Then
+                Result$ = Trim$( Str$( TempCalc ) ) & ".0"
+              Else
+                Result$ = Trim$( Str$( TempCalc ) )
+            End If
+        End Select
+        DlgText         "NumberOutputTextBox",        Result$
+        DlgEnable       "RoundupButton",              DISABLED
+        Operation%             = WAITING
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+'########################################################################################
+
+      Case "UnitsInputListBox1", "UnitsInputListBox2"
+
+' Sometimes a change in one of the units prompts a change in another, as long as its
+' associated text box has no contents.
+
+        UnitsInputListBox1Selection% = DlgValue( "UnitsInputListBox1" )
+        UnitsInputListBox2Selection% = DlgValue( "UnitsInputListBox2" )
+        UnitChanged                  = TRUE
+
+        If Id$ = "UnitsInputListBox1" Then
+            If ScaleString$ = "" Then
+                If TB2InputText$ = "" Then
+                    Call SetDefaultUnits( UnitsInputListBox1Selection%, UnitsInputListBox2Selection% )
+                    DlgValue        "UnitsInputListBox2",         UnitsInputListBox2Selection%
+                End If
+              Else
+                If CalculationPerformed = FALSE Then
+                    Call SetDefaultUnits( UnitsInputListBox1Selection%, UnitsOutputListBoxSelection% )
+                    DlgValue        "UnitsOutputListBox",         UnitsOutputListBoxSelection%
+                  Else
+                    CalculationPerformed = FALSE
+                    DlgText         "NumberOutputTextBox",        ""
+                End If
+            End If
+          Else
+            If TB1InputText$ = "" Then
+                Call SetDefaultUnits( UnitsInputListBox2Selection%, UnitsInputListBox1Selection% )
+                DlgValue        "UnitsInputListBox1",         UnitsInputListBox1Selection%
+              Else
+                If CalculationPerformed Then
+                    CalculationPerformed = FALSE
+                End If
+            End If
+        End If
+
+'########################################################################################
+
+      Case "UnitsOutputListBox"
+
+' If a length or area has already been calculated, changing the unit of the output can be
+' an immediate recalculation.
+
+        UnitsOutputListBoxSelection% = DlgValue( "UnitsOutputListBox" )
+        If UnitsOutputListBoxSelection% <> UnitsInputListBox1Selection% Then
+            If CalculationPerformed Then
+                CalculationPerformed = FALSE
+                GoTo ReCalc:
+            End If
+        End If
+
+'########################################################################################
+
+    End Select
+
+
+'##### DIALOG BOX IDLING ################################################################
+
+  Case IDLE_STATE
+
+' As input is entered, character by character, check its validity so as to know when to
+' enable the "Calculate" button. This involves comparing the new string with what was in
+' the input box in the previous cycle. If the two input boxes contain invalid input, keep
+' the focus on the bad box, so nothing can be done until the input is corrected.
+
+    If UnitChanged Then
+        ChangedInput = TRUE
+      Else
+        ChangedInput = FALSE
+    End If
+
+    TB1InputText$ = Trim$( DlgText( "NumberInputTextBox1" ) )
+    TB1InputText$ = CheckInput( TB1InputText$, MEASUREMENT_INPUT )
+    If TB1InputText$ <> TB1InputPrev$ Then
+        ChangedInput = TRUE
+    End If
+    If TB1InputText$ = CHECK_INPUT_BAD Then
+        CurrInputWarning$ = "Character " & DOUBLE_QUOTE & BadInputCharacter$ & DOUBLE_QUOTE & " not allowed!"
+        DlgFocus        "NumberInputTextBox1"
+      ElseIf TB1InputText$ = CHECK_INPUT_INVALID Then
+        CurrInputWarning$ = "Invalid input!"
+        DlgFocus        "NumberInputTextBox1"
+    End If
+    TB1InputWarning% = CheckInputWarning( TB1InputText$ )
+
+    TB2InputText$ = Trim$( DlgText( "NumberInputTextBox2" ) )
+    TB2InputText$ = CheckInput( TB2InputText$, MEASUREMENT_INPUT )
+    If TB2InputText$ <> TB2InputPrev$ Then
+        ChangedInput = TRUE
+    End If
+    If TB2InputText$ = CHECK_INPUT_BAD Then
+        CurrInputWarning$ = "Character " & DOUBLE_QUOTE & BadInputCharacter$ & DOUBLE_QUOTE & " not allowed!"
+        DlgFocus        "NumberInputTextBox2"
+      ElseIf TB2InputText$ = CHECK_INPUT_INVALID Then
+        CurrInputWarning$ = "Invalid input!"
+        DlgFocus        "NumberInputTextBox2"
+    End If
+    TB2InputWarning% = CheckInputWarning( TB2InputText$ )
+
+    TB3InputText = Trim$( DlgText( "ScaleInputTextBox" ) )
+    TB3InputText = CheckInput( TB3InputText, SCALE_INPUT )
+    If TB3InputText <> TB3InputPrev$ Then
+        ChangedScale = TRUE
+        ChangedInput = TRUE
+    End If
+    If TB3InputText = CHECK_INPUT_BAD Then
+        CurrInputWarning$ = "Character " & DOUBLE_QUOTE & BadInputCharacter$ & DOUBLE_QUOTE & " not allowed!"
+        DlgFocus        "ScaleInputTextBox"
+      ElseIf TB3InputText = CHECK_INPUT_INVALID Then
+        CurrInputWarning$ = "Invalid input!"
+        DlgFocus        "ScaleInputTextBox"
+    End If
+    TB3InputWarning% = CheckInputWarning( TB3InputText )
+    If TB3InputWarning% = WARNING_NO_INPUT Then
+        DlgEnable       "ClearScaleInputBoxButton",   DISABLED
+      Else
+        DlgEnable       "ClearScaleInputBoxButton",   ENABLED
+    End If
+
+    If CurrInputWarning$ <> PrevInputWarning$ Then
+        DlgText         "InputProblemWarning",        CurrInputWarning$
+    End If
+    PrevInputWarning$ = CurrInputWarning$
+
+    If TB1InputWarning% = WARNING_BAD_INPUT Or TB2InputWarning% = WARNING_BAD_INPUT Or TB3InputWarning% = WARNING_BAD_INPUT Then
+        If DlgVisible( "InputProblemWarning" ) = FALSE Then
+            DlgVisible      "InputProblemWarning",        VISIBLE
+        End If
+      Else
+        If DlgVisible( "InputProblemWarning" ) Then
+            DlgVisible      "InputProblemWarning",        INVISIBLE
+        End If
+    End If
+
+    UnitsInputListBox1Selection% = DlgValue( "UnitsInputListBox1" )
+    UnitsInputListBox2Selection% = DlgValue( "UnitsInputListBox2" )
+    UnitsOutputListBoxSelection% = DlgValue( "UnitsOutputListBox" )
+
+' If any input is invalid for the operation to be done in the selected tab (finding
+' scale, length, or area), the macro is in a state of WAITING.  To calculate a scale,
+' valid input is required for the two measurement input boxes, and the units selected for
+' each measurement must be different. To calculate a distance or area, valid input is
+' required for the first or top measurement input box as well as for the scale input box,
+' and the units selected for input and output must be different. The "Calculate" button
+' is disabled until necessary inputs are valid.
+
+    If SelectedTab% = TAB_FIND_SCALE Then
+        If ( TB1InputWarning% <> WARNING_INPUT_PROBLEM ) Or ( TB2InputWarning% <> WARNING_INPUT_PROBLEM ) Or _
+           ( UnitsInputListBox1Selection% = UnitsInputListBox2Selection% ) Then
+            Operation% = WAITING
+          Else
+            Operation% = FIND_SCALE
+        End If
+      Else
+        ScaleVal& = Val( TB3InputText )
+        If ( ScaleVal& = 0 ) Or ( TB1InputWarning% <> WARNING_INPUT_PROBLEM ) Then
+            Operation% = WAITING
+          Else
+            Operation% = DlgValue( "OptionGroupLengthArea" )
+        End If
+    End If
+
+' If anything in the dialog box has changed, enable the Reset button, so the macro can go
+' back to its intial state.
+
+    If TB1InputWarning% <> WARNING_NO_INPUT Or TB2InputWarning% <> WARNING_NO_INPUT Or CalculationPerformed = TRUE Or _
+       ( OriginalScale$ <> "" And ( TB3InputText <> OriginalScale$ ) ) Then
+        DlgEnable       "ResetButton",                ENABLED
+      Else
+        DlgEnable       "ResetButton",                DISABLED
+    End If
+
+' If appropriate input is valid, WAITING is over and the "Calculate" button becomes
+' operational. If it was disabled because of a calculation, new valid input enables it
+' again.
+
+    If Operation% < WAITING Then
+        DlgEnable       "ResetButton",                ENABLED
+        If ChangedInput Then
+            DlgEnable       "CalculateButton",            ENABLED
+        End If
+        If ChangedScale Then
+            DlgEnable       "ClearScaleInputBoxButton",   ENABLED
+        End If
+      Else
+        DlgEnable       "CalculateButton",            DISABLED
+    End If
+
+    If ChangedScale Then
+        DlgText         "ScaleSourceLegend",          "Enter scale:"
+        DlgEnable       "CalculateButton",            ENABLED
+    End If
+
+    If CalculationPerformed Then
+        If DlgEnable( "CopyButton" ) <> ENABLED Then
+            DlgEnable       "CopyButton",                 ENABLED
+        End If
+        If Left$( DlgText( "CopyButton" ), 2 ) <> "C&" Then
+            Select Case Operation%
+              Case FIND_SCALE
+                DlgText         "CopyButton",                 "C&opy scale && close"
+              Case FIND_AREA
+                DlgText         "CopyButton",                 "C&opy area && close"
+              Case FIND_LENGTH
+                DlgText         "CopyButton",                 "C&opy length && close"
+            End Select
+        End If
+    End If
+
+    TB1InputPrev$ = TB1InputText$
+    TB2InputPrev$ = TB2InputText$
+    TB3InputPrev$ = TB3InputText
+
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'180574840
+'
+'Macro name: MapCalculatorTool
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 4/17/2023 9:53:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.

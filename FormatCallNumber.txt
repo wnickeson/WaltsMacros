@@ -1,0 +1,919 @@
+'MacroName:FormatCallNumber.2023.04
+'MacroDescription:Formats an LC-type call number; checks for matching dates in the call
+' number, 260/264 subfield $c, and the fixed field; and copies the call number to the
+' Windows Clipboard.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Place the cursor in an LC call number field (050 or 090) in a
+' bibliographic record and run the macro. It attempts to format the call number with
+' respect to capitalization, spacing, and placement of the decimal for Cutters, allowing
+' you to construct a draft call number without having to be too concerned about those
+' niceties. Is it necessary to say that the formatted call number should be reviewed for
+' correctness? Use the macro also to check that the date in the call number matches the
+' dates in 260/264 subfield $c and the fixed field. If there is no date in the call
+' number, the macro will add automatically it, except for records for continuing
+' resources, in which case the macro mades the addition optional. The formatted call
+' number, minus a delimiter, is also placed on the Windows Clipboard (even if the call
+' number was correctly formatted to begin with and the macro did nothing), so it can be
+' pasted into any sort of form for searching.
+'
+' When formatting a call number, the macro converts all characters to uppercase (except a
+' single character at the end, such as a workmark); checks that the classification number
+' contains no more than three letters or (excluding any decimal portion) four digits;
+' adds a decimal before the first Cutter, and removes one before the second; places
+' subfield $b before the correct Cutter; adds appropriate spacing throughout; and checks
+' for a date of four digits at the end. If there is no date in the call number, or if the
+' date given does not match the first date in a 260 or 264 field, the macro will place
+' the date found in the 260/264 field in the call number (but for continuing resources,
+' adding the date requires confirmation). At the same time, it checks that the date in
+' the fixed field matches, changing it if necessary (but it does not check the value of
+' "DtSt" nor of the appropriateness of the relationships between that element and Dates 1
+' and 2). If there are multiple 260 fields, the macro looks for the first date in the
+' first field; if there are multiple 264 fields, the macro takes the first date from the
+' fields according to the second indicator value, in this order: 1 (publication), 4
+' (copyright), 0 (production), 3 (manufacture), and 2 (distribution). If there are no 260
+' or 264 fields, the macro will copy the date in the fixed field to the call number
+' (again, with the exception of serials).
+'
+' When formatting an 050, the macro assumes the call number is not assigned by LC and
+' sets the second indicator to "4." If no formatting is necessary the macro does nothing
+' to the record.
+'
+' For example, the macro changes this:
+'    050 00  pn1995.67c2a441985
+' to this:
+'    050  4  PN1995.67.C2 $b A44 1985
+'
+' Or this:
+'    090     e41b7
+' to this (taking the date from the 260/264):
+'    090     E41 $b .B7 1949
+'
+' Following the guidelines in instruction sheet G140, "Dates," in LC's Classification and
+' Shelflisting Manual, a workmark "z" is added to a call number ending in zero if the
+' date is an estimate, that is, if it is between two numbers--except if the resource is
+' from a corporate body.
+'
+' It cannot handle a call number with more than two Cutters, or with a date elsewhere
+' than at the end. For some call numbers, this macro may produce bizarre results (for
+' example, a Cutter of four digits may, in some circumstances, be treated by the macro as
+' a date). It's not AI! The macro works by looking for the alternation of groups of
+' letters and numbers, and interior dates or other unusual kinds of call numbers will
+' confuse it.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function AddDateOrNot( ContinuingResource, SourceOfDate% ) As Integer
+Declare Function ConvertDate( DateString$ )                        As String
+Declare Function ExtractDate( InputString$, CountOfDatesIn26X% )   As String
+
+Global Const ADD_DATE      As Integer = -1
+Global Const CANCEL_MACRO  As Integer = 1
+Global Const DONT_ADD_DATE As Integer = 0
+
+Global DELIMITER As String*1
+
+Global WaltsMacros$
+
+Global Uncertain
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE    As Integer = 16
+Const DISPLAY_FF_AT_TOP   As Integer = 1
+Const INFORMATION_MESSAGE As Integer = 64
+Const WARNING_MESSAGE     As Integer = 48
+
+Const ABSENT_0X0          As Integer = 2   'The sum of these
+Const ABSENT_26X          As Integer = 8   'values determines
+Const ABSENT_FF           As Integer = 32  'the macro's actions
+Const PRESENT_0X0         As Integer = 1   'and the wording
+Const PRESENT_26X         As Integer = 4   'that appears in the
+Const PRESENT_FF          As Integer = 16  'dialog boxes.
+
+DELIMITER = Chr$( 223 )
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE          = Chr$( 034 )
+Dim SUBFIELD_B   As String*2 : SUBFIELD_B            = DELIMITER & "b"
+
+Dim AddDate%
+Dim BLvl$
+Dim CallNumberCopied$
+Dim CallNumberDate$
+Dim CallNumberDateLength%
+Dim CallNumberFormatted$
+Dim CallNumberIndicator1$    : CallNumberIndicator1$ = " "
+Dim CallNumberInProcess$
+Dim CallNumberNoDate$
+Dim CallNumberOriginal$
+Dim CallNumberTag$
+Dim CallNumberWorkmark$
+Dim CatSource$
+Dim ClassNumber$
+Dim CountOf260Fields%
+Dim CountOf264Fields%
+Dim CountOfDatesIn26X%
+Dim DateFrom26X$
+Dim DateFrom26XConv$
+Dim DateFromFF$
+Dim DateFromFFConv$
+Dim DatesComparison%
+Dim Field26X$
+Dim Field26XIndicator2$
+Dim FieldData$
+Dim First$
+Dim Index%
+Dim MsgActionReport$
+Dim MsgDatePresence$
+Dim MsgNumberFormatted$
+Dim PosFF%
+Dim Row%
+Dim Tag26X$
+Dim TempString$
+Dim TestStringRaw$
+Dim TypeOfWindow%
+
+Dim ChangedFFView            : ChangedFFView         = FALSE
+Dim ContinuingResource
+Dim First26X
+Dim Formatted                : Formatted             = FALSE
+Dim No26X                    : No26X                 = FALSE
+Dim Numbers                  : Numbers               = FALSE
+
+Dim i As Integer, p As Integer
+
+Dim CallNumberArray( 3 ) As String
+Dim Field26XArray( 5 )   As String
+
+Uncertain    = FALSE
+WaltsMacros$ = "[Walt's macros] Essentials:FormatCallNumber"
+
+' First, make sure that a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End Select
+
+' Then, get some information from the fixed field.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+
+' If a date is found, convert any letter "u" to the digit zero.
+
+If CS.GetFixedField( "Dates", DateFromFF$ ) Then
+    If DateFromFF$ <> "uuuu" Then
+        DateFromFFConv$ = ConvertDate( DateFromFF$ )
+      Else
+        DateFromFFConv$ = ""
+    End If
+  Else
+    DateFromFF$     = ""
+    DateFromFFConv$ = ""
+End If
+
+' Is the record for a continuing resource? The answer is important in determining whether
+' to add a date to a call number that lacks one.
+
+If CS.GetFixedField( "BLvl", BLvl$ ) Then
+    If BLvl$ = "s" Then
+        ContinuingResource = TRUE
+      Else
+        ContinuingResource = FALSE
+    End If
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Move on to the variable fields. First, get the call number in the row in which the
+' cursor is placed.
+
+Row% = CS.CursorRow
+If CS.GetFieldLine( Row%, FieldData$ ) Then
+    CallNumberTag$ = Left$( FieldData$, 3 )
+    If CallNumberTag$ = "050" Or CallNumberTag$ = "090" Then
+        CallNumberOriginal$   = Mid$( FieldData$, 6 )
+        CallNumberIndicator1$ = Mid$( FieldData$, 4, 1 )
+      Else
+        MsgBox "This is not an LC call number field!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' If the call number field is empty, exit the macro.
+
+If CallNumberOriginal$ = SUBFIELD_B & " " Then
+    MsgBox "This call number field is empty!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Make a copy of the original call number so the edited number can be compared to the
+' original at the end.
+
+CallNumberInProcess$ = CallNumberOriginal$
+
+' Check for a workmark or other single letter at the end of the call number; if found,
+' remove it (storing it for later) and proceed--except for a "z" that follows a zero.
+' That "z" indicates uncertainty in the date and is not a watermark.
+
+If Right$( CallNumberInProcess$, 2 ) = "0z" Then
+    CallNumberWorkmark$ = ""
+    CallNumberInProcess$ = Left$( CallNumberInProcess$, Len( CallNumberInProcess$ ) - 1 )
+  Else
+    If Right$( CallNumberInProcess$, 1 )  Like "[0-9]" Then
+        CallNumberWorkmark$ = ""
+      Else
+        CallNumberInProcess$ = Left$( CallNumberInProcess$, Len( CallNumberInProcess$ ) - 1 )
+    End If
+End If
+
+' Check for a date at the end of the call number by examining the last four characters.
+' If they contain a number between 1450 and the present, assume that number is the date
+' (although this is not an infallible assumption--it could be a long Cutter), and remove
+' it so the base call number can be processed. Otherwise, assume the call number lacks a
+' date, and get the date from the 260/264 or the fixed field later in the macro. Start
+' building the number in "DatesComparison%," a value which tells whether there are dates
+' in those three locations in the record.
+
+CallNumberDate$ = Right$( CallNumberInProcess$, 4 )
+If Val( CallNumberDate$ ) < 1450 Or Val( CallNumberDate$ ) > Year( Now() ) + 1 Then
+    CallNumberDate$       = ""
+    CallNumberDateLength% = 0
+    DatesComparison%      = DatesComparison% + ABSENT_0X0
+  Else
+    CallNumberDateLength% = 4
+    DatesComparison%      = DatesComparison% + PRESENT_0X0
+End If
+CallNumberInProcess$ = Trim$( Left$( CallNumberInProcess$, Len( CallNumberInProcess$ ) - CallNumberDateLength% ) )
+
+CallNumberNoDate$    = CallNumberInProcess$
+
+' Remove a subfield $b, if present, and let the macro take care of its positioning later.
+
+p = InStr( CallNumberInProcess$, SUBFIELD_B )
+If p <> 0 Then
+    CallNumberInProcess$ = Left$( CallNumberInProcess$, p - 1 ) & Mid$( CallNumberInProcess$, p + 2 )
+End If
+CallNumberInProcess$ = Trim$( CallNumberInProcess$ )
+
+If Len( CallNumberInProcess$ ) < 2 Then
+    MsgBox "The macro cannot handle this call number!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Make the string uppercase for manipulation, and then remove all spaces.
+
+CallNumberInProcess$ = UCase$( CallNumberInProcess$ )
+Do
+  p = InStr( CallNumberInProcess$, " " )
+  If p <> 0 Then
+      CallNumberInProcess$ = Left$( CallNumberInProcess$, p - 1 ) & Mid$( CallNumberInProcess$, p + 1 )
+  End If
+Loop Until p = 0
+
+' Separate the string into alternating groups of letters and numbers, storing them in an
+' array whose four elements are the alphabetic and numeric parts of the classification
+' (including any decimal), and one or two Cutters. The macro creates these elements by
+' adding each character in the string to the appropriate element, depending on the
+' character that follows. A change from letters to numbers, or vice versa, starts
+' building the next element of the array. All other characters are simply ignored.
+
+For i = 1 To Len( CallNumberInProcess$ )
+  TestStringRaw$ = Mid$( CallNumberInProcess$, i, 1 )
+
+  Select Case TestStringRaw$
+
+    Case "A" To "Z"
+      If Index% = 1 Or Numbers = TRUE Then
+          Index% = Index% + 1
+          If Index% = 4 Then
+              MsgBox "Sorry, this call number cannot be formatted by this macro. Check that it has a maximum of two Cutters following a class number.", CRITICAL_MESSAGE, WaltsMacros$
+              Exit Sub
+          End If
+          Numbers = FALSE
+      End If
+      CallNumberArray( Index% ) = CallNumberArray( Index% ) & TestStringRaw$
+
+    Case "."
+      If Index% = 1 Then
+          If Right$( CallNumberArray( Index% ), 1 ) <> "." Then
+              CallNumberArray( Index% ) = CallNumberArray( Index% ) & TestStringRaw$
+          End If
+      End If
+
+    Case "0" To "9"
+      If Index% = 0 Then
+          Index% = Index% + 1
+      End If
+      CallNumberArray( Index% ) = CallNumberArray( Index% ) & TestStringRaw$
+      Numbers = TRUE
+
+  End Select
+
+Next
+
+If Right$( CallNumberArray( 2 ), 1 ) = "." Then
+    CallNumberArray( 2 ) = Left$( CallNumberArray( 2 ), Len( CallNumberArray( 2 ) ) - 1 )
+End If
+If Left$( CallNumberArray( 2 ), 1 ) <> "." Then
+    CallNumberArray( 2 ) = "." & CallNumberArray( 2 )
+End If
+
+' Clean up extraneous decimals that may sneak in at the end of elements.
+
+For Index% = 0 To 3
+  If Right$( CallNumberArray( Index% ), 1 ) = "." Then
+      CallNumberArray( Index% ) = Left$ ( CallNumberArray( Index% ), Len( CallNumberArray( Index% ) ) - 1 )
+  End If
+Next
+
+' Check that the alphabetic portion of the class number is not too long.
+
+If Len( CallNumberArray( 0 ) ) > 3 Then
+    MsgBox "There is no such class as " & DOUBLE_QUOTE & CallNumberArray( 0 ) & DOUBLE_QUOTE & "!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Check that the non-decimal portion of the class number is not too long.
+
+ClassNumber$ = CallNumberArray( 0 ) & CallNumberArray( 1 )
+p = InStr( CallNumberArray( 1 ), "." )
+If p <> 0 Then
+    TempString$ = Left$( CallNumberArray( 1 ), p - 1 )
+  Else
+    TempString$ = CallNumberArray( 1 )
+End If
+If Len( TempString$ ) > 4 Then
+    If p <> 0 Then
+        MsgBox "The class number, '" & ClassNumber$ & "', may be too long. Please check placement of the decimal.", WARNING_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "The class number, '" & ClassNumber$ & "', may be too long.", WARNING_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+End If
+
+' Assemble the base call number from the classification and the Cutters, placing subfield
+' $b according to the number of Cutters.
+
+If CallNumberArray( 3 ) = "" Then
+    CallNumberFormatted$ = ClassNumber$ & " " & SUBFIELD_B & " " & CallNumberArray( 2 )
+  Else
+    CallNumberFormatted$ = ClassNumber$ & CallNumberArray( 2 ) & " " & SUBFIELD_B & " " & CallNumberArray( 3 )
+End If
+
+' Compare the reconstructed, dateless string with the dateless call number formulated
+' earlier, to determine if formatting took place.
+
+If CallNumberFormatted$ <> UCase( CallNumberNoDate$ ) Then
+    Formatted = TRUE
+End If
+
+' Look for a date in the 260/264 fields. Get all the 260/264 fields in the record,
+' putting the first one found of each type into the array in the order of priority for
+' selecting a date appropriate for the call number: 260 first, then 264, starting with
+' publication information. Assume that the 260 and 264 fields are mutually exclusive,
+' i.e., both fields will not appear in one record.
+
+i = 1
+Do
+  If CS.GetFieldUnicode( "26[04]", i, Field26X$ ) Then
+      Field26XIndicator2$ = Mid$( Field26X$, 5, 1 )
+      Select Case Field26XIndicator2$
+        Case " "    '260 field
+          If Field26XArray( 0 ) = "" Then
+              Field26XArray( 0 ) = Field26X$
+              CountOf260Fields%  = CountOf260Fields% + 1
+          End If
+        Case "1"
+          If Field26XArray( 1 ) = "" Then
+              Field26XArray( 1 ) = Field26X$
+              CountOf264Fields%  = CountOf264Fields% + 1
+          End If
+        Case "4"
+          If Field26XArray( 2 ) = "" Then
+              Field26XArray( 2 ) = Field26X$
+              CountOf264Fields%  = CountOf264Fields% + 1
+          End If
+        Case "0"
+          If Field26XArray( 3 ) = "" Then
+              Field26XArray( 3 ) = Field26X$
+              CountOf264Fields%  = CountOf264Fields% + 1
+          End If
+        Case "3"
+          If Field26XArray( 4 ) = "" Then
+              Field26XArray( 4 ) = Field26X$
+              CountOf264Fields%  = CountOf264Fields% + 1
+          End If
+        Case "2"
+          If Field26XArray( 5 ) = "" Then
+              Field26XArray( 5 ) = Field26X$
+              CountOf264Fields%  = CountOf264Fields% + 1
+          End If
+      End Select
+      i = i + 1
+    Else
+      Exit Do
+  End If
+Loop Until i = 100
+
+' Now go through the array, whose fields are in the preferred order for choosing a date,
+' and take the first field with a date.
+
+For i = 0 To 5
+  Field26X$ = Field26XArray( i )
+  If Field26X$ <> "" Then
+      If VarType( First26X ) = 0 Then
+          First26X = i
+      End If
+      DateFrom26X$ = ExtractDate( Field26X$, CountOfDatesIn26X% )
+      If DateFrom26X$ <> "" Then
+          Exit For
+      End If
+  End If
+Next i
+
+' Construct the field reference text snippets for the dialog boxes, depending on which
+' field (if any) the call number was extracted from.
+
+If CountOfDatesIn26X% = 1 Then
+    First$    = ""
+  Else
+    First$    = " first"
+    If VarType( First26X ) > 0 Then
+        Field26X$ = Field26XArray( First26X )
+    End If
+End If
+Tag26X$ = Left$( Field26X$, 3 )
+
+If CountOf260Fields% = 0 And CountOf264Fields% = 0 Then
+    Tag26X$ = "26X"
+    No26X   = TRUE
+  ElseIf CountOf260Fields% = 1 Then
+    Tag26X$ = "field 260"
+  ElseIf CountOf260Fields% > 1 Then
+    Tag26X$ = "the first 260 field"
+  ElseIf CountOf264Fields% = 1 Then
+    Tag26X$ = "field 264"
+  ElseIf CountOf264Fields% > 0 Then
+    Field26XIndicator2$ = Mid$( Field26X$, 5, 1 )
+    Select Case Field26XIndicator2$
+      Case "0"
+        Tag26X$ = "field 264_0 (production statement)"
+      Case "1"
+        Tag26X$ = "field 264_1 (publication statement)"
+      Case "2"
+        Tag26X$ = "field 264_2 (distribution statement)"
+      Case "3"
+        Tag26X$ = "field 264_3 (manufacture statement)"
+      Case "4"
+        Tag26X$ = "field 264_4 (copyright notice)"
+    End Select
+End If
+
+' If the date in the 260/264 field contains hyphens for uncertain digits, the extract
+' function changed each one to the letter "u" so the date could be readily inserted into
+' the fixed field if necessary. For the date to be used in the call number, each of those
+' letters must be replaced by the digit zero. If there is a usable date, continue adding
+' to the "DatesComparison%" number.
+
+If Len( DateFrom26X$ ) = 4 Then
+    DatesComparison% = DatesComparison% + PRESENT_26X
+    DateFrom26XConv$ = ConvertDate( DateFrom26X$ )
+  Else
+    DateFrom26X$     = ""
+    DatesComparison% = DatesComparison% + ABSENT_26X
+End If
+
+If Len( DateFromFF$ ) = 0 Or DateFromFF$ = "uuuu" Then DateFromFF$ = ""
+If DateFromFF$ = "" Then
+    DatesComparison% = DatesComparison% + ABSENT_FF
+  Else
+    DatesComparison% = DatesComparison% + PRESENT_FF
+End If
+
+' With data from the locations of all three dates on the record in hand--the call number,
+' the 260/264 fields, and the fixed field--compare them to determine whether the call
+' number needs to be added or changed and what messages to display. The value of
+' "DatesComparison%" tells which of the eight different combinations appears (since two
+' of the combinations are treated in essentially the same manner, there are actually only
+' six cases to consider). This value is the sum of the numbers in the PRESENT* AND
+' ABSENT* constants defined above. The basic principle is this: Consider the first date
+' in the 260/264 field as the principal source of date information, and make the dates in
+' the other two locations match it.
+
+Select Case DatesComparison%
+
+  Case PRESENT_0X0 + PRESENT_26X + PRESENT_FF, PRESENT_0X0 + PRESENT_26X + ABSENT_FF
+    CallNumberFormatted$ = CallNumberFormatted$ & " " & DateFrom26XConv$
+    If CallNumberDate$ = DateFrom26XConv$ Then
+        MsgActionReport$ = ""
+      Else
+
+' If the date from the 260 field is being added to the call number, don't bother
+' reporting it, so as to reduce the number of dialog boxes to display, until
+' slowness of dialog box painting is resolved.
+
+'      MsgActionReport$ = "The date in the call number has been changed to match the" & First$ & " date in " & Tag26X$ & "."
+    End If
+    If DateFrom26XConv$ <> DateFromFFConv$ Then
+        If CS.SetFixedField ( "Dates", DateFrom26X$ ) Then
+            If MsgActionReport$ = "" Then
+                MsgActionReport$ = "The date in the fixed field has been changed to match the" & First$ & " date in " & Tag26X$ & "."
+              Else
+                MsgActionReport$ = "The dates in the call number and the fixed field have been changed to match the" & First$ & " date in " & Tag26X$ & "."
+            End If
+        End If
+    End If
+
+  Case PRESENT_0X0 + ABSENT_26X + PRESENT_FF
+    If CallNumberDate$ = DateFromFFConv$ Then
+        CallNumberFormatted$ = CallNumberFormatted$ & " " & CallNumberDate$
+        MsgActionReport$     = ""
+      Else
+        CallNumberFormatted$ = CallNumberFormatted$ & " " & DateFromFFConv$
+        MsgActionReport$     = "The date in the call number has been changed to match the date in the fixed field."
+    End If
+    If No26X Then
+        MsgDatePresence$ = "There are no 26X fields in the record."
+      Else
+        MsgDatePresence$ = "There is no date in " & Tag26X$ & "."
+    End If
+
+  Case PRESENT_0X0 + ABSENT_26X + ABSENT_FF
+    If No26X Then
+        MsgDatePresence$ = "There are no 26X fields in the record and no date in the fixed field."
+      Else
+        MsgDatePresence$ = "There is no date in " & Tag26X$ & ", nor in the fixed field."
+    End If
+
+  Case ABSENT_0X0 + PRESENT_26X + PRESENT_FF, ABSENT_0X0 + PRESENT_26X + ABSENT_FF
+
+' The case of a date in a 26X field: Ask about adding it to the call number. Correct the
+' fixed field date no matter the answer.
+
+    AddDate% = AddDateOrNot( ContinuingResource, PRESENT_26X )
+
+    Select Case AddDate%
+
+      Case ADD_DATE
+        CallNumberFormatted$ = CallNumberFormatted$ & " " & DateFrom26XConv$
+        If DateFrom26XConv$ <> DateFromFFConv$ Then
+            If CS.SetFixedField ( "Dates", DateFrom26X$ ) Then MsgActionReport$ = "The dates in the call number and the fixed field have been changed to match the" & First$ & " date in " & Tag26X$ & "."
+          Else
+
+' Don't report the simple action of adding a date from the 26X field to the call number
+' (see comment on line 524).
+
+'          MsgActionReport$ = "The" & First$ & " date in " & Tag26X$ & " was added to the call number."
+        End If
+
+      Case DONT_ADD_DATE
+        If DateFrom26XConv$ <> DateFromFFConv$ Then
+            If CS.SetFixedField ( "Dates", DateFrom26X$ ) Then MsgActionReport$ = "The date in the fixed field has been changed to match the" & First$ & " date in " & Tag26X$ & "."
+        End If
+
+      Case CANCEL_MACRO
+        Exit Sub
+
+    End Select
+
+  Case ABSENT_0X0 + ABSENT_26X + PRESENT_FF
+
+' The case of no date in any 26X fields: This could indicate a continuing resource, for
+' which a call number typically would not include a call number, or an "in" analytic, for
+' which a call number typically would include a date. Ask about adding a date.
+
+    If No26X Then
+        MsgDatePresence$ = "There are no 26X fields in the record."
+      Else
+        MsgDatePresence$ = "There is no date in " & Tag26X$ & "."
+    End If
+    AddDate% = AddDateOrNot( ContinuingResource, ABSENT_26X )
+    Select Case AddDate%
+      Case ADD_DATE
+        CallNumberFormatted$ = CallNumberFormatted$ & " " & DateFromFFConv$
+        MsgActionReport$     = "The date in the fixed field was added to the call number."
+      Case DONT_ADD_DATE
+        MsgDatePresence$ = ""
+      Case CANCEL_MACRO
+        Exit Sub
+    End Select
+
+  Case ABSENT_0X0 + ABSENT_26X + ABSENT_FF
+    If No26X Then
+        MsgDatePresence$ = "The call number lacks a date, there are no 26X fields in the record, and there is no date in the fixed field!"
+      Else
+        MsgDatePresence$ = "The call number lacks a date, and there is no date in " & Tag26X$ & " nor in the fixed field!"
+    End If
+
+End Select
+
+' If one or more digits are unknown in the 260/264 date, add "z" at the end, unless the
+' presence of a 11X field indicates the item is from a corporate body.
+
+If CS.GetField( "11[01]", 1, FieldData$ ) = FALSE Then
+    If Uncertain Then
+        If CallNumberWorkmark$ <> "z" Then
+            CallNumberFormatted$ = CallNumberFormatted$ & "z"
+        End If
+    End If
+End If
+
+' Set up the results message. A call number that has simply been formatted, with no data
+' being added or removed, produces no
+' message. If the macro leaves the call number untouched, or a date that could be added
+' was not, the message serves to confirm that the macro indeed ran. If dates were
+' changed, or if the record does not contain dates in all three expected places, the
+' message explains or warns. If shown, the results message has three elements: Whether or
+' not the base call number (exclusive of date) was formatted; what action (if any) was
+' taken on the dates in the record; and what issues with dates remain.
+
+If CallNumberOriginal$ = Trim$( CallNumberFormatted$ & CallNumberWorkmark$ ) Then
+    If MsgActionReport$ = "" Then
+        MsgNumberFormatted$ = "The call number looks OK to this macro. "
+      Else
+        MsgNumberFormatted$ = "The call number looks OK to this macro, but--t"
+        MsgActionReport$    = Mid$( MsgActionReport$, 2 )
+    End If
+    If MsgDatePresence$ <> "" Then
+        MsgDatePresence$ = "However, t" & Mid$( MsgDatePresence$, 2 )
+    End If
+  Else
+    If Formatted = FALSE Then
+        MsgNumberFormatted$ = "The call number looks OK to this macro"
+        If MsgActionReport$ <> "" Then
+            MsgNumberFormatted$ = MsgNumberFormatted$ & ", but--t"
+            MsgActionReport$    = Mid$( MsgActionReport$, 2 )
+          Else
+            MsgNumberFormatted$ = MsgNumberFormatted$ & "."
+            If MsgDatePresence$ <> "" Then
+                MsgDatePresence$ = "However, t" & Mid$( MsgDatePresence$, 2 )
+            End If
+        End If
+      Else
+        MsgNumberFormatted$ = ""
+    End If
+
+' Finally, construct the field, using the tag as found. Begin by checking the 040 for
+' "DLC" to help determine the 1st indicator.
+
+    If CS.GetField( "040", 1, CatSource$ ) Then
+        p = InStr( CatSource$, "DLC" )
+        If p = 0 Then
+            CallNumberIndicator1$ = " "
+        End If
+    End If
+    If CallNumberTag$ = "050" Then
+        CallNumberFormatted$ = CallNumberTag$ & CallNumberIndicator1$ & "4" & CallNumberFormatted$ & CallNumberWorkmark$
+      Else
+        CallNumberFormatted$ = CallNumberTag$ & "  " & CallNumberFormatted$ & CallNumberWorkmark$
+    End If
+
+' Add the new (formatted) field and delete the old (original) one.
+
+    If CS.SetFieldLine( Row%, CallNumberFormatted$ ) = FALSE Then
+        MsgBox "Sorry, could not add formatted call number.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+    CS.CursorRow = Row%
+
+End If
+
+' Copy the formatted string to the Clipboard, removing a delimiter b.
+
+CallNumberCopied$ = CallNumberFormatted$
+If Left$( CallNumberCopied$, 2 ) Like "0[59]" Then
+    CallNumberCopied$ = Mid$( CallNumberCopied$, 6 )
+End If
+p = InStr( CallNumberCopied$, SUBFIELD_B )
+If p <> 0 Then
+    CallNumberCopied$ = Trim$( Left$( CallNumberCopied$, p - 1 ) ) & " " & Trim$( Mid$( CallNumberCopied$, p + 2 ) )
+End If
+Clipboard.Clear
+Clipboard.SetText CallNumberCopied$
+
+' Display the summary of the macro's actions.
+
+If MsgNumberFormatted$ = "" And MsgActionReport$ = "" And MsgDatePresence$ = "" Then
+  Else
+    MsgBox MsgNumberFormatted$ & MsgActionReport$ & " " & MsgDatePresence$, INFORMATION_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function AddDateOrNot( ContinuingResource, SourceOfDate% ) As Integer
+
+' This function asks whether or not to add a date to the call number. For continuing
+' resources, the default answer is no; for all other material, the default answer is yes.
+
+Const ABSENT_26X                      As Integer = 8
+Const MSGBOX_2ND_BUTTON               As Integer = 256
+Const MSGBOX_RETURN_CANCEL            As Integer = 2
+Const MSGBOX_RETURN_NO                As Integer = 7
+Const MSGBOX_RETURN_YES               As Integer = 6
+Const MSGBOX_SETBUTTONS_YES_NO_CANCEL As Integer = 3
+Const PRESENT_26X                     As Integer = 4
+Const WARNING_QUERY                   As Integer = 32
+
+Dim Answer%
+Dim SourceTerm$
+
+' First, determine the default choice.
+
+If ContinuingResource = FALSE Then
+    AddDateOrNot = ADD_DATE
+    Exit Function
+End If
+
+' Adjust the wording of the question, depending on where the available date is found.
+
+Select Case SourceOfDate%
+
+  Case ABSENT_26X
+    SourceTerm$ = "There is no date in the 26X field. Add the date from the fixed field?"
+
+  Case PRESENT_26X
+    SourceTerm$ = "Add the date from the 26X field?"
+
+End Select
+
+' Ask the question.
+
+Answer% = MsgBox( SourceTerm$, MSGBOX_SETBUTTONS_YES_NO_CANCEL + WARNING_QUERY + MSGBOX_2ND_BUTTON, WaltsMacros$ )
+Select Case Answer%
+
+  Case MSGBOX_RETURN_CANCEL
+    AddDateOrNot = CANCEL_MACRO
+
+  Case MSGBOX_RETURN_YES
+    AddDateOrNot = ADD_DATE
+
+  Case MSGBOX_RETURN_NO
+    AddDateOrNot = DONT_ADD_DATE
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function ConvertDate( InputString$ ) As String
+
+' This function converts the letter "u" in a date string to the digit zero.
+
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = InputString$
+
+Do
+  p = InStr( TempString$, "u" )
+  If p <> 0 Then
+      Mid$( TempString$, p, 1 ) = "0"
+  End If
+Loop Until p = 0
+
+ConvertDate = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function ExtractDate( Str26X$, CountOfDatesIn26X% ) As String
+
+' This function finds dates in the 26X fields. It also checks to see if there is more
+' than one date, which affects the wording of the message boxes.
+
+Dim DateIn26X$
+Dim LengthTempString%
+Dim SUBFIELD_C As String*2   : SUBFIELD_C = DELIMITER & "c"
+Dim TempString$
+Dim TestStringRaw$
+Dim TestStringWithZeros$
+
+Dim i As Integer, p As Integer
+
+TempString$ = Str26X$
+
+' In case the field is in Unicode, change the encoding of the delimiter sign to ASCII.
+
+Do
+  p = InStr( TempString$, "&#x01C2;c" )
+  If p <> 0 Then
+      TempString$ = Left$( TempString$, p - 1 ) & SUBFIELD_C & Mid$( TempString$, p + 9 )
+  End If
+Loop Until p = 0
+
+' Isolate subfield $c.
+
+p = InStr( TempString$, SUBFIELD_C )
+If p <> 0 Then
+    TempString$       = Trim$( Mid$( TempString$, p + 2 ) )
+    LengthTempString% = Len( TempString$ )
+
+' Go through subfield $c, examining four characters at a time, looking for a string in
+' which the first digit is "1" or "2" and each of the remaining three characters is a
+' digit or a hyphen. If the first four characters don't match the pattern, then go to
+' characters 2-5, then 3-6, and so on.
+
+    If LengthTempString% > 3 Then
+        i = 1
+        Do
+          TestStringRaw$ = Mid$( TempString$, i, 4 )
+
+' If the pattern is found, convert any hyphens to zeros and test the string to see if
+' it's a valid date, that is, a date between 1451 and next year.
+
+          If TestStringRaw$ Like "[1-2][-0-9][-0-9][-0-9]" Then
+              TestStringWithZeros$ = TestStringRaw$
+              Do
+                p = InStr( TestStringWithZeros$, "-" )
+                If p <> 0 Then
+                    Mid$( TestStringWithZeros$, p, 1 ) = "0"
+                    Uncertain                          = TRUE
+                End If
+              Loop Until p = 0
+              If Val( TestStringWithZeros$ ) > 1450 And Val( TestStringWithZeros$ ) < Year( Now() ) + 2 Then
+                  If CountOfDatesIn26X% = 0 Then
+                      DateIn26X$ = TestStringRaw$
+
+' Change any hyphen found in the first valid date to "u" for direct insertion into the
+' fixed field (the "u" will be changed to "0" for insertion into the call number field).
+' A second valid date found is used only to control the wording in the message boxes, and
+' ends the loop (i.e., don't go looking for any more dates).
+
+                      Do
+                        p = InStr( DateIn26X$, "-" )
+                        If p <> 0 Then
+                            Mid$( DateIn26X$, p, 1 ) = "u"
+                        End If
+                      Loop Until p = 0
+                      CountOfDatesIn26X% = 1
+                      i = i + 3
+                    Else
+                      CountOfDatesIn26X% = 2
+                      Exit Do
+                  End If
+                  If LengthTempString% - i < 6 Then
+                      Exit Do
+                  End If
+                Else
+                  If LengthTempString% - i < 6 Then Exit Do
+              End If
+          End If
+          i = i + 1
+        Loop Until i >= LengthTempString%
+    End If
+End If
+
+DateIn26X$ = Trim$( DateIn26X$ )
+
+' Check for the date being estimated by the presence of the string "[between" in the
+' field. If the date ends in a zero, it will appear in the call number with a "z" suffix,
+' unless a 11X field also appears.
+
+If InStr( TempString$, "[between" ) And Right$( DateIn26X$, 1 ) = "0" Then
+    Uncertain = TRUE
+End If
+
+ExtractDate = Trim$( DateIn26X$ )
+
+End Function
+'91534687
+'
+'Macro name: FormatCallNumber
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:51:11 AM using "MacroBookInspector" macro by Walter F. Nickeson.

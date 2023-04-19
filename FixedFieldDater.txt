@@ -1,0 +1,372 @@
+'MacroName:FixedFieldDater.2022.09
+'MacroDescription:Fills in the fixed field date elements from a bibliographic record's
+' 26X fields.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 27 June 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Enter dates in a 260 or 264 field in a bibliographic record, and run the
+' macro to appropriately copy those dates into the fixed field, as well as correctly code
+' "DtSt" (Type of date). Or, run the macro in an existing record to help verify that the
+' fixed field correctly reflects the dates in the 26X fields. The macro takes into
+' account only dates in 264 1 (publication) and 264 4 (copyright) fields. Dates in other
+' 264 fields, and dates in field 245 (as for archival materials) or 3XX fields (for
+' serials), are ignored. This macro is designed to work with RDA but can generally
+' accommodate pre-RDA records. It can't get a date from a field in a non-Latin script,
+' and may not work well with records cataloging in a language other than English.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function GetDate( InString$, NextPos% ) As String
+
+Global Relation$
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DISPLAY_AT_TOP       As Integer = 1
+Const INFORMATION_MESSAGE  As Integer = 64
+Const MSGBOX_RETURN_CANCEL As Integer = 2
+Const MSGBOX_RETURN_NO     As Integer = 7
+Const WARNING_MESSAGE      As Integer = 48
+
+Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE  = Chr$( 034 )
+
+Dim BibLevel$
+Dim CopyrightStatement$
+Dim Date1_26X$
+Dim Date1_FF$
+Dim Date2_26X$
+Dim Date2_FF$
+Dim FieldData$
+Dim MsgBoxAnswer%
+Dim NextPos%
+Dim PosFF%
+Dim PublicationStatement$
+Dim Remainder$
+Dim SubfieldC$
+Dim Truncate%
+Dim TypeOfDate$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras1:FixedFieldDater"
+
+Dim Changed                  : Changed       = FALSE
+Dim ChangedFFView            : ChangedFFView = FALSE
+Dim FoundField               : FoundField    = FALSE
+Dim NonLatin                 : NonLatin      = FALSE
+Dim Serial
+Dim SetFF
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer
+
+' First, make sure that a bibliographic record is open.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro only works in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Get the appropriate elements from the fixed field.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_AT_TOP
+    ChangedFFView         = TRUE
+End If
+
+If CS.GetFixedField( "DtSt", TypeOfDate$ ) Then
+    If TypeOfDate$ = "e" Then
+        MsgBox "Sorry, this macro can't handle DtSt " & DOUBLE_QUOTE & "e" & DOUBLE_QUOTE & " for Detailed Date.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+  Else
+    GoTo Failure:
+End If
+If CS.GetFixedField( "Dates", Date1_FF$ ) = FALSE Then GoTo Failure:
+If CS.GetFixedField( ",", Date2_FF$ )     = FALSE Then GoTo Failure:
+If CS.GetFixedField( "BLvl", BibLevel$ ) Then
+    If BibLevel$ = "s" Then
+        Serial = TRUE
+      Else
+        Serial = FALSE
+    End If
+  Else
+    GoTo Failure:
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Go through all the 264 fields on the record, looking for a publication statement in
+' 264 1 and an existing notice of copyright in 264 4. Only keep the first one found in
+' either case.
+
+i = 1
+Do
+  FoundField = CS.GetField( "26.", i, FieldData$ )
+  If FoundField Then
+      If Left$( FieldData$, 3 ) = "264" Then
+          Select Case Mid$( FieldData$, 3, 1 )
+            Case "0"
+              If PublicationStatement$ = "" Then
+                  PublicationStatement$ = FieldData$
+              End If
+            Case "4"
+              Select Case Mid$( FieldData$, 5, 1 )
+                Case "1"
+                  If PublicationStatement$ = "" Then
+                      PublicationStatement$ = FieldData$
+                  End If
+                Case "4"
+                  If CopyrightStatement$ = "" Then
+                      CopyrightStatement$ = FieldData$
+                  End If
+              End Select
+          End Select
+        ElseIf Left$( FieldData$, 3 ) = "260" Then
+          If InStr( FieldData$, DELIMITER & "c" ) Then
+              If PublicationStatement$ = "" Then
+                  PublicationStatement$ = FieldData$
+              End If
+          End If
+        ElseIf FieldData$ = "Data contains non-latin script" Then
+          NonLatin = TRUE
+      End If
+  End If
+  i = i + 1
+Loop Until FoundField = FALSE
+
+' If neither a 260 nor a 264 field are found, or if either field contains non-Latin
+' scripts (and there is no Latin script 26X field), the macro can't proceed.
+
+If PublicationStatement$ = "" And CopyrightStatement$ = "" Then
+    If NonLatin Then
+        MsgBox "This macro can't extract a publication date from the 26X field.", CRITICAL_MESSAGE, WaltsMacros$
+      Else
+        MsgBox "This record doesn't contain a publication date.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+End If
+
+' Get the first 4-digit date from subfield $c of the publication statement, and collect
+' information to determine the relation of that date to any others present.
+
+p = InStr( PublicationStatement$, DELIMITER & "c" )
+If p <> 0 Then
+    SubfieldC$ = Trim$( Mid$( PublicationStatement$, p + 2 ) )
+
+' There may be subfields following subfield $c (e.g., in AACR2, production information in
+' subfields $e, $f, or $g). Trim them.
+
+    p = InStr( SubfieldC$, DELIMITER )
+    If p > 0 Then
+        SubfieldC$ = Left$( SubfieldC$, p - 1 )
+    End If
+    If Left$( SubfieldC$, 1 ) = "-" Then
+        NextPos% = 1
+      Else
+        Date1_26X$ = GetDate( SubfieldC$, NextPos% )
+        If Date1_26X$ = "" Then
+            MsgBox "No date could be extracted from the record's " & Left$( PublicationStatement$, 3 ) & " field.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+        Truncate% = NextPos%
+    End If
+
+' A hyphen after the first date always means multiple dates.
+
+    If Mid$( SubfieldC$, NextPos%, 1 ) = "-" Then
+        If Not Serial Then
+            Relation$ = "m"
+        End If
+    End If
+
+' If the remainder of the string in subfield $c is long enough to contain a 4-digit date,
+' extract it.
+
+    If Len( SubfieldC$ ) > NextPos% + 4 Then
+        Remainder$ = Mid$( SubfieldC$, NextPos% )
+        Date2_26X$ = GetDate( Remainder$, NextPos% )
+      Else
+        If Relation$ = "m" Then
+            Date2_26X$ = "9999"
+        End If
+    End If
+  Else
+    MsgBox "This record doesn't contain a publication date.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Now get the first 4-digit date from the copyright statement.
+
+If CopyrightStatement$ <> "" Then
+    p = InStr( CopyrightStatement$, DELIMITER & "c" )
+    If p <> 0 Then
+        SubfieldC$ = Trim$( Mid$( CopyrightStatement$, p + 2 ) )
+        p = InStr( SubfieldC$, DELIMITER )
+        If p > 0 Then
+            SubfieldC$ = Left$( SubfieldC$, p - 1 )
+        End If
+        NextPos%   = 0
+        Date2_26X$ = GetDate( SubfieldC$, NextPos% )
+    End If
+End If
+
+' With the dates in hand, determine what "DtSt" ought to be.
+
+If Serial Then
+    If Date1_26X$ <> "" And Date2_26X$ = "" Then
+        Relation$ = "c"
+        Date2_26X$ = "9999"
+      ElseIf Date1_26X$ <> "" And Date2_26X$ <> "" Then
+        Relation$ = "d"
+    End If
+  Else
+    If Instr( SubfieldC$, "not before " & Date1_26X$ ) Then
+        Relation$  = "q"
+        Date2_26X$ = "uuuu"
+      ElseIf Instr( SubfieldC$, "not after " & Date1_26X$ ) Then
+        Relation$  = "q"
+        Date2_26X$ = Date1_26X$
+        Date1_26X$ = "uuuu"
+    End If
+    If Date2_26X$ = "" Then
+        Relation$ = "s"
+      ElseIf Relation$ = "m" Then
+        If BibLevel$ = "c" Then
+            Relation$ = "i"
+        End If
+      ElseIf Relation$ = "t" Then 'DtSt code m takes precedence over code t.
+        If TypeOfDate$ <> "t" Then
+            MsgBoxAnswer% = MsgBox( "Add copyright date to fixed field?", 35, WaltsMacros$ )
+            If MsgBoxAnswer% = MSGBOX_RETURN_CANCEL Then
+                Exit Sub
+              ElseIf MsgBoxAnswer% = MSGBOX_RETURN_NO Then
+                Relation$  = TypeOfDate$
+                Date2_26X$ = ""
+            End If
+        End If
+      ElseIf InStr( SubfieldC$, "between " & Date1_26X$ ) Then
+        Relation$ = "q"
+      ElseIf Instr( SubfieldC$, Date1_26X & " or" ) Then
+        Relation$ = "q"
+      ElseIf Date2_26X$ <> "" And Relation$ = "s" Then
+        MsgBox "Sorry, this macro doesn't know what to do with these dates.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' If the determined data matches the actual data, the macro quits, as there is nothing
+' for it to do.
+
+If Date1_26X$ = Date1_FF$ And Date2_26X$ = Date2_FF$ And Relation$ = TypeOfDate$ Then
+    MsgBox "The fixed field looks like it's correctly coded!", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Otherwise, continue by setting the elements of the fixed field.
+
+If Date1_26X$ <> Date1_FF$ Or Date2_26X$ <> Date2_FF$ Or Relation$ <> TypeOfDate$ Then
+    If TypeOfDate$ = "r" Then
+        MsgBox "This macro can't confirm that the record represents a reprint.", WARNING_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        PosFF% = CS.FixedFieldPosition
+        If PosFF% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
+        If CS.SetFixedField( "DtSt", Relation$ ) Then Changed = TRUE
+        If CS.SetFixedField( "Dates", Date1_26X$ ) Then Changed = TRUE
+        If Date2_26X$ = "" Then Date2_26X$ = "    "
+        If CS.SetFixedField( ",", Date2_26X$ ) Then Changed = TRUE
+    End If
+End If
+CS.FixedFieldPosition = PosFF%
+If Changed = FALSE Then
+    MsgBox "Sorry, the fixed field was not completely changed.", WARNING_MESSAGE, WaltsMacros$
+End If
+
+Failure:
+
+End Sub
+
+'****************************************************************************************
+
+Function GetDate( InString$, NextPos% ) As String
+
+Dim Copyright$
+Dim LBracketPos%
+Dim TempString$
+Dim TestString$
+
+Dim i As Integer, p As Integer
+
+TempString$ = InString$
+
+'First, check bracketed information, as that may be the information to work with.
+
+LBracketPos% = Instr( InString$, "[" )
+If LBracketPos% > 0 Then
+    TempString$ = Mid$( InString$, LBracketPos% + 1 )
+End If
+
+For i = 1 To Len( TempString$ )
+  TestString$ = Mid$( TempString$, i, 4 )
+  If TestString$ Like "[12][0-9][0-9][0-9]" Or _
+     TestString$ Like "[12][0-9][0-9][-]" Or _
+     TestString$ Like "[12][0-9][-][-]" Then
+      If i > 1 Then
+          Copyright$ = Mid$( TempString$, i - 1, 1 )
+          If Copyright$ = "c" Or Copyright$ = Chr$( 202 ) Then
+              Relation$ = "t"
+          End If
+'          Or Copyright$ = "p" Or Copyright$ = Chr$( 203 )
+      End If
+      If i + 3 < Len( TempString$ ) And Right$( TestString$, 1 ) Like "[0-9]" Then
+          If Mid$( TempString$, i + 4, 1 ) Like "[0-9]" Then
+              GetDate = ""
+              Exit Function
+          End If
+      End If
+      Do
+        p = InStr( TestString$, "-" )
+        If p > 0 Then
+            TestString$ = Left$( TestString$, p - 1 ) & "u" & Mid$( TestString$, p + 1 )
+        End If
+      Loop Until p = 0
+      GetDate$ = TestString$
+      If i < Len( TempString$ ) Then
+          If LBracketPos% > 0 Then
+              NextPos% = LBracketPos% + i + 4
+            Else
+              NextPos% = i + 4
+          End If
+      End If
+      Exit Function
+  End If
+Next i
+
+End Function
+'36912708
+'
+'Macro name: FixedFieldDater
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 4/17/2023 9:53:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.

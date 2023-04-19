@@ -1,0 +1,2769 @@
+'MacroName:RelatorHelper.2023.02
+'MacroDescription:Helps with verifying, adding, replacing, and deleting MARC relator
+' codes and terms, singly and en masse.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 15 February 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro in a bibliographic record to help quickly and easily:
+'
+'  + Add a correct term to one or more fields;
+'  + Verify accuracy of the record's relator terms and codes;
+'  + Add terms to fields containing only codes (and vice versa);
+'  + Replace terms with codes (and vice versa);
+'  + Replace incorrect terms with their preferred forms;
+'  + Replace unknown terms with valid terms;
+'  + Delete terms or codes.
+'
+' ("Terms" and "codes" are MARC; this macro does not work with RDA terms from Appendix
+' I.)
+'
+' If no fields are selected, and the cursor is not in a heading field when the macro is
+' run, the macro shows the relator terms and codes present in subfields $e, $j, and $4 of
+' the 1XX, 6XX, 7XX, and 8XX fields of the record. It identifies incorrect and unknown
+' terms for appropriate replacement, and allows for adding terms to matching codes and
+' codes to matching terms, as well as swapping codes for terms and terms for codes.
+'
+' If several fields have been selected, the macro can add a relator term to them all.
+' Select the fields by clicking and dragging with the mouse, or by using the [SHIFT] and
+' [UP] and [DOWN] arrow keys, then run the macro, selecting a term to add from the drop-
+' down list presented. This feature is especially useful when multiple headings require
+' the same relator term, as for records for visual materials (e.g., "actor") and sound
+' recordings (e.g., "performer"). The macro won't add a term to fields where it is
+' already present.
+'
+' If the cursor is in a heading field when the macro is run, and no fields are selected,
+' the options presented are to add a new term to the field or to correct an invalid or
+' unknown term. When several relator terms are present in the field, the macro allows for
+' scrolling through them for verification. An incorrect term will be displayed first for
+' correction.
+'
+' Although only terms can be added to multiple fields, the terms can be converted to
+' codes, or have their corresponding codes added, by running the macro a second time, but
+' without selecting fields.
+'
+' You can enter a partial term in a subfield $e in a single heading and run the macro to
+' view the closest match to that fragment, and let the macro do the work of inserting the
+' whole, correct form--saving a bit of typing.
+'
+' The macro attempts to correct punctuation when adding and deleting terms and codes, but
+' the results may not be what is expected, and so should always be checked.
+'
+' The list of codes and terms is at http://www.loc.gov/marc/relators/
+'****************************************************************************************
+
+Option Compare Text
+Option Explicit
+
+Declare Sub FillCodesAndTermsArray
+Declare Sub FillNotesArray
+Declare Sub SetActionsBox       ( a%, b$ )
+Declare Sub SetOptionButtonsText( a%, b% )
+Declare Sub Sort
+Declare Sub Swap                ( a% )
+
+Declare Function CleanSubfieldString     ( InString$ )              As String
+Declare Function EligibleField           ( InString$, SubfieldEJ$ ) As Integer
+Declare Function FindLastOccurrence      ( InField$, InCode$ )      As Integer
+Declare Function GetIndexOfAuthorizedTerm( InString$, AuthCode% )   As Integer
+Declare Function TruncateString          ( InString$ )              As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
+
+Type RecordContainer 'For monitoring the relator terms and codes in the whole record
+ Code            As String
+ CodeOccurrences As Integer
+ Index           As Integer
+ Term            As String
+ TermOccurrences As Integer
+End Type
+
+Type FieldContainer 'For monitoring the relator terms and codes in a single field
+ Index           As Integer
+ MatchType       As Integer
+ Term            As String
+End Type
+
+Global Const CONTROL_CHANGE          As Integer = 2
+Global Const DISABLED                As Integer = 0
+Global Const ENABLED                 As Integer = 1
+Global Const INITIALIZE              As Integer = 1
+Global Const INVISIBLE               As Integer = 0
+Global Const VISIBLE                 As Integer = 1
+
+Global Const AUTHORIZED              As Integer = 1    'The value of MatchType% when the relator in the record is an authorized form.
+Global Const NOTE_COUNT              As Integer = 325  'The number of entries in the list of notes (the number of relator terms + 2 for the unknowns).
+Global Const NOT_FOUND               As String  = "?"  'A relator term not in the official list.
+Global Const NOT_USED                As String  = "*"  'A relator term not used; a "see reference" to the preferred term.
+Global Const NO_MATCH                As Integer = 0    'The value of MatchType% when the relator in the record matches no recognized form.
+Global Const REFERENCE               As Integer = -1   'The value of MatchType% when the relator in the record is an unused form.
+Global Const RELATOR_CODE            As Integer = 0    'The relator found in a heading is a code.
+Global Const RELATOR_COUNT           As Integer = 323  'The number of entries in the official list (includes unused terms as "see references").
+Global Const RELATOR_TERM            As Integer = 1    'The relator found in a heading is a term.
+
+Global Const ADD                     As Integer = 1    'Numeric values for the action
+Global Const DELETE_OPTION_1         As Integer = 3    'of the macro. The actions apply
+Global Const DELETE_OPTION_2         As Integer = 4    'to all occurrences of a term or
+Global Const NO_SELECTION            As Integer = 0    'code, not just one (unless there
+Global Const REPLACE_WITH_CORRECT    As Integer = 5    'is only one occurrence in the
+Global Const REPLACE_WITH_EQUIVALENT As Integer = 2    'whole record).
+
+Global CR                            As String*1
+Global DELIMITER                     As String*1
+Global QUOTE                         As String*1
+
+Global AuthorizedTerm$
+Global BadTerm$
+Global CountDistinctCodes%
+Global CountDistinctTerms%
+Global FieldsWithRelators%
+Global FieldTermCount%
+Global InitialSelection%
+Global ReferenceTerm$
+Global RelatorTermsString$
+Global ReplacementTerm$
+Global WhichRelator%
+
+Global BothCodesAndTermsPresent
+Global ProblemsPresent
+Global FieldsSelected
+Global FoundRelator
+
+Global AllTerms      ()                As String
+Global EquivDisplay  ()                As String
+Global FieldRelators ()                As FieldContainer
+Global FoundDisplay  ()                As String
+Global RecordRelators()                As RecordContainer
+Global RelatorCode   ( RELATOR_COUNT ) As String
+Global RelatorNote   ( NOTE_COUNT )    As String
+Global RelatorTerm   ( RELATOR_COUNT ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DIALOG_BUTTON_CANCEL As Integer = 0
+Const DIALOG_BUTTON_MORE   As Integer = 1
+Const DIALOG_BUTTON_OK     As Integer = -1
+Const UNCHECKED            As Integer = 0
+
+Const ADD_ALL_CODES        As Integer = 0
+Const ADD_ALL_TERMS        As Integer = 1
+Const ADD_ONE_CODE         As Integer = 2
+Const ADD_ONE_TERM         As Integer = 3
+Const DELETE_ALL_CODES     As Integer = 4
+Const DELETE_ALL_TERMS     As Integer = 5
+Const DELETE_ONE_CODE      As Integer = 6
+Const DELETE_ONE_TERM      As Integer = 7
+Const REPLACE_ALL_CODES    As Integer = 8
+Const REPLACE_ALL_TERMS    As Integer = 9
+Const REPLACE_ONE_CODE     As Integer = 10
+Const REPLACE_ONE_TERM     As Integer = 11
+Const UPDATE_TERM          As Integer = 12
+
+Dim END_OF_FIELD As String*2
+Dim SUBFIELD_4 As String*3
+
+Dim BadSelectionMessage$
+Dim CodesString$
+Dim CountOfIncorrectTerms%
+Dim CountOfUnknownCodes%
+Dim CountOfUnknownTerms%
+Dim CurrentCode$
+Dim CurrentColumn%
+Dim CurrentIndex%
+Dim CurrentRow%
+Dim CurrentTerm$
+Dim Dialog1Value%
+Dim EndOfFieldCount%
+Dim EndOfFieldFound%
+Dim FieldCount$
+Dim FieldData$
+Dim FieldsNotAddedToA$
+Dim FieldsNotAddedToB$
+Dim FieldString$
+Dim FirstRow%
+Dim FollowingPunctuation$
+Dim IncorrectTerm$
+Dim Increment%
+Dim Incumbent$
+Dim Index%
+Dim IndexOfAuthorizedTerm%
+Dim LastRow%
+Dim LengthOfField%
+Dim LengthOfTerm%
+Dim MacroAction%
+Dim MatchType%
+Dim Msg_CountOfDistinctRelators$
+Dim Msg_CountOfIncorrectTerms$
+Dim Msg_CountOfUnknownRelators$
+Dim NoRelatorsMessage$
+Dim NotAddedCount%
+Dim NotAddedString$
+Dim OptionGroupValue%
+Dim Remainder$
+Dim ReplacementCode$
+Dim ReplacementField$
+Dim Row%
+Dim SelectedCode$
+Dim SelectedTerm$
+Dim SelectedText$
+Dim Start%
+Dim StartPositionTerms%
+Dim Subfield$
+Dim SubfieldEJ$
+Dim Tag$
+Dim TempString$
+Dim TermsString$
+Dim TotalRelatorsCount%
+Dim TypeOfWindow%
+Dim UB_RelatorInfo%
+Dim WaltsMacros$
+
+Dim FoundField
+Dim HeadingField             : HeadingField   = FALSE
+Dim SelectedUp               : SelectedUp     = FALSE
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer, t As Integer, x As Integer
+
+CR              = Chr$( 013 )
+DELIMITER       = Chr$( 223 )
+END_OF_FIELD    = Chr$( 013 ) & Chr$( 010 )
+QUOTE           = Chr$( 034 )
+SUBFIELD_4      = DELIMITER & "4 "
+
+FieldsSelected  = FALSE
+FoundRelator    = FALSE
+ProblemsPresent = FALSE
+WaltsMacros$    = "[Walt's macros] Essentials:RelatorHelper"
+
+' First, check to see that some text has been selected. Note that a CursorColumn position
+' of 1 may mean the tag has been selected, which happens when clicking on any part of it.
+' This is likely to mean an accidental mouse click and is ignored, the macro assuming
+' nothing has actually been selected.
+
+CurrentColumn% = CS.CursorColumn
+CurrentRow%    = CS.CursorRow
+If CS.GetSelectedText( SelectedText$ ) Then
+    If CurrentColumn% > 1 Then
+        FieldsSelected = TRUE
+'        MsgBox Str$( CurrentColumn% )
+    End If
+End If
+
+' Then make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Verify the record is English-language cataloging.
+
+If CS.GetField( "040", 1, FieldData$ ) Then
+    p = InStr( FieldData$, DELIMITER & "b" )
+    If p <> 0 And Mid$( FieldData$, p + 3, 3 ) <> "eng" Then
+        MsgBox "Sorry, this macro works only in English-language records!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' If the record is appropriate, go ahead and fill the arrays.
+
+FillCodesAndTermsArray
+FillNotesArray
+
+' If fields have been selected, or the cursor was placed in a heading field, the initial dialog
+' box will display.
+
+If FieldsSelected Then
+
+' If the selection has been made by dragging upward, the last characters will be the end-
+' of-field marker (ASCII characters 013 + 010).
+
+    If Right$( SelectedText$, 2 ) = END_OF_FIELD Then SelectedUp = TRUE
+
+' The number of end-of-field markers within the selection is the count of how many
+' fields have been included. If a selection made within a field, the fields will not be
+' considered to have been selected.
+
+    Start% = 1
+    Index% = 0
+    Do
+      EndOfFieldFound% = InStr( Start%, SelectedText$, END_OF_FIELD )
+      If EndOfFieldFound% > 0 Then
+          Start%           = EndOfFieldFound% + 1
+          EndOfFieldCount% = EndOfFieldCount% + 1
+      End If
+    Loop Until EndOfFieldFound% = 0
+    If EndOfFieldCount% = 0 Then
+        FieldsSelected = FALSE
+        GoTo SingleField:
+    End If
+
+' In the case of fields selected by dragging up, we must do some calculations to figure
+' out in which row the selection was begun. By counting the number of end-of-field
+' markers in the selection, we can work backwards--toward the bottom of the record--to
+' find the row where the selection was started.
+
+    If SelectedUp = TRUE Then
+        CurrentRow% = CurrentRow% + EndOfFieldCount%
+    End If
+    FirstRow% = CurrentRow% - EndOfFieldCount%
+    LastRow%  = FirstRow% + EndOfFieldCount%
+
+' With the bounds of the selected lines established, look at each one to make sure it is
+' eligible to have a relator term added. A single ineligible line means the macro can't
+' proceed with adding a term, so it stops.
+
+    For i = FirstRow% To FirstRow% + EndOfFieldCount%
+      If CS.GetFieldLine( i, FieldData$ ) Then
+          If EligibleField( FieldData$, SubfieldEJ$ ) = FALSE Then
+              BadSelectionMessage$ = "Not all the selected fields may accept relator terms! Either select different fields, "
+              BadSelectionMessage$ = BadSelectionMessage$ & "or run the macro with the cursor in an appropriate field."
+              MsgBox BadSelectionMessage$, CRITICAL_MESSAGE, WaltsMacros$
+              Exit Sub
+          End If
+      End If
+    Next i
+    HeadingField = TRUE
+  Else
+
+SingleField:
+
+' On the other hand, if nothing has been selected, test the row in which the cursor has
+' been placed. If it is a field appropriate for a relator term, see if any are already
+' present. If not, or if there are correct terms present, the dialog box default is to
+' add a new term. If an unknown term is found, as when only the beginning of a term was
+' typed in for the macro to finish, the closest match will display as the possible
+' choice. If an incorrect term is found, the macro offers the correct term as a possible
+' replacement.
+
+    If CurrentColumn% > 0 Then
+        If CS.GetFieldLine( CurrentRow%, FieldData$ ) Then
+            If EligibleField( FieldData$, SubfieldEJ$ ) Then
+                HeadingField = TRUE
+                FirstRow%    = CurrentRow%
+                LastRow%     = CurrentRow%
+                Start%       = 1
+                Do
+                  p = InStr( Start%, FieldData$, SubfieldEJ$ )
+                  If p > 0 Then
+                      FoundRelator = TRUE
+                      q = InStr( p + 1, FieldData$, DELIMITER )
+                      If q <> 0 Then
+                          Subfield$ = Mid$( FieldData$, p + 2, q - p - 2 )
+                        Else
+                          Subfield$ = Mid$( FieldData$, p + 2 )
+                      End If
+                      Subfield$           = CleanSubfieldString( Subfield$ )
+                      RelatorTermsString$ = RelatorTermsString$ & Subfield$
+                      IndexOfAuthorizedTerm%   = GetIndexOfAuthorizedTerm( Subfield$, MatchType% )
+
+                      ReDim Preserve FieldRelators( FieldTermCount% )
+                      FieldRelators( FieldTermCount% ).Index     = IndexOfAuthorizedTerm%
+                      If AuthorizedTerm$ <> Subfield$ Then
+                          InitialSelection% = FieldTermCount%
+                      End If
+                      FieldRelators( FieldTermCount% ).Term      = AuthorizedTerm$
+                      FieldRelators( FieldTermCount% ).MatchType = MatchType%
+                      FieldTermCount% = FieldTermCount% + 1
+
+                    Else
+                      If Start% = 1 Then
+                          FoundRelator = FALSE
+                      End If
+                  End If
+                  Start% = p + 2
+                Loop Until p = 0
+              Else    ' No text selected, cursor not in a heading field:
+                GoTo FullTreatment:
+            End If
+        End If
+      Else            ' Cursor in fixed field:
+        GoTo FullTreatment:
+   End If
+End If
+
+Begin Dialog Dialog1Definition  222, 218, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      100, 194,  52,  14
+  CancelButton  160, 194,  52,  14
+  PushButton     10, 194,  52,  14, "&More ..."
+  DropListBox    32,  51, 144, 160, RelatorTerm(), .DropListBox1
+  Text           18,  12, 188,  32, "",            .Instructions
+  Text           14, 176, 186,   8, "",            .AddTermQuestion
+  Text           18,  70, 188,  96, "",            .Description
+  GroupBox       10,   2, 202, 168, ""
+  Text           24,  53,   8,   8, "",            .Warning
+  PushButton    180,  51,  10,  12, "<",           .PrevTerm
+  PushButton    192,  51,  10,  12, ">",           .NextTerm
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog1Value% = Dialog( Dialog1 )
+
+Select Case Dialog1Value%
+
+  Case DIALOG_BUTTON_OK
+    SelectedTerm$ = RelatorTerm( Dialog1.DropListBox1 )
+    If FieldsSelected Then
+        MacroAction% = ADD_ONE_TERM
+      Else
+        If FoundRelator Then
+            Select Case MatchType%
+              Case AUTHORIZED
+                MacroAction%     = ADD_ONE_TERM
+              Case REFERENCE
+                MacroAction%     = UPDATE_TERM
+                ReplacementTerm$ = SelectedTerm$
+                IncorrectTerm$   = ReferenceTerm$
+              Case NO_MATCH
+                MacroAction%     = UPDATE_TERM
+                ReplacementTerm$ = SelectedTerm$
+                IncorrectTerm$   = Subfield$
+            End Select
+          Else
+            MacroAction% = ADD_ONE_TERM
+        End If
+    End If
+    GoTo StartTestingFields:
+
+  Case DIALOG_BUTTON_CANCEL
+    Exit Sub
+
+  Case DIALOG_BUTTON_MORE
+    HeadingField = FALSE
+    FirstRow%    = 0
+    LastRow%     = 0
+
+End Select
+
+FullTreatment:
+
+' Go through the record to find all the relator codes and terms in heading fields. If
+' fields have been selected, go through only those selected fields. Check each field to
+' see if it is eligible for relators. For each eligible field, look for terms in
+' subfields $e and $j, then look for codes in subfield $4.
+
+Row% = 1
+Do
+  FoundField = CS.GetFieldLine( Row%, FieldData$ )
+  If FoundField Then
+      If EligibleField( FieldData$, SubfieldEJ$ ) Then
+          FieldString$ = Mid$( FieldData$, 6 )
+          Start% = 1
+          Do
+            p = InStr( Start%, FieldString$, SubfieldEJ$ )
+            If p <> 0 Then
+                q = InStr( p + 1, FieldString$, DELIMITER )
+                If q = 0 Then
+                    Subfield$ = Trim$( Mid$( FieldString$, p + 2 ) )
+                  Else
+                    Subfield$ = Trim$( Mid$( FieldString$, p + 2, ( q - p ) - 3 ) )
+                End If
+                CurrentTerm$ = CleanSubfieldString( Subfield$ )
+                FoundRelator = TRUE
+
+' The first relator term found automatically goes right into the array.
+
+                If TotalRelatorsCount% = 0 Then
+                    ReDim Preserve RecordRelators( TotalRelatorsCount% )
+                    RecordRelators( TotalRelatorsCount% ).Term            = CurrentTerm$
+                    RecordRelators( TotalRelatorsCount% ).TermOccurrences = RecordRelators( TotalRelatorsCount% ).TermOccurrences + 1
+                    Increment%    = 1
+                    CurrentIndex% = 0
+                  Else
+
+' Subsequent relator terms are added to the array only if they don't already appear. If a
+' term is found to be already in the array, the count of occurrences of that term is
+' incremented, but the term itself is not added again.
+
+                    For i = 0 To TotalRelatorsCount% - 1
+                      Incumbent$ = RecordRelators( i ).Term
+                      If Left$( Incumbent$, 1 ) Like "[*?]" Then
+                          Incumbent$ = Mid$( Incumbent$, 2 )
+                      End If
+                      If CurrentTerm$ = Incumbent$ Then
+                          RecordRelators( i ).TermOccurrences = RecordRelators( i ).TermOccurrences + 1
+                          Increment% = 0
+                          Exit For
+                        Else
+                          If i = TotalRelatorsCount% - 1 Then
+                              ReDim Preserve RecordRelators( TotalRelatorsCount% )
+                              RecordRelators( TotalRelatorsCount% ).Term            = CurrentTerm$
+                              RecordRelators( TotalRelatorsCount% ).TermOccurrences = RecordRelators( TotalRelatorsCount% ).TermOccurrences + 1
+                              Increment% = 1
+                          End If
+                      End If
+                    Next i
+                    CurrentIndex% = i
+                End If
+
+' For each term found, look up the equivalent code and add it in the corresponding
+' position in the array. An incorrect form of a term is marked by a preceding asterisk;
+' an unknown term (a term not in LC's list) is marked by a preceding question mark. In
+' these cases, the equivalent codes are an asterisk and a question mark, respectively.
+
+                If RecordRelators( CurrentIndex% ).Code = "" Then
+                    For i = 0 To RELATOR_COUNT
+                      If CurrentTerm$ = RelatorTerm( i ) Then
+                          RecordRelators( TotalRelatorsCount% ).Code  = RelatorCode( i )
+                          If Left$( RelatorNote( i ), 4 ) = "*USE" Then
+                              RecordRelators( TotalRelatorsCount% ).Term = "*" & RecordRelators( TotalRelatorsCount% ).Term
+                          End If
+                          RecordRelators( TotalRelatorsCount% ).Index = i
+                          Exit For
+                        Else
+                          If i = RELATOR_COUNT Then
+                              RecordRelators( TotalRelatorsCount% ).Code  = NOT_FOUND
+                              RecordRelators( TotalRelatorsCount% ).Term  = "? " & RecordRelators( TotalRelatorsCount% ).Term
+                              RecordRelators( TotalRelatorsCount% ).Index = 322
+                              CountOfUnknownTerms%                        = CountOfUnknownTerms% + 1
+                              Exit For
+
+                          End If
+                      End If
+                    Next i
+                End If
+                TotalRelatorsCount% = TotalRelatorsCount% + Increment%
+
+' If a term is not found in the field, look for a code. If both terms and codes are
+' present, the code will already be in the array. Otherwise, add the code and its
+' equivalent term, as was done with the term, unless the code is unknown. (The list does
+' not contain "USE" references for incorrect codes.)
+
+              Else
+                p = InStr( Start%, FieldString$, DELIMITER & "4" )
+                If p <> 0 Then
+                    q = InStr( p + 1, FieldString$, DELIMITER )
+                    If q = 0 Then
+                        Subfield$ = Trim$( Mid$( FieldString$, p + 2 ) )
+                      Else
+                        Subfield$ = Trim$( Mid$( FieldString$, p + 2, ( q - p ) - 3 ) )
+                    End If
+                    CurrentCode$ = CleanSubfieldString( Subfield$ )
+                    FoundRelator = TRUE
+                    If TotalRelatorsCount% = 0 Then
+                        ReDim Preserve RecordRelators( TotalRelatorsCount% )
+                        RecordRelators( TotalRelatorsCount% ).Code            = CurrentCode$
+                        RecordRelators( TotalRelatorsCount% ).CodeOccurrences = RecordRelators( TotalRelatorsCount% ).CodeOccurrences + 1
+                        Increment% = 1
+                        i          = 0
+                      Else
+                        For i = 0 To TotalRelatorsCount% - 1
+                          If CurrentCode$ = RecordRelators( i ).Code Then
+                              RecordRelators( i ).CodeOccurrences = RecordRelators( i ).CodeOccurrences + 1
+                              Increment% = 0
+                              Exit For
+                            Else
+                              If i = TotalRelatorsCount% - 1 Then
+                                  ReDim Preserve RecordRelators( TotalRelatorsCount% )
+                                  RecordRelators( TotalRelatorsCount% ).Code            = CurrentCode$
+                                  RecordRelators( TotalRelatorsCount% ).CodeOccurrences = RecordRelators( TotalRelatorsCount% ).CodeOccurrences + 1
+                                  Increment% = 1
+                              End If
+                          End If
+                        Next i
+                    End If
+                    If RecordRelators( i ).Term = "" Then
+                        For i = 0 To RELATOR_COUNT
+                          If CurrentCode$ = RelatorCode( i ) Then
+                              RecordRelators( TotalRelatorsCount% ).Term  = RelatorTerm( i )
+                              RecordRelators( TotalRelatorsCount% ).Index = i
+                              Exit For
+                            Else
+                              If i = RELATOR_COUNT Then
+                                  RecordRelators( TotalRelatorsCount% ).Term  = NOT_FOUND
+                                  RecordRelators( TotalRelatorsCount% ).Index = 323
+                                  CountOfUnknownCodes%                     = CountOfUnknownCodes% + 1
+                                  Exit For
+                              End If
+                          End If
+                        Next i
+                    End If
+                    TotalRelatorsCount% = TotalRelatorsCount% + Increment%
+                End If
+            End If
+            Start% = p + 1
+          Loop Until p = 0
+          If FoundRelator Then FieldsWithRelators% = FieldsWithRelators% + 1
+      End If
+  End If
+
+  CurrentCode$ = ""
+  CurrentTerm$ = ""
+  FoundRelator = FALSE
+  Row%         = Row% + 1
+
+Loop Until FoundField = FALSE
+
+' If no relators have been found in any heading field, exit the macro, with a suggestion
+' to either select fields or put the cursor in an appropriate heading field.
+
+If TotalRelatorsCount% = 0 Then
+    NoRelatorsMessage$ = "No relators found in this record. To add relator terms, either select some fields, or "
+    NoRelatorsMessage$ = NoRelatorsMessage$ & "place the cursor in an appropriate heading field, and run the macro again."
+    MsgBox NoRelatorsMessage$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' With all terms and codes accounted for, sort the array to put relators in alphabetical
+' order, and to place codes following terms if both are found on the record.
+
+Call Sort
+
+' Now build the display arrays from the sorted master array. The relator term/code found
+' in the field is put in the top text box with its equivalent code/term below; if both
+' are found in the same field, the term goes in the top text box. While building the
+' display arrays count the number of distinct codes and terms.
+
+UB_RelatorInfo% = TotalRelatorsCount% - 1
+ReDim FoundDisplay( UB_RelatorInfo% )
+ReDim EquivDisplay( UB_RelatorInfo% )
+
+For i = 0 To TotalRelatorsCount% - 1
+  If RecordRelators( i ).Code = "   " Then
+      RecordRelators( i ).Code  = NOT_USED
+      CountOfIncorrectTerms% = CountOfIncorrectTerms% + 1
+  End If
+  If RecordRelators( i ).TermOccurrences > 0 Then
+      CountDistinctTerms% = CountDistinctTerms% + 1
+  End If
+  If RecordRelators( i ).CodeOccurrences > 0 Then
+      CountDistinctCodes% = CountDistinctCodes% + 1
+  End If
+  If RecordRelators( i ).TermOccurrences >= RecordRelators( i ).CodeOccurrences Then
+      FoundDisplay( i ) = RecordRelators( i ).Term
+      EquivDisplay( i ) = RecordRelators( i ).Code
+    Else
+      FoundDisplay( i ) = RecordRelators( i ).Code
+      EquivDisplay( i ) = RecordRelators( i ).Term
+  End If
+Next i
+
+' Refine the count of distinct terms by subtracting incorrect and unknown terms.
+
+CountDistinctTerms% = CountDistinctTerms% - CountOfIncorrectTerms% - CountOfUnknownTerms%
+
+' Construct the various message phrases to display in the dialog box.
+
+If FieldsWithRelators% = 1 Then
+    FieldCount$ = "The record includes 1 heading that contains:"
+  Else
+    FieldCount$ = "The record includes " & Trim$( Str$( FieldsWithRelators% ) ) & " headings that contain:"
+End If
+
+If CountDistinctTerms% = 0 And CountDistinctCodes% = 0 Then
+    If CountOfIncorrectTerms% > 0 Or CountOfUnknownTerms% > 0 Then
+        Msg_CountOfDistinctRelators$  = "No correct relator terms and no relator codes."
+    End If
+
+  ElseIf CountDistinctTerms% = 0 And CountDistinctCodes% = 1 Then
+    If CountOfIncorrectTerms% > 0 Or CountOfUnknownTerms% > 0 Then
+        Msg_CountOfDistinctRelators$ = "No correct relator terms and 1 relator code."
+      Else
+        Msg_CountOfDistinctRelators$ = "No relator terms; 1 relator code."
+        If CountOfIncorrectTerms% = 0 And CountOfUnknownTerms% = 0 Then
+            Msg_CountOfIncorrectTerms$  = "X"
+            Msg_CountOfUnknownRelators$ = "X"
+        End If
+    End If
+
+  ElseIf CountDistinctTerms% = 0 And CountDistinctCodes% > 1 Then
+    If CountOfIncorrectTerms% > 0 Or CountOfUnknownTerms% > 0 Then
+        Msg_CountOfDistinctRelators$ = "No correct relator terms and " & Trim$( Str$( CountDistinctCodes% ) ) & " relator codes."
+      Else
+        Msg_CountOfDistinctRelators$ = "No relator terms; " & Trim$( Str$( CountDistinctCodes% ) ) & " relator codes."
+        If CountOfIncorrectTerms% = 0 And CountOfUnknownTerms% = 0 Then
+            Msg_CountOfIncorrectTerms$  = "X"
+            Msg_CountOfUnknownRelators$ = "X"
+        End If
+    End If
+
+  ElseIf CountDistinctTerms% = 1 And CountDistinctCodes% = 0 Then
+    Msg_CountOfDistinctRelators$ = "1 correct relator term and no relator codes."
+
+  ElseIf CountDistinctTerms% > 1 And CountDistinctCodes% = 0 Then
+    Msg_CountOfDistinctRelators$ = Trim$( Str$( CountDistinctTerms% ) ) & " correct relator terms and no relator codes."
+
+  ElseIf CountDistinctTerms% = CountDistinctCodes% Then
+    Msg_CountOfDistinctRelators$ = Trim$( Str$( CountDistinctTerms% ) ) & " correct relator terms and " & Trim$( Str$( CountDistinctCodes% ) ) & " relator codes."
+
+  ElseIf CountDistinctTerms% <> CountDistinctCodes% Then
+    Msg_CountOfDistinctRelators$ = Trim$( Str$( CountDistinctTerms% ) ) & " correct relator terms and " & Trim$( Str$( CountDistinctCodes% ) ) & " relator codes."
+
+  Else
+    Msg_CountOfDistinctRelators$ = Trim$( Str$( CountDistinctTerms% ) ) & " correct relator terms and " & Trim$( Str$( CountDistinctCodes% ) ) & " relator codes."
+
+End If
+
+Select Case CountOfIncorrectTerms%
+
+  Case 0
+    If Msg_CountOfIncorrectTerms$ <> "X" Then
+        Msg_CountOfIncorrectTerms$ = "No incorrect relator terms."
+    End If
+  Case 1
+    Msg_CountOfIncorrectTerms$ = "1 incorrect relator term."
+  Case Else
+    Msg_CountOfIncorrectTerms$ = Trim$( Str$( CountOfIncorrectTerms% ) ) & " incorrect relator terms."
+
+End Select
+
+Select Case CountOfUnknownTerms%
+
+  Case 0
+
+    Select Case CountOfUnknownCodes%
+
+      Case 0
+        If Msg_CountOfUnknownRelators$ <> "X" Then
+            Msg_CountOfUnknownRelators$ = "No unknown terms or codes."
+        End If
+      Case 1
+        Msg_CountOfUnknownRelators$ = "No unknown terms and 1 unknown code."
+      Case Else
+        Msg_CountOfUnknownRelators$ = "No unknown terms and " & Trim$( Str$( CountOfUnknownCodes% ) ) & " unknown codes."
+
+    End Select
+
+  Case 1
+
+    Select Case CountOfUnknownCodes%
+
+      Case 0
+        Msg_CountOfUnknownRelators$ = "1 unknown term and no unknown codes."
+      Case 1
+        Msg_CountOfUnknownRelators$ = "1 unknown term and 1 unknown code."
+      Case Else
+        Msg_CountOfUnknownRelators$ = "1 unknown term and " & Trim$( Str$( CountOfUnknownCodes% ) ) & " unknown codes."
+
+    End Select
+
+  Case Else
+
+    Select Case CountOfUnknownCodes%
+
+      Case 0
+        Msg_CountOfUnknownRelators$ = Trim$( Str$( CountOfUnknownTerms% ) ) & " unknown terms and no unknown codes."
+      Case 1
+        Msg_CountOfUnknownRelators$ = Trim$( Str$( CountOfUnknownTerms% ) ) & " unknown terms and 1 unknown code."
+      Case Else
+        Msg_CountOfUnknownRelators$ = Trim$( Str$( CountOfUnknownTerms% ) ) & " unknown terms and " & Trim$( Str$( CountOfUnknownCodes% ) ) & " unknown codes."
+
+    End Select
+
+End Select
+
+Msg_CountOfDistinctRelators$ = "- " & Msg_CountOfDistinctRelators$
+If Msg_CountOfIncorrectTerms$ = "X" Then
+    Msg_CountOfIncorrectTerms$ = ""
+  Else
+    Msg_CountOfIncorrectTerms$ = "- " & Msg_CountOfIncorrectTerms$
+End If
+If Msg_CountOfUnknownRelators$  = "X" Then
+    Msg_CountOfUnknownRelators$  = ""
+  Else
+    Msg_CountOfUnknownRelators$  = "- " & Msg_CountOfUnknownRelators$
+End If
+
+If CountOfUnknownTerms% > 0 Or CountOfIncorrectTerms% > 0 Or CountOfUnknownCodes% > 0 Then
+    ProblemsPresent = TRUE
+End If
+
+Begin Dialog Dialog2Definition  378, 228, WaltsMacros$, .Dialog2ControlFunction
+  OkButton       254, 204,  52,  14
+  CancelButton   314, 204,  52,  14
+  DropListBox     20,  57, 144,  96, FoundDisplay(),                                .FoundList
+  DropListBox     20, 105, 144,  96, EquivDisplay(),                                .EquivList
+  Text            22,  72, 144,   8, "",                                            .FoundOccurrence
+  Text            22, 120, 144,   8, "",                                            .EquivOccurrence
+  Text            12,   6, 157,   9, FieldCount$
+  Text           160,   6, 153,   8, Msg_CountOfDistinctRelators$
+  Text           160,  18, 145,   8, Msg_CountOfIncorrectTerms$
+  Text           160,  30, 141,   8, Msg_CountOfUnknownRelators$
+  Text            12, 140, 232,  72, "",                                            .Description
+  DropListBox    204, 112, 144, 160, RelatorTerm(),                                 .AllTerms
+  OptionGroup                                                                       .OptionGroup1
+   OptionButton  183,  20,   1,   1, "",                                            .OptionButton0
+   OptionButton  192,  57,  96,  12, "",                                            .OptionButton_Add
+   OptionButton  192,  71, 128,  12, "",                                            .OptionButton_Swap
+   OptionButton  192,  85,  56,  12, "",                                            .OptionButton_Delete1
+   OptionButton  250,  85,  56,  12, "Delete code",                                 .OptionButton_Delete2
+   OptionButton  192,  99, 160,  12, "Replace selected term with term from &list:", .OptionButton_Replace
+  Text           340,  62,  24,   8, "D&o for",                                     .CheckBoxDoAllText1
+  CheckBox       328,  71,  32,  12, "all",                                         .CheckBoxDoAll
+  Text           340,  82,  24,   8, "",                                            .CheckBoxDoAllText2
+  GroupBox       182,  44, 184,  90, "",                                            .ActionLabel
+  GroupBox        12,  44, 160,  42, "",                                            .FoundGroupBox
+  GroupBox        12,  92, 160,  42, "",                                            .EquivGroupBox
+End Dialog
+
+Dim Dialog2 As Dialog2Definition
+If Dialog( Dialog2 ) = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+OptionGroupValue% = Dialog2.OptionGroup1
+
+' When both terms and codes are present in the same heading, the radio button to delete a
+' term or code needs to have its action clarified. This dialog box asks whether, in that
+' case, to delete the term or the code.
+
+If WhichRelator% = RELATOR_TERM Then
+    SelectedCode$ = RecordRelators( Dialog2.EquivList ).Code
+    SelectedTerm$ = RecordRelators( Dialog2.FoundList ).Term
+  Else
+    SelectedCode$ = RecordRelators( Dialog2.FoundList ).Code
+    SelectedTerm$ = RecordRelators( Dialog2.EquivList ).Term
+End If
+
+' The values in the text boxes when "OK" is clicked may be incorrect or unknown, but
+' they are treated the same way in this section of the macro.
+
+IncorrectTerm$ = SelectedTerm$
+If Left$( IncorrectTerm$, 1 ) = NOT_USED Then
+    IncorrectTerm$ = Mid$( IncorrectTerm$, 2 )
+  ElseIf Left$( IncorrectTerm$, 1 ) = NOT_FOUND Then
+    IncorrectTerm$ = Mid$( IncorrectTerm$, 3 )
+End If
+
+LengthOfTerm% = Len( IncorrectTerm$ )
+
+' The option buttons direct whether to add, delete, or replace relators, and the state of
+' the checkbox determines whether to apply the action to the selected relator (in all
+' occurrences in the record) or to all of them.
+
+Select Case OptionGroupValue%
+
+  Case NO_SELECTION
+
+    Exit Sub
+
+  Case ADD
+
+    If WhichRelator% = RELATOR_CODE Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
+            MacroAction% = ADD_ONE_TERM
+          Else
+            MacroAction% = ADD_ALL_TERMS
+        End If
+      Else
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
+            MacroAction% = ADD_ONE_CODE
+          Else
+            MacroAction% = ADD_ALL_CODES
+        End If
+    End If
+
+  Case DELETE_OPTION_1, DELETE_OPTION_2
+
+    If WhichRelator% = RELATOR_CODE Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
+            MacroAction% = DELETE_ONE_CODE
+          Else
+            MacroAction% = DELETE_ALL_CODES
+        End If
+      Else
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
+            MacroAction% = DELETE_ONE_TERM
+          Else
+            MacroAction% = DELETE_ALL_TERMS
+        End If
+    End If
+
+  Case REPLACE_WITH_EQUIVALENT
+
+    If WhichRelator% = RELATOR_CODE Then
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
+            MacroAction% = REPLACE_ONE_CODE
+          Else
+            MacroAction% = REPLACE_ALL_CODES
+        End If
+      Else
+        If Dialog2.CheckBoxDoAll = UNCHECKED Then
+            MacroAction% = REPLACE_ONE_TERM
+          Else
+            MacroAction% = REPLACE_ALL_TERMS
+        End If
+    End If
+
+  Case REPLACE_WITH_CORRECT
+
+    MacroAction% = UPDATE_TERM
+
+End Select
+
+' Go through all the headings on the record, looking for occurrences of the selected code
+' or term, and apply the selected action.
+
+StartTestingFields:
+
+If FirstRow% > 0 Then
+    Row% = FirstRow%
+  Else
+    Row% = 1
+End If
+
+Do
+  FoundField = CS.GetFieldLine( Row%, FieldData$ )
+  If FoundField Then
+      If HeadingField Then
+          If Row% < FirstRow% Or Row% > LastRow% Then
+              GoTo SkipField:
+          End If
+        Else
+          If EligibleField( FieldData$, SubfieldEJ$ ) = FALSE Then
+              GoTo SkipField:
+          End If
+      End If
+      LengthOfField% = Len( FieldData$ )
+      Start%         = 1
+
+      Select Case MacroAction%
+
+' The action to add codes to all headings is also part of the action to replace all terms
+' with their equivalent codes. For this latter action, codes are added first, then their
+' equivalent terms are deleted.
+
+        Case ADD_ALL_CODES, REPLACE_ALL_TERMS
+
+          For i = 0 To UB_RelatorInfo%
+            If InStr( Start%, FieldData$, SubfieldEJ$ & RecordRelators( i ).Term ) Then
+                If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) = 0 Then
+                    CodesString$ = CodesString$ & " " & SUBFIELD_4 & RecordRelators( i ).Code
+                End If
+            End If
+          Next i
+          If CodesString$ <> "" Then
+              ReplacementField$ = FieldData$ & CodesString$
+
+' If terms are to be replaced by their equivalent codes, make the edited string, with
+' codes added corresponding to the terms in the heading, the field to be acted upon by
+' the section that deletes terms.
+
+              If MacroAction% = REPLACE_ALL_TERMS Then
+                  FieldData$ = ReplacementField$
+                  GoTo DeleteAllTerms:
+              End If
+              If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                  MsgBox "Whoops, failed. ADD_ALL_CODES. Row " & Row%
+                  Exit Sub
+              End If
+          End If
+
+' Similarly, the action to add terms to all headings is also part of the action to
+' replace all codes with their equivalent terms.
+
+       Case ADD_ALL_TERMS, REPLACE_ALL_CODES
+
+         For i = 0 To UB_RelatorInfo%
+           If InStr( Start%, FieldData$, SUBFIELD_4 & RecordRelators( i ).Code ) Then
+               If InStr( FieldData$, SubfieldEJ$ & RecordRelators( i ).Term ) = 0 Then
+                   TermsString$ = TermsString$ & ", " & SubfieldEJ$ & RecordRelators( i ).Term
+               End If
+           End If
+         Next i
+         If TermsString$ <> "" Then
+             If Left$( TermsString$, 1 ) = "," Then
+                 TermsString$ = Mid$( TermsString$, 2 )
+             End If
+
+' If new terms are to be added, add them after an existing terms in subfield $e or $j. If
+' no terms are in the heading, add new ones before the codes any subfield $4. If no codes
+' are in the heading, simply stick the terms on at the end.
+
+              p = FindLastOccurrence( FieldData$, SubfieldEJ$ )
+              If p = 0 Then
+                  q = InStr( FieldData$, DELIMITER & "4" )
+                  TempString$ = Trim$( Left$( FieldData$, q - 1 ) )
+                  If Right$( TempString$, 1 ) = "." Then
+                      TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+                  End If
+                  TempString$ = TempString$ & TermsString$ & ". " & Mid$( FieldData$, q )
+                Else
+                  TempString$ = Trim$( Left$( FieldData$, p - 1 ) )
+                  If Right$( TempString$, 1 ) <> "," Then
+                      TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+                  End If
+                  TempString$ = TempString$ & " " & SubfieldEJ$ & TermsString$ & ". " & Trim$( Mid$( FieldData$, p ) )
+              End If
+              If TempString$ <> "" Then
+                  ReplacementField$ = TempString$
+
+' After adding all terms, if the intent is that the terms replace their equivalent codes,
+' send the edited string as the found field to the section to delete all codes.
+
+                  If MacroAction% = REPLACE_ALL_CODES Then
+                      FieldData$ = ReplacementField$
+                      GoTo DeleteAllCodes:
+                  End If
+                  If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                      MsgBox "Whoops, failed. ADD_ALL_TERMS. Row " & Row%
+                      Exit Sub
+                  End If
+              End If
+          End If
+
+        Case ADD_ONE_CODE
+
+          p = InStr( Start%, FieldData$, SubfieldEJ$ & SelectedTerm$ )
+          If p = 0 Then
+              GoTo SkipField:
+            Else
+              If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) = 0 Then
+                  CodesString$ = " " & SUBFIELD_4 & SelectedCode$
+              End If
+              ReplacementField$ = FieldData$ & CodesString$
+              If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                  MsgBox "Whoops, failed. ADD_ONE_CODE. Row " & Row%
+                  Exit Sub
+              End If
+          End If
+
+' As above, a term is either added after other terms, or before any codes in subfield $4,
+' or at the end of the field.
+
+        Case ADD_ONE_TERM
+
+          If InStr( FieldData$, SubfieldEJ$ & SelectedTerm$ ) Then
+              NotAddedCount% = NotAddedCount% + 1
+            Else
+              If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) Or HeadingField Then
+                  p = FindLastOccurrence( FieldData$, SubfieldEJ$ )
+                  If p = 0 Then
+                      q = InStr( FieldData$, DELIMITER & "4" )
+                      If q = 0 Then 'The case when a term is being added to a relator-less field
+                          TempString$ = FieldData$
+                        Else
+                          TempString$ = Trim$( Left$( FieldData$, q - 1 ) )
+                      End If
+                      If Right$( TempString$, 1 ) = "." Then
+                          TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+                      End If
+                      If q = 0 Then
+                          TempString$ = TempString$ & " " & SubfieldEJ$ & SelectedTerm$ & ". "
+                        Else
+                          TempString$ = TempString$ & " " & SubfieldEJ$ & SelectedTerm$ & ". " & Mid$( FieldData$, q )
+                      End If
+                    Else
+                      TempString$ = Trim$( Left$( FieldData$, p - 1 ) )
+                      Remainder$  = Trim$( Mid$( FieldData$, p ) )
+                      If Right$( TempString$, 1 ) <> "," Then
+                          TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+                      End If
+                      TempString$ = TempString$ & " " & SubfieldEJ$ & SelectedTerm$
+                      If Left$( Remainder$, 3 ) = SubfieldEJ$ Then
+                          TempString$ = TempString$ & ", " & Remainder$
+                        Else
+                          TempString$ = TempString$ & "."
+                      End If
+                  End If
+                  If TempString$ <> "" Then
+                      ReplacementField$ = TempString$
+                      If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                          MsgBox "Whoops, failed. ADD_ONE_TERM. Row " & Row%
+                          Exit Sub
+                      End If
+                  End If
+              End If
+          End If
+
+        Case DELETE_ALL_CODES
+
+DeleteAllCodes:
+
+          TempString$ = FieldData$
+          Do
+            p = InStr$( Start%, TempString$, DELIMITER )
+            If p = 0 Then
+                If TempString$ = FieldData$ Then GoTo SkipField:
+              Else
+                If Mid$( TempString$, p + 1, 1 ) = "4" Then
+                    q = InStr$( p + 1, TempString$, DELIMITER )
+                    If q <> 0 Then
+                        TempString$ = Trim$( Left$( TempString$, p - 1 ) ) & " " & Trim$( Mid$( TempString$, q ) )
+                        Start%      = p
+                      Else
+                        TempString$ = Trim$( Left$( TempString$, p - 1 ) )
+                    End If
+                  Else
+                    Start% = p + 1
+                End If
+            End If
+          Loop Until p = 0
+          If TempString$ <> FieldData$ Then
+              If Right$( TempString$, 1 ) = "," Then
+                  TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & "."
+              End If
+              ReplacementField$ = TempString$
+              If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                  MsgBox "Whoops, failed. DELETE_ONE_CODE. Row " & Row%
+                  Exit Sub
+              End If
+          End If
+
+        Case DELETE_ALL_TERMS
+
+DeleteAllTerms:
+
+          Do
+            p = InStr$( Start%, FieldData$, DELIMITER )
+            If p = 0 Then
+                GoTo SkipField:
+              Else
+                If Start% = 1 Then
+                    TempString$ = Left$( FieldData$, p - 1 )
+                End If
+                q = InStr$( p + 1, FieldData$, DELIMITER )
+                If q <> 0 Then
+                    Subfield$ = Mid$( FieldData$, p, q - p )
+                  Else
+                    Subfield$ = Mid$( FieldData$, p )
+                End If
+                If Left$( Subfield$, 3 ) = SubfieldEJ$ Then
+                    If StartPositionTerms% = 0 Then
+                        StartPositionTerms% = p
+                    End If
+                    FollowingPunctuation$ = Right$( Trim$( Subfield$ ), 1 )
+                  Else
+                    If StartPositionTerms% > 0 Then
+                        x           = Len( TempString$ )
+                        TempString$ = Trim$( TempString$ )
+                        If Right$( TempString$, 1 ) = "," Then
+                            TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & "."
+                        End If
+                        TempString$         = TempString$ & Space$( x - Len( TempString$ ) )
+                        StartPositionTerms% = 0
+                    End If
+                    TempString$ = TempString$ & Subfield$
+                End If
+                Start% = q
+            End If
+          Loop Until q = 0
+          If p > 0 Then
+              If StartPositionTerms% > Len( TempString$ ) Then
+                  TempString$ = Trim$( TempString$ )
+                  If Right$( TempString$, 1 ) = "," Then
+                       TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & FollowingPunctuation$
+                  End If
+                Else
+                  Remainder$ = Trim$( Mid$( FieldData$, p ) )
+              End If
+              If TempString$ <> FieldData$ Then
+                  If Right$( TempString$, 1 ) = "," Then
+                      TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & "."
+                  End If
+                  ReplacementField$ = TempString$
+                  If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                      MsgBox "Whoops, failed. DELETE_ONE_CODE. Row " & Row%
+                      Exit Sub
+                  End If
+              End If
+          End If
+
+        Case DELETE_ONE_CODE
+
+DeleteOneCode:
+
+          p = InStr( FieldData$, SUBFIELD_4 & SelectedCode$ )
+          If p = 0 Then
+              GoTo SkipField:
+            Else
+              If p + 5 < LengthOfField% Then
+                  TempString$ = Trim$( Left$( FieldData$, p - 1 ) ) & " " & Trim$( Mid$( FieldData$, p + 6 ) )
+                Else
+                  TempString$ = Trim$( Left$( FieldData$, p - 1 ) )
+              End If
+              If TempString$ <> "" Then
+                  ReplacementField$ = TempString$
+                  If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                      MsgBox "Whoops, failed. DELETE_ONE_CODE. Row " & Row%
+                      Exit Sub
+                  End If
+              End If
+          End If
+
+        Case DELETE_ONE_TERM
+
+          p = InStr( FieldData$, SubfieldEJ$ & IncorrectTerm$ )
+          If p = 0 Then
+              GoTo SkipField:
+            Else
+              If p + LengthOfTerm% + 3 < LengthOfField% Then
+                  Remainder$ = Trim$( Mid$( FieldData$, p + LengthOfTerm% + 4 ) )
+              End If
+              TempString$ = Trim$( Left$( FieldData$, p - 1 ) )
+              If Remainder$ = "" Then
+                  If Right$( TempString$, 1 ) = "," Then
+                      TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & "."
+                  End If
+                Else
+                  If Right$( TempString$, 1 ) <> "," Then
+                      TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+                  End If
+              End If
+              TempString$ = TempString$ & " " & Remainder
+              If TempString$ <> "" Then
+                  ReplacementField$ = TempString$
+                  If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                      MsgBox "Whoops, failed. DELETE_ONE_TERM. Row " & Row%
+                      Exit Sub
+                  End If
+              End If
+          End If
+
+        Case REPLACE_ONE_CODE
+
+            p = InStr( Start%, FieldData$, SUBFIELD_4 & SelectedCode$ )
+            If p = 0 Then
+                GoTo SkipField:
+              Else
+                If LengthOfField% - p < 6 Then
+                    FieldData$ = Trim$( Left$( FieldData$, p - 1 ) )
+                  Else
+                    FieldData$ = Trim$( Left$( FieldData$, p - 1 ) ) & " " & Trim$( Mid$( FieldData$, p + 5 ) )
+                End If
+                t = FindLastOccurrence( FieldData$, SubfieldEJ$ )
+                If t > 0 Then
+                    TempString$ = Left$( FieldData$, t )
+                  Else
+                    TempString$ = FieldData$
+                End If
+                If Right$( TempString$, 1 ) = "." Then
+                    TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+                End If
+                TempString$ = TempString$ & " " & SubfieldEJ$ & SelectedTerm$
+                ReplacementField$ = TempString$
+                If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                    MsgBox "Whoops, failed. REPLACE_ONE_CODE. Row " & Row%
+                    Exit Sub
+                End If
+            End If
+
+        Case REPLACE_ONE_TERM
+
+          p = InStr( Start%, FieldData$, SubfieldEJ$ & SelectedTerm$ )
+          If p = 0 Then
+              GoTo SkipField:
+            Else
+              TempString$ = Trim$( Left$( FieldData$, p - 1 ) )
+              q = InStr( p + 1, FieldData$, DELIMITER )
+              If q > 0 Then
+                  TempString$ = TempString$ & " " & Trim$( Mid$( FieldData$, q ) )
+              End If
+              FollowingPunctuation$ = Mid$( FieldData$, ( Len( TempString$ ) + Len( SelectedTerm$ ) + 5 ), 1 )
+              If Right$( TempString$, 1 ) = "," Then
+                  TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & FollowingPunctuation$
+              End If
+              If InStr( FieldData$, SUBFIELD_4 & SelectedCode$ ) = 0 Then
+                  CodesString$ = CodesString$ & " " & SUBFIELD_4 & SelectedCode$
+              End If
+              ReplacementField$ = TempString$ & CodesString$
+              If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                  MsgBox "Whoops, failed. REPLACE_ONE_TERM. Row " & Row%
+                  Exit Sub
+              End If
+          End If
+
+        Case UPDATE_TERM
+
+          p = InStr( FieldData$, SubfieldEJ$ & IncorrectTerm$ )
+          If p = 0 Then
+              GoTo SkipField:
+            Else
+              TempString$ = Mid$( FieldData$, p + Len( IncorrectTerm$ ) + 3 )
+              TempString$ = Left$( FieldData$, p + 2 ) & ReplacementTerm$ & TempString$
+          End If
+
+' Check the field for the code corresponding to the replaced term. If present, add the replacement
+' code, and delete the existing, incorrect code.
+
+          p = InStr( TempString$, SUBFIELD_4 & SelectedCode$ )
+          If p <> 0 Then
+              For i = 0 To RELATOR_COUNT
+                If ReplacementTerm$ = RelatorTerm( i ) Then
+                    ReplacementCode$ = RelatorCode( i )
+                    Exit For
+                End If
+              Next i
+              p = InStr( TempString$, SUBFIELD_4 & ReplacementCode$ )
+              If p = 0 Then
+                  TempString$ = TempString$ & " " & SUBFIELD_4 & ReplacementCode$
+              End If
+              FieldData$ = TempString$
+              GoTo DeleteOneCode:
+            Else
+              ReplacementField$ = TempString$
+              If ReplacementField$ <> "" Then
+                  If CS.SetFieldLine( Row%, ReplacementField$ ) = FALSE Then
+                      MsgBox "Whoops, failed. UPDATE_TERM. Row " & Row%
+                      Exit Sub
+                  End If
+              End If
+          End If
+
+      End Select
+
+    Else
+      If Row% > LastRow% Then
+          If HeadingField Or FieldsSelected Then
+              Exit Do
+          End If
+      End If
+  End If
+
+SkipField:
+
+  Row%                = Row% + 1
+  If LastRow% > 0 Then
+      If Row% > LastRow% Then
+          Exit Do
+      End If
+  End If
+  CodesString$        = ""
+  Remainder$          = ""
+  ReplacementField$   = ""
+  StartPositionTerms% = 0
+  TempString$         = ""
+  TermsString$        = ""
+
+Loop Until FoundField = FALSE
+
+If FieldsSelected Then
+    If NotAddedCount% = 1 > 0 Then
+        If NotAddedCount% = 1 Then
+            FieldsNotAddedToA$ = "one"
+            FieldsNotAddedToB$ = "that field."
+          ElseIf NotAddedCount% > 1 Then
+            FieldsNotAddedToA$ = Trim$( Str$( NotAddedCount% ) )
+            FieldsNotAddedToB$ = "those fields."
+        End If
+        NotAddedString$ = "The relator term " & SelectedTerm$ & " was not added to " & FieldsNotAddedToA$ & " of the " & Trim$( Str$( EndOfFieldCount% + 1 ) )
+        NotAddedString$ = NotAddedString$ & " fields selected because that term is present in " & FieldsNotAddedToB$
+        MsgBox NotAddedString$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillCodesAndTermsArray
+
+' Fill the arrays with codes and terms. A blank code, signifying an unused term, will be
+' replaced by an asterisk later in the macro; it is represented here by three spaces only
+' for esthetic reasons (to help things line up).
+
+RelatorCode( 0   ) = "   " : RelatorTerm( 0   ) = ""
+RelatorCode( 1   ) = "abr" : RelatorTerm( 1   ) = "abridger"
+RelatorCode( 2   ) = "act" : RelatorTerm( 2   ) = "actor"
+RelatorCode( 3   ) = "adp" : RelatorTerm( 3   ) = "adapter"
+RelatorCode( 4   ) = "rcp" : RelatorTerm( 4   ) = "addressee"
+RelatorCode( 5   ) = "anl" : RelatorTerm( 5   ) = "analyst"
+RelatorCode( 6   ) = "anm" : RelatorTerm( 6   ) = "animator"
+RelatorCode( 7   ) = "ann" : RelatorTerm( 7   ) = "annotator"
+RelatorCode( 8   ) = "apl" : RelatorTerm( 8   ) = "appellant"
+RelatorCode( 9   ) = "ape" : RelatorTerm( 9   ) = "appellee"
+RelatorCode( 10  ) = "app" : RelatorTerm( 10  ) = "applicant"
+RelatorCode( 11  ) = "   " : RelatorTerm( 11  ) = "appraiser"
+RelatorCode( 12  ) = "arc" : RelatorTerm( 12  ) = "architect"
+RelatorCode( 13  ) = "arr" : RelatorTerm( 13  ) = "arranger"
+RelatorCode( 14  ) = "   " : RelatorTerm( 14  ) = "arranger of music"
+RelatorCode( 15  ) = "acp" : RelatorTerm( 15  ) = "art copyist"
+RelatorCode( 16  ) = "adi" : RelatorTerm( 16  ) = "art director"
+RelatorCode( 17  ) = "art" : RelatorTerm( 17  ) = "artist"
+RelatorCode( 18  ) = "ard" : RelatorTerm( 18  ) = "artistic director"
+RelatorCode( 19  ) = "asg" : RelatorTerm( 19  ) = "assignee"
+RelatorCode( 20  ) = "asn" : RelatorTerm( 20  ) = "associated name"
+RelatorCode( 21  ) = "att" : RelatorTerm( 21  ) = "attributed name"
+RelatorCode( 22  ) = "auc" : RelatorTerm( 22  ) = "auctioneer"
+RelatorCode( 23  ) = "aut" : RelatorTerm( 23  ) = "author"
+RelatorCode( 24  ) = "aqt" : RelatorTerm( 24  ) = "author in quotations or text abstracts"
+RelatorCode( 25  ) = "aft" : RelatorTerm( 25  ) = "author of afterword, colophon, etc."
+RelatorCode( 26  ) = "aud" : RelatorTerm( 26  ) = "author of dialog"
+RelatorCode( 27  ) = "aui" : RelatorTerm( 27  ) = "author of introduction, etc."
+RelatorCode( 28  ) = "   " : RelatorTerm( 28  ) = "author of screenplay, etc."
+RelatorCode( 29  ) = "ato" : RelatorTerm( 29  ) = "autographer"
+RelatorCode( 30  ) = "ant" : RelatorTerm( 30  ) = "bibliographic antecedent"
+RelatorCode( 31  ) = "bnd" : RelatorTerm( 31  ) = "binder"
+RelatorCode( 32  ) = "bdd" : RelatorTerm( 32  ) = "binding designer"
+RelatorCode( 33  ) = "blw" : RelatorTerm( 33  ) = "blurb writer"
+RelatorCode( 34  ) = "bkd" : RelatorTerm( 34  ) = "book designer"
+RelatorCode( 35  ) = "bkp" : RelatorTerm( 35  ) = "book producer"
+RelatorCode( 36  ) = "bjd" : RelatorTerm( 36  ) = "bookjacket designer"
+RelatorCode( 37  ) = "bpd" : RelatorTerm( 37  ) = "bookplate designer"
+RelatorCode( 38  ) = "bsl" : RelatorTerm( 38  ) = "bookseller"
+RelatorCode( 39  ) = "   " : RelatorTerm( 39  ) = "bowdlerizer"
+RelatorCode( 40  ) = "brl" : RelatorTerm( 40  ) = "braille embosser"
+RelatorCode( 41  ) = "brd" : RelatorTerm( 41  ) = "broadcaster"
+RelatorCode( 42  ) = "cll" : RelatorTerm( 42  ) = "calligrapher"
+RelatorCode( 43  ) = "ctg" : RelatorTerm( 43  ) = "cartographer"
+RelatorCode( 44  ) = "cas" : RelatorTerm( 44  ) = "caster"
+RelatorCode( 45  ) = "cns" : RelatorTerm( 45  ) = "censor"
+RelatorCode( 46  ) = "   " : RelatorTerm( 46  ) = "chief electrician"
+RelatorCode( 47  ) = "chr" : RelatorTerm( 47  ) = "choreographer"
+RelatorCode( 48  ) = "cng" : RelatorTerm( 48  ) = "cinematographer"
+RelatorCode( 49  ) = "cli" : RelatorTerm( 49  ) = "client"
+RelatorCode( 50  ) = "   " : RelatorTerm( 50  ) = "collaborator"
+RelatorCode( 51  ) = "cor" : RelatorTerm( 51  ) = "collection registrar"
+RelatorCode( 52  ) = "col" : RelatorTerm( 52  ) = "collector"
+RelatorCode( 53  ) = "clt" : RelatorTerm( 53  ) = "collotyper"
+RelatorCode( 54  ) = "clr" : RelatorTerm( 54  ) = "colorist"
+RelatorCode( 55  ) = "cmm" : RelatorTerm( 55  ) = "commentator"
+RelatorCode( 56  ) = "cwt" : RelatorTerm( 56  ) = "commentator for written text"
+RelatorCode( 57  ) = "com" : RelatorTerm( 57  ) = "compiler"
+RelatorCode( 58  ) = "cpl" : RelatorTerm( 58  ) = "complainant"
+RelatorCode( 59  ) = "cpt" : RelatorTerm( 59  ) = "complainant-appellant"
+RelatorCode( 60  ) = "cpe" : RelatorTerm( 60  ) = "complainant-appellee"
+RelatorCode( 61  ) = "cmp" : RelatorTerm( 61  ) = "composer"
+RelatorCode( 62  ) = "cmt" : RelatorTerm( 62  ) = "compositor"
+RelatorCode( 63  ) = "ccp" : RelatorTerm( 63  ) = "conceptor"
+RelatorCode( 64  ) = "cnd" : RelatorTerm( 64  ) = "conductor"
+RelatorCode( 65  ) = "con" : RelatorTerm( 65  ) = "conservator"
+RelatorCode( 66  ) = "csl" : RelatorTerm( 66  ) = "consultant"
+RelatorCode( 67  ) = "csp" : RelatorTerm( 67  ) = "consultant to a project"
+RelatorCode( 68  ) = "cos" : RelatorTerm( 68  ) = "contestant"
+RelatorCode( 69  ) = "cot" : RelatorTerm( 69  ) = "contestant-appellant"
+RelatorCode( 70  ) = "coe" : RelatorTerm( 70  ) = "contestant-appellee"
+RelatorCode( 71  ) = "cts" : RelatorTerm( 71  ) = "contestee"
+RelatorCode( 72  ) = "ctt" : RelatorTerm( 72  ) = "contestee-appellant"
+RelatorCode( 73  ) = "cte" : RelatorTerm( 73  ) = "contestee-appellee"
+RelatorCode( 74  ) = "ctr" : RelatorTerm( 74  ) = "contractor"
+RelatorCode( 75  ) = "ctb" : RelatorTerm( 75  ) = "contributor"
+RelatorCode( 76  ) = "   " : RelatorTerm( 76  ) = "copier"
+RelatorCode( 77  ) = "cpc" : RelatorTerm( 77  ) = "copyright claimant"
+RelatorCode( 78  ) = "cph" : RelatorTerm( 78  ) = "copyright holder"
+RelatorCode( 79  ) = "crr" : RelatorTerm( 79  ) = "corrector"
+RelatorCode( 80  ) = "crp" : RelatorTerm( 80  ) = "correspondent"
+RelatorCode( 81  ) = "cst" : RelatorTerm( 81  ) = "costume designer"
+RelatorCode( 82  ) = "   " : RelatorTerm( 82  ) = "counterfeiter"
+RelatorCode( 83  ) = "cou" : RelatorTerm( 83  ) = "court governed"
+RelatorCode( 84  ) = "crt" : RelatorTerm( 84  ) = "court reporter"
+RelatorCode( 85  ) = "cov" : RelatorTerm( 85  ) = "cover designer"
+RelatorCode( 86  ) = "cre" : RelatorTerm( 86  ) = "creator"
+RelatorCode( 87  ) = "cur" : RelatorTerm( 87  ) = "curator"
+RelatorCode( 88  ) = "   " : RelatorTerm( 88  ) = "curator of an exhibition"
+RelatorCode( 89  ) = "   " : RelatorTerm( 89  ) = "current owner"
+RelatorCode( 90  ) = "dnc" : RelatorTerm( 90  ) = "dancer"
+RelatorCode( 91  ) = "dtc" : RelatorTerm( 91  ) = "data contributor"
+RelatorCode( 92  ) = "dtm" : RelatorTerm( 92  ) = "data manager"
+RelatorCode( 93  ) = "dte" : RelatorTerm( 93  ) = "dedicatee"
+RelatorCode( 94  ) = "   " : RelatorTerm( 94  ) = "dedicatee of item"
+RelatorCode( 95  ) = "dto" : RelatorTerm( 95  ) = "dedicator"
+RelatorCode( 96  ) = "dfd" : RelatorTerm( 96  ) = "defendant"
+RelatorCode( 97  ) = "dft" : RelatorTerm( 97  ) = "defendant-appellant"
+RelatorCode( 98  ) = "dfe" : RelatorTerm( 98  ) = "defendant-appellee"
+RelatorCode( 99  ) = "dgg" : RelatorTerm( 99  ) = "degree granting institution"
+RelatorCode( 100 ) = "dgc" : RelatorTerm( 100 ) = "degree committee member"
+RelatorCode( 101 ) = "   " : RelatorTerm( 101 ) = "degree grantor"
+RelatorCode( 102 ) = "dgs" : RelatorTerm( 102 ) = "degree supervisor"
+RelatorCode( 103 ) = "dln" : RelatorTerm( 103 ) = "delineator"
+RelatorCode( 104 ) = "dpc" : RelatorTerm( 104 ) = "depicted"
+RelatorCode( 105 ) = "   " : RelatorTerm( 105 ) = "deponent"
+RelatorCode( 106 ) = "dpt" : RelatorTerm( 106 ) = "depositor"
+RelatorCode( 107 ) = "dsr" : RelatorTerm( 107 ) = "designer"
+RelatorCode( 108 ) = "   " : RelatorTerm( 108 ) = "designer of binding"
+RelatorCode( 109 ) = "   " : RelatorTerm( 109 ) = "designer of book"
+RelatorCode( 110 ) = "   " : RelatorTerm( 110 ) = "designer of bookjacket"
+RelatorCode( 111 ) = "   " : RelatorTerm( 111 ) = "designer of cover"
+RelatorCode( 112 ) = "   " : RelatorTerm( 112 ) = "designer of e-book"
+RelatorCode( 113 ) = "   " : RelatorTerm( 113 ) = "designer of type"
+RelatorCode( 114 ) = "drt" : RelatorTerm( 114 ) = "director"
+RelatorCode( 115 ) = "   " : RelatorTerm( 115 ) = "director of photography"
+RelatorCode( 116 ) = "dis" : RelatorTerm( 116 ) = "dissertant"
+RelatorCode( 117 ) = "dbp" : RelatorTerm( 117 ) = "distribution place"
+RelatorCode( 118 ) = "dst" : RelatorTerm( 118 ) = "distributor"
+RelatorCode( 119 ) = "dnr" : RelatorTerm( 119 ) = "donor"
+RelatorCode( 120 ) = "drm" : RelatorTerm( 120 ) = "draftsman"
+RelatorCode( 121 ) = "dub" : RelatorTerm( 121 ) = "dubious author"
+RelatorCode( 122 ) = "edt" : RelatorTerm( 122 ) = "editor"
+RelatorCode( 123 ) = "edc" : RelatorTerm( 123 ) = "editor of compilation"
+RelatorCode( 124 ) = "edm" : RelatorTerm( 124 ) = "editor of moving image work"
+RelatorCode( 125 ) = "elg" : RelatorTerm( 125 ) = "electrician"
+RelatorCode( 126 ) = "elt" : RelatorTerm( 126 ) = "electrotyper"
+RelatorCode( 127 ) = "enj" : RelatorTerm( 127 ) = "enacting jurisdiction"
+RelatorCode( 128 ) = "   " : RelatorTerm( 128 ) = "encoder"
+RelatorCode( 129 ) = "eng" : RelatorTerm( 129 ) = "engineer"
+RelatorCode( 130 ) = "egr" : RelatorTerm( 130 ) = "engraver"
+RelatorCode( 131 ) = "etr" : RelatorTerm( 131 ) = "etcher"
+RelatorCode( 132 ) = "evp" : RelatorTerm( 132 ) = "event place"
+RelatorCode( 133 ) = "exp" : RelatorTerm( 133 ) = "expert"
+RelatorCode( 134 ) = "   " : RelatorTerm( 134 ) = "expurgator"
+RelatorCode( 135 ) = "   " : RelatorTerm( 135 ) = "eyewitness"
+RelatorCode( 136 ) = "fac" : RelatorTerm( 136 ) = "facsimilist"
+RelatorCode( 137 ) = "fld" : RelatorTerm( 137 ) = "field director"
+RelatorCode( 138 ) = "fmd" : RelatorTerm( 138 ) = "film director"
+RelatorCode( 139 ) = "fds" : RelatorTerm( 139 ) = "film distributor"
+RelatorCode( 140 ) = "flm" : RelatorTerm( 140 ) = "film editor"
+RelatorCode( 141 ) = "fmp" : RelatorTerm( 141 ) = "film producer"
+RelatorCode( 142 ) = "fmk" : RelatorTerm( 142 ) = "filmmaker"
+RelatorCode( 143 ) = "fpy" : RelatorTerm( 143 ) = "first party"
+RelatorCode( 144 ) = "frg" : RelatorTerm( 144 ) = "forger"
+RelatorCode( 145 ) = "fmo" : RelatorTerm( 145 ) = "former owner"
+RelatorCode( 146 ) = "fnd" : RelatorTerm( 146 ) = "funder"
+RelatorCode( 147 ) = "gis" : RelatorTerm( 147 ) = "geographic information specialist"
+RelatorCode( 148 ) = "   " : RelatorTerm( 148 ) = "geospatial information specialist"
+RelatorCode( 149 ) = "   " : RelatorTerm( 149 ) = "graphic technician"
+RelatorCode( 150 ) = "hnr" : RelatorTerm( 150 ) = "honoree"
+RelatorCode( 151 ) = "   " : RelatorTerm( 151 ) = "honouree"
+RelatorCode( 152 ) = "   " : RelatorTerm( 152 ) = "honouree of item"
+RelatorCode( 153 ) = "hst" : RelatorTerm( 153 ) = "host"
+RelatorCode( 154 ) = "his" : RelatorTerm( 154 ) = "host institution"
+RelatorCode( 155 ) = "   " : RelatorTerm( 155 ) = "host, supporting"
+RelatorCode( 156 ) = "   " : RelatorTerm( 156 ) = "house electrician"
+RelatorCode( 157 ) = "ilu" : RelatorTerm( 157 ) = "illuminator"
+RelatorCode( 158 ) = "ill" : RelatorTerm( 158 ) = "illustrator"
+RelatorCode( 159 ) = "   " : RelatorTerm( 159 ) = "imprimatur"
+RelatorCode( 160 ) = "ins" : RelatorTerm( 160 ) = "inscriber"
+RelatorCode( 161 ) = "   " : RelatorTerm( 161 ) = "instructor"
+RelatorCode( 162 ) = "itr" : RelatorTerm( 162 ) = "instrumentalist"
+RelatorCode( 163 ) = "ive" : RelatorTerm( 163 ) = "interviewee"
+RelatorCode( 164 ) = "ivr" : RelatorTerm( 164 ) = "interviewer"
+RelatorCode( 165 ) = "inv" : RelatorTerm( 165 ) = "inventor"
+RelatorCode( 166 ) = "isb" : RelatorTerm( 166 ) = "issuing body"
+RelatorCode( 167 ) = "   " : RelatorTerm( 167 ) = "joint author"
+RelatorCode( 168 ) = "jud" : RelatorTerm( 168 ) = "judge"
+RelatorCode( 169 ) = "jug" : RelatorTerm( 169 ) = "jurisdiction governed"
+RelatorCode( 170 ) = "   " : RelatorTerm( 170 ) = "lab director"
+RelatorCode( 171 ) = "lbr" : RelatorTerm( 171 ) = "laboratory"
+RelatorCode( 172 ) = "ldr" : RelatorTerm( 172 ) = "laboratory director"
+RelatorCode( 173 ) = "lsa" : RelatorTerm( 173 ) = "landscape architect"
+RelatorCode( 174 ) = "led" : RelatorTerm( 174 ) = "lead"
+RelatorCode( 175 ) = "len" : RelatorTerm( 175 ) = "lender"
+RelatorCode( 176 ) = "lil" : RelatorTerm( 176 ) = "libelant"
+RelatorCode( 177 ) = "lit" : RelatorTerm( 177 ) = "libelant-appellant"
+RelatorCode( 178 ) = "lie" : RelatorTerm( 178 ) = "libelant-appellee"
+RelatorCode( 179 ) = "lel" : RelatorTerm( 179 ) = "libelee"
+RelatorCode( 180 ) = "let" : RelatorTerm( 180 ) = "libelee-appellant"
+RelatorCode( 181 ) = "lee" : RelatorTerm( 181 ) = "libelee-appellee"
+RelatorCode( 182 ) = "lbt" : RelatorTerm( 182 ) = "librettist"
+RelatorCode( 183 ) = "lse" : RelatorTerm( 183 ) = "licensee"
+RelatorCode( 184 ) = "lso" : RelatorTerm( 184 ) = "licensor"
+RelatorCode( 185 ) = "lgd" : RelatorTerm( 185 ) = "lighting designer"
+RelatorCode( 186 ) = "ltg" : RelatorTerm( 186 ) = "lithographer"
+RelatorCode( 187 ) = "lyr" : RelatorTerm( 187 ) = "lyricist"
+RelatorCode( 188 ) = "mfp" : RelatorTerm( 188 ) = "manufacture place"
+RelatorCode( 189 ) = "mfr" : RelatorTerm( 189 ) = "manufacturer"
+RelatorCode( 190 ) = "mrb" : RelatorTerm( 190 ) = "marbler"
+RelatorCode( 191 ) = "mrk" : RelatorTerm( 191 ) = "markup editor"
+RelatorCode( 192 ) = "   " : RelatorTerm( 192 ) = "master electrician"
+RelatorCode( 193 ) = "med" : RelatorTerm( 193 ) = "medium"
+RelatorCode( 194 ) = "mdc" : RelatorTerm( 194 ) = "metadata contact"
+RelatorCode( 195 ) = "mte" : RelatorTerm( 195 ) = "metal engraver"
+RelatorCode( 196 ) = "mtk" : RelatorTerm( 196 ) = "minute taker"
+RelatorCode( 197 ) = "mod" : RelatorTerm( 197 ) = "moderator"
+RelatorCode( 198 ) = "mon" : RelatorTerm( 198 ) = "monitor"
+RelatorCode( 199 ) = "   " : RelatorTerm( 199 ) = "motion picture editor"
+RelatorCode( 200 ) = "   " : RelatorTerm( 200 ) = "moving image work editor"
+RelatorCode( 201 ) = "mcp" : RelatorTerm( 201 ) = "music copyist"
+RelatorCode( 202 ) = "msd" : RelatorTerm( 202 ) = "musical director"
+RelatorCode( 203 ) = "mus" : RelatorTerm( 203 ) = "musician"
+RelatorCode( 204 ) = "nrt" : RelatorTerm( 204 ) = "narrator"
+RelatorCode( 205 ) = "   " : RelatorTerm( 205 ) = "observer"
+RelatorCode( 206 ) = "   " : RelatorTerm( 206 ) = "onlooker"
+RelatorCode( 207 ) = "osp" : RelatorTerm( 207 ) = "onscreen presenter"
+RelatorCode( 208 ) = "opn" : RelatorTerm( 208 ) = "opponent"
+RelatorCode( 209 ) = "orm" : RelatorTerm( 209 ) = "organizer"
+RelatorCode( 210 ) = "   " : RelatorTerm( 210 ) = "organizer of meeting"
+RelatorCode( 211 ) = "org" : RelatorTerm( 211 ) = "originator"
+RelatorCode( 212 ) = "oth" : RelatorTerm( 212 ) = "other"
+RelatorCode( 213 ) = "own" : RelatorTerm( 213 ) = "owner"
+RelatorCode( 214 ) = "pan" : RelatorTerm( 214 ) = "panelist"
+RelatorCode( 215 ) = "ppm" : RelatorTerm( 215 ) = "papermaker"
+RelatorCode( 216 ) = "pta" : RelatorTerm( 216 ) = "patent applicant"
+RelatorCode( 217 ) = "pth" : RelatorTerm( 217 ) = "patent holder"
+RelatorCode( 218 ) = "   " : RelatorTerm( 218 ) = "patent inventor"
+RelatorCode( 219 ) = "   " : RelatorTerm( 219 ) = "patentee"
+RelatorCode( 220 ) = "pat" : RelatorTerm( 220 ) = "patron"
+RelatorCode( 221 ) = "prf" : RelatorTerm( 221 ) = "performer"
+RelatorCode( 222 ) = "   " : RelatorTerm( 222 ) = "performer of research"
+RelatorCode( 223 ) = "pma" : RelatorTerm( 223 ) = "permitting agency"
+RelatorCode( 224 ) = "pht" : RelatorTerm( 224 ) = "photographer"
+RelatorCode( 225 ) = "pad" : RelatorTerm( 225 ) = "place of address"
+RelatorCode( 226 ) = "ptf" : RelatorTerm( 226 ) = "plaintiff"
+RelatorCode( 227 ) = "ptt" : RelatorTerm( 227 ) = "plaintiff-appellant"
+RelatorCode( 228 ) = "pte" : RelatorTerm( 228 ) = "plaintiff-appellee"
+RelatorCode( 229 ) = "plt" : RelatorTerm( 229 ) = "platemaker"
+RelatorCode( 230 ) = "   " : RelatorTerm( 230 ) = "plates, printer of"
+RelatorCode( 231 ) = "pra" : RelatorTerm( 231 ) = "praeses"
+RelatorCode( 232 ) = "pre" : RelatorTerm( 232 ) = "presenter"
+RelatorCode( 233 ) = "   " : RelatorTerm( 233 ) = "preservationist"
+RelatorCode( 234 ) = "prt" : RelatorTerm( 234 ) = "printer"
+RelatorCode( 235 ) = "pop" : RelatorTerm( 235 ) = "printer of plates"
+RelatorCode( 236 ) = "prm" : RelatorTerm( 236 ) = "printmaker"
+RelatorCode( 237 ) = "prc" : RelatorTerm( 237 ) = "process contact"
+RelatorCode( 238 ) = "pro" : RelatorTerm( 238 ) = "producer"
+RelatorCode( 239 ) = "   " : RelatorTerm( 239 ) = "producer of book"
+RelatorCode( 240 ) = "prn" : RelatorTerm( 240 ) = "production company"
+RelatorCode( 241 ) = "prs" : RelatorTerm( 241 ) = "production designer"
+RelatorCode( 242 ) = "pmn" : RelatorTerm( 242 ) = "production manager"
+RelatorCode( 243 ) = "prd" : RelatorTerm( 243 ) = "production personnel"
+RelatorCode( 244 ) = "prp" : RelatorTerm( 244 ) = "production place"
+RelatorCode( 245 ) = "prg" : RelatorTerm( 245 ) = "programmer"
+RelatorCode( 246 ) = "pdr" : RelatorTerm( 246 ) = "project director"
+RelatorCode( 247 ) = "   " : RelatorTerm( 247 ) = "promoter"
+RelatorCode( 248 ) = "pfr" : RelatorTerm( 248 ) = "proofreader"
+RelatorCode( 249 ) = "prv" : RelatorTerm( 249 ) = "provider"
+RelatorCode( 250 ) = "pup" : RelatorTerm( 250 ) = "publication place"
+RelatorCode( 251 ) = "pbl" : RelatorTerm( 251 ) = "publisher"
+RelatorCode( 252 ) = "pbd" : RelatorTerm( 252 ) = "publisher director"
+RelatorCode( 253 ) = "ppt" : RelatorTerm( 253 ) = "puppeteer"
+RelatorCode( 254 ) = "rdd" : RelatorTerm( 254 ) = "radio director"
+RelatorCode( 255 ) = "rpc" : RelatorTerm( 255 ) = "radio producer"
+RelatorCode( 256 ) = "   " : RelatorTerm( 256 ) = "recipient"
+RelatorCode( 257 ) = "rce" : RelatorTerm( 257 ) = "recording engineer"
+RelatorCode( 258 ) = "rcd" : RelatorTerm( 258 ) = "recordist"
+RelatorCode( 259 ) = "red" : RelatorTerm( 259 ) = "redaktor"
+RelatorCode( 260 ) = "ren" : RelatorTerm( 260 ) = "renderer"
+RelatorCode( 261 ) = "rpt" : RelatorTerm( 261 ) = "reporter"
+RelatorCode( 262 ) = "rps" : RelatorTerm( 262 ) = "repository"
+RelatorCode( 263 ) = "rth" : RelatorTerm( 263 ) = "research team head"
+RelatorCode( 264 ) = "rtm" : RelatorTerm( 264 ) = "research team member"
+RelatorCode( 265 ) = "res" : RelatorTerm( 265 ) = "researcher"
+RelatorCode( 266 ) = "rsp" : RelatorTerm( 266 ) = "respondent"
+RelatorCode( 267 ) = "rst" : RelatorTerm( 267 ) = "respondent-appellant"
+RelatorCode( 268 ) = "rse" : RelatorTerm( 268 ) = "respondent-appellee"
+RelatorCode( 269 ) = "rpy" : RelatorTerm( 269 ) = "responsible party"
+RelatorCode( 270 ) = "rsg" : RelatorTerm( 270 ) = "restager"
+RelatorCode( 271 ) = "rsr" : RelatorTerm( 271 ) = "restorationist"
+RelatorCode( 272 ) = "rev" : RelatorTerm( 272 ) = "reviewer"
+RelatorCode( 273 ) = "rbr" : RelatorTerm( 273 ) = "rubricator"
+RelatorCode( 274 ) = "sce" : RelatorTerm( 274 ) = "scenarist"
+RelatorCode( 275 ) = "sad" : RelatorTerm( 275 ) = "scientific advisor"
+RelatorCode( 276 ) = "aus" : RelatorTerm( 276 ) = "screenwriter"
+RelatorCode( 277 ) = "scr" : RelatorTerm( 277 ) = "scribe"
+RelatorCode( 278 ) = "scl" : RelatorTerm( 278 ) = "sculptor"
+RelatorCode( 279 ) = "spy" : RelatorTerm( 279 ) = "second party"
+RelatorCode( 280 ) = "sec" : RelatorTerm( 280 ) = "secretary"
+RelatorCode( 281 ) = "sll" : RelatorTerm( 281 ) = "seller"
+RelatorCode( 282 ) = "std" : RelatorTerm( 282 ) = "set designer"
+RelatorCode( 283 ) = "stg" : RelatorTerm( 283 ) = "setting"
+RelatorCode( 284 ) = "sgn" : RelatorTerm( 284 ) = "signer"
+RelatorCode( 285 ) = "sng" : RelatorTerm( 285 ) = "singer"
+RelatorCode( 286 ) = "sds" : RelatorTerm( 286 ) = "sound designer"
+RelatorCode( 287 ) = "spk" : RelatorTerm( 287 ) = "speaker"
+RelatorCode( 288 ) = "spn" : RelatorTerm( 288 ) = "sponsor"
+RelatorCode( 289 ) = "   " : RelatorTerm( 289 ) = "sponsoring body"
+RelatorCode( 290 ) = "sgd" : RelatorTerm( 290 ) = "stage director"
+RelatorCode( 291 ) = "stm" : RelatorTerm( 291 ) = "stage manager"
+RelatorCode( 292 ) = "stn" : RelatorTerm( 292 ) = "standards body"
+RelatorCode( 293 ) = "str" : RelatorTerm( 293 ) = "stereotyper"
+RelatorCode( 294 ) = "stl" : RelatorTerm( 294 ) = "storyteller"
+RelatorCode( 295 ) = "sht" : RelatorTerm( 295 ) = "supporting host"
+RelatorCode( 296 ) = "   " : RelatorTerm( 296 ) = "supposed name"
+RelatorCode( 297 ) = "srv" : RelatorTerm( 297 ) = "surveyor"
+RelatorCode( 298 ) = "tch" : RelatorTerm( 298 ) = "teacher"
+RelatorCode( 299 ) = "tcd" : RelatorTerm( 299 ) = "technical director"
+RelatorCode( 300 ) = "   " : RelatorTerm( 300 ) = "technical draftsman"
+RelatorCode( 301 ) = "tld" : RelatorTerm( 301 ) = "television director"
+RelatorCode( 302 ) = "tlp" : RelatorTerm( 302 ) = "television producer"
+RelatorCode( 303 ) = "   " : RelatorTerm( 303 ) = "testifier"
+RelatorCode( 304 ) = "ths" : RelatorTerm( 304 ) = "thesis advisor"
+RelatorCode( 305 ) = "trc" : RelatorTerm( 305 ) = "transcriber"
+RelatorCode( 306 ) = "trl" : RelatorTerm( 306 ) = "translator"
+RelatorCode( 307 ) = "tyd" : RelatorTerm( 307 ) = "type designer"
+RelatorCode( 308 ) = "   " : RelatorTerm( 308 ) = "typesetter"
+RelatorCode( 309 ) = "tyg" : RelatorTerm( 309 ) = "typographer"
+RelatorCode( 310 ) = "uvp" : RelatorTerm( 310 ) = "university place"
+RelatorCode( 311 ) = "vdg" : RelatorTerm( 311 ) = "videographer"
+RelatorCode( 312 ) = "   " : RelatorTerm( 312 ) = "vocalist"
+RelatorCode( 313 ) = "vac" : RelatorTerm( 313 ) = "voice actor"
+RelatorCode( 314 ) = "wit" : RelatorTerm( 314 ) = "witness"
+RelatorCode( 315 ) = "wde" : RelatorTerm( 315 ) = "wood engraver"
+RelatorCode( 316 ) = "wdc" : RelatorTerm( 316 ) = "woodcutter"
+RelatorCode( 317 ) = "wam" : RelatorTerm( 317 ) = "writer of accompanying material"
+RelatorCode( 318 ) = "wac" : RelatorTerm( 318 ) = "writer of added commentary"
+RelatorCode( 319 ) = "wal" : RelatorTerm( 319 ) = "writer of added lyrics"
+RelatorCode( 320 ) = "wat" : RelatorTerm( 320 ) = "writer of added text"
+RelatorCode( 321 ) = "win" : RelatorTerm( 321 ) = "writer of introduction"
+RelatorCode( 322 ) = "wpr" : RelatorTerm( 322 ) = "writer of preface"
+RelatorCode( 323 ) = "wst" : RelatorTerm( 323 ) = "writer of supplementary textual content"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillNotesArray
+
+' The explanations of the different terms. The "Use for" term goes on the line following
+' the explanation, with an indent to help it stand out a bit.
+
+Dim NEW_LINE_INDENT As String*5 : NEW_LINE_INDENT = Chr$( 013 ) & Space$( 4 )
+
+RelatorNote( 0   ) = ""
+RelatorNote( 1   ) = "A person, family, or organization contributing to a resource by shortening or condensing the original work but leaving the nature and content of the original work substantially unchanged. For substantial modifications that result in the creation of a new work, see author."
+RelatorNote( 2   ) = "A performer contributing to an expression of a work by acting as a cast member or player in a musical or dramatic presentation, etc."
+RelatorNote( 3   ) = "A person or organization who 1) reworks a musical composition, usually for a different medium, or 2) rewrites novels or stories for motion pictures or other audiovisual medium."
+RelatorNote( 4   ) = "A person, family, or organization to whom the correspondence in a work is addressed." & NEW_LINE_INDENT & "UF Recipient"
+RelatorNote( 5   ) = "A person or organization that reviews, examines and interprets data or information in a specific area."
+RelatorNote( 6   ) = "A person contributing to a moving image work or computer program by giving apparent movement to inanimate objects or drawings. For the creator of the drawings that are animated, see artist."
+RelatorNote( 7   ) = "A person who makes manuscript annotations on an item."
+RelatorNote( 8   ) = "A person or organization who appeals a lower court's decision."
+RelatorNote( 9   ) = "A person or organization against whom an appeal is taken."
+RelatorNote( 10  ) = "A person or organization responsible for the submission of an application or who is named as eligible for the results of the processing of the application (e.g., bestowing of rights, reward, title, position)."
+RelatorNote( 11  ) = "*USE Expert"
+RelatorNote( 12  ) = "A person, family, or organization responsible for creating an architectural design, including a pictorial representation intended to show how a building, etc., will look when completed. It also oversees the construction of structures."
+RelatorNote( 13  ) = "A person, family, or organization contributing to a musical work by rewriting the composition for a medium of performance different from that for which the work was originally intended, or modifying the work for the same medium of performance, etc., such that the musical substance of the original composition remains essentially unchanged. For extensive modification that effectively results in the creation of a new musical work, see composer." & NEW_LINE_INDENT & "UF Arranger of music"
+RelatorNote( 14  ) = "*USE Arranger"
+RelatorNote( 15  ) = "A person (e.g., a painter or sculptor) who makes copies of works of visual art."
+RelatorNote( 16  ) = "A person contributing to a motion picture or television production by overseeing the artists and craftspeople who build the sets."
+RelatorNote( 17  ) = "A person, family, or organization responsible for creating a work by conceiving, and implementing, an original graphic design, drawing, painting, etc. For book illustrators, prefer Illustrator [ill]." & NEW_LINE_INDENT & "UF Graphic technician"
+RelatorNote( 18  ) = "A person responsible for controlling the development of the artistic style of an entire production, including the choice of works to be presented and selection of senior production staff."
+RelatorNote( 19  ) = "A person or organization to whom a license for printing or publishing has been transferred."
+RelatorNote( 20  ) = "A person or organization associated with or found in an item or collection, which cannot be determined to be that of a Former owner [fmo] or other designated relationship indicative of provenance."
+RelatorNote( 21  ) = "An author, artist, etc., relating him/her to a resource for which there is or once was substantial authority for designating that person as author, creator, etc. of the work." & NEW_LINE_INDENT & "UF Supposed name"
+RelatorNote( 22  ) = "A person or organization in charge of the estimation and public auctioning of goods, particularly books, artistic works, etc."
+RelatorNote( 23  ) = "A person, family, or organization responsible for creating a work that is primarily textual in content, regardless of media type (e.g., printed text, spoken word, electronic text, tactile text) or genre (e.g., poems, novels, screenplays, blogs). Use also for persons, etc., creating a new work by paraphrasing, rewriting, or adapting works by another creator such that the modification has substantially changed the nature and content of the original or changed the medium of expression." & NEW_LINE_INDENT & "UF Joint author"
+RelatorNote( 24  ) = "A person or organization whose work is largely quoted or extracted in works to which he or she did not contribute directly. Such quotations are found particularly in exhibition catalogs, collections of photographs, etc."
+RelatorNote( 25  ) = "A person or organization responsible for an afterword, postface, colophon, etc. but who is not the chief author of a work."
+RelatorNote( 26  ) = "A person or organization responsible for the dialog or spoken commentary for a screenplay or sound recording."
+RelatorNote( 27  ) = "A person or organization responsible for an introduction, preface, foreword, or other critical introductory matter, but who is not the chief author."
+RelatorNote( 28  ) = "*USE Screenwriter"
+RelatorNote( 29  ) = "A person whose manuscript signature appears on an item."
+RelatorNote( 30  ) = "A person or organization responsible for a resource upon which the resource represented by the bibliographic description is based. This may be appropriate for adaptations, sequels, continuations, indexes, etc."
+RelatorNote( 31  ) = "A person who binds an item."
+RelatorNote( 32  ) = "A person or organization responsible for the binding design of a book, including the type of binding, the type of materials used, and any decorative aspects of the binding." & NEW_LINE_INDENT & "UF Designer of binding"
+RelatorNote( 33  ) = "A person or organization responsible for writing a commendation or testimonial for a work, which appears on or within the publication itself, frequently on the back or dust jacket of print publications or on advertising material for all media."
+RelatorNote( 34  ) = "A person or organization involved in manufacturing a manifestation by being responsible for the entire graphic design of a book, including arrangement of type and illustration, choice of materials, and process used." & NEW_LINE_INDENT & "UF Designer of book" & NEW_LINE_INDENT & "UF Designer of e-book"
+RelatorNote( 35  ) = "A person or organization responsible for the production of books and other print media." & NEW_LINE_INDENT & "UF Producer of book"
+RelatorNote( 36  ) = "A person or organization responsible for the design of flexible covers designed for or published with a book, including the type of materials used, and any decorative aspects of the bookjacket." & NEW_LINE_INDENT & "UF Designer of bookjacket"
+RelatorNote( 37  ) = "A person or organization responsible for the design of a book owner's identification label that is most commonly pasted to the inside front cover of a book."
+RelatorNote( 38  ) = "A person or organization who makes books and other bibliographic materials available for purchase. Interest in the materials is primarily lucrative."
+RelatorNote( 39  ) = "*USE Censor"
+RelatorNote( 40  ) = "A person, family, or organization involved in manufacturing a resource by embossing Braille cells using a stylus, special embossing printer, or other device."
+RelatorNote( 41  ) = "A person, family, or organization involved in broadcasting a resource to an audience via radio, television, webcast, etc."
+RelatorNote( 42  ) = "A person or organization who writes in an artistic hand, usually as a copyist and or engrosser."
+RelatorNote( 43  ) = "A person, family, or organization responsible for creating a map, atlas, globe, or other cartographic work."
+RelatorNote( 44  ) = "A person, family, or organization involved in manufacturing a resource by pouring a liquid or molten substance into a mold and leaving it to solidify to take the shape of the mold."
+RelatorNote( 45  ) = "A person or organization who examines bibliographic resources for the purpose of suppressing parts deemed objectionable on moral, political, military, or other grounds." & NEW_LINE_INDENT & "UF Bowdlerizer." & NEW_LINE_INDENT & "UF Expurgator"
+RelatorNote( 46  ) = "*USE Electrician"
+RelatorNote( 47  ) = "A person responsible for creating or contributing to a work of movement."
+RelatorNote( 48  ) = "A person in charge of photographing a motion picture, who plans the technical aspets of lighting and photographing of scenes, and often assists the director in the choice of angles, camera setups, and lighting moods. He or she may also supervise the further processing of filmed material up to the completion of the work print. Cinematographer is also referred to as director of photography. Do not confuse with videographer." & NEW_LINE_INDENT & "UF Director of photography"
+RelatorNote( 49  ) = "A person or organization for whom another person or organization is acting."
+RelatorNote( 50  ) = "*USE Contributor"
+RelatorNote( 51  ) = "A curator who lists or inventories the items in an aggregate work such as a collection of items or works."
+RelatorNote( 52  ) = "A curator who brings together items from various sources that are then arranged, described, and cataloged as a collection. A collector is neither the creator of the material nor a person to whom manuscripts in the collection may have been addressed."
+RelatorNote( 53  ) = "A person, family, or organization involved in manufacturing a manifestation of photographic prints from film or other colloid that has ink-receptive and ink-repellent surfaces."
+RelatorNote( 54  ) = "A person or organization responsible for applying color to drawings, prints, photographs, maps, moving images, etc."
+RelatorNote( 55  ) = "A performer contributing to a work by providing interpretation, analysis, or a discussion of the subject matter on a recording, film, or other audiovisual medium."
+RelatorNote( 56  ) = "A person or organization responsible for the commentary or explanatory notes about a text. For the writer of manuscript annotations in a printed book, use Annotator."
+RelatorNote( 57  ) = "A person, family, or organization responsible for creating a new work (e.g., a bibliography, a directory) through the act of compilation, e.g., selecting, arranging, aggregating, and editing data, information, etc."
+RelatorNote( 58  ) = "A person or organization who applies to the courts for redress, usually in an equity proceeding."
+RelatorNote( 59  ) = "A complainant who takes an appeal from one court or jurisdiction to another to reverse the judgment, usually in an equity proceeding."
+RelatorNote( 60  ) = "A complainant against whom an appeal is taken from one court or jurisdiction to another to reverse the judgment, usually in an equity proceeding."
+RelatorNote( 61  ) = "A person, family, or organization responsible for creating or contributing to a musical resource by adding music to a work that originally lacked it or supplements it."
+RelatorNote( 62  ) = "A person or organization responsible for the creation of metal slug, or molds made of other materials, used to produce the text and images in printed matter." & NEW_LINE_INDENT & "UF Typesetter"
+RelatorNote( 63  ) = "A person or organization responsible for the original idea on which a work is based, this includes the scientific author of an audio-visual item and the conceptor of an advertisement."
+RelatorNote( 64  ) = "A performer contributing to a musical resource by leading a performing group (orchestra, chorus, opera, etc.) in a musical or dramatic presentation, etc."
+RelatorNote( 65  ) = "A person or organization responsible for documenting, preserving, or treating printed or manuscript material, works of art, artifacts, or other media." & NEW_LINE_INDENT & "UF Preservationist"
+RelatorNote( 66  ) = "A person or organization relevant to a resource, who is called upon for professional advice or services in a specialized field of knowledge or training."
+RelatorNote( 67  ) = "A person or organization relevant to a resource, who is engaged specifically to provide an intellectual overview of a strategic or operational task and by analysis, specification, or instruction, to create or propose a cost-effective course of action or solution."
+RelatorNote( 68  ) = "A person(s) or organization who opposes, resists, or disputes, in a court of law, a claim, decision, result, etc."
+RelatorNote( 69  ) = "A contestant who takes an appeal from one court of law or jurisdiction to another to reverse the judgment."
+RelatorNote( 70  ) = "A contestant against whom an appeal is taken from one court of law or jurisdiction to another to reverse the judgment."
+RelatorNote( 71  ) = "A person(s) or organization defending a claim, decision, result, etc. being opposed, resisted, or disputed in a court of law."
+RelatorNote( 72  ) = "A contestee who takes an appeal from one court or jurisdiction to another to reverse the judgment."
+RelatorNote( 73  ) = "A contestee against whom an appeal is taken from one court or jurisdiction to another to reverse the judgment."
+RelatorNote( 74  ) = "A person or organization relevant to a resource, who enters into a contract with another person or organization to perform a specific."
+RelatorNote( 75  ) = "A person, family or organization responsible for making contributions to the resource. This includes those whose work has been contributed to a larger work, such as an anthology, serial publication, or other compilation of individual works. If a more specific role is available, prefer that, e.g. editor, compiler, illustrator." & NEW_LINE_INDENT & "UF Collaborator"
+RelatorNote( 76  ) = "*USE Facsimilist"
+RelatorNote( 77  ) = "A person or organization listed as a copyright owner at the time of registration. Copyright can be granted or later transferred to another person or organization, at which time the claimant becomes the copyright holder."
+RelatorNote( 78  ) = "A person or organization to whom copy and legal rights have been granted or transferred for the intellectual content of a work. The copyright holder, although not necessarily the creator of the work, usually has the exclusive right to benefit financially from the sale and use of the work to which the associated copyright protection applies."
+RelatorNote( 79  ) = "A person or organization who is a corrector of manuscripts, such as the scriptorium official who corrected the work of a scribe. For printed matter, use Proofreader."
+RelatorNote( 80  ) = "A person or organization who was either the writer or recipient of a letter or other communication."
+RelatorNote( 81  ) = "A person, family, or organization that designs the costumes for a moving image production or for a musical or dramatic presentation or entertainment."
+RelatorNote( 82  ) = "*USE Forger"
+RelatorNote( 83  ) = "A court governed by court rules, regardless of their official nature (e.g., laws, administrative regulations)."
+RelatorNote( 84  ) = "A person, family, or organization contributing to a resource by preparing a court's opinions for publication."
+RelatorNote( 85  ) = "A person or organization responsible for the graphic design of a book cover, album cover, slipcase, box, container, etc. For a person or organization responsible for the graphic design of an entire book, use Book designer; for book jackets, use Bookjacket designer." & NEW_LINE_INDENT & "UF Designer of cover"
+RelatorNote( 86  ) = "A person or organization responsible for the intellectual or artistic content of a resource."
+RelatorNote( 87  ) = "A person, family, or organization conceiving, aggregating, and/or organizing an exhibition, collection, or other item." & NEW_LINE_INDENT & "UF Curator of an exhibition"
+RelatorNote( 88  ) = "*USE Curator"
+RelatorNote( 89  ) = "*USE Owner"
+RelatorNote( 90  ) = "A performer who dances in a musical, dramatic, etc., presentation."
+RelatorNote( 91  ) = "A person or organization that submits data for inclusion in a database or other collection of data."
+RelatorNote( 92  ) = "A person or organization responsible for managing databases or other data sources."
+RelatorNote( 93  ) = "A person, family, or organization to whom a resource is dedicated." & NEW_LINE_INDENT & "UF Dedicatee of item"
+RelatorNote( 94  ) = "*USE Dedicatee"
+RelatorNote( 95  ) = "A person who writes a dedication, which may be a formal statement or in epistolary or verse form."
+RelatorNote( 96  ) = "A person or organization who is accused in a criminal proceeding or sued in a civil proceeding."
+RelatorNote( 97  ) = "A defendant who takes an appeal from one court or jurisdiction to another to reverse the judgment, usually in a legal action."
+RelatorNote( 98  ) = "A defendant against whom an appeal is taken from one court or jurisdiction to another to reverse the judgment, usually in a legal action."
+RelatorNote( 99  ) = "A organization granting an academic degree." & NEW_LINE_INDENT & "UF Degree grantor"
+RelatorNote( 100 ) = "A person who is part of a committee that considers the merit of a thesis, dissertation, or other submission by an academic degree candidate."
+RelatorNote( 101 ) = "*USE Degree granting institution"
+RelatorNote( 102 ) = "A person overseeing a higher level academic degree."
+RelatorNote( 103 ) = "A person or organization executing technical drawings from others' designs."
+RelatorNote( 104 ) = "An entity depicted or portrayed in a work, particularly in a work of art."
+RelatorNote( 105 ) = "*USE Witness"
+RelatorNote( 106 ) = "A current owner of an item who deposited the item into the custody of another person, family, or organization, while still retaining ownership."
+RelatorNote( 107 ) = "A person, family, or organization responsible for creating a design for an object."
+RelatorNote( 108 ) = "*USE Binding designer"
+RelatorNote( 109 ) = "*USE Book designer"
+RelatorNote( 110 ) = "*USE Bookjacket designer"
+RelatorNote( 111 ) = "*USE Cover designer"
+RelatorNote( 112 ) = "*USE Book designer"
+RelatorNote( 113 ) = "*USE Type designer"
+RelatorNote( 114 ) = "A person responsible for the general management and supervision of a filmed performance, a radio or television program, etc."
+RelatorNote( 115 ) = "*USE Cinematographer"
+RelatorNote( 116 ) = "A person who presents a thesis for a university or higher-level educational degree."
+RelatorNote( 117 ) = "A place from which a resource, e.g., a serial, is distributed."
+RelatorNote( 118 ) = "A person or organization that has exclusive or shared marketing rights for a resource."
+RelatorNote( 119 ) = "A former owner of an item who donated that item to another owner."
+RelatorNote( 120 ) = "A person, family, or organization contributing to a resource by an architect, inventor, etc., by making detailed plans or drawings for buildings, ships, aircraft, machines, objects, etc." & NEW_LINE_INDENT & "UF Technical draftsman"
+RelatorNote( 121 ) = "A person or organization to which authorship has been dubiously or incorrectly ascribed."
+RelatorNote( 122 ) = "A person, family, or organization contributing to a resource by revising or elucidating the content, e.g., adding an introduction, notes, or other critical matter. An editor may also prepare a resource for production, publication, or distribution. For major revisions, adaptations, etc., that substantially change the nature and content of the original work, resulting in a new work, see author."
+RelatorNote( 123 ) = "A person, family, or organization contributing to a collective or aggregate work by selecting and putting together works, or parts of works, by one or more creators. For compilations of data, information, etc., that result in new works, see compiler."
+RelatorNote( 124 ) = "A person, family, or organization responsible for assembling, arranging, and trimming film, video, or other moving image formats, including both visual and audio aspects." & NEW_LINE_INDENT & "UF Moving image work editor"
+RelatorNote( 125 ) = "A person responsible for setting up a lighting rig and focusing the lights for a production, and running the lighting at a performance." & NEW_LINE_INDENT & "UF Chief electrician." & NEW_LINE_INDENT & "UF House electrician." & NEW_LINE_INDENT & "UF Master electrician"
+RelatorNote( 126 ) = "A person or organization who creates a duplicate printing surface by pressure molding and electrodepositing of metal that is then backed up with lead for printing."
+RelatorNote( 127 ) = "A jurisdiction enacting a law, regulation, constitution, court rule, etc."
+RelatorNote( 128 ) = "*USE Markup editor"
+RelatorNote( 129 ) = "A person or organization that is responsible for technical planning and design, particularly with construction."
+RelatorNote( 130 ) = "A person or organization who cuts letters, figures, etc. on a surface, such as a wooden or metal plate used for printing."
+RelatorNote( 131 ) = "A person or organization who produces text or images for printing by subjecting metal, glass, or some other surface to acid or the corrosive action of some other substance."
+RelatorNote( 132 ) = "A place where an event such as a conference or a concert took place."
+RelatorNote( 133 ) = "A person or organization in charge of the description and appraisal of the value of goods, particularly rare items, works of art, etc." & NEW_LINE_INDENT & "UF Appraiser"
+RelatorNote( 134 ) = "*USE Censor"
+RelatorNote( 135 ) = "*USE Witness"
+RelatorNote( 136 ) = "A person or organization that executed the facsimile." & NEW_LINE_INDENT & "UF Copier"
+RelatorNote( 137 ) = "A person or organization that manages or supervises the work done to collect raw data or do research in an actual setting or environment (typically applies to the natural and social sciences)."
+RelatorNote( 138 ) = "A director responsible for the general management and supervision of a filmed performance."
+RelatorNote( 139 ) = "A person, family, or organization involved in distributing a moving image resource to theatres or other distribution channels."
+RelatorNote( 140 ) = "A person who, following the script and in creative cooperation with the Director, selects, arranges, and assembles the filmed material, controls the synchronization of picture and sound, and participates in other post-production tasks such as sound mixing and visual effects processing. Today, picture editing is often performed digitally." & NEW_LINE_INDENT & "UF Motion picture editor"
+RelatorNote( 141 ) = "A producer responsible for most of the business aspects of a film."
+RelatorNote( 142 ) = "A person, family or organization responsible for creating an independent or personal film. A filmmaker is individually responsible for the conception and execution of all aspects of the film."
+RelatorNote( 143 ) = "A person or organization who is identified as the only party or the party of the first party. In the case of transfer of rights, this is the assignor, transferor, licensor, grantor, etc. Multiple parties can be named jointly as the first party."
+RelatorNote( 144 ) = "A person or organization who makes or imitates something of value or importance, especially with the intent to defraud." & NEW_LINE_INDENT & "UF Copier." & NEW_LINE_INDENT & "UF Counterfeiter"
+RelatorNote( 145 ) = "A person, family, or organization formerly having legal possession of an item."
+RelatorNote( 146 ) = "A person or organization that furnished financial support for the production of the work."
+RelatorNote( 147 ) = "A person responsible for geographic information system (GIS) development and integration with global positioning system data." & NEW_LINE_INDENT & "UF Geospatial information specialist"
+RelatorNote( 148 ) = "*USE Geographic information specialist"
+RelatorNote( 149 ) = "*USE Artist"
+RelatorNote( 150 ) = "A person, family, or organization honored by a work or item (e.g., the honoree of a festschrift, a person to whom a copy is presented)." & NEW_LINE_INDENT & "UF Honouree." & NEW_LINE_INDENT & "UF Honouree of item"
+RelatorNote( 151 ) = "*USE Honoree"
+RelatorNote( 152 ) = "*USE Honoree"
+RelatorNote( 153 ) = "A performer contributing to a resource by leading a program (often broadcast) that includes other guests, performers, etc. (e.g., talk show host)."
+RelatorNote( 154 ) = "An organization hosting the event, exhibit, conference, etc., which gave rise to a resource, but having little or no responsibility for the content of the resource."
+RelatorNote( 155 ) = "*USE Supporting host"
+RelatorNote( 156 ) = "*USE Electrician"
+RelatorNote( 157 ) = "A person providing decoration to a specific item using precious metals or color, often with elaborate designs and motifs."
+RelatorNote( 158 ) = "A person, family, or organization contributing to a resource by supplementing the primary content with drawings, diagrams, photographs, etc. If the work is primarily the artistic content created by this entity, use artist or photographer."
+RelatorNote( 159 ) = "*USE Licensor"
+RelatorNote( 160 ) = "A person who has written a statement of dedication or gift."
+RelatorNote( 161 ) = "*USE Teacher"
+RelatorNote( 162 ) = "A performer contributing to a resource by playing a musical instrument."
+RelatorNote( 163 ) = "A person, family or organization responsible for creating or contributing to a resource by responding to an interviewer, usually a reporter, pollster, or some other information gathering agent."
+RelatorNote( 164 ) = "A person, family, or organization responsible for creating or contributing to a resource by acting as an interviewer, reporter, pollster, or some other information gathering agent."
+RelatorNote( 165 ) = "A person, family, or organization responsible for creating a new device or process." & NEW_LINE_INDENT & "UF Patent inventor"
+RelatorNote( 166 ) = "A person, family or organization issuing a work, such as an official organ of the body."
+RelatorNote( 167 ) = "*USE Author"
+RelatorNote( 168 ) = "A person who hears and decides on legal matters in court."
+RelatorNote( 169 ) = "A jurisdiction governed by a law, regulation, etc., that was enacted by another jurisdiction."
+RelatorNote( 170 ) = "*USE Laboratory director"
+RelatorNote( 171 ) = "An organization that provides scientific analyses of material samples."
+RelatorNote( 172 ) = "A person or organization that manages or supervises work done in a controlled setting or environment." & NEW_LINE_INDENT & "UF Lab director"
+RelatorNote( 173 ) = "An architect responsible for creating landscape works. This work involves coordinating the arrangement of existing and proposed land features and structures."
+RelatorNote( 174 ) = "A person or organization that takes primary responsibility for a particular activity or endeavor. May be combined with another relator term or code to show the greater importance this person or organization has regarding that particular role. If more than one relator is assigned to a heading, use the Lead relator only if it applies to all the relators."
+RelatorNote( 175 ) = "A person or organization permitting the temporary use of a book, manuscript, etc., such as for photocopying or microfilming."
+RelatorNote( 176 ) = "A person or organization who files a libel in an ecclesiastical or admiralty case."
+RelatorNote( 177 ) = "A libelant who takes an appeal from one ecclesiastical court or admiralty to another to reverse the judgment."
+RelatorNote( 178 ) = "A libelant against whom an appeal is taken from one ecclesiastical court or admiralty to another to reverse the judgment."
+RelatorNote( 179 ) = "A person or organization against whom a libel has been filed in an ecclesiastical court or admiralty."
+RelatorNote( 180 ) = "A libelee who takes an appeal from one ecclesiastical court or admiralty to another to reverse the judgment."
+RelatorNote( 181 ) = "A libelee against whom an appeal is taken from one ecclesiastical court or admiralty to another to reverse the judgment."
+RelatorNote( 182 ) = "An author of a libretto of an opera or other stage work, or an oratorio."
+RelatorNote( 183 ) = "A person or organization who is an original recipient of the right to print or publish."
+RelatorNote( 184 ) = "A person or organization who is a signer of the license, imprimatur, etc." & NEW_LINE_INDENT & "UF Imprimatur"
+RelatorNote( 185 ) = "A person or organization who designs the lighting scheme for a theatrical presentation, entertainment, motion picture, etc."
+RelatorNote( 186 ) = "A person or organization who prepares the stone or plate for lithographic printing, including a graphic artist creating a design directly on the surface from which printing will be done."
+RelatorNote( 187 ) = "An author of the words of a non-dramatic musical work (e.g. the text of a song), except for oratorios."
+RelatorNote( 188 ) = "The place of manufacture (e.g., printing, duplicating, casting, etc.) of a resource in a published form."
+RelatorNote( 189 ) = "A person or organization responsible for printing, duplicating, casting, etc. a resource."
+RelatorNote( 190 ) = "The entity responsible for marbling paper, cloth, leather, etc. used in construction of a resource."
+RelatorNote( 191 ) = "A person or organization performing the coding of SGML, HTML, or XML markup of metadata, text, etc." & NEW_LINE_INDENT & "UF Encoder"
+RelatorNote( 192 ) = "*USE Electrician"
+RelatorNote( 193 ) = "A person held to be a channel of communication between the earthly world and a world."
+RelatorNote( 194 ) = "A person or organization primarily responsible for compiling and maintaining the original description of a metadata set (e.g., geospatial metadata set)."
+RelatorNote( 195 ) = "An engraver responsible for decorations, illustrations, letters, etc. cut on a metal surface for printing or decoration."
+RelatorNote( 196 ) = "A person, family, or organization responsible for recording the minutes of a meeting."
+RelatorNote( 197 ) = "A performer contributing to a resource by leading a program (often broadcast) where topics are discussed, usually with participation of experts in fields related to the discussion."
+RelatorNote( 198 ) = "A person or organization that supervises compliance with the contract and is responsible for the report and controls its distribution. Sometimes referred to as the grantee, or controlling agency."
+RelatorNote( 199 ) = "*USE Film editor"
+RelatorNote( 200 ) = "*USE Editor of moving image work"
+RelatorNote( 201 ) = "A person who transcribes or copies musical notation."
+RelatorNote( 202 ) = "A person who coordinates the activities of the composer, the sound editor, and sound mixers for a moving image production or for a musical or dramatic presentation or entertainment."
+RelatorNote( 203 ) = "A person or organization who performs music or contributes to the musical content of a work when it is not possible or desirable to identify the function more precisely."
+RelatorNote( 204 ) = "A performer contributing to a resource by reading or speaking in order to give an account of an act, occurrence, course of events, etc."
+RelatorNote( 205 ) = "*USE Witness"
+RelatorNote( 206 ) = "*USE Witness"
+RelatorNote( 207 ) = "A performer contributing to an expression of a work by appearing on screen in nonfiction moving image materials or introductions to fiction moving image materials to provide contextual or background information. Use when another term (e.g., narrator, host) is either not applicable or not desired."
+RelatorNote( 208 ) = "A person or organization responsible for opposing a thesis or dissertation."
+RelatorNote( 209 ) = "A person, family, or organization organizing the exhibit, event, conference, etc., which gave rise to a resource." & NEW_LINE_INDENT & "UF Organizer of meeting"
+RelatorNote( 210 ) = "*USE Organizer"
+RelatorNote( 211 ) = "A person or organization performing the work, i.e., the name of a person or organization associated with the intellectual content of the work. This category does not include the publisher or personal affiliation, or sponsor except where it is also the corporate author."
+RelatorNote( 212 ) = "A role that has no equivalent in the MARC list."
+RelatorNote( 213 ) = "A person, family, or organization that currently owns an item or collection, i.e.has legal possession of a resource." & NEW_LINE_INDENT & "UF Current owner"
+RelatorNote( 214 ) = "A performer contributing to a resource by participating in a program (often broadcast) where topics are discussed, usually with participation of experts in fields related to the discussion."
+RelatorNote( 215 ) = "A person or organization responsible for the production of paper, usually from wood, cloth, or other fibrous material."
+RelatorNote( 216 ) = "A person or organization that applied for a patent."
+RelatorNote( 217 ) = "A person or organization that was granted the patent referred to by the item." & NEW_LINE_INDENT & "UF Patentee"
+RelatorNote( 218 ) = "*USE Inventor"
+RelatorNote( 219 ) = "*USE Patent holder"
+RelatorNote( 220 ) = "A person or organization responsible for commissioning a work. Usually a patron uses his or her means or influence to support the work of artists, writers, etc. This includes those who commission and pay for individual works."
+RelatorNote( 221 ) = "A person contributing to a resource by performing music, acting, dancing, speaking, etc., often in a musical or dramatic presentation, etc. If specific codes are used, [prf] is used for a person whose principal skill is not known or specified."
+RelatorNote( 222 ) = "*USE Researcher"
+RelatorNote( 223 ) = "An organization (usually a government agency) that issues permits under which work is accomplished."
+RelatorNote( 224 ) = "A person, family, or organization responsible for creating a photographic work."
+RelatorNote( 225 ) = "The place to which a resource is sent, for example, the place of the postal address of a letter."
+RelatorNote( 226 ) = "A person or organization who brings a suit in a civil proceeding."
+RelatorNote( 227 ) = "A plaintiff who takes an appeal from one court or jurisdiction to another to reverse the judgment, usually in a legal proceeding."
+RelatorNote( 228 ) = "A plaintiff against whom an appeal is taken from one court or jurisdiction to another to reverse the judgment, usually in a legal proceeding."
+RelatorNote( 229 ) = "A person, family, or organization involved in manufacturing a manifestation by preparing plates used in the production of printed images and/or text."
+RelatorNote( 230 ) = "*USE Printer of plates"
+RelatorNote( 231 ) = "A person who is the faculty moderator of an academic disputation, normally proposing a thesis and participating in the ensuing disputation."
+RelatorNote( 232 ) = "A person or organization mentioned in an " & QUOTE & "X presents" & QUOTE & " credit for moving image materials and who is associated with production, finance, or distribution in some way. A vanity credit; in early years, normally the head of a studio."
+RelatorNote( 233 ) = "*USE Conservator"
+RelatorNote( 234 ) = "A person, family, or organization involved in manufacturing a manifestation of printed text, notated music, etc., from type or plates, such as a book, newspaper, magazine, broadside, score, etc."
+RelatorNote( 235 ) = "A person or organization who prints illustrations from plates." & NEW_LINE_INDENT & "UF Plates, printer of"
+RelatorNote( 236 ) = "A person or organization who makes a relief, intaglio, or planographic printing surface."
+RelatorNote( 237 ) = "A person or organization primarily responsible for performing or initiating a process, such as is done with the collection of metadata sets."
+RelatorNote( 238 ) = "A person, family, or organization responsible for most of the business aspects of a production for screen, audio recording, television, webcast, etc. The producer is generally responsible for fund raising, managing the production, hiring key personnel, arranging for distributors, etc."
+RelatorNote( 239 ) = "*USE Book producer"
+RelatorNote( 240 ) = "An organization that is responsible for financial, technical, and organizational management of a production for stage, screen, audio recording, television, webcast, etc."
+RelatorNote( 241 ) = "A person or organization responsible for designing the overall visual appearance of a moving image production."
+RelatorNote( 242 ) = "A person responsible for all technical and business matters in a production."
+RelatorNote( 243 ) = "A person or organization associated with the production (props, lighting, special effects, etc.) of a musical or dramatic presentation or entertainment."
+RelatorNote( 244 ) = "The place of production (e.g., inscription, fabrication, construction, etc.) of a resource in an unpublished form."
+RelatorNote( 245 ) = "A person, family, or organization responsible for creating a computer program."
+RelatorNote( 246 ) = "A person or organization with primary responsibility for all essential aspects of a project, has overall responsibility for managing projects, or provides overall direction to a project manager."
+RelatorNote( 247 ) = "*USE Thesis advisor"
+RelatorNote( 248 ) = "A person who corrects printed matter. For manuscripts, use Corrector [crr]."
+RelatorNote( 249 ) = "A person or organization who produces, publishes, manufactures, or distributes a resource if specific codes are not desired (e.g. [mfr], [pbl]."
+RelatorNote( 250 ) = "The place where a resource is published."
+RelatorNote( 251 ) = "A person or organization responsible for publishing, releasing, or issuing a resource."
+RelatorNote( 252 ) = "A person or organization who presides over the elaboration of a collective work to ensure its coherence or continuity. This includes editors-in-chief, literary editors, editors of series, etc."
+RelatorNote( 253 ) = "A performer contributing to a resource by manipulating, controlling, or directing puppets or marionettes in a moving image production or a musical or dramatic presentation or entertainment."
+RelatorNote( 254 ) = "A director responsible for the general management and supervision of a radio program."
+RelatorNote( 255 ) = "A producer responsible for most of the business aspects of a radio program."
+RelatorNote( 256 ) = "*USE Addressee"
+RelatorNote( 257 ) = "A person contributing to a resource by supervising the technical aspects of a sound or video recording session."
+RelatorNote( 258 ) = "A person or organization who uses a recording device to capture sounds and/or video during a recording session, including field recordings of natural sounds, folkloric events, music, etc."
+RelatorNote( 259 ) = "A person or organization who writes or develops the framework for an item without being intellectually responsible for its content."
+RelatorNote( 260 ) = "A person or organization who prepares drawings of architectural designs (i.e., renderings) in accurate, representational perspective to show what the project will look like when completed."
+RelatorNote( 261 ) = "A person or organization who writes or presents reports of news or current events on air or in print."
+RelatorNote( 262 ) = "An organization that hosts data or material culture objects and provides services to promote long term, consistent and shared use of those data or objects."
+RelatorNote( 263 ) = "A person who directed or managed a research project."
+RelatorNote( 264 ) = "A person who participated in a research project but whose role did not involve direction or management of it."
+RelatorNote( 265 ) = "A person or organization responsible for performing research." & NEW_LINE_INDENT & "UF Performer of research"
+RelatorNote( 266 ) = "A person or organization who makes an answer to the courts pursuant to an application for redress (usually in an equity proceeding) or a candidate for a degree who defends or opposes a thesis provided by the praeses in an academic disputation."
+RelatorNote( 267 ) = "A respondent who takes an appeal from one court or jurisdiction to another to reverse the judgment, usually in an equity proceeding."
+RelatorNote( 268 ) = "A respondent against whom an appeal is taken from one court or jurisdiction to another to reverse the judgment, usually in an equity proceeding."
+RelatorNote( 269 ) = "A person or organization legally responsible for the content of the published material."
+RelatorNote( 270 ) = "A person or organization, other than the original choreographer or director, responsible for restaging a choreographic or dramatic work and who contributes minimal new content."
+RelatorNote( 271 ) = "A person, family, or organization responsible for the set of technical, editorial, and intellectual procedures aimed at compensating for the degradation of an item by bringing it back to a state as close as possible to its original condition."
+RelatorNote( 272 ) = "A person or organization responsible for the review of a book, motion picture, performance, etc."
+RelatorNote( 273 ) = "A person or organization responsible for parts of a work, often headings or opening parts of a manuscript, that appear in a distinctive color, usually red."
+RelatorNote( 274 ) = "A person or organization who is the author of a motion picture screenplay, generally the person who wrote the scenarios for a motion picture during the silent era."
+RelatorNote( 275 ) = "A person or organization who brings scientific, pedagogical, or historical competence to the conception and realization on a work, particularly in the case of audio-visual items."
+RelatorNote( 276 ) = "An author of a screenplay, script, or scene." & NEW_LINE_INDENT & "UF Author of screenplay, etc"
+RelatorNote( 277 ) = "A person who is an amanuensis and for a writer of manuscripts proper. For a person who makes pen-facsimiles, use Facsimilist [fac]."
+RelatorNote( 278 ) = "An artist responsible for creating a three-dimensional work by modeling, carving, or similar technique."
+RelatorNote( 279 ) = "A person or organization who is identified as the party of the second part. In the case of transfer of right, this is the assignee, transferee, licensee, grantee, etc. Multiple parties can be named jointly as the second party."
+RelatorNote( 280 ) = "A person or organization who is a recorder, redactor, or other person responsible for expressing the views of a organization."
+RelatorNote( 281 ) = "A former owner of an item who sold that item to another owner."
+RelatorNote( 282 ) = "A person who translates the rough sketches of the art director into actual architectural structures for a theatrical presentation, entertainment, motion picture, etc. Set designers draw the detailed guides and specifications for building the set."
+RelatorNote( 283 ) = "An entity in which the activity or plot of a work takes place, e.g. a geographic place, a time period, a building, an event."
+RelatorNote( 284 ) = "A person whose signature appears without a presentation or other statement indicative of provenance. When there is a presentation statement, use Inscriber [ins]."
+RelatorNote( 285 ) = "A performer contributing to a resource by using his/her/their voice, with or without instrumental accompaniment, to produce music. A singer's performance may or may not include actual words." & NEW_LINE_INDENT & "UF Vocalist"
+RelatorNote( 286 ) = "A person who produces and reproduces the sound score (both live and recorded), the installation of microphones, the setting of sound levels, and the coordination of sources of sound for a production."
+RelatorNote( 287 ) = "A performer contributing to a resource by speaking words, such as a lecture, speech, etc."
+RelatorNote( 288 ) = "A person, family, or organization sponsoring some aspect of a resource, e.g., funding research, sponsoring an event." & NEW_LINE_INDENT & "UF Sponsoring body"
+RelatorNote( 289 ) = "*USE Sponsor"
+RelatorNote( 290 ) = "A person or organization contributing to a stage resource through the overall management and supervision of a performance."
+RelatorNote( 291 ) = "A person who is in charge of everything that occurs on a performance stage, and who acts as chief of all crews and assistant to a director during rehearsals."
+RelatorNote( 292 ) = "An organization responsible for the development or enforcement of a standard."
+RelatorNote( 293 ) = "A person or organization who creates a new plate for printing by molding or copying another printing surface."
+RelatorNote( 294 ) = "A performer contributing to a resource by relaying a creator's original story with dramatic or theatrical interpretation."
+RelatorNote( 295 ) = "A person or organization that supports (by allocating facilities, staff, or other resources) a project, program, meeting, event, data objects, material culture objects, or other entities capable of support." & NEW_LINE_INDENT & "UF Host, supporting"
+RelatorNote( 296 ) = "*USE Attributed name"
+RelatorNote( 297 ) = "A person, family, or organization contributing to a cartographic resource by providing measurements or dimensional relationships for the geographic area represented."
+RelatorNote( 298 ) = "A performer contributing to a resource by giving instruction or providing a demonstration." & NEW_LINE_INDENT & "UF Instructor"
+RelatorNote( 299 ) = "A person who is ultimately in charge of scenery, props, lights and sound for a production."
+RelatorNote( 300 ) = "*USE Draftsman"
+RelatorNote( 301 ) = "A director responsible for the general management and supervision of a television program."
+RelatorNote( 302 ) = "A producer responsible for most of the business aspects of a television program."
+RelatorNote( 303 ) = "*USE Witness"
+RelatorNote( 304 ) = "A person under whose supervision a degree candidate develops and presents a thesis, mémoire, or text of a dissertation." & NEW_LINE_INDENT & "UF Promoter"
+RelatorNote( 305 ) = "A person, family, or organization contributing to a resource by changing it from one system of notation to another. For a work transcribed for a different instrument or performing group, see Arranger [arr]. For makers of pen-facsimiles, use Facsimilist [fac]."
+RelatorNote( 306 ) = "A person or organization who renders a text from one language into another, or from an older form of a language into the modern form."
+RelatorNote( 307 ) = "A person or organization who designs the type face used in a particular item." & NEW_LINE_INDENT & "UF Designer of type"
+RelatorNote( 308 ) = "*USE Compositor"
+RelatorNote( 309 ) = "A person or organization primarily responsible for choice and arrangement of type used in an item. If the typographer is also responsible for other aspects of the graphic design of a book (e.g., Book designer [bkd], codes for both functions may be needed."
+RelatorNote( 310 ) = "A place where a university that is associated with a resource is located, for example, a university where an academic dissertation or thesis was presented."
+RelatorNote( 311 ) = "A person in charge of a video production, e.g. the video recording of a stage production as opposed to a commercial motion picture. The videographer may be the camera operator or may supervise one or more camera operators. Do not confuse with cinematographer."
+RelatorNote( 312 ) = "*USE Singer"
+RelatorNote( 313 ) = "An actor contributing to a resource by providing the voice for characters in radio and audio productions and for animated characters in moving image works, as well as by providing voice overs in radio and television commercials, dubbed resources, etc."
+RelatorNote( 314 ) = "Use for a person who verifies the truthfulness of an event or action." & NEW_LINE_INDENT & "UF Deponent." & NEW_LINE_INDENT & "UF Eyewitness." & NEW_LINE_INDENT & "UF Observer" & NEW_LINE_INDENT & "UF Onlooker" & NEW_LINE_INDENT & "UF Testifier"
+RelatorNote( 315 ) = "A person or organization who makes prints by cutting the image in relief on the end-grain of a wood block."
+RelatorNote( 316 ) = "A person or organization who makes prints by cutting the image in relief on the plank side of a wood block."
+RelatorNote( 317 ) = "A person or organization who writes significant material which accompanies a sound recording or other audiovisual material."
+RelatorNote( 318 ) = "A person, family, or organization contributing to an expression of a work by providing an interpretation or critical explanation of the original work."
+RelatorNote( 319 ) = "A writer of words added to an expression of a musical work. For lyric writing in collaboration with a composer to form an original work, see lyricist."
+RelatorNote( 320 ) = "A person, family, or organization contributing to a non-textual resource by providing text for the non-textual work (e.g., writing captions for photographs, descriptions of maps)."
+RelatorNote( 321 ) = "A person, family, or organization contributing to a resource by providing an introduction to the original work."
+RelatorNote( 322 ) = "A person, family, or organization contributing to a resource by providing a preface to the original work."
+RelatorNote( 323 ) = "A person, family, or organization contributing to a resource by providing supplementary textual content (e.g., an introduction, a preface) to the original work."
+RelatorNote( 324 ) = "[Unknown term]"
+RelatorNote( 325 ) = "[Unknown code]"
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetActionsBox( Selection%, ProblemString$ )
+
+' This subroutine chiefly governs the relations between the list box that shows all the
+' terms, and the option buttons in the "Actions" box.
+
+Dim AllTermsIndex%
+Dim ClosestTerm$
+Dim PossibleLegend$
+Dim PossibleMatch%
+Dim TempString$
+Dim UnmatchedTerm$
+
+Dim i As Integer
+
+If Left$( ProblemString$, 1 ) = NOT_USED Then
+    TempString$      = RelatorNote( RecordRelators( Selection% ).Index )
+    ReplacementTerm$ = LCase$( Mid$( TempString$, 6 ) )
+    DlgText    "AllTerms",             ReplacementTerm$
+    DlgText    "Description",          RelatorNote( RecordRelators( Selection% ).Index )
+    DlgEnable  "OptionButton_Add",     DISABLED
+    DlgEnable  "OptionButton_Swap",    DISABLED
+    DlgValue   "OptionGroup1",         REPLACE_WITH_CORRECT
+
+  ElseIf Left$( ProblemString$, 1 ) = NOT_FOUND And WhichRelator% = RELATOR_TERM Then
+    UnmatchedTerm$ = Trim$( Mid$( ProblemString$, 3 ) )
+    PossibleMatch% = GetIndexOfAuthorizedTerm( UnmatchedTerm$, 0 )
+    If PossibleMatch% = 0 Then
+        ReplacementTerm$ = ""
+        PossibleLegend$  = ""
+      Else
+        ClosestTerm$ = RelatorTerm( PossibleMatch% )
+        TempString$  = RelatorNote( PossibleMatch% )
+        If Left$( TempString$, 1 ) = "*" Then
+            TempString$ = Mid$( TempString$, 6 )
+            For i = 0 To UBound( RelatorTerm )
+              If TempString$ = RelatorTerm( i ) Then
+                  PossibleMatch% = i
+              End If
+            Next i
+            TempString$ = QUOTE & ClosestTerm$ & QUOTE & " = " & QUOTE & RelatorTerm( PossibleMatch% ) & QUOTE
+          Else
+            TempString$ = QUOTE & RelatorTerm( PossibleMatch% ) & QUOTE
+        End If
+        PossibleLegend$ = "  A possible match: " & TempString$
+        DlgValue   "AllTerms",             PossibleMatch%
+    End If
+    DlgText    "Description",          RelatorNote( RecordRelators( Selection% ).Index ) & PossibleLegend$
+    DlgEnable  "OptionButton_Add",     DISABLED
+    DlgEnable  "OptionButton_Swap",    DISABLED
+    DlgValue   "OptionGroup1",         NO_SELECTION
+
+  Else
+    ReplacementTerm$ = ""
+    AllTermsIndex%   = RecordRelators( Selection% ).Index
+    If AllTermsIndex% > RELATOR_COUNT% Then
+        AllTermsIndex% = 0
+    End If
+    DlgValue   "AllTerms",             AllTermsIndex%
+    DlgText    "Description",          UCase$( RecordRelators( Selection% ).Term ) & CR & RelatorNote( AllTermsIndex% )
+    DlgValue   "OptionGroup1",         NO_SELECTION
+
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetOptionButtonsText( CountOfTerms%, CountOfCodes% )
+
+' This subprogram sets the text labels of the controls in the dialog box, as well as
+' enabling and disabling some of those controls.
+
+DlgEnable  "OptionButton_Replace", ENABLED
+DlgEnable  "AllTerms",             ENABLED
+
+If CountOfTerms% > 0 And CountOfCodes% > 0 Then
+    WhichRelator% = RELATOR_TERM
+    DlgEnable  "CheckBoxDoAll",        DISABLED
+    DlgEnable  "CheckBoxDoAllText1",   DISABLED
+    DlgText    "CheckBoxDoAllText2",   "terms"
+    DlgEnable  "CheckBoxDoAllText2",   DISABLED
+    DlgText    "OptionButton_Add",     "Add term/code"
+    DlgEnable  "OptionButton_Add",     DISABLED
+    DlgText    "OptionButton_Delete1", "Delete term"
+    DlgEnable  "OptionButton_Delete1", ENABLED
+    DlgVisible "OptionButton_Delete2", VISIBLE
+    DlgText    "OptionButton_Swap",    "Replace term/code"
+    DlgEnable  "OptionButton_Swap",    DISABLED
+    BothCodesAndTermsPresent = TRUE
+
+  Else
+    DlgEnable  "OptionButton_Add",     ENABLED
+    DlgEnable  "OptionButton_Delete1", ENABLED
+    DlgEnable  "OptionButton_Swap",    ENABLED
+    If FieldsWithRelators% > 1 Then
+        If ProblemsPresent = FALSE And BothCodesAndTermsPresent = FALSE Then
+            DlgEnable  "CheckBoxDoAll",        ENABLED
+            DlgEnable  "CheckBoxDoAllText1",   ENABLED
+            DlgEnable  "CheckBoxDoAllText2",   ENABLED
+          Else
+            DlgEnable  "CheckBoxDoAll",        DISABLED
+            DlgEnable  "CheckBoxDoAllText1",   DISABLED
+            DlgEnable  "CheckBoxDoAllText2",   DISABLED
+        End If
+      Else
+        DlgEnable  "CheckBoxDoAll",        DISABLED
+        DlgEnable  "CheckBoxDoAllText1",   DISABLED
+        DlgEnable  "CheckBoxDoAllText2",   DISABLED
+    End If
+        DlgVisible "OptionButton_Delete2", INVISIBLE
+    BothCodesAndTermsPresent = FALSE
+End If
+
+Select Case CountOfTerms%
+
+  Case 0
+    WhichRelator% = RELATOR_CODE
+    DlgText    "ActionLabel",          "For all occurrences of this code:"
+    DlgEnable  "AllTerms",             DISABLED
+    DlgText    "CheckBoxDoAllText2",   "codes"
+    DlgText    "EquivGroupBox",        "Equivalent term"
+    DlgText    "EquivOccurrence",      ""
+    DlgText    "FoundGroupBox",        "Code found"
+    DlgText    "OptionButton_Add",     "&Add equivalent term"
+    DlgText    "OptionButton_Delete1", "&Delete code"
+    DlgEnable  "OptionButton_Replace", DISABLED
+    DlgText    "OptionButton_Swap",    "&Replace code with equivalent term"
+        DlgVisible "OptionButton_Delete2", INVISIBLE
+    If CountOfCodes% = 1 Then
+        DlgText    "FoundOccurrence",      "1 occurrence of this code."
+      Else
+        DlgText    "FoundOccurrence",      Trim$( Str$( CountOfCodes% ) ) & " occurrences of this code."
+    End If
+
+  Case 1
+    WhichRelator% = RELATOR_TERM
+    DlgText    "ActionLabel",          "For all occurrences of this term:"
+    DlgText    "CheckBoxDoAllText2",   "terms"
+    If CountOfCodes% = 0 Then
+        DlgEnable  "AllTerms",             ENABLED
+        DlgText    "EquivGroupBox",        "Equivalent code"
+        DlgText    "EquivOccurrence",      ""
+        DlgText    "FoundGroupBox",        "Term found"
+        DlgText    "FoundOccurrence",      "1 occurrence of this term."
+        DlgText    "OptionButton_Add",     "&Add equivalent code"
+        DlgText    "OptionButton_Delete1", "&Delete term"
+        DlgVisible "OptionButton_Delete2", INVISIBLE
+        DlgEnable  "OptionButton_Replace", ENABLED
+        DlgText    "OptionButton_Swap",    "&Replace term with equivalent code"
+      Else
+        DlgEnable  "AllTerms",             ENABLED
+        DlgText    "EquivGroupBox",        "Code found"
+        DlgText    "EquivOccurrence",      "1 occurrence of this code and term."
+        DlgText    "FoundGroupBox",        "Term found"
+        DlgText    "FoundOccurrence",      "1 occurrence of this term and code."
+        DlgVisible "OptionButton_Delete2", VISIBLE
+        DlgEnable  "OptionButton_Replace", ENABLED
+    End If
+
+  Case Else
+    WhichRelator% = RELATOR_TERM
+    DlgText    "ActionLabel",          "For all occurrences of this term:"
+    DlgText    "CheckBoxDoAllText2",   "terms"
+    If CountOfCodes% = 0 Then
+        DlgEnable  "AllTerms",             ENABLED
+        DlgText    "EquivGroupBox",        "Equivalent code"
+        DlgText    "EquivOccurrence",      ""
+        DlgText    "FoundGroupBox",        "Term found"
+        DlgText    "FoundOccurrence",      Trim$( Str$( CountOfTerms% ) ) & " occurrences of this term."
+        DlgText    "OptionButton_Add",     "&Add equivalent code"
+        DlgText    "OptionButton_Delete1", "&Delete term"
+        DlgVisible "OptionButton_Delete2", INVISIBLE
+        DlgEnable  "OptionButton_Replace", ENABLED
+        DlgText    "OptionButton_Swap",    "&Replace term with equivalent code"
+      Else
+        DlgEnable  "AllTerms",             ENABLED
+        DlgText    "EquivGroupBox",        "Code found"
+        DlgText    "EquivOccurrence",      Trim$( Str$( CountOfTerms% ) ) & " occurrences of this code and term."
+        DlgText    "FoundGroupBox",        "Term found"
+        DlgText    "FoundOccurrence",      Trim$( Str$( CountOfTerms% ) ) & " occurrences of this term and code."
+        DlgVisible "OptionButton_Delete2", VISIBLE
+        DlgEnable  "OptionButton_Replace", ENABLED
+    End If
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub Sort
+
+' The subprogram uses a bubble sort to arrange the array "RecordRelators." Because it is a
+' strictly alphabetical sort, incorrect terms (that begin with an asterisk, "*") will
+' appear first, followed by unknown terms (that begin with a question mark, "?"). If
+' terms and codes are mixed in the record, terms appear first, followed by codes.
+
+Dim CurrentElement%
+Dim NextElement%
+
+Dim Swapped
+
+Dim i As Integer
+
+Do
+  Swapped = FALSE
+
+' Determine the nature of the current and next elements of the array.
+
+  For i = 0 To UBound( RecordRelators ) - 1
+    If RecordRelators( i ).TermOccurrences% >= RecordRelators( i ).CodeOccurrences% Then
+        CurrentElement% = RELATOR_TERM
+      Else
+        CurrentElement% = RELATOR_CODE
+    End If
+    If RecordRelators( i + 1 ).TermOccurrences% >= RecordRelators( i + 1 ).CodeOccurrences% Then
+        NextElement% = RELATOR_TERM
+      Else
+        NextElement% = RELATOR_CODE
+    End If
+
+' If the current element and the next element are both terms or both codes, compare them
+' and swap them, if necessary. Otherwise, if the current element is a code and the next
+' one is a term, swap them no matter what, so as to move codes to the end of the list.
+
+    If CurrentElement% = RELATOR_TERM And NextElement% = RELATOR_TERM Then
+        If RecordRelators( i ).Term > RecordRelators( i + 1 ).Term Then
+            Swap( i )
+            Swapped = TRUE
+        End If
+
+      ElseIf CurrentElement% = RELATOR_CODE And NextElement% = RELATOR_CODE Then
+        If RecordRelators( i ).Code > RecordRelators( i + 1 ).Code Then
+            Swap( i )
+            Swapped = TRUE
+        End If
+
+      ElseIf CurrentElement% = RELATOR_CODE And NextElement% = RELATOR_TERM Then
+        Swap( i )
+        Swapped = TRUE
+
+    End If
+  Next i
+Loop Until Swapped = FALSE
+
+End Sub
+
+'****************************************************************************************
+
+Sub Swap( Pointer% )
+
+' This routine swaps adjacent elements in the array "RecordRelators."
+
+Dim Holder As Variant
+
+Holder                                      = RecordRelators( Pointer% + 1 ).Code
+RecordRelators( Pointer% + 1 ).Code            = RecordRelators( Pointer% ).Code
+RecordRelators( Pointer% ).Code                = Holder
+
+Holder                                      = RecordRelators( Pointer% + 1 ).CodeOccurrences
+RecordRelators( Pointer% + 1 ).CodeOccurrences = RecordRelators( Pointer% ).CodeOccurrences
+RecordRelators( Pointer% ).CodeOccurrences     = Holder
+
+Holder                                      = RecordRelators( Pointer% + 1 ).Index
+RecordRelators( Pointer% + 1 ).Index           = RecordRelators( Pointer% ).Index
+RecordRelators( Pointer% ).Index               = Holder
+
+Holder                                      = RecordRelators( Pointer% + 1 ).Term
+RecordRelators( Pointer% + 1 ).Term            = RecordRelators( Pointer% ).Term
+RecordRelators( Pointer% ).Term                = Holder
+
+Holder                                      = RecordRelators( Pointer% + 1 ).TermOccurrences
+RecordRelators( Pointer% + 1 ).TermOccurrences = RecordRelators( Pointer% ).TermOccurrences
+RecordRelators( Pointer% ).TermOccurrences     = Holder
+
+End Sub
+
+'****************************************************************************************
+
+Function CleanSubfieldString( InString$ ) As String
+
+' This function strips out terminal punctuation (comma and full stop) that may be found
+' in subfield $e.
+
+Dim CharT$
+Dim TempString$
+
+Dim i As Integer
+
+TempString$ = Trim$( InString$ )
+If Right$( TempString$, 1 ) = "," Then
+    TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+End If
+
+If Right$( TempString$, 1 ) = "." Then
+    If Right$( TempString$, 4 ) <> "etc." Then
+        TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+    End If
+End If
+
+CleanSubfieldString = LCase$( TempString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function EligibleField( InString$, SubfieldEJ$ ) As Integer
+
+' This function tests a field to see a relator can be added to it, and further, what
+' subfield code is required for a term, as the relator term for conference headings goes
+' in subfield $j, rather than subfield $e. The function returns the equivalent of TRUE if
+' the field is eligible.
+
+Const CONFERENCE_HEADING As String = "11"
+
+Dim TempVal%
+
+If ( Left$( InString$, 1 ) Like "[1678]" And Mid$( InString$, 2, 1 ) Like "[01]" And Mid$( InString$, 3, 1 ) Like "[01]" ) _
+   Or Left$( InString$, 3 ) = "630" Then
+    TempVal% = -1
+    If Mid$( InString$, 2, 2 ) = CONFERENCE_HEADING Then
+        SubfieldEJ$ = DELIMITER & "j "
+      Else
+        SubfieldEJ$ = DELIMITER & "e "
+    End If
+  Else
+    TempVal%    = 0
+    SubfieldEJ$ = ""
+End If
+
+EligibleField = TempVal%
+
+End Function
+
+'****************************************************************************************
+
+Function GetIndexOfAuthorizedTerm( InString$, AuthCode% ) As Integer
+
+' This function returns an index to the array. If the submitted string matches a term in
+' the array, that term's index is the return of the function. However, if the matching
+' term is in fact a reference to another term, the function returns the authorized term's
+' index. If the submitted string matches nothing in the array, the function returns the
+' index of the term closest to it but below it (that is, earlier in the alphabetic
+' sequence) that is not a reference term. So while the function always returns a pointer
+' to an authorized term, that may be one of three things: the submitted term, the term
+' the submitted term actually refers to, or a term that's merely close in the list to the
+' submitted term.
+
+Const EQUAL_TO  As Integer = 0   'The value of the comparison function when the two strings match.
+Const LESS_THAN As Integer = -1  'The value of the comparison function when the first string is less than the second string.
+
+Dim CharT$
+Dim MatchString$
+Dim MatchType%
+Dim MatchVal%
+Dim SearchString$
+
+Dim i As Integer, x As Integer
+
+SearchString$ = InString$
+
+For i = 1 To RELATOR_COUNT
+  MatchString$ = RelatorTerm( i )
+  MatchVal%    = StrComp( SearchString$, MatchString$, 1 )
+
+  Select Case MatchVal%
+
+    Case EQUAL_TO  'If the heading's term matches, check if it's a reference.
+
+      If Left$( RelatorNote( i ), 1 ) = "*" Then 'This is to get the index of the authorized term when the match is to a SeeRef.
+          ReferenceTerm$            = SearchString$
+          AuthorizedTerm$           = LCase$( Mid$( RelatorNote( i ), 6 ) )
+          GetIndexOfAuthorizedTerm  = GetIndexOfAuthorizedTerm( AuthorizedTerm$, MatchType% )
+          AuthCode%                 = REFERENCE
+        Else
+          GetIndexOfAuthorizedTerm% = i
+          AuthCode%                 = AUTHORIZED
+          AuthorizedTerm$           = MatchString$
+      End If
+      Exit Function
+
+    Case LESS_THAN  'If the closest matching term is a SeeRef, keep stepping back in the array until the closest matching term which is NOT a SeeRef is found.
+
+      If i > 1 Then
+          MatchType% = NO_MATCH
+          BadTerm$   = SearchString$
+          x          = 1
+          Do
+            CharT$ = Left$( RelatorNote( i - x ), 1 )
+            If CharT$ <> "*" Then Exit Do
+            x = x + 1
+          Loop Until CharT$ <> "*"
+          GetIndexOfAuthorizedTerm = i - x
+          Exit Function
+        Else
+          AuthCode%                = NO_MATCH
+          AuthorizedTerm$          = RelatorTerm( 1 )
+          GetIndexOfAuthorizedTerm = 1
+      End If
+
+  End Select
+
+' If the whole array has been gone through and nothing has been matched, the last term in
+' the array is the closest one.
+
+  If i = RELATOR_COUNT Then
+      AuthCode%                = NO_MATCH
+      AuthorizedTerm$          = RelatorTerm( RELATOR_COUNT )
+      GetIndexOfAuthorizedTerm = RELATOR_COUNT
+  End If
+
+Next i
+
+End Function
+
+'****************************************************************************************
+
+Function FindLastOccurrence( InField$, InCode$ ) As Integer
+
+' This function returns the position in the string of the subfield that follows the last
+' occurrence of the selected subfield. It is used when adding a relator term, as that
+' term is always added as the last occurrence of subfields $e/$j (and therefore before
+' any subfield $4 or other subfield present in the field).
+
+Dim LastSubfield%
+Dim Start%
+Dim SubfieldCode$
+
+Dim p As Integer
+
+SubfieldCode$ = Mid$( InCode$, 2, 1 )
+Start%        = 1
+Do
+  p = InStr( Start%, InField$, DELIMITER )
+  If p <> 0 Then
+      If Mid$( InField$, p + 1, 1 ) = SubfieldCode$ Then
+          LastSubfield% = p
+        Else
+          If LastSubfield% <> 0 Then
+              FindLastOccurrence = p
+            Else
+              FindLastOccurrence = 0
+          End If
+          Exit Function
+      End If
+      Start% = p + 1
+    Else
+      FindLastOccurrence = LastSubfield%
+      Exit Function
+  End If
+Loop Until p = 0
+
+End Function
+
+'****************************************************************************************
+
+Function TruncateString( InString$ ) As String
+
+' This function shortens a relator term for display in the first dialog box. It simply
+' cuts the string short at the last possible space between words.
+
+Dim Start%
+Dim TempString$
+Dim WordCount%
+
+Dim p As Integer
+
+TempString$ = InString$
+Start%      = 1
+Do
+  p = InStr( Start%, TempString$, " " )
+  If p > 0 Then
+
+      Select Case WordCount%
+
+        Case 1
+          If p > 20 Then
+              TempString$ = Left$( TempString$, p ) & "..."
+              Exit Do
+          End If
+
+        Case 2
+          If p > 20 Then
+              TempString$ = Left$( TempString$, p ) & "..."
+              Exit Do
+          End If
+
+        Case 3
+          If p > 20 Then
+              TempString$ = Left$( TempString$, p ) & "..."
+              Exit Do
+          End If
+
+      End Select
+
+      WordCount% = WordCount% + 1
+      Start% = p + 1
+  End If
+Loop Until p = 0
+
+TruncateString = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' Setting up and running the first, simpler dialog box.
+
+Const KEEP_DLG_OPEN As Integer = -1
+
+Static FieldTermsIndex%
+
+Dim Dialog1Instructions$
+Dim RelatorTermNote$
+Dim SelectedNote$
+Dim Selection%
+Dim Start%
+Dim TempString$
+Dim TruncatedString$
+Dim WordCount%
+
+Dim p As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+' Enable the "OK" button only when a correct term is displayed.
+
+    DlgFocus   "DropListBox1"
+    DlgEnable  "OK",                   DISABLED
+    If FieldTermCount% < 2 Then
+        DlgVisible "PrevTerm",             INVISIBLE
+        DlgVisible "NextTerm",             INVISIBLE
+      Else
+        DlgVisible "PrevTerm",             VISIBLE
+        DlgEnable  "PrevTerm",             DISABLED
+        DlgVisible "NextTerm",             VISIBLE
+    End If
+    FieldTermsIndex% = 0
+
+    If FieldsSelected Then
+        Dialog1Instructions$ = "Select a term and click " & QUOTE & "OK" & QUOTE & " to add it to the selected fields."
+      Else
+        If FoundRelator Then
+
+            DlgValue   "DropListBox1",         FieldRelators( InitialSelection% ).Index
+            Select Case FieldRelators( InitialSelection% ).MatchType
+
+              Case AUTHORIZED
+                Dialog1Instructions$ = "Select a different term and click " & QUOTE & "OK" & QUOTE & " to insert it in the heading following the term(s) already present."
+                DlgText    "Description",          UCase$( FieldRelators( InitialSelection% ).Term ) & CR & RelatorNote( FieldRelators( InitialSelection% ).Index )
+
+              Case REFERENCE
+                If ReferenceTerm$ = "copier" Then
+                    Dialog1Instructions$ = "The term in the heading, " & QUOTE & "copier" & QUOTE & ", is not used. Click" & QUOTE & "OK" & QUOTE & " to replace it "
+                    Dialog1Instructions$ = Dialog1Instructions$ & "with either of the terms " & QUOTE & "Facsimilist" & QUOTE & " or " & QUOTE & "Forger"  & QUOTE & "."
+                  Else
+                    Dialog1Instructions$ = "The term in the heading, " & QUOTE & TruncateString( ReferenceTerm$ ) & QUOTE & ", is not used. Click" & QUOTE & "OK" & QUOTE & " to replace it "
+                    Dialog1Instructions$ = Dialog1Instructions$ & "with the correct term shown below, " & QUOTE & TruncateString( AuthorizedTerm$ ) & QUOTE & "."
+                End If
+                DlgEnable  "OK",                   ENABLED
+                DlgText    "Warning",              "!"
+
+              Case NO_MATCH
+                Dialog1Instructions$ = "The term in the heading, " & QUOTE & TruncateString( BadTerm$ ) & QUOTE & ", is not a valid term. Click " & QUOTE & "OK" & QUOTE & " to replace the heading with the "
+                Dialog1Instructions$ = Dialog1Instructions$ & "suggested term, or select a different replacement term from the list."
+                DlgEnable  "OK",                   ENABLED
+                DlgText    "Warning",              "?"
+
+            End Select
+
+          Else
+            DlgValue   "DropListBox1",         0
+            Dialog1Instructions$ = "Select a term and click " & QUOTE & "OK" & QUOTE & " to add it to the heading."
+        End If
+    End If
+    DlgText    "Instructions",         Dialog1Instructions$
+
+
+  Case CONTROL_CHANGE
+
+' If an invalid term (a see reference) is selected, disable the controls so it can't be
+' added.
+
+    Select Case Id$
+
+      Case "DropListBox1"
+
+        Selection%       = DlgValue( "DropListBox1" )
+        ReplacementTerm$ = RelatorTerm( Selection% )
+        SelectedNote$    = RelatorNote( Selection% )
+        If Selection% = 0 Or Left$( SelectedNote$, 1 ) = "*" Or InStr( RelatorTermsString$, ReplacementTerm$ ) Then
+            DlgEnable  "OK",                   DISABLED
+            DlgVisible "AddTermQuestion",      INVISIBLE
+          Else
+            DlgEnable  "OK",                   ENABLED
+            DlgVisible "AddTermQuestion",      VISIBLE
+            TruncatedString$ = TruncateString( ReplacementTerm$ )
+            TempString$ = "Add term " & QUOTE & TruncatedString$ & QUOTE
+            If FieldsSelected Then
+                TempString$ = TempString$ & " to selected fields?"
+              Else
+                TempString$ = TempString$ & " to field?"
+            End If
+            DlgText    "AddTermQuestion",      TempString$
+        End If
+        DlgText    "Description",          UCase$( ReplacementTerm$ ) & CR & SelectedNote$
+
+      Case "PrevTerm", "NextTerm"
+
+        If Id$ = "PrevTerm" Then
+            FieldTermsIndex% = FieldTermsIndex% - 1
+            DlgValue   "DropListBox1",         FieldRelators( FieldTermsIndex% ).Index
+            DlgText    "Description",          UCase$( FieldRelators( FieldTermsIndex% ).Term ) & CR & RelatorNote( FieldRelators( FieldTermsIndex% ).Index )
+            DlgEnable  "NextTerm",             ENABLED
+            If FieldTermsIndex% = 0 Then
+                DlgEnable  "PrevTerm",             DISABLED
+            End If
+          Else
+            FieldTermsIndex% = FieldTermsIndex% + 1
+            DlgValue   "DropListBox1",         FieldRelators( FieldTermsIndex% ).Index
+            DlgText    "Description",          UCase$( FieldRelators( FieldTermsIndex% ).Term ) & CR & RelatorNote( FieldRelators( FieldTermsIndex% ).Index )
+            DlgEnable  "PrevTerm",             ENABLED
+            If FieldTermsIndex% = UBound( FieldRelators ) Then
+                DlgEnable  "NextTerm",             DISABLED
+            End If
+        End If
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$, Action%, SVal& )
+
+' Setting up and running the big, complicated dialog box.
+
+Dim ButtonSelection%
+Dim CodeCount%
+Dim ProblemString$
+Dim RelatorTermNote$
+Dim Selection%
+Dim TermCount%
+
+Select Case Action%
+
+  Case INITIALIZE
+
+Reload:
+
+    DlgVisible "OptionButton0",        INVISIBLE
+    CodeCount% = RecordRelators( Selection% ).CodeOccurrences
+    TermCount% = RecordRelators( Selection% ).TermOccurrences
+    Call SetOptionButtonsText( TermCount%, CodeCount% )
+    If WhichRelator% = RELATOR_TERM Then
+        ProblemString$ = DlgText( "FoundList" )
+      Else
+        ProblemString$ = DlgText( "EquivList" )
+    End If
+    Call SetActionsBox( Selection%, ProblemString$ )
+    DlgValue   "OptionGroup1",         ButtonSelection%
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "AllTerms", "OptionButton_Replace"
+        Selection%       = DlgValue( "AllTerms" )
+        ReplacementTerm$ = RelatorTerm( Selection% )
+        RelatorTermNote$ = RelatorNote( Selection% )
+        DlgText    "Description",          UCase$( ReplacementTerm$ ) & CR & RelatorTermNote$
+        DlgValue   "OptionGroup1",         REPLACE_WITH_CORRECT
+        DlgEnable  "CheckBoxDoAll",        DISABLED
+        DlgEnable  "CheckBoxDoAllText1",   DISABLED
+        DlgEnable  "CheckBoxDoAllText2",   DISABLED
+
+      Case "FoundList", "EquivList"
+        If Id$ = "FoundList" Then
+            Selection% = DlgValue( "FoundList" )
+            DlgValue   "EquivList",            Selection%
+          Else
+            Selection% = DlgValue( "EquivList" )
+            DlgValue   "FoundList",            Selection%
+        End If
+        GoTo Reload:
+
+      Case "OptionButton_Add"
+        ButtonSelection% = ADD
+        Selection%       = DlgValue( "FoundList" )
+        GoTo Reload:
+
+      Case "OptionButton_Delete1"
+        ButtonSelection% = DELETE_OPTION_1
+        Selection%       = DlgValue( "FoundList" )
+        GoTo Reload:
+
+      Case "OptionButton_Delete2"
+        ButtonSelection% = DELETE_OPTION_2
+        Selection%       = DlgValue( "FoundList" )
+        WhichRelator%    = RELATOR_CODE
+        GoTo Reload:
+
+      Case "OptionButton_Swap"
+        ButtonSelection% = REPLACE_WITH_EQUIVALENT
+        Selection%       = DlgValue( "FoundList" )
+        GoTo Reload:
+
+    End Select
+
+End Select
+
+End Function
+'2766155976
+'
+'Macro name: RelatorHelper
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:52:28 AM using "MacroBookInspector" macro by Walter F. Nickeson.

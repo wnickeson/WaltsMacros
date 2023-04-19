@@ -1,0 +1,3135 @@
+'MacroName:RDAHelper(PrintedMaterial).2023.02
+'MacroDescription:Makes changes to a bibliographic record for printed material (resources
+' whose carrier type is "volume" or "sheet"--including books, maps, music scores,
+' posters, etc.), to help convert it to RDA (ISBD) form.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 7 February 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************#
+' How it works: Run the macro in an English language bibliographic record for printed
+' material. This type of material includes books, manuscripts, serials, atlases, and
+' scores--anything whose carrier type could be "volume" (i.e., anything with a book-like
+' structure), as well as microform and electronic versions of those materials. It also
+' includes resources whose carrier type could be "sheet" or "card," such as broadsides,
+' maps, posters, and postcards. It excludes all other types of material, such as
+' electronic resources, kits, sound and video recordings, microforms, and mixed
+' materials. The record must not contain non-Latin scripts.
+'
+' The macro makes some changes to the record to help it conform to RDA (ISBD) rules,
+' including:
+'
+'  + Fixed field:
+'    - changing "Desc" to "i"
+'    - adding Dates 2 and changing "DtSt" to "t", if adding a 264 #4 for copyright date
+'    - verifying Dates 2 and "DtSt" for date ranges of decades or centuries
+'    - changing Dates 1 to match 264 #1, if necessary, including for corrected ("[i.e.]")
+'      date
+'
+'  + 040:
+'    - inserting "$e rda" preceding subfield $c, preceded by "$b eng" if not present
+'
+'  + 100:
+'    - adding the appropriate relator term in subfield $e, if this subfield is not
+'      present: "author" for language material, "composer" for scores, "cartographer" for
+'      cartographic material. This term is added no matter what code may appear in
+'      subfield $4. Nothing is added to fields 110 or 111
+'
+'  + 245:
+'    - removing subfield $h (GMD)
+'    - supplying ISBD punctuation, if necessary
+'
+'  + 250:
+'    - spelling out of abbreviations in English-language resources, with the opportunity
+'      to reject the suggested change
+'    - supplying ISBD punctuation, if necessary
+'
+'  + 260:
+'    - changing tag to 264 #1
+'    - supplying ISBD punctuation, if necessary
+'    - supplying "... not identified" for data either simply missing or noted as missing
+'      for place, publisher, and date of publication--except in a record for a serial,
+'      for which subfield $c is not necessary
+'    - converting copyright date to supplied (i.e., bracketed) publication date and
+'      moving copyright date, if different, to 264 #4. >>>>>OPTION: Choose to always move
+'      the copyright date to 264 #4 by changing the value of the variable
+'      "AlwaysShowCopyright%" on line 191 below
+'    - converting dates recorded as decades or centuries, whether certain or probable, to
+'      "between" ranges (e.g., "[191-]" becomes "[between 1910 and 1919?]")
+'    - converting a "ca." date to a probable date (e.g., "[ca. 1970]" becomes "[1970?]")
+'    - moving a corrected date to a note in a 500 field (e.g., "1906 [i.e. 1907]" becomes
+'      264 #1 "1906" with a new 500 "Actual date: 1907"), and changing Dates 1 in the
+'      fixed field to match the actual date, if necessary. The new 500 field has fill
+'      characters added to force manual checking for correctness of presentation
+'    - moving manufacturing information (subfields $e, $f, and $g) to 264 #3
+'
+'  + 300:
+'    - supplying ISBD punctuation, if necessary
+'    - for extent, expanding abbreviations "p.", "l.", and "v." to "pages", "leaves", or
+'      "volumes", respectively (including their singular forms), and converting bracketed
+'      pagination or foliation to "unnumbered" terms
+'    - removing "(large print)" as a qualifier and adding a 340 field for font size
+'    - for illustrative content, expanding abbreviations, including for types of content
+'      given beyond "illustrations"--but discarding terms from previous cataloging codes
+'      not on the RDA list at 7.15.1.3
+'
+'  + 490/830:
+'    - supplying ISBD punctuation for volume numbering in subfield $v, if necessary
+'
+'  + 3XX and 5XX (except contents notes):
+'    - expanding abbreviations "p." and "v.", and their plurals and variants, certain
+'      other abbreviations, including "t.p.", "introd.", "ed.", "pt.", and "no.", and
+'      their plurals (except where these abbreviations appear inside double quotation
+'      marks), and abbreviations for months of the year; and eliminating brackets around
+'      pagination
+'
+'  + 505:
+'    - adding spaces around dashes if necessary
+'
+' What the macro will not or cannot do:
+'  - Spell out abbreviations in transcribed data
+'  - Handle more than two dates in the 260 field (e.g., "1901, c1893-1901")
+'  - Touch dates in roman numerals in the 260 field
+'  - Add double punctuation at the end of a field (e.g., "Second ed..")
+'  - Add 33X fields (use my "Check33X" macro for this purpose)
+'
+' The purpose of automating these changes is to attempt to take care of some details of
+' description in order to help free catalogers for the weightier matter of applying
+' judgment in creating good cataloging. Of course, given the multitude of forms in
+' existing records, the macro may fail spectacularly in its attempt at conversion, and
+' end up saving little time after all. And, as always, incorrect input or errors will
+' produce incorrect output.
+'****************************************************************************************
+
+Option Compare Text
+Option Explicit
+
+Declare Function AddPunctuation      ( Subfield$, Tag$ )              As String
+Declare Function BracketDate         ( DateString$ )                  As String
+Declare Function ConvertExtent       ( Extent$, SequenceType$ )       As String
+Declare Function ExpandAbbreviations ( InString$ )                    As String
+Declare Function NormalizeIllusTerms ( SubfieldB$, Parenth$, Comma% ) As String
+Declare Function PairBrackets        ( StringInput$ )                 As String
+Declare Function Process250Field     ( InString$)                     As String
+Declare Function Process260Field     ( Field260$ )                    As String
+Declare Function Process260Subfield_C( SubfieldC$ )                   As String
+Declare Function Process300Field     ( Field300$ )                    As String
+Declare Function Process300Subfield_A( SubfieldA$ )                   As String
+Declare Function Process300Subfield_B( SubfieldB$ )                   As String
+Declare Function Process505Field     ( Field505$ )                    As String
+Declare Function QuoteCheck          ( InString$, SearchTerm$ )       As Integer
+Declare Function SplitField          ( FieldFromRecord$ )             As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global Const WARNING_MESSAGE  As Integer = 48
+
+Global Const NOTES_FIELD_TERM As Integer = 0
+Global Const NOTES_FIELD_ABBR As Integer = 1
+
+Global DELIMITER       As String*1
+Global DOUBLE_QUOTE    As String*1
+Global ISBD_COLON      As String*4
+Global ISBD_COMMA      As String*3
+Global ISBD_SEMICOLON  As String*4
+Global ISBD_SLASH      As String*4
+Global NULL_CHAR       As String*1
+Global SUBFIELD_CODE_A As String*2
+Global SUBFIELD_CODE_B As String*2
+Global SUBFIELD_CODE_C As String*2
+Global SUBFIELD_CODE_E As String*2
+Global SUBFIELD_CODE_F As String*2
+Global SUBFIELD_CODE_G As String*2
+Global SUBFIELD_CODE_H As String*2
+
+Global ActualDate$
+Global AlwaysShowCopyright%
+Global BLvl$
+Global Copyright264$
+Global CorrectedDateField$
+Global DateEntered$
+Global FFCountry$
+Global FFDates1$
+Global FFDates2$
+Global FFDateType$
+Global Field340$
+Global IllsInSubfieldA$
+Global Manufacturer264$
+Global RDA250$
+Global WaltsMacros$
+
+Global ISBD
+Global SubfN
+
+Global AbbreviationsOther  ( 19, 1 ) As String
+Global AbbreviationsPageVol(  2, 1 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+'########################################################################################
+' Change the value of this variable to 1 to always show a copyright date in 264 4,     '#
+' even when it is the same as the publication date in 264 1. Otherwise, a value of 0   '#
+' means the date displays only when different.                                         '#
+'                                                                                      '#
+AlwaysShowCopyright% = 1                                                               '#
+'                                                                                      '#
+'########################################################################################
+
+Const CRITICAL_MESSAGE         As Integer = 16
+Const DISPLAY_AT_TOP           As Integer = 1
+Const INFORMATION_MESSAGE      As Integer = 64
+Const MSGBOX_RETURN_YES        As Integer = 6
+Const MSGBOX_SETBUTTONS_YES_NO As Integer = 4
+Const SECOND_BUTTON            As Integer = 256
+Const WARNING_QUERY            As Integer = 32
+
+Dim CatLang$
+Dim EndOfData%
+Dim FFDesc$
+Dim FFPosition%
+Dim FFTypeOfRecord$
+Dim FieldData$
+Dim Lang$
+Dim LineNumber%              : LineNumber% = 1
+Dim MsgBoxAnswer%
+Dim OriginalData$
+Dim ProcessedData$
+Dim Relator$
+Dim Replacement040$
+Dim Start%
+Dim Subfield$
+Dim SubfieldB$
+Dim SubfieldBPosition%
+Dim SubfieldC$
+Dim SubfieldCode$
+Dim SubfieldCPosition%
+Dim SubfieldD$
+Dim SubfieldDPosition%
+Dim SubfieldE$
+Dim SubfieldEPosition%
+Dim Tag$
+Dim TempString$
+Dim TypeOfWindow%
+
+Dim AlreadyRDA               : AlreadyRDA  = FALSE
+Dim FoundField               : FoundField  = TRUE
+Dim Has490                   : Has490      = FALSE
+Dim NonAACR2                 : NonAACR2    = FALSE
+Dim OtherRules               : OtherRules  = FALSE
+Dim OutOfOrder               : OutOfOrder  = FALSE
+Dim Replace040               : Replace040  = FALSE
+Dim SetDesc
+
+Dim p As Integer, q As Integer
+
+DELIMITER       = Chr$( 223 )
+DOUBLE_QUOTE    = Chr$( 034 )
+ISBD_COLON      = " : " & DELIMITER
+ISBD_COMMA      = ", " & DELIMITER
+ISBD_SEMICOLON  = " ; " & DELIMITER
+ISBD_SLASH      = " / " & DELIMITER
+NULL_CHAR       = Chr$( 0 )
+SUBFIELD_CODE_A = DELIMITER & "a"
+SUBFIELD_CODE_B = DELIMITER & "b"
+SUBFIELD_CODE_C = DELIMITER & "c"
+SUBFIELD_CODE_E = DELIMITER & "e"
+SUBFIELD_CODE_F = DELIMITER & "f"
+SUBFIELD_CODE_G = DELIMITER & "g"
+SUBFIELD_CODE_H = DELIMITER & "h"
+WaltsMacros$    = "[Walt's macros] Essentials:RDAHelper(PL)"
+
+ISBD            = FALSE
+SubfN           = FALSE
+
+' These two arrays hold the terms and their corresponding abbreviations which will be
+' expanded when processing the 3XX and 5XX fields.
+
+AbbreviationsOther(  0, 0 )  = "title page"
+AbbreviationsOther(  0, 1 )  = "t.p."
+AbbreviationsOther(  1, 0 )  = "title page"
+AbbreviationsOther(  1, 1 )  = "t.-p."
+AbbreviationsOther(  2, 0 )  = "introduction"
+AbbreviationsOther(  2, 1 )  = "introd."
+AbbreviationsOther(  3, 0 )  = "edition"
+AbbreviationsOther(  3, 1 )  = "ed."
+AbbreviationsOther(  4, 0 )  = "editions"
+AbbreviationsOther(  4, 1 )  = "eds."
+AbbreviationsOther(  5, 0 )  = "volumes"
+AbbreviationsOther(  5, 1 )  = "vols."
+AbbreviationsOther(  6, 0 )  = "number"
+AbbreviationsOther(  6, 1 )  = "no."
+AbbreviationsOther(  7, 0 )  = "numbers"
+AbbreviationsOther(  7, 1 )  = "nos."
+AbbreviationsOther(  8, 0 )  = "part"
+AbbreviationsOther(  8, 1 )  = "pt."
+AbbreviationsOther(  9, 0 )  = "parts"
+AbbreviationsOther(  9, 1 )  = "pts."
+AbbreviationsOther( 10, 0 )  = "preface"
+AbbreviationsOther( 10, 1 )  = "pref."
+AbbreviationsOther( 11, 0 )  = "January"
+AbbreviationsOther( 11, 1 )  = "Jan."
+AbbreviationsOther( 12, 0 )  = "February"
+AbbreviationsOther( 12, 1 )  = "Feb."
+AbbreviationsOther( 13, 0 )  = "March"
+AbbreviationsOther( 13, 1 )  = "Mar."
+AbbreviationsOther( 14, 0 )  = "April"
+AbbreviationsOther( 14, 1 )  = "Apr."
+AbbreviationsOther( 15, 0 )  = "August"
+AbbreviationsOther( 15, 1 )  = "Aug."
+AbbreviationsOther( 16, 0 )  = "September"
+AbbreviationsOther( 16, 1 )  = "Sept."
+AbbreviationsOther( 17, 0 )  = "October"
+AbbreviationsOther( 17, 1 )  = "Oct."
+AbbreviationsOther( 18, 0 )  = "November"
+AbbreviationsOther( 18, 1 )  = "Nov."
+AbbreviationsOther( 19, 0 )  = "December"
+AbbreviationsOther( 19, 1 )  = "Dec."
+
+AbbreviationsPageVol( 0, 0 ) = "page"
+AbbreviationsPageVol( 0, 1 ) = "p."
+AbbreviationsPageVol( 1, 0 ) = "volume"
+AbbreviationsPageVol( 1, 1 ) = "v."
+AbbreviationsPageVol( 2, 0 ) = "volume"
+AbbreviationsPageVol( 2, 1 ) = "vol."
+
+' First check some fixed field values.
+
+FFPosition% = CS.FixedFieldPosition
+If FFPosition% <> DISPLAY_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_AT_TOP
+End If
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Check that the record is for printed language material, atlases, scores, and
+' manuscripts. If it is, assign the appropriate relator term to be added to the 100
+' field.
+
+CS.GetFixedField "Type", FFTypeOfRecord$
+
+Select Case FFTypeOfRecord$
+  Case "a", "t"' Then'Like "[!acet]" Then
+    Relator$ = "author"
+  Case "c"
+    Relator$ = "composer"
+  Case "e"
+    Relator$ = "cartographer"
+  Case "k"
+    Relator$ = "artist"
+  Case Else
+    MsgBox "Sorry, this macro works only in a record for printed material!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' If the record already follows ISBD standards, skip some of the formatting.
+
+If CS.GetFixedField( "Desc", FFDesc$ ) Then
+    If FFDesc$ = "a" or FFDesc$ = "i" Then
+        ISBD = TRUE
+    End If
+    If FFDesc$ <> "a" Then
+        NonAACR2 = TRUE
+    End If
+End If
+
+' Get date information from the fixed field. Unknown digits, represented by "u", are
+' converted to zeroes.
+
+If CS.GetFixedField( "Dates", FFDates1$ ) Then
+    Do
+      p = InStr( FFDates1$, "u" )
+      If p <> 0 Then
+          FFDates1$ = Left$( FFDates1$, p - 1 ) & "0" & Mid$( FFDates1$, p + 1 )
+      End If
+    Loop Until p = 0
+End If
+CS.GetFixedField ",",    FFDates2$
+CS.GetFixedField "DtSt", FFDateType$
+
+' The date the record was created is used as a terminus to the range of dates when the
+' century or decade is as close as can be guessed for the date of the item. That is, a
+' date recorded under AACR2 as "[19--]" will be converted to "[between 1900 and 1973?]"
+' if the record was created in 1973, rather than the straightforward (but incorrect)
+' "[between 1900 and 1999?]".
+
+If CS.GetFixedField( "Entered", DateEntered$ ) Then
+    DateEntered$ = Left$( DateEntered$, 4 )
+End If
+
+' Finally, get the code for place of publication. Later, if the place is not identified
+' in the 264 field, the fixed field code will be made "xx" if that isn't already its
+' value.
+
+CS.GetFixedField "Ctry", FFCountry$
+
+CS.GetFixedField "BLvl", BLvl$
+
+CS.FixedFieldPosition = FFPosition%
+
+' Then check two variable fields to make sure the macro can proceed. Begin by checking if
+' the record contains non-Latin script, identified in field 066. If it does, the macro
+' must exit.
+
+If CS.GetField( "066", 1, FieldData$ ) Then
+    MsgBox "This macro cannot handle records that contain character sets for non-Latin scripts!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Finally, check the 040 field. If the record is coded as already being cataloged
+' according to RDA, nothing will be done--except if the subfields are not in the
+' preferred order, in which case the macro offers to rearrange them. If the cataloging is
+' in a language other than English, the macro quits; if no language is specified, the
+' macro supplies subfield $b "eng". If the cataloging rules are stated in subfield $e,
+' the macro asks for approval to proceed, as RDA rules may not be compatible with some
+' other rules. If the other rules are kept, the code "rda" is added in a subfield $e
+' before the code(s) for the other rules. Otherwise, the macro adds subfield $e "rda" in
+' the appropriate place in the field.
+
+If CS.GetField( "040", 1, FieldData$ ) Then
+    Start% = 3
+    Do
+      p = InStr( Start%, FieldData$, DELIMITER )
+      If p > 0 Then
+          If Start% = 3 Then
+              Replacement040$ = Left$( FieldData$, p - 1 )
+          End If
+          SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+          q = InStr( p + 1, FieldData$, DELIMITER )
+          If q > 0 Then
+              Subfield$ = Mid$( FieldData$, p, q - p )
+            Else
+              Subfield$ = Mid$( FieldData$, p )
+          End If
+          Select Case SubfieldCode$
+
+            Case "b"
+              SubfieldBPosition% = p
+              If InStr( Subfield$, "eng" ) = FALSE Then
+                  MsgBox "this macro works only in English-language records!", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+              End If
+              SubfieldB$ = Trim$( Subfield$ )
+
+            Case "c"
+              SubfieldCPosition% = p
+              SubfieldC$ = " " & Trim$( Subfield$ )
+
+            Case "d"
+              If SubfieldDPosition% = 0 Then SubfieldDPosition% = p
+              SubfieldD$ = SubfieldD$ & " " & Trim$( Subfield$ )
+
+            Case "e"
+              If ( SubfieldDPosition% > 0 And p > SubfieldDPosition% ) Or ( SubfieldBPosition% > 0 And p < SubfieldBPosition% ) Or ( SubfieldCPosition% > 0 And p > SubfieldCPosition% ) Then
+                  OutOfOrder = TRUE
+              End IF
+              If InStr( Subfield$, "rda" ) Then
+                  AlreadyRDA = TRUE
+                Else
+                  OtherRules = TRUE
+              End If
+              SubfieldE$ = SubfieldE$ & " " & Trim$( Subfield$ )
+
+          End Select
+          End If
+      Start% = p + 1
+    Loop until p = 0
+
+' If no language code appears, add subfield $b "eng".
+
+    If SubfieldB$ = "" Then
+        SubfieldB$ = DELIMITER & "b eng"
+    End If
+
+' If no rules of cataloging ("Description conventions") are specified, simply add
+' subfield $e "rda".
+
+    If SubfieldE$ = "" Then
+        SubfieldE$ = " " & DELIMITER & "e rda"
+
+' If rules are found, check if they are RDA or something else, and if they appear in the
+' correct position in the field.
+
+      Else
+        If AlreadyRDA = FALSE Then
+            If OtherRules Then
+                If MsgBox( "This record is cataloged according to other description conventions. Do you want to continue and apply RDA rules in addition to those conventions?", _
+                   WARNING_QUERY + MSGBOX_SETBUTTONS_YES_NO + SECOND_BUTTON, WaltsMacros$ ) = MSGBOX_RETURN_YES Then
+                    SubfieldE$ = " " & DELIMITER & "e rda" & SubfieldE$
+                  Else
+                    Exit Sub
+                End If
+            End If
+          Else
+            If OutOfOrder Then
+                If MsgBox( "This record is cataloged following RDA rules, but the subfields in the 040 field are not in the preferred order. Do you want to fix this?", _
+                WARNING_QUERY + MSGBOX_SETBUTTONS_YES_NO, WaltsMacros$ ) = MSGBOX_RETURN_YES Then
+                    Replace040 = TRUE
+                  Else
+                    Exit Sub
+                End If
+              Else
+                MsgBox "This record is already coded for RDA!", CRITICAL_MESSAGE, WaltsMacros$
+                Exit Sub
+            End If
+        End If
+    End If
+    Replacement040$ = Replacement040$ & SubfieldB$ & SubfieldE$ & SubfieldC$ & SubfieldD$
+    If Replacement040$ = FieldData$ Then
+         Replacement040$ = ""
+       Else
+         If Replace040 Then
+             If CS.SetField( 1, Replacement040$ ) Then
+                 MsgBox "The 040 field was replaced.", INFORMATION_MESSAGE, WaltsMacros$
+               Else
+                 MsgBox "Sorry, the 040 field was not replaced.", WARNING_MESSAGE, WaltsMacros$
+             End If
+             Exit Sub
+         End If
+    End If
+End If
+
+' Now start the work of processing the record. Go through the record, line by line,
+' examining fields 245-300, all 5XX fields, and series fields, for general and specific
+' changes to be made to give them the appearance of conforming to RDA conventions. Data
+' is retrieved with the "GetFieldLine" command to ensure a processed field is returned to
+' the record in the same place it was taken from.
+
+Do While FoundField = TRUE And LineNumber% < 100
+  FoundField = CS.GetFieldLine( LineNumber%, FieldData$ )
+  If FoundField Then
+      Tag$ = Left$( FieldData$, 3 )
+      Select Case Tag$
+
+' For what was formerly called the personal name main entry, add the appropriate relator
+' term. Add it before a subfield $4 code. Hope that the code (if present) matches the
+' term. If it doesn't, my macro "RelatorHelper" can fix things up.
+
+        Case "100"
+
+          If InStr( FieldData$, DELIMITER & "e" ) = 0 Then
+              p = InStr( FieldData$, DELIMITER & "4" )
+              If p = 0 Then
+                  EndOfData% = Len( FieldData$ )
+                Else
+                  EndOfData% = p - 1
+              End If
+              TempString$ = Trim$( Left$( FieldData$, EndOfData% ) )
+              If Right$( TempString$, 1 ) = "." Then
+                  TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+              End If
+              TempString$ = TempString$ & " " & DELIMITER & "e " & Relator$ & "."
+              If p > 0 Then
+                  TempString$ = TempString$ & " " & Mid$( FieldData$, p )
+              End If
+              CS.SetFieldLine LineNumber%, TempString$
+          End If
+
+        Case "245"
+
+' For the 245 field, the macro limits its actions to supplying ISBD punctuation if not
+' already present, and removing the GMD.
+
+          OriginalData$ = FieldData$
+          p             = InStr( FieldData$, SUBFIELD_CODE_H )
+          If p <> 0 Then
+              q = InStr( p + 1, FieldData$, "]" )
+              If q <> 0 Then
+                  FieldData$ = Left$( FieldData$, p - 1 ) & Mid$( FieldData$, q + 1 )
+                  If Right$( FieldData$, 2 ) = " ." Then
+                      FieldData$ = Left$( FieldData$, Len( FieldData$ ) - 2 ) & "."
+                  End If
+              End If
+          End If
+          Do
+            p = InStr( FieldData$, "  " )
+            If p <> 0 Then
+                FieldData$ = Left$( FieldData$, p - 1 ) & Mid$( FieldData$, p + 1 )
+            End If
+          Loop Until p = 0
+          If ISBD = FALSE Then
+              ProcessedData$ = Trim$( SplitField( FieldData$ ) )
+              If OriginalData$ <> ProcessedData$ Then
+                  CS.SetFieldLine LineNumber%, ProcessedData$
+              End If
+          End If
+
+' The 260 field requires special manipulation and has its own function for that. After
+' its data is retrieved the field is deleted and its data processed and added back to the
+' record with new tag and indicator 264 #1.
+
+        Case "260"
+          CS.DeleteField "260", 1
+          CS.AddField 1, Trim$( Process260Field( FieldData$ ) )
+          FFPosition% = CS.FixedFieldPosition
+          If FFPosition% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
+          CS.SetFixedField "Dates", FFDates1$
+          CS.SetFixedField ",",     FFDates2$
+          CS.SetFixedField "DtSt",  FFDateType$
+          CS.FixedFieldPosition   = FFPosition%
+
+' If the language of the resource is English, some of the abbreviations in the edition
+' statement can be expanded. For any record, ISBD punctuation is supplied if needed.
+
+        Case "250"
+          OriginalData$ = FieldData$
+          If CS.GetFixedField( "Lang", Lang$ ) Then
+              If Lang$ = "eng" Then
+                  ProcessedData$ = Process250Field( FieldData$ )
+              End If
+            Else
+              If ISBD Then
+                  ProcessedData$ = Trim$( SplitField( FieldData$ ) )
+              End If
+          End If
+          If OriginalData$ <> ProcessedData$ Then
+              If ProcessedData$ = "DELETE" Then
+                  If CS.DeleteField( "250", 1 ) Then
+                  End If
+                Else
+                  CS.SetFieldLine LineNumber%, ProcessedData$
+              End If
+          End If
+
+' The only change made to series fields is to supply them with ISBD punctuation if they
+' need it.
+
+        Case "490", "800", "810", "811", "830", "840"
+          If ISBD = FALSE Then
+              OriginalData$  = FieldData$
+              ProcessedData$ = SplitField( FieldData$ )
+              If OriginalData$ <> ProcessedData$ Then
+                  CS.SetFieldLine LineNumber%, ProcessedData$
+              End If
+          End If
+
+' Expanding abbreviations in the 300 field will almost always be required, and a special
+' function takes care of that. If the 300 field ends in "cm." and there is no 490, the
+' period following the symbol is removed, per LC-PCC PS for 1.7.1.
+
+        Case "300"
+          OriginalData$  = FieldData$
+          ProcessedData$ = Trim$( Process300Field( FieldData$ ) )
+          If CS.GetField( "490", 1, FieldData$ ) = FALSE Then
+              If Right$( ProcessedData$, 3 ) = "cm." Then
+                  ProcessedData$ = Left$( ProcessedData$, Len( ProcessedData$ ) - 1 )
+              End If
+          End If
+          If OriginalData$ <> ProcessedData$ Then
+              CS.SetFieldLine LineNumber%, ProcessedData$
+          End If
+          If Field340$ <> "" Then
+              If CS.AddField( 1, Field340$ ) Then
+              End If
+          End If
+
+' A few 3XX and 5XX fields get some abbreviations expanded.
+
+        Case "310", "321", "362", "363", "500", "504", "510", "515", "550", "555", "580", "588"
+          OriginalData$  = FieldData$
+          ProcessedData$ = ExpandAbbreviations( FieldData$ )
+          If OriginalData$ <> ProcessedData$ Then
+              CS.SetFieldLine LineNumber%, ProcessedData$
+          End If
+
+' Finally, a contents field with old-style ISBD punctuation only (no space around the
+' dash between titles) is upgraded.
+
+        Case "505"
+          If NonAACR2 Then
+              OriginalData$  = FieldData$
+              ProcessedData$ = Process505Field( FieldData$ )
+              If OriginalData$ <> ProcessedData$ Then
+                  CS.SetFieldLine LineNumber%, ProcessedData$
+              End If
+          End If
+
+      End Select
+  End If
+  LineNumber% = LineNumber% + 1
+Loop
+
+' Some fields created in the processing of other fields are added here. One or two 264
+' fields, containing copyright or manufacturing information, may have been generated from
+' the original 260 field. They are added first. Since they are new fields, they do not
+' need to be placed with the "AddFieldLine" command.
+
+If Copyright264$ <> "" Then
+    CS.AddField 3, Copyright264$
+    FFPosition% = CS.FixedFieldPosition
+    If FFPosition% <> DISPLAY_AT_TOP Then
+        CS.FixedFieldPosition = DISPLAY_AT_TOP
+    End If
+    CS.SetFixedField "Dates", FFDates1$
+    CS.SetFixedField ",",     FFDates2$
+    CS.SetFixedField "DtSt",  FFDateType$
+    CS.FixedFieldPosition   = FFPosition%
+End If
+
+If Manufacturer264$ <> "" Then
+    CS.AddField 2, Manufacturer264$
+    Manufacturer264 = ""
+End If
+
+' The last new field to add is for a corrected date. If an "i.e." date was found in the
+' 260 field, it was removed and reformatted and put in a 500 field for adding.
+
+If CorrectedDateField$ <> "" Then
+    CS.AddField 1, CorrectedDateField$
+End If
+
+If Replacement040$ <> "" Then
+    CS.SetField 1, Replacement040$
+End If
+
+' Make necessary adjustments to the fixed field.
+
+FFPosition% = CS.FixedFieldPosition
+If FFPosition% <> DISPLAY_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_AT_TOP
+End If
+
+If FFDesc$ <> "i" Then
+    SetDesc = CS.SetFixedField( "Desc", "i" )
+End If
+
+If FFCountry$ = "+" Then
+    CS.SetFixedField "Ctry", "xx"
+End If
+
+If ActualDate$ <> "" Then
+    CS.SetFixedField "Dates", ActualDate$
+End If
+
+CS.FixedFieldPosition = FFPosition%
+
+End Sub
+
+'****************************************************************************************
+
+Function AddPunctuation( Subfield$, Tag$ ) As String
+
+' For each subfield of a field, this function supplies a terminal ISBD mark of
+' punctuation, depending on the subfield code that follows the supplied subfield data.
+
+Dim SubfieldCode$
+Dim TestChar$
+Dim WorkString$
+
+Dim i As Integer
+
+WorkString$ = Subfield$
+
+If WorkString$ = "" Then
+    AddPunctuation = WorkString$
+    Exit Function
+  ElseIf Len( WorkString$ ) = 2 And Left$( WorkString$, 1 ) = DELIMITER Then
+    AddPunctuation = WorkString$ & " "
+    Exit Function
+End If
+
+SubfieldCode$ = Right$( WorkString$, 1 )
+
+' If the string does not represent the last subfield of the field--which requires no
+' special punctuation except possibly a final period--then trim the end of the string to
+' eliminate the delimiter, all spaces, and possible ISBD punctuation, even if it is
+' correct. The punctuation will be added back later.
+
+If SubfieldCode$ <> NULL_CHAR Then
+    WorkString$ = Trim$( Left$( WorkString$, Len( WorkString$ ) - 2 ) )
+    For i = Len( WorkString$ ) To 1 Step -1
+      TestChar$ = Mid$( WorkString$, i, 1 )
+      If TestChar$ Like "[! ,;:/+]" Then
+          Exit For
+      End If
+    Next i
+    WorkString$ = Left$( WorkString$, i )
+
+' The specific combination of tag and subfield code determines the punctuation to add.
+
+    Select Case Tag$
+
+      Case "245"
+        Select Case SubfieldCode$
+          Case "n"
+            If Right$( WorkString$, 1 ) Like "[,.:;]" Then
+                WorkString$ = Left$( WorkString$, Len( WorkString$ ) - 1 ) & ". " & DELIMITER & SubfieldCode$
+              Else
+                WorkString$ = WorkString$ & ". " & DELIMITER & SubfieldCode$
+            End If
+            SubfN = TRUE
+          Case "p"
+            If Right$( WorkString$, 1 ) Like "[,.:;]" Then
+                WorkString$ = Left$( WorkString$, Len( WorkString$ ) - 1 )
+            End If
+            If SubfN Then
+                WorkString$ = WorkString$ & ISBD_COMMA & SubfieldCode$
+                SubfN       = FALSE
+              Else
+                WorkString$ = WorkString$ & ". " & DELIMITER & SubfieldCode$
+            End If
+          Case "b"
+            If Right$( WorkString$, 1 ) <> "=" Then
+                WorkString$ = WorkString$ & ISBD_COLON & SubfieldCode$
+              Else
+                WorkString$ = WorkString$ & " " & DELIMITER & SubfieldCode$
+            End If
+          Case "c"
+            WorkString$ = WorkString$ & ISBD_SLASH & SubfieldCode$
+        End Select
+
+      Case "250"
+        Select Case SubfieldCode$
+          Case "b"
+            WorkString$ = WorkString$ & ISBD_SLASH & SubfieldCode$
+          End Select
+
+      Case "260"
+        Select Case SubfieldCode$
+          Case "a"
+            WorkString$ = WorkString$ & ISBD_SEMICOLON & SubfieldCode$
+          Case "b"
+            WorkString$ = PairBrackets( WorkString$ )
+            WorkString$ = WorkString$ & ISBD_COLON & SubfieldCode$
+          Case "c"
+            WorkString$ = PairBrackets( WorkString$ )
+            If WorkString$ <> "" Then
+                WorkString$ = WorkString$ & ISBD_COMMA & SubfieldCode$
+              Else
+                WorkString$ = DELIMITER & SubfieldCode$
+            End If
+
+' Manufacturing information in the 260 field is moved to a 264 #3 field.
+
+          Case "e", "f", "g"
+            If Manufacturer264$ = "" Then
+                If Right$( WorkString$, 1 ) <> "]" Then
+                    WorkString$ = WorkString$ & "."
+                End If
+                Manufacturer264$ = DELIMITER & SubfieldCode$
+            End If
+        End Select
+
+      Case "300"
+        Select Case SubfieldCode$
+          Case "b"
+            WorkString$ = WorkString$ & ISBD_COLON & SubfieldCode$
+          Case "c"
+            WorkString$ = WorkString$ & ISBD_SEMICOLON & SubfieldCode$
+          Case "e"
+            If Right$( WorkString$, 2 ) = " &" Then
+                WorkString$ = Left$( WorkString$, Len( WorkString$ ) - 2 )
+              ElseIf Right$ (WorkString$, 4 ) = " and" Then
+                WorkString$ = Left$( WorkString$, Len( WorkString$ ) - 4 )
+            End If
+            WorkString$ = WorkString$ & " + " & DELIMITER & SubfieldCode$
+        End Select
+
+      Case "490", "800", "810", "811", "810", "830"
+        Select Case SubfieldCode$
+          Case "v"
+            WorkString$ = WorkString$ & ISBD_SEMICOLON & SubfieldCode$
+          Case Else
+            WorkString$ = WorkString$ & " " & DELIMITER & SubfieldCode$
+        End Select
+    End Select
+
+  Else
+
+' Terminal punctuation: This must be kept simple. Periods are added to all but series
+' fields, unless some other allowable mark of punctuation is present. Because the macro
+' can't distinguish between abbreviations and existing periods at the end of the fields,
+' it won't attempt to add double punctuation.
+
+    WorkString$ = Trim$( Left$( WorkString$, Len( WorkString$ ) - 1 ) )
+    TestChar$   = Right$( WorkString$, 1 )
+    Select Case Tag$
+      Case "245", "250"
+        If TestChar$ <> "." Then
+            WorkString$ = WorkString$ & "."
+        End If
+      Case "260"
+        If InStr( ".)]?->", TestChar$ ) = FALSE Then
+            WorkString$ = WorkString$ & "."
+        End If
+      Case "300"
+        If InStr( ".)]", TestChar$ ) = FALSE Then
+            WorkString$ = WorkString$ & "."
+        End If
+    End Select
+End If
+
+AddPunctuation = WorkString$ & " "
+
+End Function
+
+'****************************************************************************************
+
+Function BracketDate( DateString$ ) As String
+
+' This function simply adds brackets around a date, but keeps a hyphen as the last
+' character.
+
+Dim WorkString$
+
+WorkString$ = DateString$
+
+If Left$( WorkString$, 1 ) <> "[" Then
+    WorkString$ = "[" & WorkString$
+    If Right$( WorkString$, 1 ) = "-" Then
+        WorkString$ = Left$( WorkString$, Len( WorkString$ ) - 1 ) & "]-"
+      Else
+        WorkString$ = WorkString$ & "]"
+    End If
+End If
+
+BracketDate = WorkString$
+
+End Function
+
+'****************************************************************************************
+
+Function ConvertExtent( Extent$, SequenceType$ )  As String
+
+' This function takes a string of page or leaf sequences and formats it, changing, e.g.,
+' "[2], xiii, [3], 15-375 p." to "2 unnumbered pages, xiii pages, 3 unnumbered pages,
+' pages 15-375". Whether or not that is an improvement is still a question.
+
+Dim BracketedNumber$
+Dim CurrentSequence$
+Dim LenSequenceName%
+Dim NextSequence$
+Dim Start%
+Dim TempString$
+Dim TestChar$
+Dim WorkString$
+
+Dim i As Integer, p As Integer, q As Integer
+
+Dim HyphenLeft               : HyphenLeft  = FALSE
+Dim HyphenRight              : HyphenRight = FALSE
+
+WorkString$      = Extent$
+LenSequenceName% = Len( SequenceType$ )
+
+' Begin by taking care of brackets. A standalone bracketed sequence is expanded to give
+' an "unnumbered" sequence, e.g. "[5] p." becomes "5 unnumbered pages". Brackets around a
+' supplied page number in a range are simply removed, and the number kept, because the
+' macro can't tell whether that number is significant; e.g., the bracketed number in
+' "viii, [9]-152 p." would normally not be recorded, but it must be in "p. [44]-83".
+
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, "[" )
+  If p <> 0 Then
+    q = InStr( p + 1, WorkString$, "]" )
+    If q <> 0 Then
+        BracketedNumber$ = Mid$( WorkString$, p + 1, q - p - 1 )
+        If Mid$( WorkString$, q + 1, 1 ) = "-" Then
+            HyphenRight = TRUE
+        End If
+        If p = 1 Then
+            WorkString$ = BracketedNumber$ & Mid$( WorkString$, q + 1 )
+          Else
+            If Mid$( WorkString$, p - 1, 1 ) = "-" Then
+                HyphenLeft = TRUE
+            End If
+            WorkString$ = Left$( WorkString$, p - 1 ) & BracketedNumber$ & Mid$( WorkString$, q + 1 )
+        End If
+
+' If the (formerly) bracketed number is not part of a range, indicated by no hyphen being
+' found either preceding or following it, add the word "unnumbered" and the sequence
+' type.
+
+        If HyphenLeft = FALSE And HyphenRight = FALSE Then
+            WorkString$ = Left$( WorkString$, q - 2 ) & " unnumbered " & SequenceType$ & Mid$( WorkString$, q - 1 )
+        End If
+      Else
+
+' If matching brackets aren't found, give up with the attempt to parse the string, but
+' keep the macro going.
+
+        Exit Function
+    End If
+    Start% = q + 1
+  End If
+  HyphenLeft  = FALSE
+  HyphenRight = FALSE
+Loop Until p = 0
+
+' Precede a range of numbers with the sequence type. That is, a range such as "15-375"
+' will become "pages 15-375". Find the hyphen and work backward until the beginning of
+' the range is found, then insert the sequence type.
+
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, "-" )
+  If p > 0 Then
+      For i = p - 1 To 1 Step -1
+        TestChar$ = Mid$( WorkString$, i, 1 )
+        If TestChar$ Like "[!0-9cilvx]" Then
+            Exit For
+        End If
+      Next i
+      WorkString$ = Left$( WorkString$, i ) & SequenceType$ & " " & Mid$( WorkString$, i + 1 )
+      Start%      = p + LenSequenceName% + 2
+  End If
+Loop Until p = 0
+
+' With unnumbered sequences and ranges both now having their sequence types added, go
+' through the string, comma by comma, and make sure each remaining sequence has its type,
+' if necessary. In a string of sequences of the same type, only the last need have the
+' type added, so pairs of sequences are tested. If the latter of the pair already has a
+' sequence type, the former needs to have it added; otherwise, continue with the test,
+' the second of the first tested pair becoming the first of the next pair.
+
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, "," )
+
+' The current sequence to consider is the string between the start of the search and the
+' first comma found. If no comma is found, this must be the last sequence of the series.
+
+  If p > 0 Then
+      CurrentSequence$ = Mid$( WorkString$, Start%, p - Start% )
+    Else
+      CurrentSequence$ = Mid$( WorkString$, Start% )
+  End If
+
+' If the sequence under consideration does not contain a sequence type, then whether to
+' add it depends on what is ahead in the next sequence. If the current sequence does
+' contain a sequence type, it is skipped and the next comma found to start a new search
+' and new comparison. If there is no succeeding comma, the last sequence of the string
+' has been reached, and its sequence type is added and this section of the macro
+' concludes.
+
+  If InStr( CurrentSequence$, SequenceType$ ) = FALSE Then
+      If p = 0 Then
+          TempString$ = TempString$ & CurrentSequence$ & " " & SequenceType$
+          Exit Do
+        Else
+
+' The sequence that follows the first is the string between the end of the first sequence
+' and the next comma found. If there is no next comma, the succeeding string is simply
+' the last sequence of the series.
+
+          q = InStr( p + 1, WorkString$, "," )
+          If q > 0 Then
+              NextSequence$ = Mid$( WorkString$, p + 1, q - p )
+            Else
+              NextSequence$ = Mid$( WorkString$, p + 1 )
+          End If
+
+' If the following sequence contains a sequence type, then the current one needs it
+' added. An unnumbered sequence already has its sequence type added, so whatever precedes
+' it must also have it added to remove ambiguity. How is the series "5, 8 unnumbered
+' pages" to be understood? Is the first sequence numbered or not? To avoid ambiguity, the
+' preceding sequence must be identified in its own right. Similarly, since the sequence
+' type of a range precedes the numbers of the range, the sequence that comes before it
+' needs to be separately identified for it to make sense. The roman numerals in "xvi,
+' pages 5-209" are ambiguous: What are they "xvi" of? We can perhaps assume "pages," but
+' don't need to make assumptions if they are positively identified as such in "xvi pages,
+' pages 5-209".
+
+          If InStr( NextSequence$, SequenceType$ ) Then
+              CurrentSequence$ = CurrentSequence$ & " " & SequenceType$
+          End If
+          TempString$ = TempString$ & CurrentSequence$ & ", "
+      End If
+    Else
+      TempString$ = TempString$ & CurrentSequence$ & ", "
+  End If
+  Start% = p + 1
+Loop Until p = 0
+
+TempString$ = Trim$( TempString$ )
+If Right$( TempString$, 1 ) = "," Then
+    TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+End If
+WorkString$ = TempString$
+
+ConvertExtent = Trim$( WorkString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function ExpandAbbreviations( InString$ ) As String
+
+' This function expands certain abbreviations in the 5XX fields (excepting 505). Besides
+' unpacking "p." and "v." and their plurals, certain other words are made whole also; the
+' complete list is in the array AbbreviationsOther, defined above at the beginning of the
+' main sub. Brackets enclosing pagination are done away with also.
+
+Dim Initial$
+Dim InitialAscii%
+Dim LenStringFollowing%
+Dim LenStringPreceding%
+Dim NumberCount%
+Dim NumberString$
+Dim Plural$
+Dim SearchString$
+Dim Start%
+Dim StringFollowing$
+Dim StringPreceding$
+Dim Terminal$
+Dim TestChar$
+Dim Unit$
+Dim WorkString$
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer
+
+Dim Digits                   : Digits = FALSE
+
+WorkString$ = InString$
+
+' First expand the abbreviations that are less likely to be associated with numbers, and
+' so can be simply replaced by the spelled-out form; these are "other" abbreviations.
+
+For i = 0 To UBound( AbbreviationsOther )
+  Unit$         = AbbreviationsOther( i, NOTES_FIELD_TERM )
+  SearchString$ = AbbreviationsOther( i, NOTES_FIELD_ABBR )
+  Start%        = 1
+  Do
+    p = QuoteCheck( WorkString$, SearchString$ )
+    If p <> 0 Then
+        Initial$         = Mid$( WorkString$, p, 1 )
+        StringFollowing$ = Mid$( WorkString$, p + Len( SearchString$ ) )
+
+' If the abbreviation is at the end of the field, its period must be retained as the
+' terminal mark of punctuation of the field.
+
+        If StringFollowing$ = "" Then
+            StringFollowing$ = "."
+          ElseIf Left$( StringFollowing$, 1 ) <> " " Then
+            StringFollowing$ = " " & StringFollowing$
+        End If
+        WorkString$ = Left$( WorkString$, p - 1 ) & Initial$ & Mid$( Unit$, 2 ) & StringFollowing$
+        Start%      = p + 2
+    End If
+  Loop Until p = 0
+Next i
+
+' The abbreviations "p." and "v.", on the other hand, almost always have numbers
+' associated with them, so some work must be done to determine whether they expand to the
+' plural form or not. "Vol." will most likely be singular, but it's included here for
+' safety's sake. The work of determining the form is a loop so as to catch the occasional
+' multiple appearances of the abbreviation in the same field.
+
+For i = 0 To UBound( AbbreviationsPageVol )
+  Unit$         = AbbreviationsPageVol( i, NOTES_FIELD_TERM )
+  SearchString$ = AbbreviationsPageVol( i, NOTES_FIELD_ABBR )
+  Start%        = 1
+  Do
+    p = QuoteCheck( WorkString$, SearchString$ )
+    If p > 5 Then
+
+' If the abbreviation is found, begin by looking ahead in the string for immediately
+' following digits or roman numerals. If nothing is found, the search is made going
+' backwards.
+
+        If p = Len( WorkString$ ) - Len( SearchString$ ) + 1 Then
+            Terminal$ = "."
+        End If
+
+' Because case is ignored in string comparisons ("Option Compare Text" is the first
+' statement in the file), the ASCII value of the initial letter must be used to determine
+' case. The test that appears later "If Initial$ = "p"" is true whether the letter is "p"
+' or "P". This routine will change the case of an initial letter depending on what
+' precedes it, so it needs to know exactly what the case is to begin with. Thus, the
+' apparent round trip from character to ASCII back to character.
+
+        InitialAscii%       = Asc( Mid$( WorkString$, p, 1 ) )
+        Initial$            = Chr$( InitialAscii% )
+        StringPreceding$    = Left$( WorkString$, p - 1 )
+        StringFollowing$    = Mid$( WorkString$, p + Len( SearchString$ ) )
+        LenStringFollowing% = Len( StringFollowing$ )
+        j = 1
+        q = 0
+        Do
+          TestChar$ = Mid$( StringFollowing$, j, 1 )
+          Select Case TestChar$
+            Case " "
+              NumberString$ = NumberString$ & TestChar$
+            Case "[", "]"
+              q = q + 1
+            Case "0" To "9"
+              NumberString$ = NumberString$ & TestChar$
+              NumberCount%  = NumberCount% + 1
+              Digits        = TRUE
+
+' The plural form is determined by the presence of a hyphen separating two numbers.
+
+            Case "-"
+              NumberString$ = NumberString$ & TestChar$
+              Plural$       = "s"
+            Case "c", "i", "l", "v", "x"
+              If Digits = TRUE Then
+                  Exit Do
+                Else
+                  NumberString$ = NumberString$ & TestChar$
+                  NumberCount%  = NumberCount% + 1
+              End If
+            Case Else
+              Exit Do
+          End Select
+          j = j + 1
+        Loop Until j >= LenStringFollowing%
+        If NumberCount% > 0 Then
+            StringFollowing$ = NumberString$ & Mid$( StringFollowing$, Len( NumberString$ ) + q + 1 )
+            If Left$( StringFollowing$, 1 ) <> " " Then
+                StringFollowing$ = " " & StringFollowing$
+            End If
+            Select Case Right$( StringPreceding$, 2 )
+              Case ": ", "--"
+                If InitialAscii% > 96 Then
+                    Initial$ = Chr$( InitialAscii% - 32 )
+                End If
+              Case " ("
+                If InitialAscii% < 96 Then
+                    Initial$ = Chr$( InitialAscii% + 32 )
+                End If
+            End Select
+            WorkString$ = StringPreceding$ & Initial$ & Mid$( Unit$, 2 ) & Plural$ & StringFollowing$
+            GoTo Recycle:
+        End If
+
+' If no numbers are found following the abbreviation, check the preceding characters for
+' numbers.
+
+        LenStringPreceding% = Len( StringPreceding$ )
+        NumberString$ = ""
+        j = LenStringPreceding%
+        Do
+          LenStringPreceding% = Len( StringPreceding$ )
+          TestChar$           = Mid$( StringPreceding$, j, 1 )
+          Select Case TestChar$
+            Case " "
+              NumberString$ = TestChar$ & NumberString$
+            Case "[", "]"
+            Case "0" To "9"
+              NumberString$ = TestChar$ & NumberString$
+              NumberCount%  = NumberCount% + 1
+              Digits        = TRUE
+            Case "-"                  'unlikely in this situation.
+              NumberString$ = TestChar$ & NumberString$
+              Plural$       = "s"
+            Case "c", "i", "l", "v", "x"
+              If Digits = TRUE Then
+                  Exit Do
+                Else
+                  NumberString$ = TestChar$ & NumberString$
+                  NumberCount%  = NumberCount% + 1
+              End If
+            Case Else
+              Exit Do
+          End Select
+          j = j - 1
+        Loop Until j = 1
+        If NumberCount% > 0 Then
+
+' When the abbreviation follows the number, the singular or plural form depends on the
+' value of the number, as there normally won't be a range in this situation.
+
+            If Val( NumberString$ ) > 1 Then
+                Plural$ = "s"
+              Else
+                Plural$ = ""
+            End If
+            WorkString$ = Left$( StringPreceding$, j ) & NumberString$ & Unit$ & Plural$ & StringFollowing$ & Terminal$
+          Else
+            WorkString$ = StringPreceding$ & Initial$ & Mid$( Unit$, 2 ) & StringFollowing$ & Terminal$
+        End If
+
+Recycle:
+
+' Each new search needs the variables re-initialized, and for a continuing search for
+' further occurrences of the abbreviation, start the search after the most recent
+' occurrence.
+
+        NumberCount%  = 0
+        NumberString$ = ""
+        Plural$       = ""
+        Start%        = p + 2
+    End If
+  Loop Until p = 0
+Next i
+
+ExpandAbbreviations = WorkString$
+
+End Function
+
+'****************************************************************************************
+
+Function NormalizeIllusTerms( IllusMaterial$, Parenth$, Comma% ) As String
+
+' This function takes a term from 300 subfield $b and normalizes it, after a fashion,
+' making it all lower case and removing all punctuation to simplify matching in the
+' parent routine. However, presence of parentheses (whether there are none, one, or both)
+' is noted, as they are important in building the new illustrative content string. The
+' presence of a comma is also noted, as the comma marks the end of a discrete term or
+' phrase in the string. The presence of these marks of punctuation determines the
+' variables "Parenth$" and "Comma%", so their incoming values are irrelevant.
+
+Dim Term$
+Dim TestChar$
+Dim WorkString$
+
+Dim i As Integer
+
+WorkString$ = LCase$( IllusMaterial$ )
+
+' Initialize the variables.
+
+Parenth$ = ""
+Term$    = ""
+Comma%   = 0
+
+' Go through the string from beginning to end, recording parentheses and comma found.
+
+For i = 1 To Len( WorkString$ )
+  TestChar$ = Mid$( WorkString$, i, 1 )
+  Select Case TestChar$
+    Case "a" To "z", "0" To "9"
+      Term$ = Term$ & TestChar$
+    Case "(", ")"
+      Parenth$ = Parenth$ & TestChar$
+    Case ","
+      Comma% = 1
+  End Select
+Next i
+
+NormalizeIllusTerms = Term$
+
+End Function
+
+'****************************************************************************************
+
+Function PairBrackets( StringInput$ ) As String
+
+' This function makes sure each subfield of the 260 field has its own set of brackets.
+
+Dim WorkString$
+
+WorkString$ = StringInput$
+
+If Left$( WorkString$, 1 ) = "[" Then
+    If Right$( WorkString$, 1 ) <> "]" Then
+        WorkString$ = WorkString$ & "]"
+    End If
+  Else
+    If Right$( WorkString$, 1 ) = "]" Then
+        WorkString$ = "[" & WorkString$
+    End If
+End If
+
+PairBrackets = WorkString$
+
+End Function
+
+'****************************************************************************************
+
+Function Process250Field( Field250$) As String
+
+' This function expands abbreviations in the 250 field.
+
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim Instructions$
+Dim OrdinalAbbrev$
+Dim Original250$
+Dim TempString$
+
+Dim p As Integer
+
+Original250$ = Mid$( Field250$, 6 )
+
+' First, remove brackets surrounding the field, as RDA requires brackets only if the
+' edition statement comes from outside the resource itself. This action will incorrectly
+' delete a small number of legitimate brackets.
+
+If Left$( Original250$, 1 ) = "[" And Right$( Original250$, 1 ) = "]" Then
+    Original250$ = Mid$( Original250$, 2, Len( Original250$ ) - 2 )
+End If
+
+' Keep track of the original edition statement (minus enclosing brackets) in case it's
+' wanted for retention.
+
+TempString$ = Original250$
+
+' Check for an abbreviation of ordinal numbers, and replace one with its verbal
+' expansion.
+
+OrdinalAbbrev$ = Left$( TempString$, 2 )
+Select Case OrdinalAbbrev$
+  Case "2d"
+    TempString$ = "Second" & Mid$( TempString$, 3 )
+  Case "3d"
+    TempString$ = "Third" & Mid$( TempString$, 3 )
+End Select
+
+OrdinalAbbrev$ = Left$( Original250$, 3 )
+Select Case OrdinalAbbrev$
+  Case "1st"
+    TempString$ = "First" & Mid$( TempString$, 4 )
+  Case "2nd"
+    TempString$ = "Second" & Mid$( TempString$, 4 )
+  Case "3rd"
+    TempString$ = "Third" & Mid$( TempString$, 4 )
+  Case "4th"
+    TempString$ = "Fourth" & Mid$( TempString$, 4 )
+  Case "5th"
+    TempString$ = "Fifth" & Mid$( TempString$, 4 )
+  Case "6th"
+    TempString$ = "Sixth" & Mid$( TempString$, 4 )
+  Case "7th"
+    TempString$ = "Seventh" & Mid$( TempString$, 4 )
+  Case "8th"
+    TempString$ = "Eighth" & Mid$( TempString$, 4 )
+  Case "9th"
+    TempString$ = "Ninth" & Mid$( TempString$, 4 )
+  Case "10t"
+    TempString$ = "Tenth" & Mid$( TempString$, 5 )
+End Select
+
+' Now replace the other common abbreviations in this field.
+
+Do
+  p = InStr( TempString$, " ed." )
+  If p <> 0 Then
+      TempString$ = Left$( TempString$, p - 1 ) & " edition" & Mid$( TempString$, p + 4 )
+  End If
+Loop Until p = 0
+
+p = InStr( TempString$, "ev." )
+If p <> 0 Then
+    TempString$ = Left$( TempString$, p - 1 ) & "evised" & Mid$( TempString$, p + 3 )
+End If
+
+p = InStr( TempString$, "orr." )
+If p <> 0 Then
+    TempString$ = Left$( TempString$, p - 1 ) & "orrected" & Mid$( TempString$, p + 4 )
+End If
+
+p = InStr( TempString$, "enl." )
+If p <> 0 Then
+    TempString$ = Left$( TempString$, p - 1 ) & "enlarged" & Mid$( TempString$, p + 4 )
+End If
+
+p = InStr( TempString$, "pbk." )
+If p <> 0 Then
+    TempString$ = Left$( TempString$, p - 1 ) & "paperback" & Mid$( TempString$, p + 4 )
+End If
+
+' Finally, if the field has been altered, display it for verification (abbreviations
+' could well appear on the resource) and correction, if desired, so it can be added to
+' the record.
+
+If TempString$ = Original250$ Then
+    RDA250$ = Original250$
+    GoTo Done:
+  Else
+    RDA250$ = TempString$
+    Instructions$ = "Edit RDA 250, if necessary, and click " & Chr$( 039 ) & "OK" & Chr$( 039 ) & " to insert."
+    Instructions$ = Instructions$ & " Click " & Chr$( 039 ) & "Cancel" & Chr$( 039 ) & " to retain original 250."
+    Instructions$ = Instructions$ & " Clear entry to delete field."
+
+    Begin Dialog Dialog1Definition 268, 72, WaltsMacros$, .Dialog1ControlFunction
+      OkButton      150,  50,  50,  14
+      CancelButton  206,  50,  50,  14
+      Text           12,   8,  40,   8, "Original 250:"
+      Text           56,   8, 200,   8, Original250$
+      Text           12,  24,  40,   8, "RDA 250:"
+      TextBox        56,  22, 200,  12,                .TextBox1
+      Text           12,  40, 128,  24, Instructions$
+    End Dialog
+
+    Dim Dialog1 as Dialog1Definition
+    On Error Resume Next
+    Dialog Dialog1
+    If Err = DLG_STATEMENT_CANCEL Then
+        RDA250$ = Original250$
+        GoTo Done:
+    End If
+    RDA250$ = Trim$( Dialog1.TextBox1 )
+End If
+
+Done:
+
+' If the entry in the input box has been cleared, take that as a sign that the edition
+' statement is to be deleted, and give that information as the return value of the
+' function.
+
+If RDA250$ = "" Then
+    Process250Field = "DELETE"
+  Else
+    Process250Field = SplitField( "250  " & RDA250$ )
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Process260Field( Field260$ ) As String
+
+' This function takes care of recording missing place of publication and publisher,
+' whether those subfields are completely absent or the missing data is noted, by
+' supplying the appropriate form of "... not identified". It also farms out the task of
+' identifying and formatting the date(s) to the date processing function.
+
+Dim Start%
+Dim Temp264$
+Dim WorkString$
+
+Dim p As Integer, q As Integer
+
+WorkString$ = Field260$
+
+' Processing begins with removing "etc." for multiple unnamed places or publishers.
+
+Start% = 1
+p = InStr( Start%, WorkString$, "[etc.]" )
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & Mid$( WorkString$, p + 6 )
+End If
+
+' Then replace abbreviations indicating "place of publication not identified" with that
+' phrase; also insert that phrase if there is no subfield $a in the field.
+
+p = InStr( 1, WorkString$, "s.l." )
+If p = 0 Then
+    p = InStr( 1, WorkString$, "n.p." )
+End If
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & "Place of publication not identified" & Mid$( WorkString$, p + 4 )
+    Start% = -1
+  ElseIf Mid$( WorkString$, 6, 1 ) = DELIMITER And Mid$( WorkString$, 7, 1 ) <> "a" Then
+    WorkString$ = Left$( WorkString$, 5 ) & "[Place of publication not identified] " & Mid$( WorkString$, 6 )
+    Start% = -1
+End If
+
+' Check that the fixed field code is appropriate for no place of publication being
+' identified, and if not, correct it at the end.
+
+If Start% = -1 Then
+    If FFCountry$ <> "xx" Then
+        FFCountry$ = "+"
+    End If
+End If
+
+' If a publisher is not named, add "Publisher not identified", whether there is no
+' subfield $b at all in the field or the abbreviation for "sine nomine" has been given.
+
+p = InStr( WorkString$, SUBFIELD_CODE_B )
+If p = 0 Then
+    p = InStr( WorkString$, SUBFIELD_CODE_C )
+    If p <> 0 Then
+        WorkString$ = Left$( WorkString$, p - 1 ) & SUBFIELD_CODE_B & " [Publisher not identified], " & Mid$( WorkString$, p )
+    End If
+  Else
+    p = InStr( WorkString$, "s.n." )
+    If p <> 0 Then
+        If Mid$( WorkString$, p - 1, 1 ) <> "[" Then
+            WorkString$ = Left$( WorkString$, p - 1 ) & "[Publisher not identified" & Mid$( WorkString$, p + 4 )
+          Else
+            WorkString$ = Left$( WorkString$, p - 1 ) & "Publisher not identified" & Mid$( WorkString$, p + 4 )
+        End If
+        p = InStr( WorkString$, "[Publisher" )
+        If Mid$( WorkString$, p + 25, 1 ) <> "]" Then
+            WorkString$ = Left$( WorkString$, p + 24 ) & "]" & Mid$( WorkString$, p + 25 )
+        End If
+    End If
+End If
+
+' Although under earlier rules the entire 260 field could be enclosed by a single pair of
+' brackets, in RDA each subfield of the new, replacement 264 field must possess its own
+' pair. The function "PairBrackets" takes care of that, but it needs to be notified when
+' it is needed, and this routine, by adding a single left bracket after each subfield
+' code found, creates that signal.
+
+Start% = 1
+p = InStr( Start%, WorkString$, "[" )
+If p < 10 Then
+    q = InStr( Start%, WorkString$, "]" )
+    If q = Len( WorkString$ ) Then
+        Start% = 10
+        Do
+          p = InStr( Start%, WorkString$, DELIMITER )
+          If p <> 0 Then
+              WorkString$ = Left$( WorkString$, p + 2 ) & "[" & Mid$( WorkString$, p + 3 )
+              Start%      = p + 3
+          End If
+        Loop Until p = 0
+    End If
+End If
+
+' Fix the date, and bracketing, if necessary, add ISBD punctuation, and change the tag.
+
+WorkString$ = Process260Subfield_C( WorkString$ )
+WorkString$ = SplitField( WorkString$ )
+Temp264$    = "264 1" & Mid$( WorkString$, 6 )
+
+' Add ISBD punctuation to any 264 #3 field for manufacturing information. Since it was
+' sent for processing with a 260 tag, replace the tag as the last step.
+
+If Manufacturer264$ <> "" Then
+    Manufacturer264$ = SplitField( Manufacturer264$ )
+    Manufacturer264$ = "264 3" & Trim$( Mid$( Manufacturer264$, 6 ) )
+End If
+
+Process260Field = Temp264$
+
+End Function
+
+'****************************************************************************************
+
+Function Process260Subfield_C( SubfieldC$ ) As String
+
+' This function extracts one or two dates from subfield $c of the 260 field (any dates
+' after the second will simply be ignored, as will dates given in roman numerals) and
+' formats them. The formatting includes: substituting the RDA phrase for "[n.d.]";
+' indicating an inferred publication date from a copyright date by the use of brackets;
+' removing "ca." to make a probable date, indicated by adding a question mark and
+' brackets; expanding probable or uncertain decades or centuries (e.g., changing "[190-]"
+' to "[between 1900 and 1909]"; and restoring missing digits (e.g., "[1891 or 2]" to
+' "[1891 or 1892]"). It also removes some dates, such as a copyright date, which may get
+' put into a new 264 #4 field (whether or not it matches the publication date, which it
+' may have been created from); a printing date, which gets put in a new 264 #3 field; and
+' a corrected date, which gets put in a new 500 field.
+
+Const DATE_1         As Integer = 1
+Const DATE_2         As Integer = 2
+Const DATE_BETWEEN   As Integer = 1
+Const DATE_BRACKET   As Integer = 2
+Const DATE_CIRCA     As Integer = 3
+Const DATE_COPYRIGHT As Integer = 4
+Const DATE_DATE      As Integer = 0
+
+Dim Between%
+Dim Date1$
+Dim Date2$
+Dim DateCount%
+Dim DateString$
+Dim DigitCount%
+Dim Following$
+Dim LengthDate2%
+Dim LengthSubfieldC%
+Dim Preceding$
+Dim Start%
+Dim TestChar$
+Dim WorkString$
+
+Dim i As Integer, p As Integer, q As Integer
+
+Dim Bracketed                : Bracketed = FALSE
+Dim Circa                    : Circa     = FALSE
+Dim Copyright                : Copyright = FALSE
+Dim IdEst                    : IdEst     = FALSE
+Dim OneOfTwo                 : OneOfTwo  = FALSE
+Dim Printing                 : Printing  = FALSE
+Dim Roman                    : Roman     = FALSE
+
+Dim DateProperties( DATE_1 to DATE_2, 4 )
+
+WorkString$ = Trim$( SubfieldC$ )
+
+' Begin by isolating subfield $c. If the subfield is not present, if the record describes
+' a monograph, it is added, with the phrase indicating that no date is identified, and
+' the function's job is done. A record describing a serial does not need subfield $c, so
+' the macro doesn't add it. Otherwise, what precedes and what follows it is stored for
+' gluing back together at the end.
+
+p = InStr( WorkString$, SUBFIELD_CODE_C )
+If p <> 0 Then
+    Preceding$ = Left$( WorkString$, p - 1 )
+    q = InStr( p + 1, WorkString$, DELIMITER )
+    If q = 0 Then
+        WorkString$ = Mid$( WorkString$, p )
+      Else
+        Following$  = Mid$( WorkString$, q )
+        WorkString$ = Mid$( WorkString$, p, q - 1 - p )
+    End If
+  Else
+    If BLvl$ = "s" Then
+        Process260Subfield_C = SubfieldC$
+        Exit Function
+      Else
+        Process260Subfield_C = SubfieldC$ & SUBFIELD_CODE_C & " [date of publication not identified]"
+        Exit Function
+    End If
+End If
+
+' Now make some fixes before crunching numbers. An approximate date recorded by using
+' "ca." or "approximately" becomes a probable date, with a question mark and brackets.
+
+p = InStr( WorkString$, "ca." )
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & Trim$( Mid$( WorkString$, p + Len( "ca." ) ) )
+    Circa       = TRUE
+End If
+
+p = InStr( WorkString$, "approximately" )
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & Trim$( Mid$( WorkString$, p + Len( "approximately" ) ) )
+    Circa       = TRUE
+End If
+
+' A corrected date recorded as "i.e." will be moved to a note.
+
+p = InStr( WorkString$, "i.e." )
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & Trim$( Mid$( WorkString$, p + Len( "i.e." ) ) )
+    IdEst       = TRUE
+End If
+
+' If a copyright symbol is found (rare but possible), change it to "c".
+
+p = InStr( WorkString$, Chr$( 202 ) )
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & "c" & Trim$( Mid$( WorkString$, p + 1 ) )
+End If
+
+' The obsolete "n.d." is replaced by the functionally equivalent RDA string.
+
+If InStr( WorkString$, "n.d." ) Then
+    DateString$ = "[date of publication not identified]"
+    GoTo Done:
+End If
+
+' An uncertain date between two endpoints is already acceptable in RDA, so no further
+' work need be done.
+
+If Mid$( WorkString$, 4, 8 ) = "[between" Then
+    Process260Subfield_C = SubfieldC$
+    Exit Function
+End If
+
+' Dates in angle brackets are left alone as they may be represented in different ways in
+' RDA.
+
+If InStr( WorkString$, "<" ) Or InStr( WorkString$, ">" ) Then
+    Process260Subfield_C = SubfieldC$
+    Exit Function
+End If
+
+' A possible date of either of two consecutive years is also acceptable in RDA, but
+' earlier rules allowed for omitting repeated digits, e.g. "[1882 or 3]". Drop the
+' connecting "or" and process the date string so a short second date can be expanded to
+' its full form, if necessary.
+
+p = InStr( WorkString$, " or " )
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p ) & Mid$( WorkString$, p + Len( " or " ) )
+    OneOfTwo    = TRUE
+End If
+
+' Printing information should properly be in a subfield $g, but on older records, or
+' improperly input records, it may appear in subfield $c. Mark this occurrence for
+' removal to 264 #3.
+
+If InStr( WorkString$, "printing" ) Then
+    Printing = TRUE
+End If
+
+WorkString$ = Trim$( Mid$( WorkString$, 3 ) )
+
+' Check for roman numerals. If the date contains only allowable characters, including
+' periods, skip processing.
+
+For i = 1 To Len( WorkString$ )
+  TestChar$ = Mid$( WorkString$, i, 1 )
+  If TestChar$ Like "[ .cdilmvx]" Then
+      Roman = TRUE
+    Else
+      Roman = FALSE
+      Exit For
+  End If
+Next i
+If Roman = TRUE Then
+    Process260Subfield_C = SubfieldC$
+    Exit Function
+End If
+
+' Extract the date from the 260 subfield $c string by going through the string and
+' building it, digit by digit. Cycle through the loop a maximum of two times, for two
+' dates.
+
+Cycle:
+
+LengthSubfieldC% = Len( WorkString$ )
+For i = 1 to LengthSubfieldC%
+  TestChar$ = Mid$( WorkString$, i, 1 )
+  Select Case TestChar$
+
+' Remove brackets, but note their presence in case they need to be added back later.
+
+    Case "[", "]"
+      Bracketed = TRUE
+
+' Since the "c" in "ca." has already been removed, and any "c" in a roman numeral has
+' already exited the function, the only "c" remaining should be for copyright.
+
+    Case "c"
+      If Mid$( WorkString$, i + 1, 1 ) Like "[0-9]" Then
+          Copyright = TRUE
+      End If
+    Case "0" To "9"
+      DateString$ = DateString$ & TestChar$
+      DigitCount% = DigitCount% + 1
+
+' A question mark is part of the date string.
+
+    Case "?"
+      DateString$ = DateString$ & TestChar$
+      DigitCount% = DigitCount% + 1
+      Bracketed   = TRUE
+
+' A hyphen represents a missing or uncertain digit if not all four digits have been
+' found, and is included in the date as a zero; otherwise, it represents the beginning
+' of a range and concludes the first date. (An initial hyphen, representing the known end
+' of a range but not the beginning, can't be handled by this macro.) Count the number of
+' such hyphens, as the resulting string built by this loop--e.g., "1900"--can't by itself
+' tell whether it is the decade or the century that is uncertain. The hyphen count
+' supplies this information.
+
+    Case "-"
+      If DigitCount% < 4 Then
+          DateString$ = DateString$ & "0"
+          DigitCount% = DigitCount% + 1
+          Between%    = Between% + 1
+        Else
+          DateString$ = DateString$ & TestChar$
+          Exit For
+      End If
+
+' Spaces or other marks of punctuation indicate the end of the date string.
+
+    Case "a" To "z", "."
+      If DigitCount% > 0 Then
+          Exit For
+      End If
+    Case Else
+      Exit For
+  End Select
+  If DigitCount% > 5 Then Exit For
+Next i
+
+DateCount% = DateCount% + 1
+
+' Build a master string for each date, containing information gleaned previously, to
+' guide formatting.
+
+DateProperties( DateCount%, DATE_DATE )          = DateString$
+If Between% > 0 Then
+    DateProperties( DateCount%, DATE_BETWEEN )   = CStr( Between% )
+  Else
+    DateProperties( DateCount%, DATE_BETWEEN )   = "0"
+End If
+If Bracketed Then
+    DateProperties( DateCount%, DATE_BRACKET )   = "1"
+  Else
+    DateProperties( DateCount%, DATE_BRACKET )   = "0"
+End If
+If Circa Then
+    DateProperties( DateCount%, DATE_CIRCA )      = "1"
+  Else
+    DateProperties( DateCount%, DATE_CIRCA )      = "0"
+End If
+If Copyright Then
+    DateProperties( DateCount%, DATE_COPYRIGHT ) = "1"
+  Else
+    DateProperties( DateCount%, DATE_COPYRIGHT ) = "0"
+End If
+
+' After the first date has been found, compare it with Date 1 in the fixed field; then,
+' if there are characters remaining in the subfield, reset the variables and run through
+' the loop again to get the second date.
+
+If DateCount% = 1 Then
+    If Left$( DateString$, 1 ) <> DELIMITER Then
+        Date1$ = DateProperties( DateCount%, DATE_DATE )
+
+' Some records have an incorrectly shortened date, e.g. "[19-]". Pad the date to four
+' digits and consider it to be a century range.
+
+        If Len( Date1$ ) < 4 Then
+            For i = Len( Date1$ ) + 1 To 4
+              Date1$   = Date1$ & "0"
+              Between% = Between% + 1
+            Next i
+
+' If the only thing the function can come up with is a date of zero, give up and retain
+' the existing 260 $c.
+
+            If Date1$ = "0000" Then
+                MsgBox "Sorry, this macro can't find a date in subfield $c of field 260, so the subfield will not be changed.", WARNING_MESSAGE, WaltsMacros$
+                Process260Subfield_C = SubfieldC$
+                Exit Function
+            End If
+            DateProperties( DateCount%, DATE_BETWEEN ) = Between%
+        End If
+        If Left$( Date1$, 4 ) <> FFDates1$ Then
+            ActualDate$ = Left$( Date1$, 4 )
+        End If
+      Else
+        DateCount% = 0
+    End If
+    If i < LengthSubfieldC% Then
+        Copyright   = FALSE
+        Bracketed   = FALSE
+        Between%    = 0
+        WorkString$ = Trim$( Mid$( WorkString$, i + 1 ) )
+        If Left$( WorkString$, 1 ) Like "[!0-9c]" Then
+            WorkString$ = Trim$( Mid$( WorkString$, 2 ) )
+        End If
+        DateString$ = ""
+        DigitCount% = 0
+        GoTo Cycle:
+    End If
+  Else
+    Date2$ = DateProperties( DateCount%, DATE_DATE )
+
+' If the first few digits of Date2$ were omitted because understood from Date1$, e.g.
+' "1907-11", use those understood numbers to expand Date2$ to a full four digits.
+
+    LengthDate2% = Len( Date2$ )
+    If LengthDate2% < 4 Then
+        If Val( Date2$ ) > Val( Right$( Str$( Date1$ ), LengthDate2% ) ) Then
+            Date2$ = Left$( Date1$, 4 - LengthDate2% ) & Date2$
+        End If
+    End If
+End If
+
+DateString$ = ""
+
+' Format the first date.
+
+Between% = Val( DateProperties( DATE_1, DATE_BETWEEN ) )
+
+' If the century is the best guess at a date, the beginning of the possible range is the
+' year ending in "00" (actually the last year of the preceding century, for purists), and
+' the end of the possible range is the last year of the century, ending in "99". For
+' material published in the 20th and 21st centuries, however, the end date of the range
+' must be no later than the year the catalog record was created. This date is taken from
+' the fixed field element "Entered". Here, the macro compares the values of the two
+' possibilities and chooses the lowest, or earliest, value, for Date2$. An analogous
+' situation obtains for an uncertain decade. The number of hyphens counted in "Between%"
+' determines whether the issue is a decade (one hyphen, 10^1) or a century (two hyphens,
+' 10^2). But also consider the existing fixed field date range: Perhaps the cataloger
+' knew of a possible publication date range of more than 20 years but fewer than 100, a
+' situation impossible to represent in AACR2, but allowed in RDA. Keep that supplied
+' date.
+
+If Between% > 0 Then
+    If Right$( Date1$, 1 ) = "?" Then
+        Date1$ = Left$( Date1$, 4 )
+    End If
+    DateString$ = "between " & Date1$ & " and "
+    Date2$      = Trim$( Str$( Val( Date1$ ) + ( 10^Between% - 1 ) ) )
+    If FFDates2$ = "" Then
+        FFDates2$ = Date2$
+    End If
+
+' Choose the earliest of the date recorded in 260 subfield $c, the date at the end of the
+' probable range, and the date the record was entered.
+
+    If DateEntered$ <= Date2$ Then
+        If FFDates2$ >= DateEntered$ Then
+            Date2$ = DateEntered$
+          Else
+            Date2$ = FFDates2$
+        End If
+      Else
+        If FFDates2$ <= Date2$ Then
+            Date2$ = FFDates2$
+        End If
+    End If
+    DateString$ = DateString$ & Date2$
+    DateString$ = "[" & DateString$ & "?]"
+    FFDateType$ = "q"
+    FFDates1$   = Date1$
+    FFDates2$   = Date2$
+    Date2$      = ""
+
+' Other Boolean values found earlier guide formatting.
+
+  ElseIf OneOfTwo Then
+    DateString$ = "[" & Date1$ & " or "
+    If FFDateType$ <> "q" Then
+        FFDateType$ = "q"
+    End If
+  ElseIf DateProperties( DATE_1, DATE_CIRCA ) = "1" Then
+    If Right$( Date1$, 1 ) <> "?" Then
+        Date1$ = Date1$ & "?"
+    End If
+    DateString$ = BracketDate( Date1$ )
+  ElseIf Printing Then     'If only one date, infer publication date from printing date.
+    If DateCount% = 1 Then
+        DateString$      = BracketDate( Date1$ )
+        Manufacturer264$ = "260  " & SUBFIELD_CODE_C & " (" & Date1$ & " printing)"
+      Else
+        DateString$      = Date1$
+    End If
+  ElseIf DateProperties( DATE_1, DATE_COPYRIGHT ) = "1" Then
+    DateString$ = BracketDate( Date1$ )
+    If AlwaysShowCopyright% = 1 Then
+        Copyright264$ = "264 4" & SUBFIELD_CODE_C & " " & Chr$( 202 ) & Date1$
+        FFDates1$     = Date1$
+        FFDates2$     = Date1$
+        FFDateType$   = "t"
+    End If
+  ElseIf DateProperties( DATE_1, DATE_BRACKET ) = "1" Then
+    DateString$ = BracketDate( Date1$ )
+  Else
+    DateString$ = Date1$
+End If
+
+' Format the second date and add it to the first date.
+
+If DateCount% = 2 Then
+    If Printing Then
+        Manufacturer264$ = "260  " & SUBFIELD_CODE_C & " (" & Date2$ & " printing)"
+
+' If Date1 is a copyright date, the 264 4 field is already filled in. If Date2 is also a
+' copyright date, it must be the end of a range, so it is added to 264 4 (after a hyphen)
+' and also to 264 1.
+
+      ElseIf DateProperties( DATE_2, DATE_COPYRIGHT ) = "1"  Then
+        If Copyright264$ = "" Then
+            Copyright264$ = "264 4" & SUBFIELD_CODE_C & " " & Chr$( 202 ) & Date2$
+          Else
+            Copyright264$ = Copyright264$ & "-" & Date2$
+        End If
+        FFDates2$   = Date2$
+        FFDateType$ = "t"
+      ElseIf OneOfTwo Then
+        DateString$ = DateString$ & Date2$ & "]"
+        FFDates2$   = Date2$
+
+' If a corrected date has been supplied, it is removed from the 264 field and put in a
+' 500 field. This date too is compared with that in the fixed field the latter changed if
+' different. The note added contains two fill characters to draw attention to it (the
+' fill characters prevent validation) so proper wording can be supplied.
+
+      ElseIf IdEst Then
+        ActualDate$ = Date2$
+        CorrectedDateField$ = "500  " & Chr$( 252 ) & "Actual date: " & ActualDate$ & Chr$( 252 )
+      ElseIf DateProperties( DATE_2, DATE_BRACKET ) = "1"  Then
+        DateString$ = DateString$ & BracketDate( Date2$ )
+      Else
+        DateString$ = DateString$ & Date2$
+    End If
+End If
+
+' If the fixed field does not properly represent a continuing publication, correct it.
+
+If Right$( Date1$, 1 ) = "-" And Date2$ = "" Then
+    FFDateType$ = "m"
+    FFDates2$   = "9999"
+End If
+
+' If two bracketed dates have been strung together, remove the interior brackets.
+
+p = InStr( DateString$, "]-[" )
+If p <> 0 Then
+    DateString$ = Left$( DateString$, p - 1 ) & "-" & Mid$( DateString$, p + 3 )
+    FFDates2$   = Date2$
+    If FFDateType$ <> "m" Then
+        FFDateType$ = "m"
+    End If
+End If
+
+Done:
+
+Process260Subfield_C = Preceding$ & SUBFIELD_CODE_C & " " & DateString$ & Following$
+
+End Function
+
+'****************************************************************************************
+
+Function Process300Field( Field300$ ) As String
+
+' This function farms out most of the work of fixing the 300 field to other functions,
+' and then puts the results back together to make it into RDA format.
+
+Dim Start%
+Dim SubfieldA$
+Dim SubfieldB$
+Dim SubfieldC$
+Dim SubfieldE$
+Dim SubfieldString$
+Dim TestChar$
+Dim WorkString$
+
+Dim i As Integer, p As Integer, q As Integer
+
+WorkString$ = Field300$
+
+' First isolate the different subfields.
+
+WorkString$ = SUBFIELD_CODE_A & " " & Trim$( Mid$( WorkString$, 6 ) )
+Do
+  p = InStr( 2, WorkString$, DELIMITER )
+  If p = 0 Then
+      SubfieldString$ = Trim$( WorkString$ )
+    Else
+      SubfieldString$ = Trim$( Left$( WorkString$, p - 1 ) )
+      WorkString$ = Mid$( WorkString$, p )
+  End If
+  TestChar$ = Mid$( SubfieldString$, 2, 1 )
+  Select Case TestChar$
+    Case "a"
+      SubfieldA$ = Mid$( SubfieldString$, 4 )
+    Case "b"
+      SubfieldB$ = Mid$( SubfieldString$, 4 )
+    Case "c"
+      SubfieldC$ = Mid$( SubfieldString$, 4 )
+    Case "e"
+      SubfieldE$ = Mid$( SubfieldString$, 4 )
+    Case Else
+      Process300Field = Field300$
+      Exit Function
+  End Select
+Loop Until p = 0
+
+If SubfieldA$ <> "" Then
+    SubfieldA$ = Process300Subfield_A( SubfieldA$ )
+End If
+
+' If illustrative content has been removed from subfield $a, add it to subfield $b for
+' processing.
+
+SubfieldB$ = Trim$( IllsInSubfieldA$ & ", " & SubfieldB$ )
+
+If SubfieldB$ <> "," Then
+    SubfieldB$ = Process300Subfield_B( SubfieldB$ )
+  Else
+    SubfieldB$ = ""
+End If
+
+WorkString$ = "300  " & Trim$( SubfieldA$ )
+If SubfieldB$ <> "" Then
+    WorkString$ = WorkString$ & SUBFIELD_CODE_B & " " & SubfieldB$
+End If
+If SubfieldC$ <> "" Then
+    Do
+      p = InStr( SubfieldC$, " cm." )
+      If p > 0 Then
+          SubfieldC$ = Left$( SubfieldC$, p + 2 ) & Mid$( SubfieldC$, p + 4 )
+        Else
+          p = InStr( SubfieldC$, " mm." )
+          If p > 0 Then
+              SubfieldC$ = Left$( SubfieldC$, p + 2 ) & Mid$( SubfieldC$, p + 4 )
+          End If
+      End If
+    Loop Until p = 0
+    WorkString$ = WorkString$ & SUBFIELD_CODE_C & " " & SubfieldC$
+End If
+If SubfieldE$ <> "" Then
+    WorkString$ = WorkString$ & SUBFIELD_CODE_E & " " & SubfieldE$
+End If
+
+WorkString$ = SplitField( WorkString$ )
+
+Process300Field = WorkString$
+
+End Function
+
+'****************************************************************************************
+
+Function Process300Subfield_A( SubfieldA$ ) As String
+
+' This function breaks up the extent of the resource based on sequences of pagination and
+' foliation (but not column count), identified by the abbreviations "p." and "l.". Each
+' chunk is then processed by the ConvertExtent function and then brought back together
+' here, to change "xiii, [3], 15-328 p., [3] leaves of plates" to "xiii pages, 3
+' unnumbered pages, pages 15-328, 3 unnumbered leaves of plates".
+
+Dim CutLength%
+Dim CutStart%
+Dim ExtentString$
+Dim Leaves%
+Dim LenWorkString%
+Dim NextChar$
+Dim NumberingSequence$
+Dim Pages%
+Dim PlateStatement$
+Dim Preceding$
+Dim SequenceType$
+Dim Start%
+Dim StartA%
+Dim TestChar$
+Dim VolCount$
+Dim WorkString$
+
+Dim SCRIPT_L As String*1     : SCRIPT_L        = Chr$( 190 )
+
+Dim i As Integer, p As Integer, q As Integer
+
+Dim ExtentStatement          : ExtentStatement = FALSE
+Dim PlateCount               : PlateCount      = FALSE
+Dim Volumes                  : Volumes         = FALSE
+
+WorkString$ = Trim$( SubfieldA$ )
+
+' First, remove an ISBD colon at the end.
+
+If Right$( WorkString$, 1 ) = ":" Then
+    WorkString$ = Left$( WorkString$, Len( WorkString$ ) - 1 )
+End If
+
+' Then remove an "includes" statement of illustrations for treatment in subfield $b.
+
+p = InStr( WorkString$, "incl." )
+If p <> 0 Then
+    IllsInSubfieldA$ = Trim$( Mid$( WorkString$, p + Len( "incl." ) ) )
+    WorkString$      = Trim$( Left$( WorkString$, p - 1 ) )
+End If
+
+' If "numbered leaves" are found, the phrase can simply be removed, as brackets would
+' indicate they are unnumbered.
+
+p = InStr( WorkString$, " numb. l" )
+If p <> 0 Then
+    WorkString$ = Left$( WorkString$, p - 1 ) & Mid$( WorkString$, p + Len( " numb. " ) )
+End If
+
+' Expand the abbreviation for "volume(s)" and adjust the form--singular or plural--for
+' one or more volumes.
+
+p = InStr( WorkString$, " vol." )
+If p > 0 Then
+    WorkString$ = Left( Workstring$, p + 1 ) & Mid$( WorkString$, p + 4 )
+End If
+
+p = InStr( WorkString$, "v." )
+If p = 1 Then
+    WorkString$ = "volumes " & Mid$( WorkString$, p + Len( "v." ) )
+  ElseIf p > 1 Then
+    For i = p - 1 To 1 Step -1
+      TestChar$ = Mid$( WorkString$, i, 1 )
+      If TestChar$ Like "[ 0-9]" Then
+          VolCount$ = TestChar$ & VolCount$
+        Else
+          Exit For
+      End If
+    Next i
+    If Val( VolCount$ ) = 1 Then
+        WorkString$ = Left$( WorkString$, p - 1 ) & " volume" & Mid$( WorkString$, p + Len( "v." ) )
+      Else
+        WorkString$ = Left$( WorkString$, p - 1 ) & " volumes" & Mid$( WorkString$, p + Len( "v." ) )
+    End If
+End If
+
+If Trim$( WorkString$ ) = "volumes" Then
+    Process300Subfield_A = WorkString$
+    Exit Function
+End If
+
+' Check the first parenthesis in this field to determine whether it introduces an extent
+' statement, which will be separated from this introductory string for processing, or a
+' qualifying term. The introductory string can be a phrase like "2 volumes" or "1 online
+' resource" or "1 score"; the following extent statement will almost always begin with a
+' digit or a roman numeral. If the parenthesis introduces some qualifying information, it
+' will begin with a word such as "some" or "part.", and therefore the whole subfield will
+' be sent through the loop for processing. The extent statement is assumed to also
+' conclude subfield $a.
+
+p = InStr( WorkString$, "(" )
+If p <> 0 Then
+
+' For the special case of the large print qualifier, remove it but add it back in to the
+' record as a 340 field.
+
+    If Mid$( WorkString$, p, 13 ) = "(large print)" Then
+        WorkString$ = Left$( WorkString$, p - 1 ) & Mid( WorkString$, p + 14 )
+        Field340$   = "340  " & DELIMITER & "n large print " & DELIMITER & "2 rdafs"
+      Else
+
+' Look at the characters following the first parenthesis. A digit means the parenthesis
+' is enclosing extent information. Letters suggest qualifying information, except for
+' those reserved for roman numerals. Go through the characters until a non-digit, non-
+' roman numeral or other character is found.
+
+        For i = p + 1 To Len( WorkString$ )
+          TestChar$ = LCase$( Mid$( WorkString$, i, 1 ) )
+          Select Case TestChar$
+            Case "0" To "9"
+              ExtentStatement = TRUE
+              Exit For
+            Case "c", "i", "l", "v", "x", ",", " ", "["
+            Case Else
+              ExtentStatement = FALSE
+              Exit For
+          End Select
+        Next i
+        If ExtentStatement Then
+            Preceding$  = Left$( WorkString$, p - 1 ) & " ("
+            WorkString$ = Mid$( WorkString$, p + 1 )
+        End If
+    End If
+End If
+
+' To begin processing, first eliminate all whitespace, for ease of manipulation. As this
+' is done, check that each numbering sequence, whether or not in brackets, is separated
+' from its neighbor by a comma. This test will not work with roman numerals.
+
+Do
+  p = InStr$( WorkString$, " " )
+  If p <> 0 Then
+      TestChar$ = Mid$( WorkString$, p - 1, 1 )
+      NextChar$ = Mid$( WorkString$, p + 1, 1 )
+      If ( TestChar$ Like "[0-9]" Or TestChar$ = "]" ) And ( NextChar$ Like "[0-9]" Or NextChar$ = "[" ) Then
+          WorkString$ = Left$( WorkString$, p - 1 ) & "," & Mid$( WorkString$, p + 1 )
+        Else
+          WorkString$ = Left$( WorkString$, p - 1 ) & Mid$( WorkString$, p + 1 )
+      End If
+  End If
+Loop until p = 0
+
+LenWorkString% = Len( WorkString$ )
+
+' Remove preliminary leaves.
+
+p = InStr( WorkString$, "p.l." )
+If p <> 0 Then
+    WorkString$ = Mid$( WorkString$, p + Len( "p.l." ) )
+End If
+
+p = InStr( WorkString$, "p.leaves" )
+If p <> 0 Then
+    WorkString$ = Mid$( WorkString$, p + Len( "p.leaves" ) )
+End If
+
+p = InStr( WorkString$, "p.leaf" )
+If p <> 0 Then
+    WorkString$ = Mid$( WorkString$, p + Len( "p.leaf" ) )
+End If
+
+p = InStr( WorkString$, "p." & SCRIPT_L & "." )
+If p <> 0 Then
+    WorkString$ = Mid$( WorkString$, p + Len( "p.l." ) )
+End If
+
+If Left$( WorkString$, 1 ) = "," Then
+    WorkString$ = Mid$( WorkString$, 2 )
+End If
+
+' Change script l's to normal.
+
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, SCRIPT_L & "." )
+  If p <> 0 Then
+      WorkString$ = Left$( WorkString$, p - 1 ) & "l" & Mid$( WorkString$, p + 1 )
+  End If
+Loop Until p = 0
+
+' An unpaged qualifier means there is no extent statement following, so processing the
+' field is not necessary.
+
+p = InStr( WorkString$, "(unpaged)" )
+If p <> 0 Then
+    WorkString$   = Left$( WorkString$, p - 1 ) & " " & Mid$( WorkString$, p )
+    ExtentString$ = WorkString$
+    GoTo SkipConvertExtent:
+End If
+
+' Now divide the subfield into units of pagination/foliation, identified by the
+' abbreviations "p." and "l." respectively (but if the terms "pages" and "leaves" are
+' used, abbreviate them). Search for the first occurrence of each, and take the one that
+' appears earlier in the string. It will mark the end of a string of sequences of
+' whatever unit it is.
+
+Start%  = 1
+StartA% = 1     'Helps keep track of place in the string for false hits, e.g. "col."
+Do
+  Do
+  Pages%  = InStr( Start%, WorkString$, "p." )
+  If Pages% <> 0 Then
+      Exit Do
+    Else
+      Pages%  = InStr( Start%, WorkString$, "pages" )
+      If Pages% <> 0 Then
+            WorkString$ = Left$( WorkString$, Pages% ) & "." & Mid$( WorkString$, Pages% + Len( "pages" ) )
+            Exit Do
+        Else
+          Start% = StartA%  'No pages found
+      End If
+  End If
+  Loop Until Pages% = 0
+
+' Not every occurrence of "l." is an abbreviation of "leaf"! Weed out abbreviations that
+' contain "l", such as "col."
+
+  Do
+    Leaves% = InStr( Start%, WorkString$, "l." )
+    If Leaves% <> 0 Then
+        If Mid$( WorkString$, Leaves% - 1, 1 ) Like "[a-z]" Then
+            StartA% = Start%   'Word characters preceding "l.", NOT abbrev. for leaf
+            Start%  = Leaves% + 1
+          Else
+            Exit Do
+        End If
+      Else
+        Leaves% = InStr( Start%, WorkString$, "leaves" )
+        If Leaves% <> 0 Then
+            If Mid$( WorkString$, Leaves% + 8, 1 ) <> "p" Then    'To exclude "leaves of plates"
+                WorkString$ = Left$( WorkString$, Leaves% ) & "." & Mid$( WorkString$, Leaves% + Len( "leaves" ) )
+                Exit Do
+              Else
+                Leaves% = 0
+            End If
+        End If
+        Start% = StartA%  'No leaves found
+    End If
+  Loop Until Leaves% = 0
+  If Pages% = 0 And Leaves% = 0 Then
+
+' Unless it's the first time through this loop, no abbreviations found indicate that this
+' is the last unit.
+
+      If Start% = 1 Then
+          NumberingSequence$ = WorkString$
+        Else
+          If LenWorkString% <= Start% Then
+              GoTo SkipConvertExtent:
+            Else
+              NumberingSequence$ = Mid$( WorkString$, Start% )
+              NumberingSequence$ = ConvertExtent( NumberingSequence$, "" )
+          End If
+      End If
+
+' Usually, if there is more than one numbering sequence, it will be of the opposite type;
+' that is, a sequence of paginations will usually be followed by a sequence of
+' foliations, and vice versa. So look for the type of sequence that comes first.
+
+    ElseIf Leaves% < Pages% Then
+      CutStart% = Start%
+      If Leaves% > 0 Then
+          CutLength%    = Leaves% - Start%
+          SequenceType$ = "leaves"
+          Start%        = Leaves% + 2
+        Else
+          CutLength%    = Pages% - Start%
+          SequenceType$ = "pages"
+          Start%        = Pages% + 2
+      End If
+    ElseIf Pages% < Leaves% Then
+      CutStart% = Start%
+      If Pages% > 0 Then
+          CutLength%    = Pages% - Start%
+          SequenceType$ = "pages"
+          Start%        = Pages% + 2
+        Else
+          CutLength%    = Leaves% - Start%
+          SequenceType$ = "leaves"
+          Start%        = Leaves% + 2
+      End If
+  End If
+  StartA% = Start%
+  If Pages% > 0 Or Leaves% > 0 Then
+
+' Now cut the subfield up into strings of sequences of paginations or foliations and send
+' them to the FixExtent function to be formatted.
+
+      NumberingSequence$ = Mid$( WorkString$, CutStart%, CutLength% )
+      If NumberingSequence$ <> "" Then
+          NumberingSequence$ = ConvertExtent( NumberingSequence$, SequenceType$ )
+        Else
+          NumberingSequence$ = SequenceType$ & " "
+      End If
+  End If
+  NumberingSequence$ = Preceding$ & NumberingSequence$
+  Preceding$         = ""
+  NextChar$          = Mid$( WorkString$, Start%, 1 )
+  If NextChar$ = "," Or NextChar$ = ")" Then
+      NumberingSequence$ = NumberingSequence$ & NextChar$
+      Start%             = Start%  + 1
+      StartA%            = StartA% + 1
+  End If
+  If Trim$( ExtentString$ ) = SequenceType$ And InStr( NumberingSequence$, "-" ) = 0 Then
+      ExtentString$ = Trim$( ExtentString$ )
+      If ExtentString$ <> "" Then
+          ExtentString$ = Left$( ExtentString$, Len( ExtentString$ ) - 1 ) & " "
+      End If
+  End If
+  ExtentString$ = ExtentString$ & NumberingSequence$
+Loop Until Pages% = 0 And Leaves% = 0
+
+SkipConvertExtent:
+
+' Since initially all spaces were removed, they must be added back. Begin by restoring
+' spaces following commas.
+
+Start% = 1
+Do
+  p = InStr( Start%, ExtentString$, "," )
+  If p <> 0 Then
+      ExtentString$ = Left$( ExtentString$, p ) & " " & Mid$( ExtentString$, p + 1 )
+      Start%        = p + 1
+  End If
+Loop Until p = 0
+
+' Then add spaces back between numbers and words, and around parentheses. Any digit not
+' preceded or followed by another digit or hyphen (or followed by a comma) gets a space
+' before or after it; a left parenthesis gets a space preceding it; so does a right
+' parenthesis, if not followed by a comma.
+
+i = 1
+Do
+  TestChar$ = Mid$( ExtentString$, i, 1 )
+  Select Case TestChar$
+    Case "0" To "9"
+      If i > 1 Then
+          If Mid$( ExtentString$, i - 1, 1 ) Like "[!- (0-9]" Then
+              ExtentString$ = Left$( ExtentString$, i - 1 ) & " " & Mid$( ExtentString$, i )
+              i             = i + 1
+          End If
+      End If
+      If Mid$( ExtentString$, i + 1, 1 ) Like "[!- ,0-9]" Then
+          ExtentString$ = Left$( ExtentString$, i ) & " " & Mid$( ExtentString$, i + 1 )
+      End If
+    Case "("
+      If Mid$( ExtentString$, i - 1, 1 ) <> " " Then
+          ExtentString$ = Left$( ExtentString$, i - 1 ) & " " & Mid$( ExtentString$, i )
+          i             = i + 1
+      End If
+    Case ")"
+      If Mid$( ExtentString$, i + 1, 1 ) Like "[! ,]" Then
+          ExtentString$ = Left$( ExtentString$, i ) & " " & Mid$( ExtentString$, i + 1 )
+      End If
+  End Select
+  i = i + 1
+Loop Until i > Len( ExtentString$ )
+
+' Finally, some stock phrases get their spaces returned also.
+
+p = InStr( ExtentString$, "(various" )
+If p <> 0 Then
+    ExtentString$ = Left$( ExtentString$, p - 1 ) & " (various " & Mid$( ExtentString$, p + Len( "(various" ) )
+End If
+
+p = InStr( ExtentString$, "leavesofplates" )
+If p <> 0 Then
+    ExtentString$ = Left$( ExtentString$, p - 1 ) & " leaves of plates" & Mid$( ExtentString$, p + Len( "leavesofplates" ) )
+End If
+
+p = InStr( ExtentString$, "pagesofplates" )
+If p <> 0 Then
+    ExtentString$ = Left$( ExtentString$, p - 1 ) & " pages of plates" & Mid$( ExtentString$, p + Len( "pagesofplates" ) )
+End If
+
+p = InStr( ExtentString$, "leafofplates" )
+If p <> 0 Then
+    ExtentString$ = Left$( ExtentString$, p - 1 ) & " leaf of plates" & Mid$( ExtentString$, p + Len( "leafofplates" ) )
+End If
+
+p = InStr( ExtentString$, "ofmusic" )
+If p <> 0 Then
+    ExtentString$ = Left$( ExtentString$, p - 1 ) & " of music" & Mid$( ExtentString$, p + Len( "ofmusic" ) )
+End If
+
+p = InStr( ExtentString$, "volumesin" )
+If p <> 0 Then
+    ExtentString$ = Left$( ExtentString$, p - 1 ) & " volumes in" & Mid$( ExtentString$, p + Len( "volumesin" ) )
+End If
+
+' Since the strings come back with plural units of numbering, they must be changed if the
+' count is only "1".
+
+Do
+  p = InStr( ExtentString$, " 1 pages" )
+  If p <> 0 Then
+      ExtentString$ = Left$( ExtentString$, p + Len( "1 page" ) ) & Mid$( ExtentString$, p + 8 )
+  End If
+Loop Until p = 0
+Do
+  p = InStr( ExtentString$, " 1 unnumbered pages" )
+  If p <> 0 Then
+      ExtentString$ = Left$( ExtentString$, p + Len( "1 unnumbered page" ) ) & Mid$( ExtentString$, p + 19 )
+  End If
+Loop Until p = 0
+Do
+  p = InStr( ExtentString$, " 1 leaves" )
+  If p <> 0 Then
+      ExtentString$ = Left$( ExtentString$, p + Len( "1 lea" ) ) & "f" & Mid$( ExtentString$, p + 9 )
+  End If
+Loop Until p = 0
+Do
+  p = InStr( ExtentString$, " 1 unnumbered leaves" )
+  If p <> 0 Then
+      ExtentString$ = Left$( ExtentString$, p + Len( "1 unnumbered lea" ) ) & "f" & Mid$( ExtentString$, p + 20 )
+  End If
+Loop Until p = 0
+
+p = InStr( ExtentString$, "onlineresource" )
+If p <> 0 Then
+    ExtentString$ = Left$( ExtentString$, p ) & "online resource " & Mid$( ExtentString$, p + 14 )
+End If
+
+p = InStr( ExtentString$, "folded" )
+If p <> 0 Then
+    If Mid$( ExtentString$, p + 6 ) <> " " Then
+        ExtentString$ = Left$( ExtentString$, p + 5 ) & " " & Mid$( ExtentString$, p + 6 )
+    End If
+End If
+
+Process300Subfield_A = ExtentString$
+
+End Function
+
+'****************************************************************************************
+
+Function Process300Subfield_B( SubfieldB$ ) As String
+
+' This function expands abbreviations prescribed under previous rules for illustrative
+' material in subfield $b of the 300 field. Retaining those terms means, of course,
+' following the option at 7.15.1.3, despite the LC-PCC PS to not record such information.
+' Plates and frontispieces, although not terms of content, are considered as indicating
+' illustrations, and are so converted, unless "illustrations" are recorded separately, or
+' unless they are qualified as to a particular type of illustration. Diagrams are also
+' considered to be simply illustrations. Thus, a listing of illustrative terms such as
+' "plates, ports., maps, diagrs., tables" is condensed to "illustrations, portraits,
+' maps". Given the free text tradition of input, however, this part of the record may
+' yield the most bizarre results on conversion.
+
+Dim CandidateTerm$
+Dim Comma%
+Dim CountColor%
+Dim CountIllus%
+Dim FirstIlls$
+Dim FirstIllsIndex%          : FirstIllsIndex% = -1
+Dim IndexInString%
+Dim IndexOfArray%
+Dim Parenth$
+Dim Start%
+Dim Term$
+Dim TestChar$
+Dim WorkString$
+
+Dim i As Integer, p As Integer, q As Integer
+
+Dim Qualification            : Qualification    = FALSE
+
+Dim IllustrationsTerms() As String
+
+WorkString$ = Trim$( SubfieldB$ )
+If Left$( WorkString$, 2 ) = ", " Then
+    WorkString$ = Mid$( WorkString$, 3 )
+End If
+
+' First, if the whole subfield is simply one of the terms "front.", "plates", or
+' "diagrs.", whether singular or plural, mark it for changing to "illustration(s)".
+
+Term$ = NormalizeIllusTerms( WorkString$, Parenth$, Comma% )
+Select Case Term$
+  Case "front", "plate", "diagr"
+    WorkString$ = "ill1"
+  Case "fronts", "plates", "pl", "diagrs"
+    WorkString$ = "ill"
+End Select
+
+' This subfield is processed by expanding abbreviations and substituting some terms for
+' others. The terms are grouped by commas and parentheses, so the first step is to make
+' sure commas follow all parenthetical groupings, and spaces follow all commas. For
+' processing, the field must end with a comma, replacing any other terminal punctuation.
+
+For i = Len( WorkString$ ) To 1 Step -1
+  TestChar$ = Mid$( WorkString$, i, 1 )
+  If TestChar$ Like "[! ;:]" Then
+      WorkString$ = Left$( WorkString$, i ) & ","'
+      Exit For
+  End If
+Next i
+
+' On some records commas after parentheses were not input, perhaps because of avoidance
+' of double punctuation?
+
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, ")" )
+  If p > 0 And p < Len( WorkString$ ) Then
+      If Mid$( WorkString$, p + 1, 1 ) <> "," Then
+          WorkString$ = Left$( WorkString$, p ) & "," & Mid$( WorkString$, p + 1 )
+      End If
+  End If
+  Start% = p + 1
+Loop Until p = 0
+
+Start% = 1
+Do
+  p = InStr( Start%, WorkString$, "," )
+  If p <> 0 Then
+      If Mid$( WorkString$, p + 1, 1 ) <> " " Then
+          WorkString$ = Left$( WorkString$, p ) & " " & Mid$( WorkString$, p + 1 )
+      End If
+  End If
+  Start% = p + 1
+Loop Until p = 0
+
+' Initialize the index and prepare the array for the first term.
+
+IndexInString% = 1
+IndexOfArray%  = 0
+ReDim Preserve IllustrationsTerms( IndexOfArray% )
+
+Do
+
+' Get each word in the string and send it to the function NormalizeIllusTerms for
+' normalization, which simply involves converting the string to lowercase and removing
+' all punctuation (but keeping track of parentheses and a following comma). The returned
+' value is used to compare against the list of text strings for expansion.
+
+StartOver:
+
+  Term$ = GetField$( WorkString$, IndexInString%, " " )
+  If Term$ = "" Then
+      Exit Do
+    Else
+      Term$          = NormalizeIllusTerms( Term$, Parenth$, Comma% )
+      CandidateTerm$ = Left$( Term$, 7 )
+  End If
+
+' Expand abbreviations. Change terms for plates, frontispieces, and diagrams to the
+' generic "illustrations" (multiple occurrences of that term will be weeded out later).
+' Drop some unnecessary terms. Keep all other words in the subfield. Put each retained
+' term or phrase (anything between commas) into an element of the array for the next step
+' of processing.
+
+  Select Case CandidateTerm$
+
+    Case "color"
+      Term$ = "color"
+      Qualification = TRUE
+    Case "ill", "illus", "ills", "diagrs", "plates", "pl", "fronts"
+      Term$ = "illustrations"
+    Case "ill1", "diagr", "plate", "front"
+      Term$ = "illustration"
+
+' Some terms always appear preceding or following another term, so mark them as
+' qualifiers for processing.
+
+    Case "some", "part"
+      Term$         = "some"
+      Qualification = TRUE
+    Case "col"
+      Term$         = "color"
+      Qualification = TRUE
+    Case "0" To "9", "chiefly"
+      Qualification = TRUE
+
+' These abbreviations are simply expanded.
+
+    Case "port"
+      Term$ = "portrait"
+    Case "ports"
+      Term$ = "portraits"
+    Case "facsim"
+      Term$ = "facsimile"
+    Case "facsims"
+      Term$ = "facsimiles"
+    Case "photo"
+      Term$ = "photograph"
+    Case "photos"
+      Term$ = "photographs"
+
+' "Includes" introduces a new term, separate from what that term is included in, so
+' "incl" is itself discarded. If it is preceded by a parenthesis, that also will
+' disappear, which means the ending parenthesis from the next term in the string must be
+' removed. Expand the array to hold that next term and return to the beginning of the
+' loop to process it.
+
+    Case "incl"
+      If Parenth$ = "(" Then
+          Term$ = GetField$( WorkString$, IndexInString% + 1, " " )
+          p = InStr( Term$, ")" )
+          If p <> 0 Then
+              Term$       = Left$( Term$, p - 1 ) & Mid$( Term$, p + 1 )
+              WorkString$ = SetField$( WorkString$, IndexInString% + 1, Term$, " " )
+          End If
+      End If
+      IndexOfArray%  = IndexOfArray% + 1
+      ReDim Preserve IllustrationsTerms( IndexOfArray% )
+      Qualification  = FALSE
+      IndexInString% = IndexInString% + 1
+      GoTo StartOver:
+
+' Some terms are simply not used and are eliminated from the string. If the preceding
+' term is a qualifer (e.g., "(some" or "(2", that must be removed from the array to avoid
+' nonsense like "maps (some".
+
+    Case "double", "table", "tables", "mount", "mounted", "fold", "folded"
+      IndexInString% = IndexInString% + 1
+      Term$ = IllustrationsTerms( IndexOfArray% )
+      For i = Len( Term$ ) To 1 Step -1
+        TestChar$ = Mid$( Term$, i, 1 )
+        If TestChar$ = "(" Then
+            Term$ = Left$( Term$, i - 1 )
+            IllustrationsTerms( IndexOfArray% ) = Trim$( Term$ )
+            Exit For
+        End If
+      Next i
+      GoTo StartOver:
+
+' For these two multi-word terms, add the words that follow in the string, and increment
+' the index to skip processing them. In both cases, the call to the normalizing
+' function--for the last term in the phrase--makes sure the correct value for Comma% is
+' obtained.
+
+    Case "geneal"           'Should be followed by "table(s)"
+      Term$       = "genealogical " & NormalizeIllusTerms( GetField$( WorkString$, IndexInString% + 1, " " ), Parenth$, Comma% )
+      IndexInString% = IndexInString% + 1
+    Case "coat", "coats"    'Should be followed by "of arms"
+      Term$       = Term$ & " of arms"
+      TestChar$   = NormalizeIllusTerms( GetField$( WorkString$, IndexInString% + 2, " " ), Parenth$, Comma% )
+      IndexInString% = IndexInString% + 2
+  End Select
+
+' Parenthetical inclusions are either retained with the preceding term (e.g.,
+' "illustrations (some color)" is kept as a phrase), or are substituted for what precedes
+' them (e.g., "illustration (portrait)" is reduced to simply "portrait"). Qualifiers keep
+' their parentheses; replacement terms don't.
+
+  If Qualification = TRUE Then
+      Select Case Parenth$
+        Case "("
+          Term$ = "(" & Term$
+        Case ")"
+          Term$ = Term$ & ")"
+        Case "()"
+          Term$ = "(" & Term$ & ")"
+      End Select
+  End If
+
+' Now build the array of terms or phrases by adding the reconstructed term. Each element
+' of the array contains text from the subfield string from the previous comma up to the
+' next comma, and so may contain one word or several. A qualifying term, whether in
+' parentheses or not, is added at the end of the existing string at the current index of
+' the array. A substituted term replaces the existing string at the current index. A new
+' term, or the beginning of a new phrase, is added as the new last element in the array,
+' which was expanded to receive it in the previous iteration of the loop.
+
+  If Qualification = TRUE Then
+      IllustrationsTerms( IndexOfArray% ) = Trim$( IllustrationsTerms( IndexOfArray% ) & " " & Term$ )
+    Else
+      IllustrationsTerms( IndexOfArray% ) = Term$
+  End If
+
+' The presence of a comma is the signal that the current term or phrase is complete. The
+' array is expanded to hold the next term and the index is incremented.
+
+  If Comma% = 1 Then
+      IndexOfArray% = IndexOfArray% + 1
+      ReDim Preserve IllustrationsTerms( IndexOfArray% )
+      Qualification = FALSE
+  End If
+  IndexInString% = IndexInString% + 1
+Loop Until Term$ = ""
+
+' Now eliminate duplicate "illustrations" (produced because several other terms were
+' converted to "illustrations," and the macro couldn't tell at that point which one to
+' keep). Run through the array looking for that term. Mark the first occurrence;
+' eliminate succeeding occurrences. If it's the only one, keep it as is. If there are
+' more than one, note if they are all color or not, and modify the plural form as
+' appropriate. If the word "color" appears with some but not all the occurrences of
+' "illustration(s)," color contents is recorded as "some color"; if "color" always
+' appears before the word "illustration(s)," then they are all color. Additional
+' information appearing with "illustrations" (such as a count) is unfortunately lost.
+
+For i = 0 To UBound( IllustrationsTerms )
+  Term$ = IllustrationsTerms( i )
+  p     = InStr( Term$, "illus" )
+  If p <> 0 Then                             'if "illus" is found
+      If FirstIllsIndex% = -1 Then
+          FirstIllsIndex% = i                'mark where the first ill. statement is in the array
+        Else
+          IllustrationsTerms( i ) = ""       '2nd and higher occurrences of ill. are blanked out
+      End If
+      CountIllus% = CountIllus% + 1
+      q = InStr( Term$, "color" )
+      If q <> 0 Then
+          If q < p Then                      'e.g. "color illustrations"
+              CountColor% = CountColor% + 10
+            Else                             'e.g. "illustrations (some color)"
+              CountColor% = CountColor% + 1
+          End If
+      End If
+  End If
+Next i
+
+If CountIllus% > 1 Then
+    Term$ = "illustrations"
+    If CountColor% > 0 Then
+        If CountColor% < 10 * CountIllus% Then
+            Term$ = Term$ & " (some color)"
+          Else
+            Term$ = "color " & Term$
+        End If
+    End If
+    IllustrationsTerms( FirstIllsIndex% ) = Term$
+End If
+
+' Build the replacement subfield by concatenating in a new string all the elements of the
+' array, separating the elements with commas.
+
+WorkString$ = ""
+For i = 0 To UBound( IllustrationsTerms )
+  Term$ = Trim$( IllustrationsTerms( i ) )
+  If Term$ <> "" Then
+      WorkString$ = WorkString$ & ", " & Term$
+  End If
+Next i
+
+If Left$( Trim$( WorkString$ ), 1 ) = "," Then
+    WorkString$ = Trim$( Mid$( WorkString$, 2 ) )
+End If
+
+Process300Subfield_B = WorkString$
+
+End Function
+
+'****************************************************************************************
+
+Function Process505Field( Field505$ ) As String
+
+' This function simply adds spaces around a dash (double hyphen).
+
+Dim Start%                   : Start% = 6
+Dim WorkString$
+
+Dim p As Integer
+
+WorkString$ = Field505$
+
+Do
+  p = InStr( Start%, WorkString$, "--" )
+  If p <> 0 Then
+      If Mid$( WorkString$, p - 1, 1 ) = "." Then
+          WorkString$ = Left$( WorkString$, p - 2 ) & " -- " & Mid$( WorkString$, p + 2 )
+        ElseIf Mid$( WorkString$, p - 1, 1 ) Like "[! ]" Then
+          WorkString$ = Left$( WorkString$, p - 1 ) & " -- " & Mid$( WorkString$, p + 2 )
+      End If
+      Start% = p + 4
+  End If
+Loop Until p = 0
+
+Process505Field = WorkString$
+
+End Function
+
+'****************************************************************************************
+
+Function QuoteCheck( InString$, SearchTerm$ ) As Integer
+
+' This function serves as a special kind of "InStr" function. It returns the position of
+' one string (the search term, such as "p." or "introd.") inside another (the 5XX field),
+' but additionally checks if that position is within a pair of double quotation marks. If
+' it is, the function reports that the search term was not found, and the term will not
+' be expanded by the calling procedure. Otherwise, if the term is a legitimate
+' abbreviation, and not the end of some other term (this is a hazard with "ed."), the
+' function returns its position in the field.
+
+Dim LQuote%
+Dim RQuote%
+Dim SearchString$
+Dim Start%
+Dim WorkString$
+
+Dim p As Integer
+
+WorkString$   = InString$
+SearchString$ = SearchTerm$
+
+Start% = 1
+
+p = InStr( Start%, WorkString$, SearchString$ )
+If p <> 0 Then
+
+' If the search term is found by looking from the starting point, the next step is to
+' make sure it is not at the end of a word; that is, it can follow only a space, left
+' parentheses or bracket, or hyphen.
+
+    If Mid$( WorkString$, p - 1, 1 ) Like "[-([ /<]" Then
+
+' If it is a legitimate abbreviation (for this purpose) then check where it is in
+' relation to the first double quotation mark (if any), searched for from the same
+' starting point.
+
+        Do
+          LQuote% = InStr( Start%, WorkString$, DOUBLE_QUOTE )
+          If p < LQuote% Or LQuote% = 0 Then
+
+' If there are no quotation marks in the field, or the term precedes one, the function is
+' done.
+
+              QuoteCheck = p
+              Exit Function
+            Else
+
+' If the term follows one quotation mark but precedes the next, it is untouched, and the
+' function returns a value of not found. Otherwise, if it follows the second quotation
+' mark, it must be checked again, as we don't know if there are further pairs of
+' quotation marks in the field. The starting point for the search is the position
+' following that second quotation mark.
+
+              RQuote% = InStr( LQuote% + 1, WorkString$, DOUBLE_QUOTE )
+              If p < RQuote% Then
+                  QuoteCheck = 0
+                  Exit Function
+                ElseIf RQuote% = 0 Then
+                  QuoteCheck = p
+                  Exit Function
+                Else
+                  Start% = RQuote% + 1
+              End If
+          End If
+        Loop Until LQuote% = 0
+      Else
+        QuoteCheck = 0
+        Exit Function
+    End If
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function SplitField( FieldFromRecord$ ) As String
+
+' This function breaks up a field into its subfields, sending each chunk--consisting of
+' a subfield's data and the following delimiter and subfield code--to the AddPuntuation
+' function for processing.
+
+Dim EditedField$
+Dim Ind$
+Dim SubfieldContents$
+Dim Tag$
+Dim WorkString$
+
+Dim p As Integer
+
+Dim FirstTime                : FirstTime = TRUE
+
+WorkString$ = FieldFromRecord$
+
+Tag$ = Left$( WorkString$, 3 )
+Ind$ = Mid$( WorkString$, 4, 2 )
+
+' Begin by finding the subfield codes. Each time around, the loop finds the first
+' subfield code and sends all the data preceding it, along with the code itself and the
+' delimiter it follows, to the AddPunctuation function. The next time around the loop
+' starts with the beginning of that next subfield (the data only, as the subfield code
+' was included at the end of the preceding subfield) and does the same thing until the
+' whole field has been processed.
+
+Do
+
+' The first time this function runs on a field, it begins by stripping the tag and
+' indicators from the data; they will be added back later.
+
+  If FirstTime Then
+      WorkString$ = Mid$( WorkString$, 6 )
+  End If
+  p = InStr( WorkString$, DELIMITER )
+  If p = 0 Then
+
+' No subfield code found: It's the end of the field, whether the loop has run many times
+' or is only on its first iteration (in which case the field contains only an implicit
+' subfield $a). Add the null character at the end of the string to tell the
+' AddPunctuation function that this is the last bit and nothing need be done (punctuation
+' is not added to the end of the field).
+
+      SubfieldContents$ = WorkString$ & NULL_CHAR
+    Else
+
+' If a subfield code is found, add it to the data of the preceding subfield and send it
+' to the AddPunctuation function, which, depending on the tag, inserts the proper
+' punctuation before that subfield code. Keep the rest of the string to run through the
+' loop again, looking for the next subfield code. If a field begins with other than
+' subfield $a, the candidate string is simply the delimiter + subfield code; with no
+' preceding content, no punctuation can be added.
+
+      SubfieldContents$ = Left$( WorkString$, p + 1 )
+      WorkString$       = Mid$( WorkString$, p + 3 )
+  End If
+
+  EditedField$ = EditedField$ & AddPunctuation( SubfieldContents$, Tag$ )
+
+' For the 260/264 field, a subfield $e, $f, or $g marks the beginning of manufacturing
+' information. This must be removed and put it its own 264 #3 field, and the subfields
+' changed to the corresponding subfields $a, $b, or $c. Tag "260" is used here for
+' processing and will be corrected later.
+
+  If Left$( Manufacturer264$, 1 ) = DELIMITER Then
+      Manufacturer264$ = "260  " & Manufacturer264$ & " " & WorkString$
+      p = InStr( Manufacturer264$, SUBFIELD_CODE_E )
+      If p <> 0 Then
+          Manufacturer264$ = Left$( Manufacturer264$, p - 2 ) & Mid$( Manufacturer264$, p + 2 )
+      End If
+      p = InStr( Manufacturer264$, SUBFIELD_CODE_F )
+      If p <> 0 Then
+          Manufacturer264$ = Left$( Manufacturer264$, p ) & "b" & Mid$( Manufacturer264$, p + 2 )
+      End If
+      p = InStr( Manufacturer264$, SUBFIELD_CODE_G )
+      If p <> 0 Then
+          Manufacturer264$ = Left$( Manufacturer264$, p ) & "c" & Mid$( Manufacturer264$, p + 2 )
+      End If
+      Exit Do
+  End If
+  FirstTime = FALSE
+Loop Until p = 0
+
+' Remove any introduced double spaces.
+
+Do
+  p = InStr( EditedField$, "  " )
+  If p <> 0 Then
+      EditedField$ = Left$( EditedField$, p - 1 ) & Mid$( EditedField$, p + 1 )
+  End If
+Loop Until p = 0
+
+SplitField = Tag$ & Ind$ & EditedField$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' This function simply inserts the altered 250 field into a dialog box for verification
+' or correction.
+
+If Action% = 1 Then
+    DlgText "TextBox1", RDA250$
+End If
+
+End Function
+'3132114298
+'
+'Macro name: RDAHelper(PrintedMaterial)
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:52:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.

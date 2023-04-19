@@ -1,0 +1,1145 @@
+'MacroName:CalcTimes.2022.05
+'MacroDescription:Adds and converts times.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Thanks to Harvey Hahn for initial help with dialog boxes. Thanks to Terry Simpkins for
+' some great ideas in the early days. All responsibility for this macro's appearance and
+' functionality are mine alone.
+'
+' Last updated: 28 June 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: To add times (as in durations of pieces of music or of video): Enter two
+' or more times in the input box, or paste in a string containing times, or run the macro
+' with the cursor in a contents field that contains times. The macro adds the times
+' entered and displays the result of the addition as a single time. This display is
+' initially in the format "hh:mm:ss", but repeated clicking of the "Change format" button
+' cycles the display between three formats: with colons, with abbreviations ("hr., min.,
+' sec."), and the sum reduced to one or two units. (See examples below.) The displayed
+' format is also copied to the Clipboard for pasting. If the macro detects something that
+' looks like a time but is entered incorrectly (e.g., "4:72"), it shows the string of
+' time entries ending with the possible problem, for review and correction. If the macro
+' can't match parentheses, it shows the string of time entries up to the last entry it's
+' sure of. After the macro adds up all the times in a string of time entries, it formats
+' that string for insertion in the bibliographic record as a 306 and/or a 500 field.
+'
+' Enter a single time, and the macro will convert it between punctuated and non-
+' punctuated format as explained below.
+'
+' When manually entering times to add, make sure the time entries are separated by spaces
+' or periods (full stops). Alphabetic and other characters are simply ignored. Entries
+' can be up to six digits in length, so 99 hours, 59 minutes, and 59 seconds is the
+' maximum duration of a single entry. Colons may be omitted or included. Include trailing
+' zeroes as placeholders, so enter six hours as 60000 (or 6:00:00). Include internal
+' zeroes.
+'
+' If the macro is run with the cursor in a 505 field, or if a string containing times is
+' pasted into the entry box, the macro will consider only numbers within parentheses as
+' times, and only if those strings also include colons or the standard abbreviations
+' "hr.", "min.", and "sec.". It ignores all characters outside of parenthetical groups.
+' It displays the processed string of times for review and correction in case some times
+' in the string were excluded, or some non-times included.
+'
+' Converting times: A simple number will be treated as seconds and converted to a mixed
+' number in the formats "hh:mm:ss" or "hr., min., sec.". Add "m" at the end of the number
+' to force conversion to hours:minutes. A mixed number (hh:mm:ss or mm:ss) will be
+' converted to the format mm:ss or just to seconds. Again, adding "m" at the end
+' indicates that the last unit is minutes, rather than seconds.
+'
+' EXAMPLES of manual data entry:
+'
+' Enter                    Macro output
+' 337.407.610.739          21:33
+' 337 407 610 739          21:33
+' 3:37.4:07.6:10.7:39      21:33
+' 3:37 4:07 6:10 7:39      21:33
+' 739                      12:19
+' 739m                     12:19:00
+' 7:39                     459 [seconds]
+' 7:39m                    459 [minutes]
+' 1:43:38                  103:38 [minutes:seconds]
+'
+' EXAMPLE of portion of a contents note used as input or pasted in:
+'
+' $t All summer long $g (2:09) -- $t Catch a wave $g (2:09) -- $t Hawaii $g (2:00) -- $t
+' Little Honda $g (1:54) -- $t 409 $g (2:00) -- $t It's OK $g (2:12) -- $t You're so good
+' to me $g (2:16) -- $t Then I kissed her $g (2:17).
+'
+' Display after extracting times, for review and editing:
+'
+' 2:09 2:09 2:00 1:54 2:00 2:12 2:16 2:17
+'
+' Macro output, as a sum of times:
+'
+' "16:57" or "16 min., 57 sec." or "1017 [seconds]"
+'
+' and as a 306 field:
+'
+' 306   000209 $a 000209 $a 000200 $a 000154 $a 000200 $a 000212 $a 000216 $a 000217
+'
+' and as a 500 note (which in this example would not be added because of the presence of
+' the 505 field):
+'
+' 500   Durations: 2:09; 2:09; 2:00; 1:54; 2:00; 2:12; 2:16; 2:17
+'
+' EXAMPLE of a portion of a contents note where times are given with abbreviations,
+' rather than with colons (the macro doesn't care whether or not a comma follows each
+' "min."):
+'
+' Ave Verum (03 min. 46 sec.) / Stopford -- Magnificat in D Major, BWV 243: Magnificat
+' anima mea (arr. H. Leck) (03 min. 34 sec.) / Bach -- Autumn (07 min. 19 sec.) / Shank
+' -- Jubilate Deo (05 min. 31 sec.) / Halley -- No. 1. Temuna (A Picture) (01 min. 50
+' sec.) / Whitacre -- No. 2. Kala Kalla (Light Bride) (03 min. 02 sec.) / Whitacre.
+'
+' This is displayed for review as:
+'
+' 3:46 3:34 7:19 5:31 1:50 3:02
+'
+' and summed as: 25:02, or 25 min., 2 sec., or 1502 [seconds]. The 306 field is formatted
+' as in the previous example.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function AddTimes   ( InString$ )              As String
+Declare Function Calculate  ( Seconds& )               As String
+Declare Function ConvertTime( InString$, CC% )         As String
+Declare Function FormatField( InsertString$, Switch% ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const MAX_CONVERT As Long    = 999999
+Global Const MAX_ENTRY   As Integer = 999
+
+Global CleanedString$
+Global ContentsField$
+Global CountTimes%
+Global Entries$
+Global ErrorMessage$
+Global Field306$
+Global Field500$
+Global Quote$
+Global ResultsMessage$
+Global State%
+Global TotalConverted$
+Global TotalWithAbbrevs$
+Global TotalWithColons$
+Global WaltsMacros$
+
+Global BibRec
+Global MinutesFlag
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DIALOG_BUTTON_1      As Integer = 1
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const SECOND_BUTTON        As Integer = 256
+Const WARNING_MESSAGE      As Integer = 48
+Const WARNING_QUERY        As Integer = 32
+
+Const ANSWER_NO            As Integer = 7
+Const YES_NO               As Integer = 4
+
+Dim FieldData$
+Dim Row%
+Dim Tag$
+
+MinutesFlag  = FALSE
+Quote$       = Chr$( 034 )
+WaltsMacros$ = "[Walt's macros] Extras2:CalcTimes"
+
+' If a bibliographic record is not displayed, the option to add the 306 and 500 fields
+' won't be offered.
+
+Select Case CS.ItemType
+  Case 0 To 2, 17, 19
+    BibRec = TRUE
+
+' If a bibliographic record IS displayed, check the position of the cursor. If it's in a
+' contents field (505), the macro will take the data in the field as the input, and also
+' not offer to add a 500 "Duration:" note at the end.
+
+    Row% = CS.CursorRow
+    If CS.GetFieldLine( Row%, FieldData$ ) Then
+        Tag$ = Left$( FieldData$, 3 )
+        If Tag$ = "505" Then
+            ContentsField$ = Mid$( FieldData$, 6 )
+            If ContentsField$ = "" Then Exit Sub
+        End If
+    End If
+  Case Else
+    BibRec = FALSE
+End Select
+
+' The dialog box for data input and display of results.
+
+Begin Dialog Dialog1Definition  360,  84, WaltsMacros$, .Dialog1ControlFunction
+  TextBox         8,  26, 344,  12,                   .TextBox
+  ButtonGroup .Choice
+   PushButton     8,  42,  52,  14, "&Go",            .Go
+   PushButton   208,  62,  52,  14, "&Add field(s)",  .AddFields
+   PushButton   110,  62,  58,  14, "Change &format", .Format
+   PushButton    68,  42,  52,  14, "&Clear",         .Clear
+   PushButton   300,   8,  52,  14, "&Help",          .Help
+  CancelButton  300,  62,  52,  14
+  Text          128,  41, 224,  16, "",               .BadInput
+  Text           14,  65,  84,   8, "",               .Results
+  Text            8,  14, 192,   8, "",               .Instructions
+  GroupBox        8,  59,  96,  18, "",               .GroupBox1
+  GroupBox      184,  41, 100,  40, "",               .GroupBox2
+  CheckBox      192,  48,  40,  12, "Add &306",       .Add306
+  CheckBox      238,  48,  40,  12, "Add &500",       .Add500
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+If Dialog1.Choice = DIALOG_BUTTON_1 Then
+
+' The option to insert fields containing times--a 306 field containing specially
+' formatted times, or a 500 field with entries in standard readable form--is available
+' only after the macro has gone through the entry string once and performed its
+' calculations. These fields are generated by the function "FormatField" operating on the
+' previously manipulated string. The LCRI for AACR2 6.7B10 recommends not giving more
+' than six statements of duration in the note area, so if there are more than six, the
+' macro asks for confirmation before proceeding. After the 306 field is added, the macro
+' ends, unless a corresponding 500 field is also added.
+
+    If Dialog1.Add306 = 1 Then
+        Field306$ = "306  " & FormatField( Field306$, 0 )
+        If CountTimes% > 6 Then
+            If MsgBox( "There are " & CStr( CountTimes% ) & " times in this field! Do you want to proceed to add a 306 field anyway?", WARNING_QUERY + SECOND_BUTTON + YES_NO, WaltsMacros$ ) = ANSWER_NO Then Exit Sub
+        End If
+        If CS.AddField( 99, Field306$ ) = FALSE Then
+            MsgBox "Sorry, could not add 306 field.", WARNING_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+
+' If the durations are to be entered as a 500 field, add that note as the macro's last
+' action.
+
+    If Dialog1.Add500 = 1 Then
+        Field500$ = "500  Durations: " & FormatField( Field500$, 1 ) & "."
+        If CS.AddField( 3, Field500$ ) = FALSE Then MsgBox "Sorry, could not add 500 field.", WARNING_MESSAGE, WaltsMacros$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function AddTimes( InString$ )
+
+' This function adds time values.
+
+Dim EntrySeconds&
+Dim HoursDisplay$
+Dim MinutesDisplay$
+Dim Ordinal$
+Dim SecondsDisplay$
+Dim TempEntry$
+Dim TempMinutes%
+Dim TempString$
+Dim TotalSeconds&
+
+Dim p As Integer
+
+TempString$ = InString$
+Ordinal$    = "1st,2nd,3rd,4th,5th,6th,7th,8th,9th,10th,11st,12nd,13rd,14th,15th,16th,17th,18th,19th,20th,"
+Ordinal$    = Ordinal$ & "21st,22nd,23rd,24th,25th,26th,27th,28th,29th,30th,31st,32nd,33rd,34th,35th,36th,37th,38th,39th,40th,"
+Ordinal$    = Ordinal$ & "41st,42nd,43rd,44th,45th,46th,47th,48th,49th,50th,51st,52nd,53rd,54th,55th,56th,57th,58th,59th,60th,"
+Ordinal$    = Ordinal$ & "61st,62nd,63rd,64th,65th,66th,67th,68th,69th,70th,71st,72nd,73rd,74th,75th,76th,77th,78th,79th,80th,"
+Ordinal$    = Ordinal$ & "81st,82nd,83rd,84th,85th,86th,87th,88th,89th,90th,91st,92nd,93rd,94th,95th,96th,97th,98th,99th,100th"
+
+' Begin the adding process by looping through the input string to remove colons, so that
+' the code for addition deals with no characters other than numbers.
+
+Do
+  p = InStr( 1, TempString$, ":" )
+  If p <> 0 Then TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
+Loop Until p = 0
+
+' The cleaned string is the basis for adding the specially formatted 306 and 500 fields.
+
+Field306$ = TempString$
+Field500$ = TempString$
+
+' Run through the string, removing the first entry each time for processing.
+
+Do
+  p = InStr( TempString$, " " )
+  If p <> 0 Then
+      TempEntry$  = Trim$( Mid$( TempString$, 1, p - 1 ) )
+      TempString$ = Trim$( Mid$( TempString$, p + 1 ) )
+    Else
+      TempEntry$  = Trim$( TempString$ )
+  End If
+  CountTimes% = CountTimes% + 1
+
+' For each entry, convert minutes and hours to seconds, cumulating the totals. If the
+' first digit of a unit is greater than 6 but there are digits to the left, consider the
+' entry invalid; e.g., an entry of "3:73" is rejected, but an entry of "73:33" or "85" is
+' valid.
+
+  Select Case Len( Trim$( TempEntry$ ) )
+    Case 1 To 2          'Seconds only
+      EntrySeconds& = Val( TempEntry$ )
+    Case 3               'One digit of minutes, plus seconds
+      If Val( Mid$( TempEntry$, 2, 1 ) ) > 5 Then
+          ErrorMessage$ = "Please check the number of seconds in the " & GetField$( Ordinal$, CountTimes%, "," ) & " entry (" & Quote$ & TempEntry$ & Quote$ & ")."
+          GoTo Problem:
+      End If
+      EntrySeconds& = Val( Right$( TempEntry$, 2 ) )
+      EntrySeconds& = EntrySeconds& + ( 60 * Val( Left$( TempEntry$, 1 ) ) )
+    Case 4               'Two digits of minutes, plus seconds
+      If Val( Mid$( TempEntry$, 3, 1 ) ) > 5 Then
+          ErrorMessage$ = "Please check the number of seconds in the " & GetField$( Ordinal$, CountTimes%, "," ) & " entry (" & Quote$ & TempEntry$ & Quote$ & ")."
+          GoTo Problem:
+      End If
+      EntrySeconds& = Val( Right$( TempEntry$, 2 ) )
+      EntrySeconds& = EntrySeconds& + ( 60 * Val( Left$( TempEntry$, 2 ) ) )
+    Case 5               'One digit of hours, plus minutes and seconds
+      If Val( Mid$( TempEntry$, 4, 1 ) ) > 5 Then
+          ErrorMessage$ = "Please check the number of seconds in the " & GetField$( Ordinal$, CountTimes%, "," ) & " entry (" & Quote$ & TempEntry$ & Quote$ & ")."
+          GoTo Problem:
+      End If
+      If Val( Mid$( TempEntry$, 2, 1 ) ) > 5 Then
+          ErrorMessage$ = "Please check the number of minutes in the " & GetField$( Ordinal$, CountTimes%, "," ) & " entry (" & Quote$ & TempEntry$ & Quote$ & ")."
+          GoTo Problem:
+      End If
+      EntrySeconds& = Val( Right$( TempEntry$, 2 ) )
+      EntrySeconds& = EntrySeconds& + ( 60 * Val( Mid$( TempEntry$, 3, 2 ) ) )
+      EntrySeconds& = EntrySeconds& + ( 3600 * Val( Left$( TempEntry$, 1 ) ) )
+    Case 6              'Two digits of hours, plus minutes and seconds
+      If Val( Mid$( TempEntry$, 5, 1 ) ) > 5 Then
+          ErrorMessage$ = "Please check the number of seconds in the " & GetField$( Ordinal$, CountTimes%, "," ) & " entry (" & Quote$ & TempEntry$ & Quote$ & ")."
+          GoTo Problem:
+      End If
+      If Val( Mid$( TempEntry$, 3, 1 ) ) > 5 Then
+          ErrorMessage$ = "Please check the number of minutes in the " & GetField$( Ordinal$, CountTimes%, "," ) & " entry (" & Quote$ & TempEntry$ & Quote$ & ")."
+          GoTo Problem:
+      End If
+      EntrySeconds& = Val( Right$( TempEntry$, 2 ) )
+      EntrySeconds& = EntrySeconds& + ( 60 * Val( Mid$( TempEntry$, 3, 2 ) ) )
+      EntrySeconds& = EntrySeconds& + ( 3600 * Val( Left$( TempEntry$, 2 ) ) )
+    Case Else
+      ErrorMessage$ = "One of the values entered is too long! Please enter a time of six digits or fewer."
+          GoTo Problem:
+  End Select
+  CleanedString$ = CleanedString$ & Calculate( EntrySeconds& ) & " "
+  TotalSeconds& = TotalSeconds& + EntrySeconds&
+
+Loop Until p = 0
+
+ResultsMessage$ = Calculate( TotalSeconds& )
+
+Problem:
+
+If ErrorMessage$ = "" Then
+    AddTimes         = ResultsMessage$
+    TotalWithColons$ = ResultsMessage$
+'    If CleanedString <> "" Then DlgText "TextBox", Trim$( CleanedString$ )
+  Else
+    AddTimes = "E"
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Calculate( InNumber& )
+
+' This function converts a seconds count to hours, minutes, and seconds, in colon format.
+
+Dim Hours%
+Dim HoursDisplay$
+Dim Minutes%
+Dim MinutesDisplay$
+Dim Seconds%
+Dim SecondsDisplay$
+Dim TempMinutes%
+Dim TotalSeconds&
+
+TotalSeconds& = InNumber&
+
+' First, calculate hours and minutes from the total number of seconds.
+
+If TotalSeconds& >= 3600 Then
+    Hours%       = TotalSeconds& \ 3600
+    TempMinutes% = TotalSeconds& Mod 3600
+    Minutes%     = TempMinutes% \ 60
+    Seconds%     = TempMinutes% Mod 60
+  ElseIf TotalSeconds& >= 60 Then
+    Minutes%     = TotalSeconds& \ 60
+    Seconds%     = TotalSeconds& Mod 60
+  Else
+    Seconds%     = TotalSeconds&
+End If
+
+' Then, format the display. Don't show hours if there are none, but always show minutes,
+' and pad minutes and seconds with zeroes if necessary.
+
+If Seconds% > 60 Then
+    Minutes%        = Minutes% + 1
+    SecondsDisplay$ = "00"
+  ElseIf Seconds% < 10 Then
+    SecondsDisplay$ = "0" & CStr( Seconds% )
+  Else
+    SecondsDisplay$ = CStr( Seconds% )
+End If
+
+If Minutes% < 10 Then
+    MinutesDisplay$ = "0" & CStr( Minutes% )
+  Else
+    MinutesDisplay$ = CStr( Minutes% )
+End If
+
+If Hours% = 0 Then
+    HoursDisplay$ = ""
+  Else
+    HoursDisplay$ = CStr( Hours% ) & ":"
+End If
+
+Calculate = HoursDisplay$ & MinutesDisplay$ & ":" & SecondsDisplay$
+
+End Function
+
+'****************************************************************************************
+
+Function ConvertTime( InString$, ColonCount% )
+
+' This function converts a single time entry into a formatted time.
+
+Dim Hours%
+Dim Minutes%
+Dim Seconds%
+Dim TempString$
+Dim TempTotal$
+Dim TotalSeconds&
+
+TempString$ = InString$
+
+' The number of colons in the time entry determines the conversion. Two colons means
+' conversion from hours:minutes:seconds to minutes:seconds. One colon ordinarily means
+' conversion from minutes:seconds to seconds, but a terminal "m" will force the
+' conversion to hours:minutes. The number in the first group of digits entered must be
+' less than 999, and there must be a pair of digits following each colon, of value less
+' than 60. The result string shows the original entry and the converted number, along
+' with a term to make clear how the input was considered by the macro (e.g., if "2:17m"
+' was entered, display "2:17 [hours:minutes] to show that the macro knew not to convert 2
+' minutes and 17 seconds).
+
+Select Case ColonCount%
+
+  Case 3 To 99
+    ErrorMessage$ = "Please check the placement of the colons."
+
+  Case 2
+    If Right$( TempString$, 6 ) Like ":##:##" Then
+        Hours% = Val( Left$( TempString$, Len( TempString$ ) - 6 ) )
+        If Hours% > MAX_ENTRY Then
+            ErrorMessage$ = "The entry is too long! Please input fewer than 999 hours."
+          ElseIf Val( Mid$( TempString$, Len( TempString$ ) - 4, 2 ) ) >= 60 Then
+            ErrorMessage$ = "The number of minutes entered is too big."
+          ElseIf Val( Right$( TempString$, 2 ) ) >= 60 Then
+            ErrorMessage$ = "The number of seconds entered is too big."
+         Else
+            Minutes%        = ( Hours% * 60 ) + Val( Mid$( TempString$, Len( TempString$ ) - 4, 2 ) )
+            TempTotal$      = CStr( Minutes% ) & ":" & Right$ ( TempString$, 2 )
+            ResultsMessage$ = TempTotal$ & " [minutes:seconds]"
+            TotalConverted$ = ResultsMessage$
+            If TotalWithColons$ = "" Then
+                TotalWithColons$ = Entries$
+            End If
+        End If
+      Else
+        ErrorMessage$ = "Something seems to be wrong with the form of the entry! Please check it."
+    End If
+
+  Case 1
+    If Right$( TempString$, 3 ) Like ":##" Then
+        If MinutesFlag = TRUE Then
+            Hours% = Val( Left$( TempString$, Len( TempString$ ) - 3 ) )
+            If Hours% > MAX_ENTRY Then
+                ErrorMessage$   = "The entry is too long! Please input fewer than 999 hours."
+              ElseIf Val( Right$( TempString$, 2 ) ) >= 60 Then
+                ErrorMessage$   = "The number of minutes entered (" & Right$( TempString$, 2 ) & ") is too big."
+              Else
+                Minutes%        = ( Hours% * 60 ) + Val( Right$( TempString$, 2 ) )
+                TempTotal$      = CStr( Minutes% )
+                ResultsMessage$ = TempTotal$ & " [minutes]"
+            End If
+          Else
+            Minutes% = Val( Left$( TempString$, Len( TempString$ ) - 3 ) )
+            If Minutes% > MAX_ENTRY Then
+                ErrorMessage$ = "The entry is too long! Please input fewer than 999 minutes."
+              ElseIf Val( Right$( TempString$, 2 ) ) >= 60 Then
+                ErrorMessage$ = "The number of seconds entered (" & Right$( TempString$, 2 ) & ") is too big."
+              ElseIf Minutes% > 60 Then
+                Hours% = Minutes% \ 60
+                Minutes% = Minutes% Mod 60
+                    Seconds% = Val( Right$( TempString$, 2 ) )
+                    If Seconds% < 10 Then
+                        ResultsMessage$ = CStr( Hours% ) & ":" & CStr( Minutes% ) & ":0" & CStr( Seconds% )
+                      Else
+                        ResultsMessage$ = CStr( Hours% ) & ":" & CStr( Minutes% ) & ":" & CStr( Seconds% )
+                    End If
+              Else
+                Seconds%        = ( Minutes% * 60 ) + Val( Right$( TempString$, 2 ) )
+                TempTotal$      = CStr( Seconds% )
+                ResultsMessage$ = TempTotal$ & " [seconds]"
+                TotalConverted$ = ResultsMessage$
+                If TotalWithColons$ = "" Then
+                    TotalWithColons$ = Entries$
+                End If
+            End If
+        End If
+      Else
+        ErrorMessage$ = "Please check the number of seconds in the entry!"
+    End If
+
+  Case 0
+
+' If no colon is present, the macro will convert a number to colon format. This number
+' has to be smaller than 999,999 for the math to work. The result string shows the
+' original entry and the converted number, with the unit at the end for clarity
+
+    If Val( TempString$ ) > MAX_CONVERT Then
+        ErrorMessage$ = "Sorry, the macro can't handle a number that big."
+    End If
+    If MinutesFlag = TRUE Then
+        TotalSeconds& = Val( TempString$ ) * 60
+        Entries$      = TempString$
+      Else
+        TotalSeconds& = Val( TempString$ )
+        Entries$      = TempString$
+    End If
+    ResultsMessage$  = Calculate( TotalSeconds& )
+    TotalWithColons$ = ResultsMessage$
+End Select
+
+' If there were no errors encountered, the function returns a converted time. Otherwise,
+' it returns the dummy value "E" which makes visible the error message when the dialog
+' box runs.
+
+If ErrorMessage$ = "" Then
+    ConvertTime = ResultsMessage$
+  Else
+    ConvertTime = "E"
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function FormatField( InsertString$, Switch% )
+
+' This function takes the times in a string and formats them for insertion into the
+' bibliographic record as either a 306 or a 500 field ("Duration:"), depending on the
+' value of "Switch%": "0" formats the string for a 306 field, by padding each time with
+' leading zeroes to form six-digit chunks; "1" formats the string for a 500 field, restoring colons
+' and separating times by semicolons. In either case, times are converted (i.e., minutes
+' or seconds over 60 are reduced and hours or minutes are increased).
+
+Dim Duration$
+Dim Hours%
+Dim HoursDisplay$
+Dim Minutes%
+Dim MinutesDisplay$
+Dim Seconds%
+Dim SecondsDisplay$
+Dim Start%
+Dim TempString$
+Dim TempTime$
+
+Dim p As Integer, q As Integer
+
+Start% = 1
+Do
+
+' First, break the input string up into chunks at spaces.
+
+  p = InStr( Start%, InsertString$, " " )
+  If p <> 0 Then
+      Duration$ = Mid$( InsertString$, Start%, p - Start% )
+    Else
+      If Start% = 1 Then
+          Duration$ = InsertString$
+        Else
+          Duration$ = Mid$( InsertString$, Start% )
+      End If
+  End If
+
+' Separate each individual time into pairs of numbers--seconds, minutes, and hours,
+' converting them if necessary, recombining the pairs, and formatting the whole for
+' display by adding leading zeroes or semicolons.
+
+  Select Case Len( Duration$ )
+    Case 1 To 2
+      Hours%   = 0
+      Minutes% = 0
+      Seconds% = Val( Duration$ )
+    Case 3 To 4
+      Hours%   = 0
+      Minutes% = Val( Left$( Duration$, Len( Duration$ ) - 2 ) )
+      Seconds% = Val( Right$( Duration$, 2 ) )
+    Case 5 To 6
+      Hours%   = Val( Left$( Duration$, Len( Duration$ ) - 4 ) )
+      Minutes% = Val( Mid$( Duration$, Len( Duration$ ) - 3, 2 ) )
+      Seconds% = Val( Right$( Duration$, 2 ) )
+  End Select
+  If Seconds% >= 60 Then
+      Minutes% = Minutes% + 1
+      Seconds% = Seconds% - 60
+  End If
+  If Minutes% >= 60 Then
+      Hours%   = Hours% + 1
+      Minutes% = Minutes% - 60
+    ElseIf Minutes% = 1 And Seconds% = 0 Then
+      Minutes% = 0
+      Seconds% = 60
+    ElseIf Minutes% = 0 And Hours% = 1 Then
+      Hours%   = 0
+      Minutes% = 60
+  End If
+  If Minutes% < 10 Then
+      MinutesDisplay$ = "0" & CStr( Minutes% )
+    Else
+      MinutesDisplay$ = CStr( Minutes% )
+  End If
+  If Seconds% < 10 Then
+      SecondsDisplay$ = "0" & CStr( Seconds% )
+    Else
+      SecondsDisplay$ = CStr( Seconds% )
+  End If
+  If Switch% = 0 Then
+      If Hours% < 10 Then
+          HoursDisplay$ = "0" & CStr( Hours% )
+          TempTime$     = HoursDisplay$ & MinutesDisplay$ & SecondsDisplay$
+      End If
+    Else
+      If Hours% = 0 Then
+          If Minutes% = 0 Then
+              MinutesDisplay$ = "0:"
+              TempTime$       = MinutesDisplay$ & SecondsDisplay$
+            Else
+              If Minutes% < 10 Then MinutesDisplay$ = CStr( Minutes% )
+              TempTime$       = MinutesDisplay$ & ":" & SecondsDisplay$
+          End If
+        Else
+          TempTime$ = CStr( Hours% ) & ":" & MinutesDisplay$ & ":" & SecondsDisplay$
+      End If
+  End If
+
+  If Switch% = 0 Then
+      TempString$ = TempString$ & TempTime$ & " " & Chr$( 223 ) & "a "
+    Else
+      TempString$ = TempString$ & TempTime$ & "; "
+  End If
+
+  Start% = p + 1
+
+Loop Until p = 0
+
+' Remove the leftover stuff from the loop.
+
+If Switch% = 0 Then
+    FormatField = Left$( TempString$, Len( TempString$ ) - 4 )
+  Else
+    FormatField = Left$( TempString$, Len( TempString$ ) - 2 )
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' If the macro is working on data pulled from a 505 rather than entered in the input box,
+' there will be nothing to go back to for review after the macro has added the times it
+' found. This function populates the input box with the times the macro extracted from
+' the field (that is, after it processed the string, discarding extra characters, testing
+' for parentheses, etc.). Otherwise, the input box retains the original values entered
+' manually. This function also manipulates the appearance of the input box. The option to
+' insert a 306 or 500 field only appears after the macro has performed its calculations,
+' so the "Insert" button and "Add 500" checkbox are hidden until the calculation has been
+' done. If the record contains a contents note, the "Add 500" checkbox remains hidden.
+' For esthetic reasons, there are two sets of buttons, one with three (the initial
+' appearance of the dialog box) and one with four. Each set is hidden when the other is
+' displayed. Finally, this function takes care of clearing the input box for new entry if
+' the "Erase entry" button is selected (Case 2 in "Select Case Action%"). The crucial
+' code here is the line setting the value of the function to -1 (although any non-zero
+' value may also work) to keep the dialog box open after the input box is erased by
+' placing an empty string into it.
+
+Const CHECKED          As Integer = 1
+Const CONTROL_CHANGE   As Integer = 2
+Const CRITICAL_MESSAGE As Integer = 16
+Const DISABLED         As Integer = 0
+Const ENABLED          As Integer = 1
+Const FOCUS_CHANGE     As Integer = 4
+Const INITIALIZE       As Integer = 1
+Const INVISIBLE        As Integer = 0
+Const KEEP_DLG_OPEN    As Integer = -1
+Const STATE_ABBREVS    As Integer = 1   'The value indicating the dialog box is showing a time using abbreviations.
+Const STATE_COLONS     As Integer = 0   'The value indicating the dialog box is showing a time in colon format.
+Const STATE_CONV       As Integer = 2   'The value indicating the dialog box is showing a time as a simple number.
+Const UNCHECKED        As Integer = 0
+Const VISIBLE          As Integer = 1
+Const WARNING_MESSAGE  As Integer = 48
+
+Dim Candidate$
+Dim CharT$
+Dim ColonCount%
+Dim DisplayString$
+Dim EntryCount%
+Dim HelpParagraph1$
+Dim HelpParagraph2$
+Dim HelpParagraph3$
+Dim HelpParagraph4$
+Dim HelpParagraph5$
+Dim InputString$
+Dim LeftParenPosition%
+Dim RightParenPosition%
+Dim Start%
+Dim StringLength%
+Dim TempEntry$
+Dim TempString$
+
+Dim Abbrev                   : Abbrev        = FALSE
+Dim LeftParenOpen            : LeftParenOpen = FALSE
+Dim ProblemEntry             : ProblemEntry  = FALSE
+
+Dim i As Integer, p As Integer, q As Integer
+
+HelpParagraph1$ = "To add times, separate entries with a space or a period. Colons may "
+HelpParagraph1$ = HelpParagraph1$ & "be omitted or included. If omitted, each entry is "
+HelpParagraph1$ = HelpParagraph1$ & "understood to be in the form " & Quote$ & "hhmmss"
+HelpParagraph1$ = HelpParagraph1$ & Quote$ & " (hours/minutes/seconds, with a maximum "
+HelpParagraph1$ = HelpParagraph1$ & "input of six digits, or 99:59:59). Include zeroes."
+
+HelpParagraph2$ = "Or, paste in a string containing times (but take out other numbers). "
+HelpParagraph2$ = HelpParagraph2$ & "Or, run the macro in a contents field that "
+HelpParagraph2$ = HelpParagraph2$ & "contains times (within parentheses). Content other "
+HelpParagraph2$ = HelpParagraph2$ & "than times (that is, outside of parentheses) will "
+HelpParagraph2$ = HelpParagraph2$ & "be ignored."
+
+HelpParagraph3$ = "To convert times to minutes or to seconds, include punctuation. An "
+HelpParagraph3$ = HelpParagraph3$ & "entry of minutes:seconds will be converted to "
+HelpParagraph3$ = HelpParagraph3$ & "seconds; add " & Quote$ & "m" & Quote$ & " to the "
+HelpParagraph3$ = HelpParagraph3$ & "end of the string to convert the entry to minutes. "
+HelpParagraph3$ = HelpParagraph3$ & "An entry of hours:minutes:seconds will be "
+HelpParagraph3$ = HelpParagraph3$ & "converted to minutes:seconds."
+
+HelpParagraph4$ = "A single entry without punctuation will be converted to minutes:"
+HelpParagraph4$ = HelpParagraph4$ & "seconds. Add " & Quote$ & "m" & Quote$ & " at the "
+HelpParagraph4$ = HelpParagraph4$ & "end to convert to hours:minutes."
+
+HelpParagraph5$ = "Results can be toggled between colon format, abbreviation format, "
+HelpParagraph5$ = HelpParagraph5$ & "and converted format (which sometimes uses "
+HelpParagraph5$ = HelpParagraph5$ & "colons): " & Quote$ & "1:07:04" & Quote$ & " -> "
+HelpParagraph5$ = HelpParagraph5$ & Quote$ & "1 hr., 7 min., 4 sec." & Quote$ & " -> "
+HelpParagraph5$ = HelpParagraph5$ & Quote$ & "67:04 [minutes:seconds]" & Quote$ & ". "
+HelpParagraph5$ = HelpParagraph5$ & "Whichever format is displayed is what is copied to "
+HelpParagraph5$ = HelpParagraph5$ & "the Clipboard."
+
+Select Case Action%
+
+  Case INITIALIZE
+
+Startup:
+
+    DlgVisible "Add306",        INVISIBLE
+    DlgVisible "Add500",        INVISIBLE
+    DlgVisible "AddFields",     INVISIBLE
+    DlgVisible "BadInput",      INVISIBLE
+    DlgEnable  "Format",        DISABLED
+    DlgVisible "GroupBox2",     INVISIBLE
+    DlgText    "Instructions",  "Enter times to convert or add:"
+    DlgText    "Results",       ""
+    DlgFocus   "TextBox"
+    DlgText    "TextBox",       ""
+    If ContentsField$ <> "" Then
+
+' If the input is a contents field, discard all characters not enclosed by parentheses.
+' (Mismatched parentheses will cause input problems.) Check that all candidate strings
+' are composed only of digits. The test for a time is the presence of either at least one
+' colon, or at least one of the prescribed time abbreviations "hr.", "min.", or "sec.".
+' If either of these conditions is met, the string is most likely a time and not a date,
+' opus number, or other possibility.
+
+        For i = 1 To Len( ContentsField$ )
+          CharT$ = Mid$( ContentsField$, i, 1 )
+          If LeftParenOpen Then
+
+              Select Case CharT$
+
+                Case "("
+                  ErrorMessage$       = "A right parenthesis was not found after the last entry extracted. Please check the parentheses in the field following position " & CStr( LeftParenPosition% ) & "."
+                  GoTo InputProb:
+
+                Case ")"
+                  LeftParenOpen       = FALSE
+                  RightParenPosition% = i
+                  If Len( Candidate$ ) > 0 And Len( Candidate$ ) < 9 Then
+                      If Left$( Candidate$, 1 ) = "0" Then
+                          Candidate$ = Mid$( Candidate$, 2 )
+                      End If
+
+' Only add a potential time entry if it contains a colon or it contains the standard
+' abbreviations.
+
+                      If Abbrev Or ColonCount% Then
+                          Entries$    = Entries$ & " " & Candidate$
+                          EntryCount% = EntryCount% + 1
+                          If ProblemEntry Then
+                              ErrorMessage$ = "There may be a problem with the last entry in the input box."
+                              GoTo InputProb:
+                          End If
+                      End If
+                      Abbrev      = FALSE
+                      Candidate$  = ""
+                      ColonCount% = 0
+                  End If
+
+                Case ":"
+                   Candidate$  = Candidate$ & CharT$
+                   ColonCount% = ColonCount% + 1
+
+                Case "0" To "9"
+                   If Right$( Candidate$, 1 ) = ":" Then
+                       If Val( CharT$ ) > 5 Then
+                           ProblemEntry = TRUE
+                       End If
+                   End If
+                   Candidate$  = Candidate$ & CharT$
+
+                Case "h", "H"
+                  If Mid$( ContentsField$, i, 3 ) = "hr." Then
+                      Candidate$  = Candidate & ":"
+                      Start%      = i + 2
+                      Abbrev      = TRUE
+                  End If
+
+                Case "m", "M"
+                  If Mid$( ContentsField$, i, 4 ) = "min." Then
+                      Candidate$  = Candidate & ":"
+                      Start%      = i + 3
+                      Abbrev      = TRUE
+                  End If
+
+                Case "s", "S"
+                   If Mid$( ContentsField$, i, 4 ) = "sec." Then
+                       Abbrev      = TRUE
+                   End If
+
+              End Select
+
+            Else
+
+              Select Case CharT$
+
+                Case "("
+                  LeftParenOpen      = TRUE
+                  LeftParenPosition% = i
+                  Start%             = i
+
+                Case ")"
+                  ErrorMessage$      = "A left parenthesis was not found after the last entry extracted. Please check the parentheses in the field following position " & CStr( RightParenPosition% ) & "."
+                  GoTo InputProb:
+
+              End Select
+
+          End If
+        Next i
+
+InputProb:
+
+        DlgText    "TextBox",       Trim$( Entries$ )
+        If Entries$ = "" Then
+            If ErrorMessage$ = "" Then
+                MsgBox "There appear to be no times in this contents field! Please input times manually.", CRITICAL_MESSAGE, WaltsMacros$
+              Else
+                ErrorMessage$ = "There are problems with parentheses in this field and no times were found. Please check the field for correct punctuation."
+            End If
+          Else
+            DlgText    "Instructions",  "Add these " & CStr( EntryCount% ) & " times extracted from the contents field:"
+            If ErrorMessage$ <> "" Then
+                DlgText    "BadInput",      ErrorMessage$
+                DlgVisible "BadInput",      VISIBLE
+                DlgText    "Results",       "Please check input!"
+                DlgFocus   "TextBox"
+            End If
+        End If
+    End If
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "Clear"
+
+        CleanedString$ = ""
+        ColonCount%    = 0
+        ContentsField$ = ""
+        CountTimes%    = 0
+        Entries$       = ""
+        ErrorMessage$  = ""
+        InputString$   = ""
+        MinutesFlag    = FALSE
+        DlgEnable  "Go",            ENABLED
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+        GoTo Startup:
+
+      Case "Format"
+
+' Repeatedly clicking the "Change format" button switches the results display between the
+' different formats: the original result with colons; the result with abbreviations; and
+' the result in terms of smaller units. Store each calculated format so the calculations
+' don't need to be repeated with subsequent clicks of the button.
+
+        Select Case State%
+
+          Case STATE_COLONS
+
+' If the original result is displayed, the format to switch to is with abbreviations.
+' Split the result string up at the colons and add the abbreviations in the proper
+' places.
+
+            If TotalWithAbbrevs$ = "" Then
+                ColonCount%   = 0
+                StringLength% = Len( TotalWithColons$ )
+                TempString$   = ""
+                p = 0
+                For i = StringLength% To 1 Step -1
+                  CharT$ = Mid$( TotalWithColons$, i, 1 )
+                  If CharT$ = ":" Then
+                      If ColonCount% = 0 Then
+                          If i + 1 < StringLength% Then
+                              TempString$ = " min., " & TempString$ & " sec."
+                            Else
+                              TempString$ = " " & TempString$ & " sec."
+                          End If
+                          ColonCount% = ColonCount% + 1
+                          p = 0
+                        ElseIf ColonCount% = 1 Then
+                          If i + 1 < StringLength% Then
+                              TempString$ = " hr., " & TempString$
+                            Else
+                          End If
+                          p = 0
+                      End If
+                    ElseIf CharT$ <> "0" Then
+                      TempString$ = CharT$ & TempString$
+                      p = p + 1
+                    Else
+                      If p = 0 Then
+                          TempString$ = CharT$ & TempString$
+                      End If
+                  End If
+                Next i
+                TotalWithAbbrevs$ = TempString$
+            End If
+            DlgText    "Results",       TotalWithAbbrevs$
+            Clipboard.Clear
+            Clipboard.SetText TotalWithAbbrevs$
+            State% = STATE_ABBREVS
+
+          Case STATE_ABBREVS
+
+' If the current display is with abbreviations, the next format to show is a converted
+' form. Send the original, colon-formatted result to the "ConvertTime" function (after
+' determining how many colons are in the string).
+
+            If TotalConverted$ = "" Then
+                ColonCount% = 0
+                For i = 1 To Len( TotalWithColons$ )
+                  CharT$ = Mid$( TotalWithColons$, i, 1 )
+                  If CharT$ = ":" Then ColonCount% = ColonCount% + 1
+                Next i
+                TotalConverted$ = ConvertTime( TotalWithColons$, ColonCount% )
+            End If
+            DlgText    "Results",       TotalConverted$
+            Clipboard.Clear
+            Clipboard.SetText TotalConverted$
+            State% = STATE_CONV
+
+          Case STATE_CONV
+
+' From the display of the converted number, return to the original format of the result.
+
+            DlgText    "Results",       TotalWithColons$
+            Clipboard.Clear
+            Clipboard.SetText TotalWithColons$
+            State% = STATE_COLONS
+        End Select
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Go"
+
+        InputString$  = Trim$( DlgText( "TextBox" ) )
+        ErrorMessage$ = ""
+        DlgText    "Results",       ""
+        If InputString$ = "" Then
+            MsgBox "Please enter some times to add or convert!", WARNING_MESSAGE, WaltsMacros$
+          Else
+            TempEntry$ = ""
+
+' If the input string is entered manually, check that it consists only of numbers,
+' spaces, decimal points (periods), colons, and the letter "m" (which at the end of an
+' entry forces the entry to be considered as minutes rather than seconds). If any other
+' character is found, omit it. Otherwise, substitute spaces for period separators. Count
+' the colons in order to direct conversion.
+
+            Entries$ = InputString$
+            For i = 1 To Len( Entries$ )
+              CharT$ = Mid$( Entries$, i, 1 )
+              If CharT$ Like "[0-9: ]" Then
+                  TempEntry$ = TempEntry$ & CharT$
+                  If CharT$ = ":" Then ColonCount% = ColonCount% + 1
+                ElseIf CharT$ = "." Then
+                  TempEntry$ = TempEntry$ & " "
+                ElseIf ( CharT$ = "M" Or CharT$ = "m" ) And i = Len( Entries$ ) Then
+                  MinutesFlag = TRUE
+              End If
+            Next i
+            Entries$   = Trim$( TempEntry$ )
+            TempEntry$ = ""
+            Do
+              p = InStr( Entries$, "  " )
+              If p <> 0 Then Entries$ = Left$( Entries, p ) & Mid$( Entries$, p + 2 )
+            Loop Until p = 0
+            InputString$ = Trim$( Entries$ )
+            If Val( Entries$ ) < 60 And ColonCount% = 0 Then
+                MsgBox "This macro can't do anything with the number entered!", CRITICAL_MESSAGE, WaltsMacros$
+              Else
+
+' If the input seems valid, do the calculations.
+
+                If InStr( Entries$, " " ) Then
+                    DisplayString$ = AddTimes( Entries$ )
+                    State%         = STATE_COLONS
+                  Else
+                    DisplayString$ = ConvertTime( Entries$, ColonCount% )
+                    If TotalWithColons$ = "" Then
+                        State% = STATE_CONV
+                      Else
+                        State% = STATE_COLONS
+                    End If
+                End If
+                If DisplayString$ = "E" Then
+                    DlgText    "BadInput",      ErrorMessage$
+                    DlgVisible "BadInput",      VISIBLE
+                    DlgEnable  "Format",        DISABLED
+                    DlgText    "Results",       "Invalid input!"
+                    CountTimes% = 0
+                  Else
+                    If BibRec Then
+                        DlgVisible "Add306",        VISIBLE
+                        DlgValue   "Add306",        CHECKED
+                        DlgVisible "Add500",        VISIBLE
+                        If ContentsField$ <> "" Then
+                            DlgEnable  "Add500",        DISABLED
+                            DlgValue   "Add500",        UNCHECKED
+                          Else
+                            DlgVisible "Add500",        VISIBLE
+                            DlgValue   "Add500",        CHECKED
+                        End If
+                        DlgVisible "AddFields",     VISIBLE
+                        DlgFocus   "AddFields"
+                        DlgVisible "GroupBox2",     VISIBLE
+                    End If
+                    DlgVisible "BadInput",      INVISIBLE
+                    DlgEnable  "Format",        ENABLED
+                    DlgEnable  "Go",            DISABLED
+                    DlgVisible "GroupBox1",     VISIBLE
+                    DlgText    "Results",       DisplayString$
+                    Clipboard.Clear
+                    Clipboard.SetText DisplayString$
+                End If
+            End If
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Help"
+
+        Begin Dialog Dialog2Definition  360, 230, WaltsMacros$
+          OkButton      240, 208,  52,  14
+          CancelButton  300, 208,  52,  14
+          Text          220,   8,  42,   8, "Sample input"
+          Text          304,   8,  44,   8, "Macro result"
+          Text            8,  18, 200,  32, HelpParagraph1$
+          Text            8,  54, 200,  32, HelpParagraph2$
+          Text          220,  18,  76,   8, "725.601.1300.059.230"
+          Text          304,  18,  44,   8, "29:55"
+          Text          220,  26,  76,   8, "4:47 12:00 9:18 :59 3:22"
+          Text          304,  26,  44,   8, "26:05"
+          Text          220,  54,  76,  32, "...K 16, E flat major (13:23) -- K 19, D major (9:30) -- K Anh. 223 (19a), F major (13:00)..."
+          Text          304,  54,  44,   8, "35:53"
+          Text            8,  94, 200,  40, HelpParagraph3$
+          Text          220,  94,  76,   8, "1:43:38"
+          Text          304,  94,  44,   8, "60:38"
+          Text          220, 102,  76,   8, "1:43"
+          Text          304, 102,  44,   8, "103 seconds"
+          Text          220, 110,  76,   8, "1:43m"
+          Text          304, 110,  44,   8, "103 minutes"
+          Text            8, 138, 200,  24, HelpParagraph4$
+          Text          220, 138,  76,   8, "143"
+          Text          304, 138,  44,   8, "02:23"
+          Text          220, 146,  76,   8, "143m"
+          Text          304, 146,  44,   8, "2:23:00"
+          Text            8, 172, 256,  32, HelpParagraph5$
+        End Dialog
+
+        Dim Dialog2 As Dialog2Definition
+        On Error Resume Next
+        Dialog Dialog2
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+
+  Case FOCUS_CHANGE
+
+    If Id$ = "TextBox" Then
+        CleanedString$ = ""
+        ColonCount%    = 0
+        ContentsField$ = ""
+        CountTimes%    = 0
+        Entries$       = ""
+        ErrorMessage$  = ""
+        InputString$   = ""
+        MinutesFlag    = FALSE
+        DlgEnable  "Go",            ENABLED
+    End If
+
+End Select
+
+End Function
+'114246782
+'
+'Macro name: CalcTimes
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:57:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.

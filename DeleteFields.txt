@@ -1,0 +1,180 @@
+'MacroName:DeleteFields.2022.05
+'MacroDescription:Deletes multiple contiguous fields, selected by clicking and dragging
+' the mouse, all at once.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 26 June 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro deletes contiguous variable fields from a record in the Client
+' without your having to worry about precise cursor placement in selecting those fields.
+' Click anywhere in the first field to delete, and extend the selection by dragging
+' straight down across all the fields you wish to delete, ending anywhere in the cell
+' containing the last field to be deleted. (You can also select by dragging backward, or
+' up.) You don't have to click at the beginning of the tag in the first field, and end
+' the selection with the last character in the last field, or vice-versa. The macro
+' deletes the whole of the fields in which the selection begins and ends (even though
+' they may be only partially highlighted), and all fields in between. If only part of a
+' cell has been selected, the whole field is deleted. The macro cannot delete lines that
+' contain non-Latin script characters. Empty fields are another problem: If the selection
+' consists only of empty fields, they will all be deleted; if the empty fields are at the
+' end of the block of selected fields, all selected fields will be deleted; but if the
+' block of selected fields begins with one or more empty fields, those empty fields will
+' not be deleted, although the non-empty ones will be.
+'
+' The end-of-field marker in Connexion is the ASCII character pair 13 + 10, or Carriage
+' return + Line feed. The macro looks at the text that has been selected for end-of-field
+' markers to figure out how many fields it spans. Text containing no end-of-field markers
+' may indicate a selection within a single field, or a selection of empty fields (e.g.,
+' if the text in those fields has been cut to paste in elsewhere). In the latter case,
+' the number of fields selected is calculated by counting the number of tags found. The
+' macro then uses the "DeleteFieldLine" command to delete that number of whole fields,
+' starting with the first one. Using the macro command to cut whole fields gets around
+' the problem of the <DELETE> key deleting only the characters (as opposed to fields)
+' that have been selected; as the Client functions now, to delete whole fields, the
+' entire text of all the fields must be carefully selected, which requires more physical
+' coordination and thought than it ought.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub Sleep Lib "kernel32" ( ByVal Milliseconds& )
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim END_OF_FIELD As String*2 : END_OF_FIELD = Chr$( 013 ) & Chr$( 010 )
+
+Dim BeginningRow%
+Dim CurrentRow%
+Dim Difference%
+Dim EndOfFieldCount%
+Dim EndOfFieldFound%
+Dim SelectedText$
+Dim Start%
+Dim TextLength%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:DeleteFields"
+Dim WindowType%
+
+Dim SelectedUp               : SelectedUp   = FALSE
+
+Dim i As Integer
+
+' First, check to see that some text has been selected!
+
+If CS.GetSelectedText( SelectedText$ ) = FALSE Then
+
+' List views won't allow for selection, so if nothing was selected, make sure that the
+' type of window is for a record--something that actually contains fields--before showing
+' a warning about nothing having been selected.
+
+    WindowType% = CS.ItemType
+    Select Case WindowType%
+      Case 0 To 4, 14, 17 To 20
+        MsgBox "Please select some fields to delete!", CRITICAL_MESSAGE, WaltsMacros$
+      Case Else
+        MsgBox "This macro works only in bibliographic or authority records!", CRITICAL_MESSAGE, WaltsMacros$
+    End Select
+    Exit Sub
+  Else
+    If SelectedText$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, the selected data contains non-latin script characters and will not be deleted.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+CurrentRow% = CS.CursorRow
+
+' If the selection has been made by dragging upward, the last characters will be the end-
+' of-field marker (ASCII characters 013 + 010). In this case we must do some calculations
+' to figure out in which row is the end of the selection.
+
+If Right$( SelectedText$, 2 ) = END_OF_FIELD Then SelectedUp = TRUE
+
+' Then find the end-of-field markers within the selection to count how many fields have
+' been included. No end-of-field markers will be found if the selection is made within a
+' field, or if the selection consists of empty fields. In the former case, the macro will
+' delete the whole field. If the selected empty fields are contiguous, the only text in
+' the selection will be the tags and indicators, in groups of five characters composed of
+' digits and spaces. Thus the length of the selection can provide a clue as to how many
+' fields are selected.
+
+Start% = 1
+Do
+  EndOfFieldFound% = InStr( Start%, SelectedText$, END_OF_FIELD )
+  If EndOfFieldFound% > 0 Then
+      Start%           = EndOfFieldFound% + 1
+      EndOfFieldCount% = EndOfFieldCount% + 1
+    Else
+      TextLength% = Len( SelectedText$ )
+
+' If the selection contains no end-of-field markers, and its length is a multiple of 5,
+' test to see if it contains only digits and spaces. If that is the case, assume the
+' selection is made up of tags and indicators from empty fields, and count the number of
+' 5-character groups, which will be the number of lines to delete. It is possible, but
+' seems unlikely, that a selection within a field intended to delete the whole field will
+' be of only digits and spaces whose length is a whole multiple of 5; in that unlikely
+' case more than one field will be deleted.
+
+      If TextLength% Mod 5 = 0 Then
+          For i = 1 To TextLength%
+            If Mid$( SelectedText$, i, 1 ) Like "[! 0-9]" Then
+                TextLength% = 0
+                Exit For
+            End If
+          Next i
+          EndOfFieldCount% = TextLength% / 5
+      End If
+  End If
+Loop Until EndOfFieldFound% = 0
+
+' The Client can tell where the end of the selection is by the cursor position, so by
+' knowing how many end-of-field markers there are we can work backwards to find the row
+' where the selection begins.
+
+If SelectedUp = TRUE Then CurrentRow% = CurrentRow% + EndOfFieldCount%
+Difference% = CurrentRow% - EndOfFieldCount%
+CurrentRow% = Difference%
+
+' The macro seems to work more consistently if a delay is built in. This value is a
+' quarter of a second.
+
+'Sleep 250
+
+' Delete each field in the selection, beginning with the first row. Of course, as each
+' field is deleted, the next one will have the same line number, so the macro simply
+' deletes the current row the same number of times as there are rows in the selection.
+
+For i = 0 To ( EndOfFieldCount% )
+  If CS.DeleteFieldLine( CurrentRow% ) = FALSE Then
+      MsgBox "Sorry, the macro failed to delete a field.", CRITICAL_MESSAGE, WaltsMacros$
+      Exit Sub
+    Else
+      Sleep 100
+  End If
+Next i
+
+End Sub
+'1777969
+'
+'Macro name: DeleteFields
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:51:00 AM using "MacroBookInspector" macro by Walter F. Nickeson.

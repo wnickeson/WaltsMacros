@@ -1,0 +1,314 @@
+'MacroName:DeleteAllSuchPlus.2023.02
+'MacroDescription:Deletes all fields sharing characteristics of the field in which the
+' cursor is placed. Those characteristics are the tag, subject thesaurus or term source,
+' or subfield $5.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 14 April 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro to delete all fields in a bibliographic record that are
+' like the field in which the cursor is placed. The three criteria for deleting are
+' explained below.
+'
+' CAUTION: Whatever is deleted is done with NO WARNING and NO FEEDBACK! There is no
+' confirmation message or count of fields deleted! This macro offers no choice for finer
+' or coarser discrimination in deletion!
+'
+' The macro deletes fields that have these characteristics, evaluating them in this
+' order:
+'
+'  + All fields that contain the same institution code in subfield $5 as the selected
+'    field, regardless of the tag. For example, an LC record may contain these fields:
+'      500     LC copy formerly owned by Bruce Rogers. $5 DLC
+'      700 1   Rogers, Bruce, $d 1870-1957, $e former owner. $5 DLC
+'      710 2   Pforzheimer Bruce Rogers Collection (Library of Congress) $5 DLC
+'    If the cursor is placed in any of these fields, the macro will delete all three
+'    fields at once. Any other field that contains a subfield $5 with a different
+'    institution code will be ignored.
+'
+'  + All subject headings with the same source of the selected heading or term,
+'    regardless of the tag. The macro's action is based on the value of the second
+'    indicator. For example, if the cursor is placed in a 650 #4 field, the macro deletes
+'    all subject headings with second indicator 4--not just 650, but also 600, etc. All
+'    other subject headings remain untouched. If the second indicator is 7, the macro
+'    deletes only those headings with a matching source code in subfield $2. Thus, for
+'    example, it will delete from a record all "fast" headings but not "bisach" headings:
+'    While both headings have second indicator 7, the terms for the source of the code in
+'    subfield $2 are different. If the source code in subfield $2 in a candidate field is
+'    from a different authority file, as identified by its MARC organization code in
+'    subfield $0, it won't be deleted.
+'
+'  + All fields with the same tag as the selected field. The cursor does not need to be
+'    in a specific occurrence of the field; it may be placed in the first, last, fifth,
+'    or fifteenth 029 field, for example, and will still delete them all. If the selected
+'    field contains a source code in subfield $2, the macro will delete only those fields
+'    with the same tag that also contain that same code in subfield $2 (and qualified in
+'    the same way in subfield $0, as described above).
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub DeleteFields( SubfieldCode$, CodeToMatch$ )
+
+Declare Function GetCode( InString$, SubfieldCode$ ) As String
+
+Global CS As Object
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim INSTITUTION_SUBFIELD_CODE_5 As String*1 : INSTITUTION_SUBFIELD_CODE_5 = "5"
+Dim LCSH As String*1                        : LCSH                        = "0"
+Dim SOURCE_IN_SUBFIELD_2 As String*1        : SOURCE_IN_SUBFIELD_2        = "7"
+Dim SOURCE_SUBFIELD_CODE_2 As String*1      : SOURCE_SUBFIELD_CODE_2      = "2"
+
+Dim CandidateFieldData$
+Dim CandidateFieldTag$
+Dim CandidateTermSource$
+Dim Col%
+Dim Institution$
+Dim LineCount%
+Dim Row%
+Dim SecondIndicator$
+Dim SelectedFieldData$
+Dim SelectedFieldTag$
+Dim SelectedFieldTagVal%
+Dim SelectedTermSource$
+Dim SourceTerm$
+Dim TypeOfWindow%
+Dim WaltsMacros$                            : WaltsMacros$                = "[Walt's macros] Essentials:DeleteAllSuchPlus"
+
+Dim FoundField                              : FoundField                  = TRUE
+Dim Success                                 : Success                     = TRUE
+
+Dim p As Integer, q As Integer
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+If Col% > 0 Then             '0 = Fixed field
+    If CS.GetFieldLine( Row%, SelectedFieldData$ ) = TRUE Then
+
+' Then check for the presence of subfield $5 in the selected field.
+
+        Institution$ = GetCode( SelectedFieldData$, INSTITUTION_SUBFIELD_CODE_5 )
+        If Institution$ <> "-" Then
+
+' Get the content of subfield $5 and delete every field that contains that same code in a
+' subfield $5.
+
+            Call DeleteFields( INSTITUTION_SUBFIELD_CODE_5, Institution$ )
+            Exit Sub
+        End If
+
+' If no subfield $5 is present, continue by detecting the tag, in order to identify any
+' subject heading. Those headings are treated differently than other tags.
+
+        SelectedFieldTag$    = Left$( SelectedFieldData$, 3 )
+        SelectedFieldTagVal% = Val( SelectedFieldTag$ )
+
+' If the selected field is not a subject heading, delete all such fields with the same
+' tag, by repeatedly using the "DeleteField" command until no more matching fields are
+' found. If the selected field contains a source code in subfield $2, delete only those
+' other fields that contain the same source code.
+
+        If SelectedFieldTagVal% < 600 Or SelectedFieldTagVal% > 699 Then
+            SourceTerm$ = GetCode( SelectedFieldData$, SOURCE_SUBFIELD_CODE_2 )
+            If SourceTerm$ = "-" Then
+                Do
+                  Success = CS.DeleteField( SelectedFieldTag$, 1 )
+                Loop Until Success = FALSE
+              Else
+                Call DeleteFields( SOURCE_SUBFIELD_CODE_2, SourceTerm$ )
+                Exit Sub
+            End If
+          Else
+            Select Case SelectedFieldTag$
+
+' All instances of field 653, an uncontrolled field, are deleted without further
+' consideration.
+
+              Case "653"
+                Do
+                  Success = CS.DeleteField( SelectedFieldTag$, 1 )
+                Loop Until Success = FALSE
+
+' But any other subject heading is to be deleted according to the source of the heading
+' or term, rather than strictly by tag. These other headings identify their thesauri by
+' means of the second indicator. If its value is 7, the code for the thesaurus is to be
+' found in subfield $2.
+
+              Case Else
+                SecondIndicator$ = Mid$( SelectedFieldData$, 5, 1 )
+                If SecondIndicator$ = SOURCE_IN_SUBFIELD_2 Then
+                    SelectedTermSource$ = GetCode( SelectedFieldData$, SOURCE_SUBFIELD_CODE_2 )
+                End If
+
+' Although we want to delete only subject headings, to get to them we have to go through
+' the record line by line, starting from the first line, because we don't know which line
+' contains the first 6XX tag. Once the subject block is found, exclude those fields whose
+' second indicator doesn't tell the source of the heading.
+
+                LineCount% = 1
+                Do
+                  FoundField = CS.GetFieldLine( LineCount%, CandidateFieldData$ )
+                  If FoundField Then
+                      CandidateFieldTag$ = Left$( CandidateFieldData$, 3 )
+                      If Val( CandidateFieldTag$ ) > 599 And Val( CandidateFieldTag$ ) < 700 Then
+                          Select Case CandidateFieldTag$
+                            Case "653"
+                            Case Else
+                              If Mid$( CandidateFieldData$, 5, 1 ) = SecondIndicator$ Then
+
+' As was done with the selected field, check the second indicator of the candidate field;
+' if it is 7, determine the source of the term or heading, so only headings with a
+' matching thesaurus are deleted. A record may have, for example, terms coded bisacsh,
+' sears, fast, and others. The macro will delete only the ones exactly matching the
+' source of the target field. The tag is not relevant.
+
+                                  If SecondIndicator$ = SOURCE_IN_SUBFIELD_2  Then
+                                      CandidateTermSource$ = GetCode( CandidateFieldData$, SOURCE_SUBFIELD_CODE_2 )
+                                      If SelectedTermSource$ = CandidateTermSource$ Then
+                                          Success = CS.DeleteFieldLine( LineCount% )
+                                      End If
+
+' For LC headings, distinguish between genre headings in 655 and subject headings in
+' 600-650.
+                                    ElseIf SecondIndicator$ = LCSH Then
+                                      If ( Val( CandidateFieldTag$ ) < 655 and Val ( SelectedFieldTag$ ) < 655 ) Or _
+                                         ( CandidateFieldTag$ = "655" and SelectedFieldTag$ = "655" ) Then
+                                          Success = CS.DeleteFieldLine( LineCount% )
+                                      End If
+                                    Else
+                                      Success = CS.DeleteFieldLine( LineCount% )
+                                  End If
+                              End If
+                          End Select
+
+' As above, decrement the line count before the loop increments it.
+
+                          If Success Then
+                              LineCount% = LineCount% - 1
+                              Success    = FALSE
+                          End If
+                      End If
+                      LineCount% = LineCount% + 1
+                  End If
+                Loop Until FoundField = FALSE
+            End Select
+        End If
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub DeleteFields( SubfieldCode$, CodeToMatch$ )
+
+' This sub deletes fields with the same content in the specified subfield. It starts at
+' the beginning of the record and examines every successive line. Since deleting a field
+' makes the record one line shorter, the sub must decrement the line count before the
+' loop increments it. That means the next time through the loop, although the line number
+' will be the same, the sub will identify what was the next field on this go through.
+
+Dim LineCount%
+Dim SelectedFieldData$
+Dim Test$
+
+Dim FoundField
+Dim Success
+
+LineCount% = 1
+Do
+  FoundField = CS.GetFieldLine( LineCount%, SelectedFieldData$ )
+  If FoundField Then
+      Test$ = GetCode( SelectedFieldData$, SubfieldCode$ )
+      If Test$ = CodeToMatch$ Then
+          Success    = CS.DeleteFieldLine( LineCount% )
+          LineCount% = LineCount% - 1
+      End If
+      LineCount% = LineCount% + 1
+  End If
+Loop Until FoundField = FALSE
+
+End Sub
+
+'****************************************************************************************
+
+Function GetCode( InString$, SubfieldCode$ ) As String
+
+' This function returns the code in the specified subfield. If the subfield is not
+' present in the field, the output of the function is a hyphen. If the subfield is
+' followed by a subfield $0 that contains a MARC Organization code which is responsible
+' for the authority record from which the code is drawn, as in "$2 fast $0
+' (OCoLC)fst01205542," add the organization code to the code found in the specified
+' subfield. In this example, the macro will delete FAST headings only from OCLC, as it
+' is looking for the source code "fast(OCoLC)". FAST headings in the record from another
+' source, or whose source is not further identified, would be ignored.
+
+Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
+
+Dim AuthRecMARCOrg$
+Dim Delimiter1%
+Dim Delimiter2%
+Dim TempString$
+
+Dim p As Integer
+
+Delimiter1% = InStr( InString$, DELIMITER & SubfieldCode$ )
+If Delimiter1% > 0 Then
+    Delimiter2% = InStr( Delimiter1% + 1, InString$, DELIMITER )
+    If Delimiter2% = 0 Then
+        TempString$ = Trim$( Mid$( InString$, Delimiter1% + 3 ) )
+      Else
+        If Mid$( InString$, Delimiter2% + 1, 1 ) = "0" Then
+            TempString$ = Trim$( Mid$( InString$, Delimiter2% + 2 ) )
+            If Left$( TempString$, 1 ) = "(" Then
+                p = InStr( TempString$, ")" )
+                If p > 0 Then
+                    AuthRecMARCOrg$ = Mid$( TempString$, 2, p - 2 )
+                End If
+            End If
+            TempString$ = Trim$( Mid$( InString$, Delimiter1% + 3, Delimiter2% - ( Delimiter1% + 3 ) ) )
+        End If
+    End If
+  Else
+    TempString$ = "-"
+End If
+
+GetCode = TempString$ & AuthRecMARCOrg$
+
+End Function
+'31113615
+'
+'Macro name: DeleteAllSuchPlus
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:50:55 AM using "MacroBookInspector" macro by Walter F. Nickeson.

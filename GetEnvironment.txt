@@ -1,0 +1,256 @@
+'MacroName:GetEnvironment.2022.03
+'MacroDescription:Displays some environment variables.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Freely adapted from OCLC's example of use of the BASIC command "Environ."
+'
+' Last updated: 27 September 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro to see the "environment variables." The macro formats them
+' to display nicely in a dialog box, and also copies the whole list of strings to the
+' Windows clipboard for pasting into an application if desired.
+'****************************************************************************************
+
+Option Explicit
+Option Base 1
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global PageCount%
+Global PageNumber%
+
+Global EnviroStrings() As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Const MAX_LINE_LENGTH      As Integer = 88  'The maximum number of characters that can display on a line in the results window.
+Const PAGE_LIMIT           As Integer = 21  'The value for the number of lines to display in the dialog box + 1.
+
+Dim CRLF As String*1         : CRLF         = Chr$( 013 ) & Chr$( 010 )
+Dim TAB_CHAR As String*1     : TAB_CHAR     = Chr$( 009 )
+
+Dim AllLines$
+Dim ClipText$                : ClipText$    = " (Strings copied to Clipboard.)"
+Dim EnvironLine$
+Dim EnvironVar$
+Dim LineCount%
+Dim PasteString$             : PasteString$ = "The environment strings are:" & CRLF & CRLF
+Dim Start%
+Dim StringCount$
+Dim SubLineCount%
+Dim SubLineFormatted$
+Dim SubLineRaw$
+Dim TempLine$
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] MacroTools:GetEnvironment"
+
+Dim i As Integer, p As Integer
+
+PageCount%  = 1
+PageNumber% = 1
+
+i = 1
+Start% = 1
+
+Do
+  StringCount$ = Trim$( Str$( i ) )
+  EnvironVar$  = Environ( i )
+  Do
+    p = InStr( Start%, EnvironVar$, ";" )
+    If p <> 0 Then
+        EnvironVar$ = Left$( EnvironVar$, p ) & " " & Mid$( EnvironVar$, p + 1 )
+        Start% = p + 2
+    End If
+  Loop Until p = 0
+  If Len( EnvironVar$ ) > MAX_LINE_LENGTH Then
+      Do Until Len(EnvironVar$ ) <= MAX_LINE_LENGTH
+        For p = MAX_LINE_LENGTH + 1 To 0 Step -1
+          If Mid$( EnvironVar$, p, 1 ) = ";" Then
+              SubLineRaw$ = Left$( EnvironVar$, p )
+              EnvironVar$ = Mid$( EnvironVar$, p + 1 )
+              If SubLineCount% = 0 Then
+                  EnvironLine$ = StringCount$ & TAB_CHAR & SubLineRaw$
+                Else
+                  EnvironLine$ = TAB_CHAR & SubLineRaw$
+              End If
+              SubLineCount%     = SubLineCount% + 1
+              SubLineFormatted$ = SubLineFormatted$ & EnvironLine$ & CRLF
+              Exit For
+          End If
+        Next p
+      Loop
+      If EnvironVar$ <> "" Then
+          SubLineCount%     = SubLineCount% + 1
+          SubLineFormatted$ = SubLineFormatted$ & TAB_CHAR & EnvironVar$ & CRLF
+      End If
+      If LineCount% + SubLineCount% < PAGE_LIMIT Then
+          AllLines$  = AllLines$ & SubLineFormatted$
+          LineCount% = LineCount% + SubLineCount%
+        Else
+          ReDim Preserve EnviroStrings( PageCount% )
+          EnviroStrings( PageCount% ) = AllLines$
+          PageCount% = PageCount% + 1
+          AllLines$  = SubLineFormatted$
+          LineCount% = SubLineCount%
+      End If
+    Else
+      EnvironLine$ = StringCount$ & TAB_CHAR & EnvironVar$ & CRLF
+      If LineCount% < PAGE_LIMIT - 1 Then
+          AllLines$  = AllLines$ & EnvironLine$
+          LineCount% = LineCount% + 1
+        Else
+          ReDim Preserve EnviroStrings( PageCount% )
+          EnviroStrings( PageCount% ) = AllLines$
+          PageCount% = PageCount% + 1
+          AllLines$  = EnvironLine$
+          LineCount% = 0
+      End If
+  End If
+  i = i + 1
+Loop Until Environ( i ) = ""
+
+ReDim Preserve EnviroStrings( PageCount% )
+EnviroStrings( PageCount% ) = AllLines$
+
+For i = 1 To PageCount%
+  TempLine$ = EnviroStrings( i )
+  Do
+    p = InStr( TempLine$, CRLF & TAB_CHAR )
+    If p <> 0 Then
+        TempLine$ = Left$( TempLine$, p - 1 ) & Mid$( TempLine$, p + 2 )
+    End If
+  Loop Until p = 0
+  PasteString$ = PasteString$ & TempLine$
+Next i
+
+Clipboard.Clear
+Clipboard.SetText PasteString$
+
+Begin Dialog Dialog1Definition  448, 238, WaltsMacros$, .Dialog1ControlFunction
+  ButtonGroup .Choice
+   PushButton     16, 210,  64,  16, "",          .Left
+   PushButton     88, 210,  64,  16, "&Next",     .Right
+   OkButton      296, 210,  64,  16
+   CancelButton  368, 210,  64,  16
+  GroupBox        16,  12, 416, 188, "The environment strings are:"
+  Text           320,  12,  96,   8, ClipText$
+  Text            28,  28, 384, 160, "",          .DisplayPage
+  Text           166, 213,  40,   8, "",          .PagePosition
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Or Dialog1.Choice > 1 Then Exit Sub
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const DISABLED       As Integer = 0
+Const ENABLED        As Integer = 1
+Const INITIALIZE     As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const KEEP_DLG_OPEN  As Integer = -1
+Const VISIBLE        As Integer = 1
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText    "DisplayPage",  EnviroStrings( PageNumber% )
+    DlgText    "PagePosition", "Page " & Trim$( Str$( PageNumber% ) ) & " of " & Trim$( Str$( PageCount% ) )
+    If PageCount% = 1 Then
+        DlgVisible "Left",         INVISIBLE
+        DlgVisible "Right",        INVISIBLE
+      ElseIf PageCount% = 2 Then
+        DlgText    "Left",         "&Next"
+        DlgVisible "Left",         VISIBLE
+        DlgVisible "Right",        INVISIBLE
+      Else
+        DlgText    "Left",         "&Previous"
+        DlgEnable  "Left",         DISABLED
+        DlgVisible "Left",         VISIBLE
+        DlgVisible "Right",        VISIBLE
+    End If
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' If there are only two pages to display, only one navigation button is necessary. Its
+' text will toggle between "Next" and "Previous" as the display toggles between page 1
+' and page 2. If there are more pages to display, two buttons are needed, dedicated to
+' the "Next" and "Previous" pages (but disabled as appropriate on the first and last
+' pages). The button controls are labeled "left" and "right" corresponding to their
+' placement in the dialog box, not according to their function when the dialog box runs.
+
+      Case "Left"
+        If PageCount% = 2 Then
+            If PageNumber% = 1 Then
+                PageNumber% = PageNumber% + 1
+                DlgText    "Left",         "&Previous"
+              Else
+                PageNumber% = PageNumber% - 1
+                DlgText    "Left",         "&Next"
+            End If
+          Else
+            If PageNumber% < ( PageCount% ) Then
+                If PageNumber% > 2 Then
+                    PageNumber% = PageNumber% - 1
+                    DlgText    "Left",         "&Previous"
+                    DlgEnable  "Right",        1
+                  Else
+                    PageNumber% = PageNumber% - 1
+                    DlgText    "Left",         "&Previous"
+                    DlgEnable  "Left",         DISABLED
+                    DlgEnable  "Right",        ENABLED
+                End If
+              Else
+                PageNumber% = PageNumber% - 1
+                DlgText    "Left",         "&Previous"
+                DlgEnable  "Right",        ENABLED
+            End If
+        End If
+        DlgText    "DisplayPage",  EnviroStrings( PageNumber% )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Right"
+        If PageNumber% = ( PageCount% ) - 1 Then
+            DlgEnable  "Right",        DISABLED
+            DlgEnable  "Left",         ENABLED
+          Else
+            DlgEnable  "Right",        ENABLED
+            DlgEnable  "Left",         ENABLED
+        End If
+        PageNumber% = PageNumber% + 1
+        DlgText    "DisplayPage",  EnviroStrings( PageNumber% )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+    End Select
+    DlgText    "PagePosition", " Page " & Trim$( Str$( PageNumber% ) ) & " of " & Trim$( Str$( PageCount% ) )
+
+End Select
+
+End Function
+'2539071
+'
+'Macro name: GetEnvironment
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
+'Saved: 4/17/2023 10:01:32 AM using "MacroBookInspector" macro by Walter F. Nickeson.

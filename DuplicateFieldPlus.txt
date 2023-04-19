@@ -1,0 +1,571 @@
+'MacroName:DuplicateFieldPlus.2022.06
+'MacroDescription:Copies a field and pastes it in a new field directly below the
+' original, automatically making some useful changes in tag, indicators, and content.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 21 November 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: With the cursor in the field to be copied, run the macro. It copies the
+' entire field to a new field directly following the original, automatically making some
+' useful changes. These are the changes it makes:
+'
+'    original tag      new tag in copied field
+'   050 #0, 051,
+'        090, 099      050 #4
+'        1XX, 7XX      6XX     (minus subfields $e, $4, and $i, and subfields $0 and $1)
+'             245      246 3|  (minus subfield $c)
+'        440, 490      830     (the 4XX is changed to 490 1#)
+'             6XX X0   7XX X   (names and titles; subject subdivisions are removed)
+'             6XX XX   6XX X0  (non-LC subjects and genre terms are copied as LC)
+'        650, 651              (in a few instances, some content is rearranged; see below)
+'   800, 810, 811      490 #1  (minus all preceding subfield $t)
+'             830      490 #1
+'
+' In 65X fields containing a century chronological subdivision (10th-21st centuries
+' only), the duplicated field can contain a different century:
+'
+'   Original:          650  0 Diet $z United States $x History $y 20th century.
+'   Duplicate option:  650  0 Diet $z United States $x History $y 21st century.
+'   Duplicate option:  650  0 Diet $z United States $x History $y 18th century.
+'
+' In 651 fields for relations (unqualified, foreign, and military) between countries, the
+' duplicated field swaps the countries:
+'
+'   Original:   651  0 United States $x Foreign relations $z Korea (North) $v Pictorial works.
+'   Duplicate:  651  0 Korea (North) $x Foreign relations $z United States $v Pictorial works.
+'
+' In 650 fields for bilingual dictionaries, the duplicated field swaps the languages:
+'
+'   Original:   650  0 Latin language $v Dictionaries $x English.
+'   Duplicate:  650  0 English language $v Dictionaries $x Latin.
+'
+' If an 050 field contains an alternative class number (and so contains two subfields
+' $a), the macro retains the original field and copies the second call number to another
+' 050 field, with second indicator 4 to indicate assignation by an agency other than LC:
+'
+'   Original:   050 00 Z8230.2 $b .B78 1990 $a PS3554.I32
+'   Duplicate:  050 04 PS3554.I32
+'
+' A non-LC subject heading (including FAST headings and genre terms in 655) is copied as
+' LC: The second indicator is changed to 0 and control subfields $2 and $0 are deleted.
+' The resulting heading may not actually be an authorized LC subject term, of course.
+'
+' For series (440 or 490 0#), the macro changes the tag and indicator to 490 1# as it
+' adds the 830.
+'
+' All other fields are simply duplicated. To copy one of the fields listed above without
+' making changes, use my macro "DuplicateField."
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Century%
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DIALOG_BUTTON_CANCEL As Integer = 102
+Const FIXED_FIELD_COLUMN   As Integer = 0   'The column position reported when the cursor is in the fixed field.
+
+Dim DELIMITER    As String*1 : DELIMITER    = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
+Dim FILL_CHAR    As String*1 : FILL_CHAR    = Chr$( 252 )
+
+Dim CharT$
+Dim Col%
+Dim Content$
+Dim Country1$
+Dim Country2$
+Dim DuplicatedField$
+Dim EditedOriginalField$
+Dim FieldData$
+Dim Filing%
+Dim Indicator1$
+Dim Indicator2$
+Dim Language1$
+Dim Language2$
+Dim Relations$
+Dim Remainder$
+Dim Row%
+Dim Source$
+Dim Start%
+Dim Subfield$
+Dim SubfieldCode$
+Dim SubfieldCount%
+Dim Tag$
+Dim TestString$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:DuplicateFieldPlus"
+
+Dim p As Integer, q As Integer
+
+Dim Centuries( 11 ) As String
+Centuries( 0  ) = "10th century"
+Centuries( 1  ) = "11th century"
+Centuries( 2  ) = "12th century"
+Centuries( 3  ) = "13th century"
+Centuries( 4  ) = "14th century"
+Centuries( 5  ) = "15th century"
+Centuries( 6  ) = "16th century"
+Centuries( 7  ) = "17th century"
+Centuries( 8  ) = "18th century"
+Centuries( 9  ) = "19th century"
+Centuries( 10 ) = "20th century"
+Centuries( 11 ) = "21st century"
+
+Dim SourceTerms( 7 ) As String
+
+SourceTerms( 0 ) = "aat - Art & architecture thesaurus"
+SourceTerms( 1 ) = "fast - Faceted application of subject terminology"
+SourceTerms( 2 ) = "gmgpc - Thesaurus for graphic materials: TGM II, Genre and physical characteristic terms"
+SourceTerms( 3 ) = "gsafd - Guidelines on subject access to individual works of fiction, drama, etc."
+SourceTerms( 4 ) = "lcgft - Library of Congress genre/form terms for library and archival materials"
+SourceTerms( 5 ) = "lctgm - Thesaurus for graphic materials: TGM I, Subject terms"
+SourceTerms( 6 ) = "marcgt - MARC genre terms"
+SourceTerms( 7 ) = "migfg - Moving image genre-form guide"
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only in bibliographic or authority records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+If Col% > FIXED_FIELD_COLUMN Then
+    If CS.GetFieldLineUnicode( Row%, FieldData$ ) = FALSE Then
+        MsgBox "Sorry, this macro can't proceed.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    MsgBox "This macro can only duplicate a variable field!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Smart duplicating: Convert certain tags. Get the tag and the indicators.
+
+Tag$             = Left$( FieldData$, 3 )
+Indicator1$      = Mid$ ( FieldData$, 4, 1 )
+Indicator2$      = Mid$ ( FieldData$, 5, 1 )
+Content$         = Mid$ ( FieldData$, 6 )
+DuplicatedField$ = FieldData$
+
+If Left$( Tag$, 1 ) = "6" Then
+
+' LC subject headings that are names or titles get copied as name or title added entries.
+
+    If Indicator2$ = "0" Then
+
+        Select Case Tag$
+
+' Copy a 6XX name or title as a 7XX. Remove subject subdivisions.
+
+          Case "600", "610", "611", "630"
+
+            Start% = 1
+            Do
+              p = InStr( Start%, Content$, DELIMITER )
+              If p > 0 Then
+                  SubfieldCode$ = Mid$( Content$, p + 1, 1 )
+                  If InStr( "vxyz", SubfieldCode$ ) Then
+                      Content$ = Left$( Content$, p - 2 )
+                      Exit Do
+                    Else
+                      Start% = p + 1
+                  End If
+                Else
+                  Start% = p + 1
+              End If
+            Loop Until p = 0
+            DuplicatedField$ = "7" & Right$( Tag$, 2 ) & Indicator1$ & " " & Content$
+
+' Topical and geographic subjects are simply duplicated, with the following exceptions:
+'
+'  + Headings containing a century chronological subdivision (e.g., "History $y 20th
+'    century," or "Social conditions $y 19th century"): The macro can increment or
+'    decrement the century when copying.
+'  + Headings about relations between two countries ("Relations," "Foreign relations,"
+'    and "Military relations"): The macro flips the two countries when copying (e.g.,
+'    "Rome $x Relations $z Greece" is copied as "Greece $x Relations $z Rome").
+'  + Headings for language dictionaries with two languages: The macro flips the two
+'    languages when copying (e.g., "English language $v Dictionaries $x Spanish" is
+'    duplicated as "Spanish language $v Dictionaries $x English").
+
+          Case "650", "651"
+
+            If InStr( Content$, "century" ) Then
+
+' If a heading contains a century chronological subdivision, display a dialog box to
+' choose how to copy that century, with a drop-down list showing the choices. The default
+' choice is to add 1 to the century, except for "21st century," for which the default
+' action is to subtract 1, to duplicate the field with "20th century."
+
+                Start% = 1
+                Do
+                  p = InStr( Start%, Content$, DELIMITER )
+                  If p > 0 Then
+                      SubfieldCode$ = Mid$( Content$, p + 1, 1 )
+                      If SubfieldCode$ = "y" And Mid$( Content$, p + 7, 8 ) = " century" Then
+                          q = InStr$( p + 1, Content$, DELIMITER )
+                          If q = 0 Then
+                              Subfield$ = Trim$( Mid$( Content$, p + 2 ) )
+                              If Right$( Subfield$, 1 ) <> "y" Then
+                                  Subfield$  = Left$( Subfield$, Len( Subfield ) - 1 )
+                                  Remainder$ = "."
+                              End If
+                            Else
+                              Subfield$  = Trim$( Mid$( Content$, p + 2, q - p - 2 ) )
+                              Remainder$ = Trim$( Mid$( Content$, q ) )
+                          End If
+                          Century% = Val( Subfield$ )
+                          If Century% > 9 and Century% < 22 Then
+
+                              Begin Dialog Dialog1Definition 194, 56, WaltsMacros$, .Dialog1ControlFunction
+                                ButtonGroup                                  .Choice
+                                 PushButton     10, 32, 52, 14, "&Change"
+                                 PushButton     70, 32, 52, 14, "&Don't change"
+                                CancelButton   132, 32, 52, 14
+                                Text            18, 10, 88,  8, "Change " & DOUBLE_QUOTE & Subfield$ & DOUBLE_QUOTE & " to:"
+                                DropListBox    108,  8, 64, 96, Centuries(), .DropListBox1
+                              End Dialog
+
+                              Dim Dialog1 as Dialog1Definition
+                              On Error Resume Next
+                              Dialog Dialog1
+                              If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+                          End If
+
+                          Select Case Dialog1.Choice
+
+                            Case 0
+                              FieldData$ = Tag$ & Indicator1$ & Indicator2$ & Left$( Content$, p + 2 ) & Centuries( Dialog1.DropListBox1 )
+                              If Remainder$ <> "." Then Remainder$ = " " & Remainder$
+                              DuplicatedField$ = FieldData$ & Remainder$
+
+                            Case 1
+                              DuplicatedField$ = Tag$ & Indicator1$ & Indicator2$ & Content$
+
+                          End Select
+
+                          Exit Do
+                        Else
+                          Start% = p + 1
+                      End If
+                  End If
+                Loop Until p = 0
+
+' For subject headings for relations between countries, the macro duplicates the heading
+' but switches countries. H1629, Foreign Relations, and H1996, Relations and Military
+' Relations, cover these subdivisions.
+
+              ElseIf InStr( Content$, "relations" ) Then
+
+                If Tag$ = "651" Then
+                    If InStr( 1, Content$, "relations", 1 ) Then
+                        SubfieldCount% = 0
+                        Start% = 1
+                        Do
+                          p = InStr( Start%, Content$, DELIMITER )
+                          If p > 0 Then
+                              Select Case SubfieldCount%
+                                Case 0
+                                  Country1$ = Trim$( Left$( Content$, p - 1 ) )
+                                  Start%    = p + 1
+                                Case 1
+                                  TestString$ = Trim$( Mid$( Content$, Start% + 1, p - Start% - 2 ) )
+                                  Relations$  = Right$( TestString$, 9 )
+                                  If LCase$( Relations$ ) = "relations" Then
+                                      Relations$ = " " & DELIMITER & "x " & TestString$ & " "
+                                      Start%     = p + 1
+                                    Else
+                                      Exit Do
+                                  End If
+                                Case 2
+                                  Country2$  = Trim$( Mid$( Content$, Start% + 2, p - Start% - 2 ) )
+                                  Remainder$ = " " & Trim$( Mid$( Content$, p ) )
+                                  Exit Do
+                              End Select
+                              SubfieldCount% = SubfieldCount% + 1
+                            Else
+                              If SubfieldCount% = 2 Then
+                                  If Mid$( Content$, Start%, 1 ) = "z" Then
+                                      Country2$ = Trim$( Mid$( Content$, Start% + 2 ) )
+                                      If Right$( Country2$, 1 ) = "." Then
+                                          Country2$ = Left$( Country2$, Len( Country2$ ) - 1 )
+                                      End If
+                                      Remainder$ = "."
+                                    Else
+                                  End If
+                              End If
+                          End If
+                        Loop Until p = 0
+                    End If
+                    If Country2$ <> "" Then
+                        DuplicatedField$ = Tag$ & Indicator1$ & Indicator2$ & Country2$ & Relations$ & DELIMITER & "z " & Country1$ & Remainder$
+                      Else
+                    End If
+                End If
+
+' For bilingual dictionaries, in which each language gives its terms in the terms of the
+' other language, copy the field but reverse the languages.
+
+              ElseIf InStr( Content$, "Dictionaries") Then
+
+                p = InStr( Content$, "language " & DELIMITER & "v Dictionaries " & DELIMITER & "x" )
+                If p = InStr( Content$, " " ) + 1 Then
+                    Language1$ = Trim$( Left$( Content$, p - 1 ) )
+                    Language2$ = Trim$( Mid$( Content$, p + 27 ) )
+                    p = InStr( Language2$, " " )
+                    If p = 0 Then
+                        If Right$( Language2$, 1 ) = "." Then
+                            Language2$ = Left$( Language2$, Len( Language2$ ) - 1 )
+                        End If
+                      Else
+                        Language2$ = Trim$( Left$( Language2$, p - 1 ) )
+                    End If
+                    If Language2$ <> "" Then
+                        DuplicatedField$ = Tag$ & Indicator1$ & Indicator2$ & Language2$ & " language " & DELIMITER & "v Dictionaries " & DELIMITER & "x " & Language1$ & "."
+                    End If
+                End If
+            End If
+
+        End Select
+
+      Else
+
+' A 655 field may be copied with another thesaurus.
+
+        If Tag$ = "655" Then
+            If InStr( Content$, "2 lcgft" ) = FALSE Then
+                Start% = 1
+                Do
+                  If Left$( Content$, 1 ) <> DELIMITER Then
+                      Content$ = DELIMITER & "a " & Content$
+                  End If
+                  p = InStr( Start%, Content$, DELIMITER )
+                  If p > 0 Then
+                      SubfieldCode$ = Mid$( Content$, p + 1, 1 )
+                      q = InStr( p + 1, Content$, DELIMITER )
+                      If SubfieldCode$ Like "[0-9]" Then
+                          If q = 0 Then
+                              If Start% = 1 Then
+                                  If CS.DeleteField Then
+                                      Exit Sub
+                                  End If
+                                Else
+                                  Content$ = Trim$( Left$( Content$, p - 1 ) )
+                                  Exit Do
+                              End If
+                            Else
+                              If p = 1 Then
+                                  Content$ = Trim$( Mid$( Content$, q ) )
+                                  Start%   = 1
+                                Else
+                                  Source$  = Trim$( Mid$( Content$, p + 2, q - p - 2 ) )
+                                  Content$ = Trim$( Left$( Content$, p - 1 ) )
+                                  If SubfieldCode$ = "2" Then
+                                      Content$ = Content$ & " " & DELIMITER & "2 lcgft"
+                                      Exit Do
+                                  End If
+                                  Start%   = p
+                              End If
+                          End If
+                        Else
+                          Start% = p + 2
+                      End If
+                  End If
+                Loop Until p = 0
+                If Left$( Content$, 2 ) = DELIMITER & "a" Then
+                    Content$ = Trim$( Mid$( Content$, 3 ) )
+                End If
+                DuplicatedField$ = Tag$ & " 7" & Content$
+            End If
+        End If
+    End If
+
+' Non-subject fields:
+
+  Else
+
+    Select Case Tag$
+
+' Switch a copied call number field from LC to local, or vice versa. The macro can't, of
+' course, check the validity of any classification number.
+
+      Case "050"
+
+' An alternate call number, in a second subfield $a, becomes the new call number field.
+
+        p = InStr( FieldData$, DELIMITER & "a" )
+        If p > 0 Then
+            DuplicatedField$ = Tag$ & Indicator1$ & "4" & Trim$( Mid$( FieldData$, p + 2 ) )
+          Else
+
+' A call number assigned by LC, with second indicator "0", will be copied with second
+' indicator changed to "4". The value of the first indicator, whether the item is held by
+' LC, is not changed.
+
+            If Indicator2$ = "0" Then
+                DuplicatedField$ = Tag$ & Indicator1$ & "4" & Content$
+            End If
+        End If
+
+      Case "051"
+
+        DuplicatedField$ = "05004" & Content$
+
+      Case "090", "099"
+
+        DuplicatedField$ = "050 4" & Content$
+
+' Copy a 245 as a 246.
+
+      Case "245"
+
+        p = InStr( FieldData$, DELIMITER & "c" )
+        If p > 0 Then
+            FieldData$ = RTrim$( Left$( FieldData$, p - 3 ) )
+        End If
+        Filing%  = Val( Mid$( FieldData$, 5, 1 ) )
+        Content$ = Mid$( FieldData$, 6 + Filing% )
+        CharT$   = Left$( Content$, 1 )
+        If CharT$ Like "[a-z]" Then
+            Mid$( Content$, 1, 1 ) = UCase$( CharT$ )
+        End If
+        If Right$( Content$, 1 ) = "." Then
+            Content$ = Mid$( Content$, 1, Len( Content$ ) - 1 )
+            p        = InStr( Content$, DELIMITER & "c" )
+            If p > 0 Then
+                Content$ = RTrim$( Left$( Content$, p - 5 ) )
+            End If
+        End If
+        DuplicatedField$ = "2463" & FILL_CHAR & Content$
+
+' Copy a 1XX or 7XX as a 6XX. Remove relator and control codes.
+
+      Case "100", "110", "111", "130", "700", "710", "711", "730"
+
+        Start% = 1
+        Do
+          p = InStr( Start%, Content$, DELIMITER )
+          If p > 0 Then
+              SubfieldCode$ = Mid$( Content$, p + 1, 1 )
+              q = InStr( p + 1, Content$, DELIMITER )
+              If SubfieldCode$ Like "[ei014]" Then
+                  If q > 0 Then
+                      If p = 1 Then
+                          Content$ = Mid$( Content$, q )
+                        Else
+                          Content$ = Trim$( Left$( Content$, p - 1 ) ) & " " & Trim$( Mid$( Content$, q ) )
+                      End If
+                      Start% = p
+                    Else
+                      If p = 1 Then
+                          Exit Do
+                        Else
+                          Content$ = Left$( Content$, p - 2 )
+                      End If
+                    End If
+                    If Left$( Content$, 2 ) = DELIMITER & "a" Then
+                        Content$ = Trim$( Mid$( Content$, 3 ) )
+                    End If
+                    If Right$( Content$, 1 ) = "," Then
+                        Content$ = Left$( Content$, Len( Content$ ) - 1 )
+                    End If
+                  Else
+                    Start% = p + 1
+              End If
+            Else
+              Start% = p + 1
+          End If
+        Loop Until p = 0
+        DuplicatedField$ = "6" & Right$( Tag$, 2 ) & Indicator1$ & "0" & Content$
+
+' Copy a 4XX as an 830.
+
+      Case "440"
+
+        DuplicatedField$     = "830 " & Indicator2$ & Content$
+        EditedOriginalField$ = "4901 " & Content$
+
+      Case "490"
+
+        DuplicatedField$     = "830 0" & Content$
+        EditedOriginalField$ = "4901 " & Content$
+
+' Copy an 800, 810, 811, or 830 as a 490.
+
+      Case "800", "810", "811"
+
+        p = InStr( Content$, DELIMITER & "t" )
+        If p = 0 Then
+            MsgBox "This series field lacks a title!", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+          Else
+            DuplicatedField$ = "4901 " & Mid$( Content$, p + 3 )
+        End If
+
+      Case "830"
+
+        DuplicatedField$ = "4901 " & Content$
+
+    End Select
+
+End If
+
+If EditedOriginalField$ <> "" Then
+    If CS.SetFieldLine( Row%, EditedOriginalField$ ) Then
+    End If
+End If
+
+If CS.AddFieldLine( Row% + 1, DuplicatedField$ ) = FALSE Then
+    MsgBox "Sorry, the macro couldn't duplicate the field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const INITIALIZE As Integer = 1
+
+If Action% = INITIALIZE Then
+    If Century% < 21 Then
+        DlgValue "DropListBox1", Century% - 9
+      Else
+        DlgValue "DropListBox1", Century% - 11
+    End If
+    DlgFocus "DropListBox1"
+End If
+
+End Function
+'56823036
+'
+'Macro name: DuplicateFieldPlus
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:51:06 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,1253 @@
+'MacroName:ChangeCase.2023.17
+'MacroDescription:Changes the case of selected text within a field or of an entire field.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic or authority record to change the case
+' of selected text in a field, or, if nothing is selected, to change the case of all the
+' text in the whole field in which the cursor is located. The macro works best with
+' English-language text, but it is able to convert text in other languages that use Latin
+' script. That includes many of the languages of Western Europe--languages that can be
+' encoded with the Extended Latin code table (ANSEL) or Windows-1252, in addition to
+' MARC-8. Whole fields that contain non-Latin scripts or Unicode characters cannot be
+' changed; some text selections that contain non-Latin scripts or Unicode characters may
+' be changed. The macro's success depends in part on how the Client has encoded some
+' characters, and that appears to be somewhat inconsistent.
+'
+' These are the six options available:
+'
+'   lowercase:     all letters are made lowercase.
+'
+'   UPPERCASE:     ALL LETTERS ARE MADE UPPERCASE (EXCEPT SUBFIELD CODES).
+'
+'   Sentence case: The first letter in the selection or field, and any letter that
+'                  follows a space preceded by a period (full stop), a question mark, or
+'                  an exclamation point, with or without quotation marks, is capitalized.
+'                  All other letters are made lowercase. No terminal punctuation is
+'                  added.
+'
+'   Initial Capitals Case:
+'                  Every Letter That Follows A Space, Or Other Non-Word Character, Is
+'                  Capitalized. All Other Letters Are Made Lowercase.
+'
+'   Title Case:    Every Letter That Follows a Space Is Capitalized, but, following the
+'                  Chicago Manual of Style Guidelines for "Headline-Style
+'                  Capitalization," Articles, Coordinate Conjunctions, and Prepositions
+'                  Are Made Lowercase--Except that Every Word that Begins a Sentence Is
+'                  Capitalized. The Prepositions Included for This Macro's Attention Are
+'                  Taken from Wikipedia's List of Single-Word Prototypical English
+'                  Prepositions, Viewed 29 November 2022.
+'
+'   Contents case: All titles in a contents note (505) are made into sentence case, that
+'                  is, the first character is made uppercase, and all the remaining
+'                  characters are made lowercase. In an enhanced contents note (as
+'                  determined by value "0" for the second indicator), a title is a text
+'                  string contained in a subfield $t. Text contained in a subfield $r, a
+'                  statement of responsibility, is converted to Initial Capitals case.
+'                  Text contained in a subfield $g is not converted. In a non-enhanced
+'                  contents note, titles and statements of responsibility are identified
+'                  by ISBD punctuation, so the macro won't work properly in non-ISBD
+'                  records. Specifically, a dash (space-hyphen-hyphen-space) introduces
+'                  a title string (except, of course, at the beginning of a field), and a
+'                  space-slash-space precedes a statement of responsibility. This option
+'                  works only on an entire field, not a selection. Select portions of a
+'                  field to change case in other ways.
+'
+' For the four options other than lowercase and UPPERCASE, letters between periods, such
+' as those in abbreviations or initials, are capitalized. Thus, "u.s.a." is converted to
+' "U.S.A.", and "j.r.r." (as in "Tolkien") is made "J.R.R." Initialisms or acronyms
+' without periods are treated as words and will be converted as such. "NASA" might become
+' "nasa" or "Nasa", for example, depending on the conversion option chosen.
+'
+' Because of the possibility that some text may be converted that should not be, such as
+' acronyms and abbreviations, proper nouns, URIs, and so on, select text carefully, and
+' review closely the results of this macro's operation.
+'
+' The macro can simply apply the BASIC commands UCase and LCase to characters whose code
+' points are below decimal 128, which includes the 26-letter English alphabet. The macro
+' expects that code points above 127 encode OCLC-MARC characters, and knows how to change
+' their case accordingly. However, those code points may also encode Windows-1252 (or
+' ISO-8859-1) characters, for which the default case conversion rules don't work. The
+' macro can't tell, as it runs, which encoding has been used for any particular
+' character. To force it to convert case with characters encoded with Windows-1252, mark
+' the checkbox in the dialog box. Unfortunately, the encoding used may not be known
+' beforehand, so to properly change the case of some characters it may be necessary to
+' run the macro a second time on the original text string, with the checkbox marked.
+'
+'
+'
+' Unicode characters encoded as Numeric Character References (NCRs) are, for the most
+' part, beyond the capability of this macro to change. These characters may be
+' encountered when text in the ASCII range 128-159 is selected, as opposed to when a
+' whole field is the subject of the macro. The macro can convert some of those characters
+' to ones whose case may be changed, but a whole field of NCRs causes the macro to quit.
+' However, it may be possible to change the case of those characters if they can be
+' decomposed or converted to MARC-8 characters. This is what Joel Hahn's macro
+' "CvtDiacritics" does: It replaces all Latin or Unicode composite characters in a field
+' with MARC-8 base and combining characters. It can be found at http://www.hahnlibrary.net/libraries/oml/connex.html.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Binary
+
+Declare Sub FillArray
+
+Declare Function ChangeContents( ReplacementText$, Enhanced )         As String
+Declare Function MakeInitials  ( InString$ )                          As String
+Declare Function MakeLowercase ( InString$ )                          As String
+Declare Function MakeMARC_8    ( CompositeCharA%, DecomposedLength% ) As String
+Declare Function MakeSentence  ( InString$ )                          As String
+Declare Function MakeUppercase ( InString$ )                          As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global DELIMITER As String*1
+Global HACEK     As String*1
+Global UMLAUT    As String*1
+
+Global AllLowerCase
+Global AllUpperCase
+Global ContentsField
+Global ConvertToMARC_8
+
+Global DoNotCapitalize( 117 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CHECKED                  As Integer = 1
+Const CRITICAL_MESSAGE         As Integer = 16
+Const DLG_STATEMENT_CANCEL     As Integer = 102
+
+Const CONTENTS_CASE            As Integer = 5
+Const INITIAL_CAPS             As Integer = 3
+Const LOWERCASE                As Integer = 0
+Const SENTENCE_CASE            As Integer = 2
+Const TITLE_CASE               As Integer = 4
+Const UPPERCASE                As Integer = 1
+
+Const CASE_INSENSITIVE_COMPARE As Integer = 1
+Const CASE_SENSITIVE_COMPARE   As Integer = 0
+
+Dim CharT$
+Dim Conversion%
+Dim FieldData$
+Dim Indicators$
+Dim Legend$
+Dim NothingMessage$
+Dim Prep$
+Dim ReplacementText$
+Dim Row%
+Dim SelectedText$
+Dim Start%
+Dim Tag$
+Dim TempString$
+Dim WaltsMacros$             : WaltsMacros$   = "[Walt's macros] Extras3:ChangeCase"
+Dim Window%
+Dim WorkString$
+
+Dim DelimiterFound           : DelimiterFound = FALSE
+Dim Enhanced
+Dim LowerCaseFound           : LowerCaseFound = FALSE
+Dim UpperCaseFound           : UpperCaseFound = FALSE
+
+Dim i As Integer, p As Integer, q As Integer'
+
+DELIMITER    = Chr$( 223 )
+UMLAUT       = Chr$( 232 )
+HACEK        = Chr$( 233 )
+
+AllLowerCase = FALSE
+AllUpperCase = FALSE
+
+' First, make sure a record is displayed, as opposed to a list.
+
+Window% = CS.ItemType
+Select Case Window%
+  Case -1, 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only in a bibliographic or authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' There is nothing for the macro to convert if the cursor is in the fixed field.
+
+If CS.CursorColumn = 0 Then
+    MsgBox "Please place the cursor in a variable field, or select text in a variable field, to change its case.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Continue by checking whether text has been selected. If there is no selection, get the
+' whole field in which the cursor is placed. For either situation, stop the macro if a
+' non-Latin script is encountered.
+
+If CS.GetSelectedText( SelectedText$ ) = FALSE Or CS.CursorColumn < 6 Then
+    Row% = CS.CursorRow
+    If CS.GetFieldLine( Row%, FieldData$ ) Then
+        If FieldData$ = "Data contains non-latin script" Then
+            MsgBox "Sorry, this macro works only in fields with Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+
+' If the cursor is in a contents field, with no text selected, the button for converting
+' to contents case will have the focus in the dialog box, as the default action. If text
+' is selected in such a field the button will be disabled.
+
+        Tag$        = Left$( FieldData$, 3 )
+        Indicators$ = Mid$( FieldData$, 4, 2 )
+        If Tag$ = "505" Then
+            ContentsField = TRUE
+          Else
+            ContentsField = FALSE
+        End If
+        WorkString$ = Mid$( FieldData$, 6 )
+        Legend$     = "field " & Tag$
+      Else
+        MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    If SelectedText$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro works only with Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+' In the client, certain Windows 1252 characters in selected text may be encoded as
+' Unicode characters; these are in ASCII range 128-159. Look for the ones that are
+' letters that have case and convert them to MARC-8, so they can have their case changed.
+' If a character is encoded so it doesn't have case, exit the macro. There are a few
+' other characters that may be encountered that the macro can't handle properly that may
+' be best treated with Joel Hahn's "CvtDiacritics" macro. These characters are treated
+' differently by OML's "GetField" command and will probably become undisplayable after
+' this macro runs.
+
+    Start% = 1
+    Do
+      p = InStr( Start%, SelectedText$, "&#x", CASE_INSENSITIVE_COMPARE )
+      If p > 0 Then
+          If Mid$( SelectedText$, p + 7, 1 ) = ";" Then
+              Select Case UCase$( Mid$( SelectedText$, p + 3, 4 ) )
+                Case "0152"
+                  SelectedText$ = Left$( SelectedText$, p - 1 ) & Chr$( 166 ) & Mid$( SelectedText, p + 8 )
+                Case "0153"
+                  SelectedText$ = Left$( SelectedText$, p - 1 ) & Chr$( 182 ) & Mid$( SelectedText, p + 8 )
+                Case "0160"
+                  SelectedText$ = Left$( SelectedText$, p - 1 ) & "S" & HACEK & Mid$( SelectedText, p + 8 )
+                Case "0161"
+                  SelectedText$ = Left$( SelectedText$, p - 1 ) & "s" & HACEK & Mid$( SelectedText, p + 8 )
+                Case "0178"
+                  SelectedText$ = Left$( SelectedText$, p - 1 ) & "Y" & UMLAUT & Mid$( SelectedText, p + 8 )
+                Case "017D"
+                  SelectedText$ = Left$( SelectedText$, p - 1 ) & "Z" & HACEK & Mid$( SelectedText, p + 8 )
+                Case "017E"
+                  SelectedText$ = Left$( SelectedText$, p - 1 ) & "z" & HACEK & Mid$( SelectedText, p + 8 )
+                Case Else
+                  MsgBox "Sorry, the selection includes characters that this macro can't handle.", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+              End Select
+          End If
+      End If
+    Loop Until p = 0
+    WorkString$ = SelectedText$
+    Legend$     = "selected text"
+End If
+
+' The next step is to quickly check whether the text of the string is already all
+' uppercase or all lowercase, to enable or disable the corresponding buttons in the
+' dialog box. This step ignores composite characters encoded in Windows-1252.
+
+For i = 1 To Len( WorkString$ )
+  CharT$ = Mid$( WorkString$, i, 1 )
+  Select Case CharT$
+    Case "a" To "z"
+      If DelimiterFound = FALSE Then
+          LowerCaseFound = TRUE
+          If UpperCaseFound Then
+              Exit For
+          End If
+        Else
+          DelimiterFound = FALSE
+      End If
+    Case "A" To "Z"
+      UpperCaseFound = TRUE
+      If LowerCaseFound Then
+          Exit For
+      End If
+    Case DELIMITER
+      DelimiterFound = TRUE
+  End Select
+Next i
+
+If LowerCaseFound = FALSE And UpperCaseFound = TRUE Then
+    AllUpperCase = TRUE
+  ElseIf UpperCaseFound = FALSE And LowerCaseFound = TRUE Then
+    AllLowerCase = TRUE
+
+' If there are (apparently) no letters at all, exit the macro.
+
+  ElseIf UpperCaseFound = FALSE And LowerCaseFound = FALSE Then
+    If SelectedText$ <> "" Then
+        NothingMessage$ = "This selection seems to contain no text for this macro to change its case!"
+      Else
+        NothingMessage$ = "There seems to be no text in this " & Tag$ & " field for this macro to change its case!"
+    End If
+    MsgBox NothingMessage$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Run the dialog, with the choices being presented as buttons, so pressing a button's
+' hotkey, or clicking the button, will instantly execute the change--as opposed to the
+' choices being presented as option buttons, which would then require two clicks of the
+' mouse or two key presses to execute the macro.
+
+Begin Dialog Dialog1Definition 320, 108, WaltsMacros$ & ".  ||  Change case of " & Legend$ & " to ...", .Dialog1ControlFunction
+  CancelButton  1,1,1,1
+  ButtonGroup .ConversionSelection
+   PushButton     0,   0, 160,  32, "&lowercase",                            .L
+   PushButton   160,   0, 160,  32, "&UPPERCASE",                            .U
+   PushButton     0,  32, 160,  32, "&Sentence case.",                       .S
+   PushButton   160,  32, 160,  32, "&Initial Caps (Every Word)",            .I
+   PushButton     0,  64, 160,  32, "&Title Case (Chicago Manual of Style)", .T
+   PushButton   160,  64, 160,  32, "&Contents case -- Contents case.",      .C
+  CheckBox       64,  96, 192,  12, "&Decompose characters (try this if conversion is incorrect)", .CheckBox
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+If Dialog1.CheckBox = CHECKED Then
+    ConvertToMARC_8 = TRUE
+  Else
+    ConvertToMARC_8 = FALSE
+End If
+
+Conversion% = Dialog1.ConversionSelection
+
+Select Case Conversion%
+
+  Case LOWERCASE
+
+    If AllLowerCase = FALSE Then
+        WorkString$ = MakeLowercase( WorkString$ )
+    End If
+
+  Case UPPERCASE
+
+    If AllUpperCase = FALSE Then
+        WorkString$ = MakeUppercase( WorkString$ )
+    End If
+
+  Case SENTENCE_CASE
+
+    WorkString$ = MakeSentence( WorkString$ )
+
+  Case INITIAL_CAPS
+
+    WorkString$ = MakeInitials( WorkString$ )
+
+  Case TITLE_CASE
+
+    FillArray
+    WorkString$ = MakeInitials( WorkString$ )
+
+' With the first letter of each word in the selected text capitalized, and every other
+' letter in lowercase (and all characters having been decomposed), search in that text
+' for each of the terms in the array of words to DE-capitalize. This is a case-sensitive
+' search, so matches should be made only at the beginning of the word. If a match is
+' found, check for letters following the word. If there are none, the whole word is
+' matched, and its first letter can be made lowercase.
+
+    For i = 0 To UBound( DoNotCapitalize )
+      Prep$  = DoNotCapitalize( i )
+      Start% = 1
+      Do
+        p = InStr( Start%, WorkString$, Prep$ )
+        If p > 1 Then
+            If Mid$( WorkString$, p + Len( Prep$ ), 1 ) Like "[!A-Za-z]" And _
+               Mid$( WorkString$, p - 2, 2 ) <> ". " Then
+                Mid$( WorkString$, p, 1 ) = LCase$( Mid$( WorkString$, p, 1 ) )
+            End If
+        End If
+        Start% = p + 1
+      Loop Until p = 0
+    Next i
+
+  Case CONTENTS_CASE
+
+    If Right$( Indicators$, 1 ) = "0" Then
+        Enhanced = TRUE
+      Else
+        Enhanced = FALSE
+    End If
+    WorkString$ = ChangeContents( WorkString$, Enhanced )
+
+End Select
+
+' After the text string has had all initial letters capitalized, letters in
+' abbreviations, that is, letters surrounded by periods or full stops with no spaces
+' between them, must be found and capitalized. Otherwise "U.S.A." or "u.s.a." would
+' become "U.s.a."
+
+Select Case Conversion%
+
+  Case CONTENTS_CASE, INITIAL_CAPS, SENTENCE_CASE, TITLE_CASE
+
+    Start% = 1
+    Do
+      p = InStr( Start%, WorkString$, "." )
+      If p > 0 Then
+          q = InStr( p + 1, WorkString$, "." )
+          If q > 0 Then
+              TempString$ = Mid$( WorkString$, p + 1, q - p - 1 )
+              If InStr( TempString$, " " ) = 0 Then
+
+' Since characters intended to be converted to MARC have already been dealt with in the
+' function MakeInitials, if the checkbox has been so marked, they must not be converted
+' again.
+
+'                  If ConvertToMARC_8 = TRUE Then
+'                      ConvertToMARC_8 = FALSE
+'                  End If
+                  TempString$ = MakeUppercase( TempString$ )
+                  WorkString$ = Left$( WorkString$, p ) & TempString$ & Mid$( WorkString$, q )
+                  Start%      = p + Len( TempString$ )
+                Else
+                  Start%      = q + 1
+              End If
+            Else
+              Exit Do
+          End If
+      End If
+    Loop Until p = 0
+
+End Select
+
+ReplacementText$ = Tag$ & Indicators$ & WorkString$
+
+' If a Numeric Character Reference is included in the replacement string, it must be made
+' lowercase or OML won't convert it to its proper character when replacing the field.
+
+Do
+  p = InStr( 1, ReplacementText$, "&#X", CASE_SENSITIVE_COMPARE )
+  If p > 0 Then
+      If Mid$( ReplacementText$, p + 7, 1 ) = ";" Then
+          ReplacementText$ = Left$( ReplacementText$, p - 1 ) & LCase$( Mid$( ReplacementText$, p, 8 ) ) & Mid$( ReplacementText$, p + 8 )
+      End If
+  End If
+Loop Until p = 0
+
+If Left$( Legend$, 5 ) = "field" Then
+    If CS.SetFieldLine( Row%, ReplacementText$ ) = FALSE Then
+        MsgBox "Sorry, could not change case of " & Legend$ & ".", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+  Else
+    If CS.SetSelectedText( ReplacementText$ ) = FALSE Then
+        MsgBox "Sorry, could not change case of the selection.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray
+
+' This is the list of articles, coordinate conjunctions, and prepositions that won't be
+' capitalized if Title Case is selected. Each term in the list begins with a capital
+' letter to force a match at the beginning of a word, even though the capital letter will
+' be made lowercase after the match.
+
+DoNotCapitalize( 0   ) = "A"
+DoNotCapitalize( 1   ) = "Aboard"
+DoNotCapitalize( 2   ) = "About"
+DoNotCapitalize( 3   ) = "Above"
+DoNotCapitalize( 4   ) = "Abreast"
+DoNotCapitalize( 5   ) = "Absent"
+DoNotCapitalize( 6   ) = "Across"
+DoNotCapitalize( 7   ) = "After"
+DoNotCapitalize( 8   ) = "Against"
+DoNotCapitalize( 9   ) = "Along"
+DoNotCapitalize( 10  ) = "Aloft"
+DoNotCapitalize( 11  ) = "Alongside"
+DoNotCapitalize( 12  ) = "Amid"
+DoNotCapitalize( 13  ) = "Among"
+DoNotCapitalize( 14  ) = "An"
+DoNotCapitalize( 15  ) = "And"
+DoNotCapitalize( 16  ) = "Anti"
+DoNotCapitalize( 17  ) = "Apropos"
+DoNotCapitalize( 18  ) = "Around"
+DoNotCapitalize( 19  ) = "As"
+DoNotCapitalize( 20  ) = "Aslant"
+DoNotCapitalize( 21  ) = "Astride"
+DoNotCapitalize( 22  ) = "At"
+DoNotCapitalize( 23  ) = "Atop"
+DoNotCapitalize( 24  ) = "Bar"
+DoNotCapitalize( 25  ) = "Barring"
+DoNotCapitalize( 26  ) = "Before"
+DoNotCapitalize( 27  ) = "Behind"
+DoNotCapitalize( 28  ) = "Below"
+DoNotCapitalize( 29  ) = "Beneath"
+DoNotCapitalize( 30  ) = "Beside"
+DoNotCapitalize( 31  ) = "Besides"
+DoNotCapitalize( 32  ) = "Between"
+DoNotCapitalize( 33  ) = "Beyond"
+DoNotCapitalize( 34  ) = "But"
+DoNotCapitalize( 35  ) = "By"
+DoNotCapitalize( 36  ) = "Chez"
+DoNotCapitalize( 37  ) = "Circa"
+DoNotCapitalize( 38  ) = "Come"
+DoNotCapitalize( 39  ) = "Concerning"
+DoNotCapitalize( 40  ) = "Contra"
+DoNotCapitalize( 41  ) = "Counting"
+DoNotCapitalize( 42  ) = "Cum"
+DoNotCapitalize( 43  ) = "Despite"
+DoNotCapitalize( 44  ) = "Down"
+DoNotCapitalize( 45  ) = "During"
+DoNotCapitalize( 46  ) = "Effective"
+DoNotCapitalize( 47  ) = "Ere"
+DoNotCapitalize( 48  ) = "Except"
+DoNotCapitalize( 49  ) = "Excepting"
+DoNotCapitalize( 50  ) = "Excluding"
+DoNotCapitalize( 51  ) = "Failing"
+DoNotCapitalize( 52  ) = "Following"
+DoNotCapitalize( 53  ) = "For"
+DoNotCapitalize( 54  ) = "From"
+DoNotCapitalize( 55  ) = "In"
+DoNotCapitalize( 56  ) = "Including"
+DoNotCapitalize( 57  ) = "Inside"
+DoNotCapitalize( 58  ) = "Into"
+DoNotCapitalize( 59  ) = "Less"
+DoNotCapitalize( 60  ) = "Like"
+DoNotCapitalize( 61  ) = "Minus"
+DoNotCapitalize( 62  ) = "Modulo"
+DoNotCapitalize( 63  ) = "Near"
+DoNotCapitalize( 64  ) = "Next"
+DoNotCapitalize( 65  ) = "Nor"
+DoNotCapitalize( 66  ) = "Notwithstanding"
+DoNotCapitalize( 67  ) = "Of"
+DoNotCapitalize( 68  ) = "Off"
+DoNotCapitalize( 69  ) = "Offshore"
+DoNotCapitalize( 70  ) = "On"
+DoNotCapitalize( 71  ) = "Onto"
+DoNotCapitalize( 72  ) = "Opposite"
+DoNotCapitalize( 73  ) = "Or"
+DoNotCapitalize( 74  ) = "Out"
+DoNotCapitalize( 75  ) = "Outside"
+DoNotCapitalize( 76  ) = "Over"
+DoNotCapitalize( 77  ) = "Pace"
+DoNotCapitalize( 78  ) = "Past"
+DoNotCapitalize( 79  ) = "Pending"
+DoNotCapitalize( 80  ) = "Per"
+DoNotCapitalize( 81  ) = "Plus"
+DoNotCapitalize( 82  ) = "Post"
+DoNotCapitalize( 83  ) = "Pre"
+DoNotCapitalize( 84  ) = "Pro"
+DoNotCapitalize( 85  ) = "Qua"
+DoNotCapitalize( 86  ) = "Re"
+DoNotCapitalize( 87  ) = "Regarding"
+DoNotCapitalize( 88  ) = "Respecting"
+DoNotCapitalize( 89  ) = "Sans"
+DoNotCapitalize( 90  ) = "Save"
+DoNotCapitalize( 91  ) = "Saving"
+DoNotCapitalize( 92  ) = "Short"
+DoNotCapitalize( 93  ) = "Since"
+DoNotCapitalize( 94  ) = "Sub"
+DoNotCapitalize( 95  ) = "Than"
+DoNotCapitalize( 96  ) = "The"
+DoNotCapitalize( 97  ) = "Through"
+DoNotCapitalize( 98  ) = "Throughout"
+DoNotCapitalize( 99  ) = "Till"
+DoNotCapitalize( 100 ) = "Times"
+DoNotCapitalize( 101 ) = "To"
+DoNotCapitalize( 102 ) = "Toward"
+DoNotCapitalize( 103 ) = "Towards"
+DoNotCapitalize( 104 ) = "Under"
+DoNotCapitalize( 105 ) = "Underneath"
+DoNotCapitalize( 106 ) = "Unlike"
+DoNotCapitalize( 107 ) = "Until"
+DoNotCapitalize( 108 ) = "Up"
+DoNotCapitalize( 109 ) = "Upon"
+DoNotCapitalize( 110 ) = "Versus"
+DoNotCapitalize( 111 ) = "Via"
+DoNotCapitalize( 112 ) = "Vice"
+DoNotCapitalize( 113 ) = "Vis-à-vis"
+DoNotCapitalize( 114 ) = "Wanting"
+DoNotCapitalize( 115 ) = "With"
+DoNotCapitalize( 116 ) = "Within"
+DoNotCapitalize( 117 ) = "Without"
+
+End Sub
+
+'****************************************************************************************
+
+Function ChangeContents( InString$, Enhanced )
+
+' This function converts case in a contents field. It uses subfield coding in an enhanced
+' note, or ISBD punctuation otherwise, to isolate each title and statement of
+' responsibility. Each title is converted to sentence case, meaning only the initial
+' character is capitalized, and a statement of responsibility following that title is
+' converted to Initial Capitals. In an enhanced contents note, other information,
+' contained in subfield $g, is ignored.
+
+Const BUILDING As Integer = 1
+Const DONE     As Integer = -1
+Const NONE     As Integer = 0
+
+Dim DASH      As String*4    : DASH      = " -- "
+Dim FULLSTOP  As String*2    : FULLSTOP  = ". "
+Dim SEMICOLON As String*3    : SEMICOLON = " ; "
+Dim SLASH     As String*3    : SLASH     = " / "
+
+Dim ContentsString$
+Dim SOR As Integer
+Dim Start%
+Dim StartOfString%
+Dim SubfieldCode$
+Dim TempString$
+
+Dim EndOfString
+
+Dim p As Integer, q As Integer, g As String
+
+' If the contents note is enhanced, treatment of text is simple, because subfield codes
+' straightforwardly identify the field's components.
+
+If Enhanced Then
+
+    Start% = 1
+    Do
+      p = InStr( Start%, InString$, DELIMITER )
+      If p > 0 Then
+          q = InStr( p + 1, InString$, DELIMITER )
+          If q > 0 Then
+              TempString$ = Mid$( InString$, p, q - p )
+              Start%      = q - 1
+            Else
+              TempString$ = Mid$( InString$, p )
+          End If
+          SubfieldCode$ = Mid$( TempString$, 2, 1 )
+          If SubfieldCode$ Like "[A-Z]" Then
+              Mid$( TempString$, 2, 1 ) = LCase$( SubfieldCode$ )
+          End If
+          If SubfieldCode$ = "t" Then
+              TempString$ = Left$( TempString$, 2 ) & " " & MakeSentence( LTrim$( Mid$( TempString$, 3 ) ) )
+            ElseIf SubfieldCode$ = "r" Then
+              TempString$ = MakeInitials( TempString$ )
+          End If
+          If q > 0 Then
+              InString$ = Left$( InString$, p - 1 ) & TempString$ & Mid$( InString$, q )
+            Else
+              InString$ = Left$( InString$, p - 1 ) & TempString$
+              Exit Do
+          End If
+      End If
+    Loop Until p = 0
+    ContentsString$ = InString$
+
+  Else
+
+' If the contents note is not enhanced, ISBD punctuation must be relied upon to change
+' case. Starting from the beginning, look for the next space, and test if it's the last
+' character in the prescribed ISBD punctuation. If it is, it will mark the end of a
+' phrase, which will by default be converted to Sentence Case unless a statement of
+' responsibility has been identified, in which case the phrase will be converted to
+' Initials Case.
+
+    Start% = 1
+    StartOfString% = 1
+    SOR = NONE
+    Do
+      p = InStr( Start%, InString$, " " )
+      If p > 0 Then
+          g = Mid$( InString$, StartOfString%, p - StartOfString% )
+          If Mid$( InString$, p - 1, 2 ) = FULLSTOP Or _
+             Mid$( InString$, p - 2, 3 ) = SEMICOLON Or _
+             Mid$( InString$, p - 3, 4 ) = DASH Then
+              If SOR = BUILDING Then
+                  SOR = DONE
+              End If
+              EndOfString = TRUE
+            ElseIf Mid$( InString$, p - 2, 3 ) = SLASH Then
+              SOR         = BUILDING
+              EndOfString = TRUE
+            Else
+              EndOfString = FALSE
+          End If
+        Else
+          EndOfString = TRUE
+          p           = Len( InString$ )
+          g           = Mid$( InString$, StartOfString% )
+      End If
+      If EndOfString Then
+          If SOR <> DONE Then
+              TempString$ = Mid$( InString$, StartOfString%, ( p - StartOfString% ) + 1 )
+              TempString$ = MakeSentence( TempString$ )
+            Else
+              TempString$ = Mid$( InString$, StartOfString%, ( p - StartOfString% ) + 1 )
+              TempString$ = MakeInitials( TempString$ )
+              SOR         = NONE
+          End If
+          ContentsString$ = ContentsString$ & TempString$
+          StartOfString%  = p + 1
+      End If
+      Start% = p + 1
+    Loop Until p = 0 Or Start% > Len( InString$ )
+
+End If
+
+ChangeContents = ContentsString$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeInitials( InString$ ) As String
+
+' This function capitalizes the first letter of each word it's given, so it is used by
+' some of the other functions also.
+
+Const APOSTROPHE As Integer = 39
+
+Dim CharA%
+Dim CharT$
+Dim LenDecompString%
+
+Dim DecompOff                : DecompOff = FALSE
+Dim WordChar                 : WordChar  = FALSE
+
+Dim i As Integer
+
+InString$ = MakeLowercase( InString$ )
+
+' If conversion to lowercase was made with the decompose option selected, de-select it
+' now so it doesn't get repeated below. Otherwise, strange things may result.
+
+If ConvertToMARC_8 = TRUE Then
+    ConvertToMARC_8 = FALSE
+    DecompOff       = TRUE
+End If
+
+' The first word character after a non-word character is capitalized. Word characters are
+' the letters of the Roman alphabet (including those modified with diacritical marks),
+' the ten digits, and the underscore, or low line, character. All other characters are
+' considered non-word characters, or word boundaries. However, the apostrophe ',
+' signifying abbreviation or the genitive case, is considered a word character if it is
+' surrounded by word characters. The macro therefore properly leaves lowercase words such
+' as "Artist's" and "Shouldn't." But that also means names like "D'Oyly" and "M'Cartney"
+' will be mangled to "D'oyly" and "M'cartney".
+
+For i = 1 To Len( InString$ )
+  CharT$ = Mid$( InString$, i, 1 )
+  If CharT$ Like "[A-Z]" Then
+      If Mid$( InString$, i - 1, 1 ) = DELIMITER Then
+          Mid$( InString$, i, 1 ) = LCase$( CharT$ )
+          WordChar = FALSE
+        Else
+          WordChar = TRUE
+      End If
+    ElseIf CharT$ Like "[a-z]" Then
+      If WordChar = FALSE Then
+          Mid$( InString$, i, 1 ) = UCase$( CharT$ )
+          WordChar = TRUE
+      End If
+    ElseIf CharT$ Like "[0-9]" Then
+      WordChar = TRUE
+    Else
+      If CharT$ <> DELIMITER Then
+          CharA% = Asc( CharT$ )
+          If ConvertToMARC_8 Then
+              If CharA% > 128 Then
+                  InString$ = Left$( InString$, i - 1 ) & MakeMARC_8( CharA%, LenDecompString% ) & Mid$( InString$, i + 1 )
+                  i = i + ( LenDecompString% - 1 )
+                Else
+                  WordChar = FALSE
+              End If
+            Else
+              If CharA% > 128 Then
+                  WordChar = TRUE
+                Else
+
+' An apostrophe following a word character will be considered a word character.
+
+                  If CharA% = APOSTROPHE And WordChar Then
+                      WordChar = TRUE
+                    Else
+                      WordChar = FALSE
+                  End If
+              End If
+          End If
+        Else
+          If CharT$ = DELIMITER Then
+              Mid$( InString$, i + 1, 1 ) = LCase$( Mid$( InString$, i + 1, 1 ) )
+              i = i + 2
+          End If
+      End If
+  End If
+Next i
+
+'If DecompOff Then ConvertToMARC_8 = TRUE
+
+MakeInitials = InString$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeLowercase( InString$ ) As String
+
+' This function, and the corresponding function MakeUppercase, changes the case of the 26
+' characters of the English alphabet by simply using the BASIC commands LCase and UCase.
+' For all other characters, the function proceeds by finding the decimal encoding of
+' those characters. By default, the function expects them to be OCLC-MARC. Some of them
+' in code points 161-173 are modified characters and digraphs, and have case that can be
+' converted: Polish l, Scandinavian o with slash, d with crossbar, Icelandic thorn, ae,
+' oe, hooked o, and hooked u. Many of the remaining characters are modifying characters,
+' or diacritics. They can be ignored because the base characters they modify have already
+' been converted, being the preceding character. However, if they are actually Windows-
+' 1252 characters, the default action won't work; although they have case to convert,
+' because their code points differ from those in OCLC-MARC, the conversion will be wrong.
+' Therefore the function has to know the value of the checkbox in the dialog box. If it
+' is marked, this function sends characters with code points between 138 and 255 to the
+' function MakeMARC_8, which decomposes them to OCLC-MARC and changes their case at the
+' same time.
+
+Dim CharA%
+Dim CharT$
+Dim FILL_CHAR As String*1    : FILL_CHAR = Chr$( 252 )
+Dim LenDecompString%
+
+Dim i As Integer
+
+i = 1
+Do
+  CharT$ = Mid$( InString$, i, 1 )
+  CharA% = Asc( CharT$ )
+  If CharT$ Like "[A-Z]" Then
+      Mid$( InString$, i, 1 ) = LCase$( CharT$ )
+    Else
+      If CharA% < 32 Then
+          If i < Len( InString$ ) Then
+              If Asc( Mid$( InString$, i + 1, 1 ) ) < 32 Then
+                  InString$ = Left$( InString$, i - 1 ) & FILL_CHAR & FILL_CHAR & Mid$( InString$, i + 2 )
+                Else
+                  InString$ = Left$( InString$, i - 2 ) & FILL_CHAR & FILL_CHAR & Mid$( InString$, i + 1 )
+              End If
+          End If
+        Else
+          If CharT$ <> DELIMITER Then
+              If ConvertToMARC_8 Then
+                  If CharA% > 128 Then
+                      InString$ = Left$( InString$, i - 1 ) & LCase$( MakeMARC_8( CharA%, LenDecompString% ) ) & Mid$( InString$, i + 1 )
+                      i = i + ( LenDecompString% - 1 )
+                  End If
+                Else
+                  Select Case CharA%
+                    Case 161 To 166, 172, 173
+                      InString$ = Left$( InString$, i - 1 ) & Chr$( CharA% + 16 ) & Mid$( InString$, i + 1 )
+                  End Select
+              End If
+          End If
+      End If
+  End If
+  i = i + 1
+Loop Until i > Len( InString$ )
+
+MakeLowercase = InString$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeMARC_8( CompositeCharA%, DecomposedLength% )
+
+' This function runs only if the checkbox in the dialog box is marked. If it is, this
+' function treats the decimal values of the selected characters as their values in
+' Windows-1252 encoding, translating them into OCLC-MARC characters, and decomposing them
+' if necessary. Note that although most OCLC-MARC characters are decomposed, a few are
+' precomposed or composite, such as the "o" with slash. The names by the precomposed
+' characters in this list are their OCLC-MARC names, which differ slightly from their
+' MARC-8 designations.
+
+Dim ACUTE        As String*1 : ACUTE        = Chr$( 226 )
+Dim CEDILLA      As String*1 : CEDILLA      = Chr$( 240 )
+Dim CIRCLE_ABOVE As String*1 : CIRCLE_ABOVE = Chr$( 234 )
+Dim CIRCUMFLEX   As String*1 : CIRCUMFLEX   = Chr$( 227 )
+Dim GRAVE        As String*1 : GRAVE        = Chr$( 225 )
+Dim TILDE        As String*1 : TILDE        = Chr$( 228 )
+
+Select Case CompositeCharA%
+  Case 138
+    MakeMARC_8         = "s" & HACEK
+    DecomposedLength% = 2
+  Case 140
+    MakeMARC_8         = Chr$( 182 ) 'oe, lowercase
+    DecomposedLength% = 1
+  Case 142
+    MakeMARC_8         = "z" & HACEK
+    DecomposedLength% = 2
+  Case 156
+    MakeMARC_8         = Chr$( 166 ) 'OE, uppercase
+    DecomposedLength% = 1
+  Case 158
+    MakeMARC_8         = "Z" & HACEK
+    DecomposedLength% = 2
+  Case 159
+    MakeMARC_8         = "y" & UMLAUT
+    DecomposedLength% = 2
+  Case 192
+    MakeMARC_8         = "a" & GRAVE
+    DecomposedLength% = 2
+  Case 193
+    MakeMARC_8         = "a" & ACUTE
+    DecomposedLength% = 2
+  Case 194
+    MakeMARC_8         = "a" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 195
+    MakeMARC_8         = "a" & TILDE
+    DecomposedLength% = 2
+  Case 196
+    MakeMARC_8         = "a" & UMLAUT
+    DecomposedLength% = 2
+  Case 197
+    MakeMARC_8         = "a" & CIRCLE_ABOVE
+    DecomposedLength% = 2
+  Case 198
+    MakeMARC_8         = Chr$( 181 ) 'ae, lowercase
+    DecomposedLength% = 1
+  Case 199
+    MakeMARC_8         = "c" & CEDILLA
+    DecomposedLength% = 2
+  Case 200
+    MakeMARC_8         = "e" & GRAVE
+    DecomposedLength% = 2
+  Case 201
+    MakeMARC_8         = "e" & ACUTE
+    DecomposedLength% = 2
+  Case 202
+    MakeMARC_8         = "e" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 203
+    MakeMARC_8         = "e" & UMLAUT
+    DecomposedLength% = 2
+  Case 204
+    MakeMARC_8         = "i" & GRAVE
+    DecomposedLength% = 2
+  Case 205
+    MakeMARC_8         = "i" & ACUTE
+    DecomposedLength% = 2
+  Case 206
+    MakeMARC_8         = "i" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 207
+    MakeMARC_8         = "i" & UMLAUT
+    DecomposedLength% = 2
+  Case 208
+    MakeMARC_8         = Chr$( 179 ) 'd with crossbar, lowercase
+    DecomposedLength% = 2
+  Case 209
+    MakeMARC_8         = "n" & TILDE
+    DecomposedLength% = 2
+  Case 210
+    MakeMARC_8         = "o" & GRAVE
+    DecomposedLength% = 2
+  Case 211
+    MakeMARC_8         = "o" & ACUTE
+    DecomposedLength% = 2
+  Case 212
+    MakeMARC_8         = "o" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 213
+    MakeMARC_8         = "o" & TILDE
+    DecomposedLength% = 2
+  Case 214
+    MakeMARC_8         = "o" & UMLAUT
+    DecomposedLength% = 2
+  Case 216
+    MakeMARC_8         = Chr$( 178 ) 'o with slash, lowercase
+    DecomposedLength% = 2
+  Case 217
+    MakeMARC_8         = "u" & GRAVE
+    DecomposedLength% = 2
+  Case 218
+    MakeMARC_8         = "u" & ACUTE
+    DecomposedLength% = 2
+  Case 219
+    MakeMARC_8         = "u" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 220
+    MakeMARC_8         = "u" & UMLAUT
+    DecomposedLength% = 2
+  Case 221
+    MakeMARC_8         = "y" & ACUTE
+    DecomposedLength% = 2
+  Case 222
+    MakeMARC_8         = Chr$( 180 ) 'thorn, lowercase
+    DecomposedLength% = 1
+  Case 223
+    MakeMARC_8         = Chr$( 159 ) 'Eszett
+    DecomposedLength% = 1
+  Case 224
+    MakeMARC_8         = "A" & GRAVE
+    DecomposedLength% = 2
+  Case 225
+    MakeMARC_8         = "A" & ACUTE
+    DecomposedLength% = 2
+  Case 226
+    MakeMARC_8         = "A" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 227
+    MakeMARC_8         = "A" & TILDE
+    DecomposedLength% = 2
+  Case 228
+    MakeMARC_8         = "A" & UMLAUT
+    DecomposedLength% = 2
+  Case 229
+    MakeMARC_8         = "A" & CIRCLE_ABOVE
+    DecomposedLength% = 2
+  Case 230
+    MakeMARC_8         = Chr$( 165 ) 'AE, uppercase
+    DecomposedLength% = 1
+  Case 231
+    MakeMARC_8         = "C" & CEDILLA
+    DecomposedLength% = 2
+  Case 232
+    MakeMARC_8         = "E" & GRAVE
+    DecomposedLength% = 2
+  Case 233
+    MakeMARC_8         = "E" & ACUTE
+    DecomposedLength% = 2
+  Case 234
+    MakeMARC_8         = "E" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 235
+    MakeMARC_8         = "E" & UMLAUT
+    DecomposedLength% = 2
+  Case 236
+    MakeMARC_8         = "I" & GRAVE
+    DecomposedLength% = 2
+  Case 237
+    MakeMARC_8         = "I" & ACUTE
+    DecomposedLength% = 2
+  Case 238
+    MakeMARC_8         = "I" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 239
+    MakeMARC_8         = "I" & UMLAUT
+    DecomposedLength% = 2
+  Case 240
+    MakeMARC_8         = Chr$( 163 ) 'D with crossbar, uppercase
+    DecomposedLength% = 2
+  Case 241
+    MakeMARC_8         = "N" & TILDE
+    DecomposedLength% = 2
+  Case 242
+    MakeMARC_8         = "O" & GRAVE
+    DecomposedLength% = 2
+  Case 243
+    MakeMARC_8         = "O" & ACUTE
+    DecomposedLength% = 2
+  Case 244
+    MakeMARC_8         = "O" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 245
+    MakeMARC_8         = "O" & TILDE
+    DecomposedLength% = 2
+  Case 246
+    MakeMARC_8         = "O" & UMLAUT
+    DecomposedLength% = 2
+  Case 248
+    MakeMARC_8         = Chr$( 162 ) 'O with slash, uppercase
+    DecomposedLength% = 2
+  Case 249
+    MakeMARC_8         = "U" & GRAVE
+    DecomposedLength% = 2
+  Case 250
+    MakeMARC_8         = "U" & ACUTE
+    DecomposedLength% = 2
+  Case 251
+    MakeMARC_8         = "U" & CIRCUMFLEX
+    DecomposedLength% = 2
+  Case 252
+    MakeMARC_8         = "U" & UMLAUT
+    DecomposedLength% = 2
+  Case 253
+    MakeMARC_8         = "Y" & ACUTE
+    DecomposedLength% = 2
+  Case 254
+    MakeMARC_8         = Chr$( 164 ) 'Thorn, uppercase
+    DecomposedLength% = 2
+  Case 255
+    MakeMARC_8         = "Y" & UMLAUT
+    DecomposedLength% = 2
+  Case Else
+    MakeMARC_8         = Chr$( CompositeCharA% )
+    DecomposedLength% = 1
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function MakeSentence( InString$ ) As String
+
+' This case looks for one of the three punctuation marks that can end sentences--the
+' period, exclamation point, or question mark--followed by a space. The space may be
+' preceded by a single or double quotation mark. If one of these combinations of
+' characters is found, the next letter is capitalized.
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 ) & " "
+Dim FirstWord$
+Dim NewSentence
+Dim Prev1Char$
+Dim Prev2Char$
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE = Chr$( 039 ) & " "
+Dim Start%
+
+Dim p As Integer
+
+InString$   = MakeLowercase( InString$ )
+NewSentence = TRUE
+Start%      = 1
+Do
+  p = InStr( Start%, InString$, " " )
+  If p > 0 Then
+      If NewSentence Then
+          FirstWord$ = Mid$( InString$, Start%, p - Start% )
+          FirstWord$ = MakeInitials( FirstWord$ )
+          If Start% = 1 Then
+              InString$ = FirstWord$ & Mid$( InString$, p )
+            Else
+              InString$ = Left$( InString$, Start% - 1 ) & FirstWord$ & Mid$( InString$, p )
+          End If
+          NewSentence = FALSE
+        Else
+          Prev1Char$ = Mid$( InString$, p - 1, 1 )
+          If Prev1Char$ Like "[.?]" Or Prev1Char$ = "!" Then
+              NewSentence = TRUE
+            Else
+              Prev2Char$ = Mid$( InString$, p - 2, 2 )
+              If Prev2Char$ = "." & DOUBLE_QUOTE Or Prev2Char$ = "?" & DOUBLE_QUOTE Or Prev2Char$ = "!" & DOUBLE_QUOTE Or _
+                 Prev2Char$ = "." & SINGLE_QUOTE Or Prev2Char$ = "?" & SINGLE_QUOTE Or Prev2Char$ = "!" & SINGLE_QUOTE Then
+                  NewSentence = TRUE
+              End If
+          End If
+      End If
+    Else
+      If Start% = 1 Then
+          InString$ = MakeInitials( InString$ )
+      End If
+  End If
+  Start% = p + 1
+Loop Until p = 0
+
+MakeSentence = InString$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeUppercase( InString$ ) As String
+
+Dim CharA%
+Dim CharT$
+Dim FILL_CHAR As String*1    : FILL_CHAR = Chr$( 252 )
+Dim LenDecompString%
+
+Dim i As Integer
+
+i = 1
+Do
+  CharT$ = Mid$( InString$, i, 1 )
+  CharA% = Asc( CharT$ )
+  If CharT$ Like "[a-z]" Then
+      If i > 1 Then
+          If Mid$( InString$, i - 1, 1 ) <> DELIMITER Then
+              Mid$( InString$, i, 1 ) = UCase$( CharT$ )
+          End If
+        Else
+          Mid$( InString$, i, 1 ) = UCase$( CharT$ )
+      End If
+    Else
+      If CharA% < 32 Then
+          If i < Len( InString$ ) Then
+              If Asc( Mid$( InString$, i + 1, 1 ) ) < 32 Then
+                  InString$ = Left$( InString$, i - 1 ) & FILL_CHAR & FILL_CHAR & Mid$( InString$, i + 2 )
+                Else
+                  InString$ = Left$( InString$, i - 2 ) & FILL_CHAR & FILL_CHAR & Mid$( InString$, i + 1 )
+              End If
+          End If
+        Else
+          If CharT$ <> DELIMITER Then
+              If ConvertToMARC_8 Then
+                  If CharA% > 128 Then
+                      InString$ = Left$( InString$, i - 1 ) & MakeMARC_8( CharA%, LenDecompString% ) & Mid$( InString$, i + 1 )
+                      i = i + ( LenDecompString% - 1 )
+                  End If
+                Else
+                  Select Case CharA%
+                    Case 177, 178, 179, 180, 181, 182, 188, 189
+                      InString$ = Left$( InString$, i - 1 ) & Chr$( CharA% - 16 ) & Mid$( InString$, i + 1 )
+                  End Select
+              End If
+          End If
+      End If
+  End If
+  i = i + 1
+Loop Until i > Len( InString$ )
+
+MakeUppercase = InString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const DISABLED   As Integer = 0
+Const INITIALIZE As Integer = 1
+Const INVISIBLE  As Integer = 0
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible "Cancel", INVISIBLE
+    If AllUpperCase Then
+        DlgEnable  "U",      DISABLED
+      ElseIf AllLowerCase Then
+        DlgEnable  "L",      DISABLED
+    End If
+    If ContentsField Then
+        DlgFocus   "C"
+      Else
+        DlgEnable  "C",      DISABLED
+    End If
+
+End Select
+
+End Function
+'125045902
+'
+'Macro name: ChangeCase
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 4/17/2023 9:59:41 AM using "MacroBookInspector" macro by Walter F. Nickeson.

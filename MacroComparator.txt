@@ -1,0 +1,1544 @@
+'MacroName:MacroComparator.2022.04
+'MacroDescription:Displays two macro books, and selected macros from each, side by side
+' for some simple metadata comparison.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 16 January 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro to see the macro books in the default macro directory; the
+' list is presented in two adjacent windows so you can compare macros in both of the
+' books. Select a macro in each list to see some information about it (a possible date of
+' revision, its size in terms of lines (for the source code) and bytes (for both source
+' and compiled code), and its description. No comparison of the actual text of the chosen
+' macros is made.
+'
+' For more detailed information about any individual macro, including its shortcut key
+' assignment, and to incorporate some rudimentary error checking without opening the
+' Connexion macro editor, use my macro "MacroBookInspector". Also see the text of that
+' macro for more detailed and complete information about how this macro works.
+'****************************************************************************************
+
+Option Compare Text   'Forces case-insensitive string comparison in "InStr" and "StrComp".
+Option Explicit
+
+Declare Sub BuildDataStream    ( FirstSector&, WhichFAT%, StreamSize& )
+Declare Sub BuildFAT           ( TotalSectorsInFAT% )
+Declare Sub BuildMiniFAT       ( TotalSectorsInMiniFAT%, FirstSectorOfMiniFAT% )
+Declare Sub BuildMinistream    ( MinistreamStart& )
+Declare Sub CopyArrays         ( WhichSide$, WhichDirection% )
+Declare Sub GetDirectoryEntries( FirstSectorOfDirectory& )
+Declare Sub GetEnviroVars
+Declare Sub GetFileInfo        ( SelectedMbkFile$ )
+Declare Sub GetMacroBookFiles
+Declare Sub GetMacroInfo       ( MacroDirectoryInfo$ )
+Declare Sub GetMacroNames
+Declare Sub MakeMacroList      ( SelectedMbkFile$ )
+Declare Sub ReadFile           ( FileName$ )
+Declare Sub SortMacroNames     ( NewestName$ )
+
+Declare Function FindRevisionDate( MacroLine$ )                 As String
+Declare Function GetSectorData   ( SectorID&, WhichDataArray% ) As String
+Declare Function HexVal          ( InBytes$ )                   As Long
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SuppVal& )
+
+Global Const DIR_ENTRY_LENGTH     As Integer = 128    'The length in bytes of a directory entry.
+Global Const DWORD                As Integer = 4      'The length in bytes of sector numbers and some other values.
+Global Const END_OF_CHAIN         As Integer = -2     'Hex FFFFFFFE, marks the end of a chain of sectors in the FAT.
+Global Const FILE_EXTENSION       As Integer = 4      'The length of string "dot + filename extension," e.g. ".mbk" = 4 characters.
+Global Const FROM_PRIMARY         As Integer = 0      'The value to copy data from primary arrays to storage.
+Global Const MAIN_C               As Integer = 0      'A switch to access main data array or main FAT array.
+Global Const MAX_LEN_MACRO_NAME   As Integer = 28     'The maximum length in characters of a macro name, plus 1.
+Global Const MAX_SIZE_MINISTREAM  As Integer = 4096   'The maximum size in bytes of object stored in Ministream.
+Global Const MAX_STRING_LENGTH    As Integer = 31744  'The smallest even multiple of 512 below 32767, OML's limit on string length.
+Global Const MINI_C               As Integer = 1      'A switch to access Ministream or mini FAT array.
+Global Const MINI_SECTOR_SIZE     As Integer = 64     'The size in bytes of minisectors.
+Global Const OFFSET_BIN_LENGTH    As Integer = 45     'The start of a substring in the macro name string containing the length of the data stream.
+Global Const OFFSET_DESC          As Integer = 53     'The start of a substring in the macro name string containing the macro description.
+Global Const OFFSET_FIRST_SECTOR  As Integer = 29     'The start of a substring in the macro name string containing the first sector of the data.
+Global Const OFFSET_SRC_LENGTH    As Integer = 37     'The start of a substring in the macro name string containing the length of the data stream.
+Global Const SECTOR_SIZE          As Integer = 512    'The size in bytes of normal or regular sectors.
+Global Const STREAM_DATA          As Integer = 0      'A switch to control processing of array to end elements with LF character.
+Global Const STRING1_EQUAL_TO     As Integer = 0      'The value of the "StrComp" function when strings 1 and 2 are the same.
+Global Const STRING1_GREATER_THAN As Integer = 1      'The value of the "StrComp" function when string 1 is greater than string 2.
+Global Const STRING1_LESS_THAN    As Integer = -1     'The value of the "StrComp" function when string 1 is less than string 2.
+Global Const STRING_OFFSET        As Integer = 1      'The number to make up the difference between 0-based (file offset) and 1-based
+                                                      ' (character positions in strings) counting.
+Global Const TO_PRIMARY           As Integer = 1      'The value to copy data from storage back to primary arrays.
+Global Const WARNING_MESSAGE      As Integer = 48     'The value to display the "Warning message" icon in a message box.
+
+Global Const LEFT_SIDE            As String  = "L"    'The left side lists of macro books and macros.
+Global Const RIGHT_SIDE           As String  = "R"    'The right side lists of macro books and macros.
+
+Global CRLF         As String*2
+Global DOUBLE_QUOTE As String*1
+
+Global AppDataPath$
+Global FATSectorListInHeader$
+Global FileInfo$
+Global FileInfo1$
+Global FileInfo2$
+Global FileNumber%
+Global FileSize&
+Global FileSizeKB%
+Global FileSizeKBStr$
+Global FirstSector&
+Global FullMacroName$
+Global LineCount&
+Global LineCountStr As String*8
+Global MacroBookFile$
+Global MacroBookName$
+Global MacroCount%
+Global MacroDirectoryPath$
+Global MacroOpen1$
+Global MacroOpen2$
+Global MacroRevisionDate$
+Global MacroSequence%
+Global MacroSizeStr As String*24
+Global MinistreamStart&
+Global PreviousEntry%
+Global ProgramFilesPath$
+Global SavedMacroCount%
+Global SelectedMacroIndex%
+Global SelectedMacroName$
+Global SelectedMbkFile1$
+Global SelectedMbkFile2$
+Global StreamSize&
+Global SummaryMacroCount$
+Global TestString$
+Global TotalMacroCount%
+Global ViewedMacroCount%
+Global WaltsMacros$
+Global WhichFAT%
+
+Global DataStream()         As String
+Global DirectoryEntries()   As String
+Global EndWithLF()          As String
+Global FAT()                As Long
+Global FAT1()               As Long
+Global FAT2()               As Long
+Global FileData1()          As String
+Global FileData2()          As String
+Global FileSections()       As String
+Global FileSectors()        As String
+Global MacroBooks()         As String
+Global MacroListNames()     As String
+Global MacroListNames1()    As String
+Global MacroListNames2()    As String
+Global MacroListPlus()      As String
+Global MacroListPlus1()     As String
+Global MacroListPlus2()     As String
+Global MiniFAT()            As Long
+Global MiniFAT1()           As Long
+Global MiniFAT2()           As Long
+Global MinistreamSectors()  As String
+Global MinistreamSectors1() As String
+Global MinistreamSectors2() As String
+Global ProcessedMacros()    As String
+Global SavedList()          As String
+Global UpdateClues( 7 )     As String
+Global UpdateDate( )        As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim MacroYears%
+
+Dim i As Integer
+
+' Initialize some global variables.
+
+CRLF                = Chr$( 013 ) & Chr$( 010 )
+DOUBLE_QUOTE        = Chr$( 034 )
+MacroDirectoryPath$ = "\OCLC\Connex\Macros\"
+ViewedMacroCount%   = 1
+WaltsMacros$        = "[Walt's macros] MacroTools:MacroComparator"
+ReDim SavedList( SavedMacroCount% )
+
+' The catalog of words indicating revision; "updated" is first because that's the term I
+' use in my macros.
+
+UpdateClues( 0 ) = "updated"
+UpdateClues( 1 ) = "revised"
+UpdateClues( 2 ) = "modified"
+UpdateClues( 3 ) = "revision"
+UpdateClues( 4 ) = "edited"
+UpdateClues( 5 ) = "altered"
+UpdateClues( 6 ) = "created"
+UpdateClues( 7 ) = "adapted"
+
+' The catalog of possible dates of revision of macros--1998 to the present (although what
+' macro has survived from 1998????).
+
+MacroYears% = Year( Now() ) - 1998
+ReDim UpdateDate( MacroYears% )
+For i = 0 To MacroYears%
+  UpdateDate( i ) = Trim$( Str$( 1998 + MacroYears% - i ) )
+Next i
+
+Call GetMacroBookFiles
+If AppDataPath$ = "" Then
+    MsgBox "Sorry, this macro could not find the macro files.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Variables in Sub Main.
+
+Dim SelectingMacros$
+
+' Prepare the legends for the dialog box.
+
+SelectingMacros$ = "Select macros to display information for comparison. Please be patient with this part of"
+SelectingMacros$ = SelectingMacros$ & " the macro. It may take several seconds to gather"
+SelectingMacros$ = SelectingMacros$ & " information about large macros (those with over about 600 lines)."
+
+Begin Dialog Dialog1Definition  342, 282, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      282, 260,  52,  14
+  CancelButton    1,  1,  1,  1
+  DropListBox    70,   8, 128,  96, MacroBooks(),     .MbkList1
+  DropListBox   206,   8, 128,  96, MacroBooks(),     .MbkList2
+  ListBox        70,  44, 128, 124, MacroListNames(), .MacroList1
+  ListBox       206,  44, 128, 124, MacroListNames(), .MacroList2
+  GroupBox        6, 170, 328,   2, ""
+  Text            4, 169, 332,   4, ""
+  GroupBox        6, 181, 328,   2, ""
+  Text            4, 180, 332,   4, ""
+  GroupBox        6, 192, 328,   2, ""
+  Text            4, 191, 332,   4, ""
+  Text            8,  22,  60,   8, "",               .FileUpdate
+  Text           72,  22, 128,   8, FileInfo$,        .FileInfo1
+  Text          208,  22, 128,   8, FileInfo$,        .FileInfo2
+  Text           70,  34,  48,   8, "",               .MacroCount1
+  Text          206,  34,  48,   8, "",               .MacroCount2
+  Text            8, 164,  46,   8, "Revision date:"
+  Text           70, 164, 120,   8, "",               .RevDate1
+  Text          206, 164, 120,   8, "",               .RevDate2
+  Text            8, 175,  36,   8, "Line count:"
+  Text           70, 175, 120,   8, "",               .LineCount1
+  Text          206, 175, 120,   8, "",               .LineCount2
+  Text            8, 186,  56,   8, "Size, text/binary:"
+  Text           70, 186, 120,   8, "",               .SizeBytes1
+  Text          206, 186, 120,   8, "",               .SizeBytes2
+  Text            8, 197,  40,   8, "Description:"
+  Text           70, 197, 128,  48, "",               .Desc1
+  Text          206, 197, 128,  48, "",               .Desc2
+  Text            6, 134,  52,  24, "The selected macros appear to be identical.", .Identical
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+
+End Sub
+
+'****************************************************************************************
+
+Sub BuildDataStream( FirstSector&, WhichFAT%, StreamSize& )
+
+' Given the first sector of a data stream, whether the stream is in the Ministream or
+' not, and how long the stream is, this subprogram builds the data stream from the chain
+' of sectors in either the FAT or the MiniFAT.
+
+Dim DataStreamIndex%
+Dim ExpectedSectorCount%
+Dim NextSector&
+Dim PrevSector&
+Dim SectorsRead%
+Dim StreamChunkRemainder%
+Dim StreamChunks%
+Dim StreamSegment$
+
+Dim z As Long
+
+' Calculate some parameters. Given the length of the data stream, determine how many
+' elements in the storage array to allocate, and how many sectors comprise the stream.
+
+StreamChunks%         = StreamSize& \ MAX_STRING_LENGTH
+StreamChunkRemainder% = StreamSize& Mod MAX_STRING_LENGTH
+If StreamChunkRemainder% = 0 Then
+    StreamChunks% = StreamChunks% - 1
+End If
+
+If StreamSize& < MAX_SIZE_MINISTREAM Then
+    ExpectedSectorCount% = StreamSize& \ MINI_SECTOR_SIZE
+    If StreamSize& Mod MINI_SECTOR_SIZE > 0 Then
+        ExpectedSectorCount% = ExpectedSectorCount% + 1
+    End If
+  Else
+    ExpectedSectorCount% = StreamSize& \ SECTOR_SIZE
+        If StreamSize& Mod SECTOR_SIZE > 0 Then
+        ExpectedSectorCount% = ExpectedSectorCount% + 1
+    End If
+End If
+
+' ReDim the array according to how many strings of 31744 or fewer bytes are going to be
+' stored, and then start reading the stream from the sector given in either the FAT or
+' the miniFAT.
+
+ReDim DataStream( StreamChunks% )
+PrevSector&     = FirstSector&
+StreamSegment$  = GetSectorData( FirstSector&, WhichFAT% )
+SectorsRead%    = SectorsRead% + 1
+
+' Keep reading the sectors in the chain from whichever FAT has been declared. When the
+' end-of-chain marker has been reached, put the string into the array.
+
+Do
+  If WhichFAT% = MAIN_C Then
+      NextSector& = FAT( PrevSector& )
+    Else
+      NextSector& = MiniFAT( PrevSector& )
+  End If
+  If NextSector& = END_OF_CHAIN Then
+      If StreamChunks% = 0 Or z < MAX_STRING_LENGTH Then
+          DataStream( DataStreamIndex% ) = Left$( StreamSegment$, StreamChunkRemainder% )
+        Else
+          DataStream( DataStreamIndex% ) = Left$( DataStream( DataStreamIndex% ), StreamChunkRemainder% )
+      End If
+      Exit Do
+    Else
+      StreamSegment$ = StreamSegment$ & GetSectorData( NextSector&, WhichFAT% )
+      SectorsRead%   = SectorsRead% + 1
+      PrevSector&    = NextSector&
+      z = Len( StreamSegment$ )
+      If z = MAX_STRING_LENGTH Then
+          If z < StreamSize& Then
+              DataStream( DataStreamIndex% ) = StreamSegment$
+              DataStreamIndex%               = DataStreamIndex% + 1
+              StreamSegment$                 = ""
+          End If
+      End If
+  End If
+Loop Until NextSector& = END_OF_CHAIN Or SectorsRead% > ExpectedSectorCount%
+
+' This little piece detects some FAT errors but gives only a general warning that the
+' expected size of the data does not match the actual size read.
+
+If SectorsRead% <> ExpectedSectorCount% Then
+    MsgBox "The macro is corrupt!" & CRLF & _
+           "StreamSize& = " & Str$(StreamSize&) &  CRLF & _
+           "ExpectedSectorCount% = " & Str$( ExpectedSectorCount% ) & ", SectorsRead% = " & _
+           Str$( SectorsRead% ) & CRLF & Left( DataStream(0), 256 ), WARNING_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub BuildFAT( TotalSectorsInFAT% )
+
+' This subprogram builds the FAT.
+
+Dim Break%                   : Break% = 1
+Dim FATSectorsCount%
+Dim FATSectorString$
+Dim Index%
+Dim SectorContents&
+Dim SectorCount%
+Dim SectorID&
+
+Dim FATSectorIDs() As Long
+
+For FATSectorsCount% = 0 To TotalSectorsInFAT% - 1
+  SectorID& = HexVal( Mid$( FATSectorListInHeader$, FATSectorsCount% * DWORD + 1, DWORD ) )
+  ReDim Preserve FATSectorIDs( FATSectorsCount% )
+  FATSectorIDs( FATSectorsCount% ) = SectorID&
+Next FATSectorsCount%
+
+For SectorCount% = 0 To TotalSectorsInFAT% - 1
+  FATSectorString$ = GetSectorData( FATSectorIDs( SectorCount% ), MAIN_C )
+  Do While Break% < Len( FATSectorString$ )
+    SectorContents& = HexVal( Mid$( FATSectorString$, Break%, DWORD ) )
+    ReDim Preserve FAT( Index% )
+    FAT( Index% )   = SectorContents&
+    Break%          = Break% + DWORD
+    Index%          = Index% + 1
+  Loop
+  Break% = 1
+Next SectorCount%
+
+End Sub
+
+'****************************************************************************************
+
+Sub BuildMiniFAT( TotalSectorsInMiniFAT%, FirstSectorOfMiniFAT% )
+
+' This subprogram builds the MiniFAT.
+
+Dim Break%                   : Break% = 1
+Dim FATSectorString$
+Dim Index%
+Dim MiniFATSectorsCount%
+Dim SectorContents&
+Dim SectorCount%
+Dim SectorID&
+
+Dim MiniFATSectorIDs() As Long
+
+If FirstSectorOfMiniFAT% <> END_OF_CHAIN Then
+    SectorID& = FirstSectorOfMiniFAT%
+    ReDim MiniFATSectorIDs( MiniFATSectorsCount% )
+    MiniFATSectorIDs( MiniFATSectorsCount% ) = FirstSectorOfMiniFAT%
+    For MiniFATSectorsCount% = 1 To TotalSectorsInMiniFAT% - 1
+      ReDim Preserve MiniFATSectorIDs( MiniFATSectorsCount% )
+      MiniFATSectorIDs( MiniFATSectorsCount% ) = FAT( SectorID& )
+      SectorID& = FAT( SectorID& )
+    Next MiniFATSectorsCount%
+
+    For SectorCount% = 0 To TotalSectorsInMiniFAT% - 1
+      FATSectorString$ = GetSectorData( MiniFATSectorIDs( SectorCount% ), MAIN_C )
+      Do While Break% < Len( FATSectorString$ )
+        SectorContents&   = HexVal( Mid$( FATSectorString$, Break%, DWORD ) )
+        ReDim Preserve MiniFAT( Index% )
+        MiniFAT( Index% ) = SectorContents&
+        Break%            = Break% + DWORD
+        Index%            = Index% + 1
+      Loop
+      Break% = 1
+   Next SectorCount%
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub BuildMinistream( MinistreamStart& )
+
+' This subprogram creates an array containing the contents of the minisectors.
+
+Dim MiniSecID%
+Dim MinistreamPortion$
+Dim NextSector&
+
+Dim MinistreamSectorIDs() As Long
+
+Dim i As Integer, j As Integer
+
+ReDim Preserve MinistreamSectorIDs( j )
+MinistreamSectorIDs( j ) = MinistreamStart&
+MiniSecID%               = 1
+
+Do
+  NextSector& = FAT( MinistreamSectorIDs( MiniSecID% - 1 ) )
+  If NextSector& = END_OF_CHAIN Then
+      Exit Do
+    Else
+      ReDim Preserve MinistreamSectorIDs( MiniSecID% )
+      MinistreamSectorIDs( MiniSecID% ) = NextSector&
+      MiniSecID% = MiniSecID% + 1
+  End If
+Loop Until NextSector& = END_OF_CHAIN
+
+For i = 0 To UBound( MinistreamSectorIDs )
+  MinistreamPortion$ = MinistreamPortion$ & GetSectorData( MinistreamSectorIDs( i ), MAIN_C )
+  If Len( MinistreamPortion$ ) = MAX_STRING_LENGTH Then
+      ReDim Preserve MinistreamSectors( j )
+      MinistreamSectors( j ) = MinistreamPortion$
+      MinistreamPortion$ = ""
+      j = j + 1
+    Else
+      If i = UBound( MinistreamSectorIDs ) Then
+          ReDim Preserve MinistreamSectors( j )
+          MinistreamSectors( j ) = MinistreamPortion$
+      End If
+  End If
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub CopyArrays( WhichSide$, WhichDirection% )
+
+' In its operation, this macro fills a number of arrays with data ultimately derived from
+' reading the selected macro book file. Upon selection of an individual macro, it
+' extracts data from those same arrays in order to build the output (the lists of macros
+' and information about the selected macros). Because this macro deals with two
+' selections at a time--both macro books and individual macros--the data associated with
+' each selection needs to be stored separately. Rather than using separate but matching
+' lines of code to fill and read two sets of arrays, this macro uses a single set of
+' routines for data gathering and arranging and then calls on this subprogram to swap the
+' data between three sets of arrays as needed. After the primary arrays are filled by the
+' macro's actions, their contents are copied to the appropriate sets of storage arrays,
+' called "Leftside" and "Rightside" (corresponding to the layout of the dialog box). When
+' the macro needs to read from the arrays to construct the output, this subprogram copies
+' data from storage back to the primary arrays.
+
+Dim i As Integer, q As Integer, z As Integer
+
+If WhichSide$ = LEFT_SIDE Then
+
+    If WhichDirection% = FROM_PRIMARY Then   'Copy data from the primary arrays to the storage arrays for the left side
+
+        z = UBound( FileSectors )
+        ReDim FileData1( z )
+        For i = 0 To UBound( FileSectors )
+          FileData1( i ) = FileSectors( i )
+        Next i
+
+        z = UBound( FAT )
+        ReDim FAT1( z )
+        For i = 0 To z
+          FAT1( i ) = FAT( i )
+        Next i
+
+        z = UBound( MiniFAT )
+        ReDim MiniFAT1( z )
+        For i = 0 To z
+          MiniFAT1( i ) = MiniFAT( i )
+        Next i
+
+        If MinistreamStart& > END_OF_CHAIN Then
+            z = UBound( MiniStreamSectors )
+            ReDim MiniStreamSectors1( z )
+            For i = 0 To z
+              MiniStreamSectors1( i ) = MiniStreamSectors( i )
+            Next i
+        End If
+
+      Else                                  'Copy data to the primary arrays from the storage arrays for the left side
+
+        z = UBound( FileData1 )
+        ReDim FileSectors( z )
+        For i = 0 To UBound( FileData1 )
+          FileSectors( i ) = FileData1( i )
+        Next i
+
+        z = UBound( FAT1 )
+        ReDim FAT( z )
+        For i = 0 To z
+          FAT( i ) = FAT1( i )
+        Next i
+
+        z = UBound( MiniFAT1 )
+        ReDim MiniFAT( z )
+        For i = 0 To z
+          MiniFAT( i ) = MiniFAT1( i )
+        Next i
+
+        If MinistreamStart& > END_OF_CHAIN Then
+            z = UBound( MiniStreamSectors1 )
+            ReDim MiniStreamSectors( z )
+            For i = 0 To z
+              MiniStreamSectors( i ) = MiniStreamSectors1( i )
+            Next i
+        End If
+
+    End If
+
+  Else        'RIGHT_SIDE
+
+    If WhichDirection% = FROM_PRIMARY Then   'Copy data from the primary arrays to the storage arrays for the right side
+
+        z = UBound( FileSectors )
+        ReDim FileData2( z )
+        For i = 0 To UBound( FileSectors )
+          FileData2( i ) = FileSectors( i )
+        Next i
+
+        z = UBound( FAT )
+        ReDim FAT2( z )
+        For i = 0 To z
+          FAT2( i ) = FAT( i )
+        Next i
+
+        z = UBound( MiniFAT )
+        ReDim MiniFAT2( z )
+        For i = 0 To z
+          MiniFAT2( i ) = MiniFAT( i )
+        Next i
+
+        If MinistreamStart& > END_OF_CHAIN Then
+            z = UBound( MiniStreamSectors )
+            ReDim MiniStreamSectors2( z )
+            For i = 0 To z
+              MiniStreamSectors2( i ) = MiniStreamSectors( i )
+            Next i
+        End If
+
+      Else                                  'Copy data to the primary arrays from the storage arrays for the left side
+
+        z = UBound( FileData2 )
+        ReDim FileSectors( z )
+        For i = 0 To UBound( FileData2 )
+          FileSectors( i ) = FileData2( i )
+        Next i
+
+        z = UBound( FAT2 )
+        ReDim FAT( z )
+        For i = 0 To z
+          FAT( i ) = FAT2( i )
+        Next i
+
+        z = UBound( MiniFAT2 )
+        ReDim MiniFAT( z )
+        For i = 0 To z
+          MiniFAT( i ) = MiniFAT2( i )
+        Next i
+
+        If MinistreamStart& > END_OF_CHAIN Then
+            z = UBound( MiniStreamSectors2 )
+            ReDim MiniStreamSectors( z )
+            For i = 0 To z
+              MiniStreamSectors( i ) = MiniStreamSectors2( i )
+            Next i
+        End If
+
+    End If
+
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetDirectoryEntries( FirstSectorOfDirectory& )
+
+' This subprogram creates an array of all the directory entries in the macro book.
+
+Dim DirectoryEntry$
+Dim DirectorySector$
+Dim EntryCount%
+Dim NextSector&
+Dim PrevSector&
+Dim SectorQuarter%
+
+Dim i As Integer
+
+NextSector& = FirstSectorOfDirectory&
+
+Do
+  If NextSector& = END_OF_CHAIN Then
+      Exit Do
+    Else
+      DirectorySector$ = GetSectorData( NextSector&, MAIN_C )
+      For SectorQuarter% = 0 To 3
+        DirectoryEntry$ = Mid$( DirectorySector$, ( SectorQuarter% * DIR_ENTRY_LENGTH + STRING_OFFSET ), DIR_ENTRY_LENGTH )
+        If Left$( DirectoryEntry$, 1 ) <> Chr$( 0 ) Then
+            ReDim Preserve DirectoryEntries( EntryCount% )
+            DirectoryEntries( EntryCount% ) = DirectoryEntry$
+            EntryCount%                     = EntryCount% + 1
+        End If
+      Next SectorQuarter%
+      PrevSector&      = NextSector&
+      NextSector&      = FAT( PrevSector& )
+      EntryCount%      = EntryCount% + 4
+  End If
+Loop Until NextSector& = END_OF_CHAIN
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetEnviroVars
+
+' This subprogram finds the path of the user's AppData directory, as found in the
+' environment table, in order to get to the macro book files.
+
+Const MAX_ATTEMPTS_ENVIRON As Integer = 128
+
+Dim EnvironmentString$
+
+Dim i As Integer
+
+For i = 0 To MAX_ATTEMPTS_ENVIRON
+  EnvironmentString$ = Environ( i )
+  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
+      AppDataPath$ = Mid$( EnvironmentString$, 9 )
+      Exit Sub
+  End If
+Next i
+
+AppDataPath$ = ""
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetFileInfo( SelectedMbkFile$ )
+
+' This subprogram gets important information about the selected macro book file.
+
+Dim FileSectionsArraySize%
+
+Dim i As Integer
+
+MacroBookName$ = SelectedMbkFile$
+MacroBookFile$ = MacroDirectoryPath$ & MacroBookName$ & ".mbk"
+FileInfo$      = FileDateTime( MacroBookFile$ )
+FileSize&      = FileLen( MacroBookFile$ )
+
+FileSizeKB%    = Format( FileSize& / 1000, "#" )
+FileSizeKBStr$ = Trim$( Str$( FileSizeKB% ) )
+If Len( FileSizeKBStr$ ) > 3 And Len( FileSizeKBStr$ ) < 7 Then
+    FileSizeKBStr$ = Left$( FileSizeKBStr$, Len( FileSizeKBStr$ ) - 3 ) & "," & Mid$( FileSizeKBStr$, Len( FileSizeKBStr$ ) - 2 )
+End If
+
+Call ReadFile( MacroBookFile$ )
+
+FileSectionsArraySize% = UBound( FileSections )
+ReDim FileSectors( FileSectionsArraySize% )
+For i = 0 To FileSectionsArraySize%
+  FileSectors( i ) = FileSections( i )
+Next i
+
+Erase FileSections
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetMacroBookFiles
+
+' This macro makes the list of macro book files in the "Macros" folder, checking all
+' candidates for both the proper extension and also the correct first eight bytes.
+
+Dim FileCounter%
+Dim First8Bytes As String*8
+Dim HeaderSignature$
+Dim MacroDirectoryFiles$
+Dim Possibility$
+
+' Test that the file is really a macrobook file, no matter its extension.
+
+HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 017 ) & Chr$( 224 ) & Chr$( 161 ) & Chr$( 177 ) & Chr$( 026 ) & Chr$( 225 )
+
+' Find the path to OCLC's "Macros" folder and make an array of the macro books it
+' contains to display in a drop list box in the dialog box.
+
+ReDim MacroBooks( FileCounter% )
+MacroBooks( FileCounter% ) = "Select a macro book:"
+FileCounter%               = FileCounter% + 1
+Call GetEnviroVars
+If AppDataPath$ = "" Then
+    Exit Sub
+  Else
+    MacroDirectoryPath$ = AppDataPath$ & MacroDirectoryPath$
+End If
+MacroDirectoryFiles$       = MacroDirectoryPath$ & "*.mbk"
+MacroBookFile$             = Dir( MacroDirectoryFiles$ )
+
+Do While MacroBookFile$ <> ""
+  Possibility$ = MacroDirectoryPath$ & MacroBookFile$
+  FileNumber%  = Freefile
+  Open Possibility$ For Binary As #FileNumber%
+  Get #FileNumber%, , First8Bytes
+  Close #FileNumber%
+  Reset
+  If First8Bytes = HeaderSignature$ Then
+      MacroBookName$             = Left$( MacroBookFile$, Len( MacroBookFile$ ) - FILE_EXTENSION )
+      ReDim Preserve MacroBooks( FileCounter% )
+      MacroBooks( FileCounter% ) = MacroBookName$
+      FileCounter%               = FileCounter% + 1
+  End If
+  MacroBookFile$ = Dir
+Loop
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetMacroInfo( MacroDirectoryInfo$ )
+
+' This subprogram gets the text (source data) of the selected macro.
+
+Dim CommentChar$             : CommentChar$ = Chr$( 39 )
+Dim LineFound%
+Dim MacroChunks%
+Dim MacroLine$
+Dim Start%
+Dim StringToCheck$
+
+Dim i As Integer
+
+LineCount&         = 0
+MacroRevisionDate$ = ""
+TestString$        = "0000 "
+
+FirstSector& = Val( Mid$( MacroDirectoryInfo$, OFFSET_FIRST_SECTOR, 7 ) )
+StreamSize&  = Val( Mid$( MacroDirectoryInfo$, OFFSET_SRC_LENGTH, 7 ) )
+
+' Build the macro.
+
+If StreamSize& < MAX_SIZE_MINISTREAM Then
+    Call BuildDataStream( FirstSector&, MINI_C, StreamSize& )
+  Else
+    Call BuildDataStream( FirstSector&, MAIN_C, StreamSize& )
+End If
+
+' Read and count the lines in the macro.
+
+MacroChunks% = UBound( DataStream )
+For i = 0 To MacroChunks%
+  StringToCheck$ = DataStream( i )
+  Start% = 1
+  Do
+    LineFound% = InStr( Start%, StringToCheck$, CRLF )
+    If LineFound% <> 0 Then
+        LineCount& = LineCount& + 1
+        MacroLine$ = Mid$( StringToCheck$, Start%, LineFound% - Start% )
+        If LineCount& < 21 And Left$( Trim$( MacroLine$ ), 1 ) = CommentChar$ Then
+            MacroRevisionDate$ = FindRevisionDate( MacroLine$ )
+        End If
+    End If
+    Start% = LineFound% + 2
+  Loop While LineFound% > 0
+Next i
+
+LineCountStr = Trim$( Str$( LineCount& ) )
+MacroSizeStr = Trim$( Str$( StreamSize& ) ) & "/"
+If MacroRevisionDate$ = "" Then
+    MacroRevisionDate$ = "[No revision date found]"
+  Else
+    MacroRevisionDate$ = DOUBLE_QUOTE & MacroRevisionDate$ & DOUBLE_QUOTE
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub GetMacroNames
+
+' This subprogram runs through all the directory entries previously extracted to get the
+' macro names, which it pulls out, along with information about each macro.
+
+Const VALID_STREAM As Integer = 2   'The value for a valid stream object in a directory entry.
+
+Dim DirectoryEntry$
+Dim DirEntryCount%
+Dim DirEntryName$
+Dim DirName$
+Dim FirstSectorStr As String*8
+Dim LenDirEntryName%
+Dim MacroDescription$
+Dim MacroName$
+Dim NameChar%
+Dim StreamSizeStr As String*8
+Dim TypeOfDirEntry%
+
+For DirEntryCount% = 0 To UBound( DirectoryEntries )
+  DirectoryEntry$ = DirectoryEntries( DirEntryCount% )
+  TypeOfDirEntry% = CInt( HexVal( Mid$( DirectoryEntry$, 67, 1 ) ) )
+  If TypeOfDirEntry% = VALID_STREAM Then
+      LenDirEntryName% = CInt( HexVal( Mid$( DirectoryEntry$, 65, 2 ) ) )
+      DirEntryName$    = Left$( DirectoryEntry$, LenDirEntryName% )
+      DirName$         = ""
+      For NameChar% = 1 To Len( DirEntryName$ ) - 2 Step 2
+        DirName$ = DirName$ & Mid$( DirEntryName$, NameChar%, 1 )
+      Next NameChar%
+      DirName$         = Trim$( DirName$ )
+      FirstSector&     = HexVal( Mid$( DirectoryEntry$, 117, DWORD ) )
+      StreamSize&      = HexVal( Mid$( DirectoryEntry$, 121, DWORD ) )
+      FirstSectorStr   = Trim$( Str$( FirstSector& ) )
+      StreamSizeStr    = Trim$( Str$( StreamSize& ) )
+
+      Select Case Right$( DirName$, 3 )
+        Case "SRC"
+          MacroName$ = Left$( DirName$, Len( DirName$ ) - FILE_EXTENSION )
+          MacroName$ = MacroName$ & Space$( MAX_LEN_MACRO_NAME - Len( MacroName$ ) ) & FirstSectorStr & StreamSizeStr
+        Case "DES"
+          MacroName$ = Left$( DirName$, Len( DirName$ ) - FILE_EXTENSION )
+          If FirstSector& > END_OF_CHAIN Then
+              Call BuildDataStream( FirstSector&, MINI_C, StreamSize& )
+              MacroDescription$ = DataStream( 0 )
+            Else
+              MacroDescription$ = "[NO DESCRIPTION PROVIDED]"
+          End If
+          MacroName$ = MacroName$ & Space$( OFFSET_DESC - 1 - Len( MacroName$ ) ) & MacroDescription$
+        Case "BIN"
+          MacroName$ = Left$( DirName$, Len( DirName$ ) - FILE_EXTENSION )
+          MacroName$ = MacroName$ & Space$( MAX_LEN_MACRO_NAME - Len( MacroName$ ) ) & StreamSizeStr
+      End Select
+
+' Send the newest macro name to the subprogram for insertion or merging into the list of
+' macros.
+
+      Call SortMacroNames( MacroName$ )
+
+  End If
+Next DirEntryCount%
+
+End Sub
+
+'****************************************************************************************
+
+Sub MakeMacroList( SelectedMbkFile$ )
+
+' This subprogram extracts information required for constructing the list of macros in
+' the selected macro book. That information is also used by other subprograms to display
+' information about individual macros.
+
+Const HEADER_SECTOR As Long = -1&   'The sector ID of the sector that precedes sector 0.
+
+Dim FileHeader$
+Dim FirstSectorOfDirectory&
+Dim FirstSectorOfMiniFAT%
+Dim MacroListString$
+Dim NextMiniSecData$
+Dim RootStorageEntry$
+Dim TotalSectorsInFAT%
+Dim TotalSectorsInMiniFAT%
+
+Dim i As Integer
+
+' Get important values from the Header. File offsets are from Microsoft's specification
+' for the file format.
+
+FileHeader$             = GetSectorData( HEADER_SECTOR, MAIN_C )
+
+' FAT information:
+TotalSectorsInFAT%      = CInt( HexVal( Mid$( FileHeader$, 45, DWORD ) ) )
+FATSectorListInHeader$  = Mid$( FileHeader$, 77, 436 )
+
+' Directory information:
+FirstSectorOfDirectory& = HexVal( Mid$( FileHeader$, 49, DWORD ) )
+RootStorageEntry$       = Left$( GetSectorData( FirstSectorOfDirectory&, MAIN_C ), DIR_ENTRY_LENGTH )
+MinistreamStart&        = HexVal( Mid$( RootStorageEntry$, 117, DWORD ) )
+
+' MiniFAT information:
+FirstSectorOfMiniFAT%   = CInt( HexVal( Mid$( FileHeader$, 61, DWORD ) ) )
+TotalSectorsInMiniFAT%  = CInt( HexVal( Mid$( FileHeader$, 65, DWORD ) ) )
+
+' Build the two FATs, the Ministream, and the Directory entries array.
+
+Call BuildFAT( TotalSectorsInFAT% )
+Call BuildMiniFAT( TotalSectorsInMiniFAT%, FirstSectorOfMiniFAT% )
+
+If MinistreamStart& > END_OF_CHAIN Then
+    Call BuildMinistream( MinistreamStart& )
+End If
+
+Call GetDirectoryEntries( FirstSectorOfDirectory& )
+
+' Build the array of macro names.
+
+MacroCount% = 0
+
+Call GetMacroNames
+
+TotalMacroCount% = UBound( MacroListPlus )
+
+' Cleanup of the macro name array: Sometimes an extra, empty element will be present at
+' the end; remove it.
+
+Do
+  If MacroListPlus( TotalMacroCount% ) = "" Then
+      ReDim Preserve MacroListPlus( TotalMacroCount% - 1 )
+      TotalMacroCount% = UBound( MacroListPlus )
+    Else
+      Exit Do
+  End If
+Loop Until UBound( MacroListPlus ) = 0
+
+' Set the text for the count of macros.
+
+If TotalMacroCount% = 0 Then
+    SummaryMacroCount$ = "One macro:"
+  Else
+    SummaryMacroCount$ = Trim$( Str$( TotalMacroCount% + 1 ) ) & " macros:"
+End If
+
+' The display list is the names only, shorn of the other data.
+
+For i = 0 To TotalMacroCount%
+  ReDim Preserve MacroListNames( i )
+  MacroListNames( i ) = Trim$( Left$( MacroListPlus( i ), MAX_LEN_MACRO_NAME ) )
+  MacroListPlus( i ) = "0000" & MacroListPlus( i )
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub ReadFile( FileName$ )
+
+' This subprogram reads the file whose name is passed to it and stores the data in a
+' string array for the rest of the macro.
+
+Dim CountFileSections%
+Dim FileDivider&
+Dim FileEnd$
+Dim FileSectionRead As String*MAX_STRING_LENGTH
+Dim Remainder%
+Dim TotalFileSections%
+
+FileNumber% = Freefile
+
+' Open the selected file. Because of the limitations on string length in OCLC's version
+' of BASIC, the file can only be read in chunks of about 32K bytes, so the macro may
+' have to loop through it several times to read it all. The chunk size is set at 31744
+' bytes, the largest multiple of 512 (the expected sector size) to fit safely under the
+' limit.
+
+Open FileName$ For Binary As #FileNumber%
+FileSize&          = FileLen( FileName$ )
+TotalFileSections% = Int( FileSize& / MAX_STRING_LENGTH )
+Remainder%         = FileSize& Mod MAX_STRING_LENGTH
+FileDivider&       = 1&
+CountFileSections% = 0
+
+' Read the file, storing it in a string array whose elements are of maximum length 31744
+' (62 sectors).
+
+If TotalFileSections% > 0 Then
+    For CountFileSections% = 1 To TotalFileSections%
+      Get #FileNumber%, FileDivider&, FileSectionRead
+      ReDim Preserve FileSections( CountFileSections% - 1 )
+      FileSections( CountFileSections% - 1 ) = FileSectionRead
+      FileDivider& = FileDivider& + MAX_STRING_LENGTH
+    Next CountFileSections%
+End If
+If Remainder% > 0 Then
+    Get #FileNumber%, FileDivider&, FileSectionRead
+    FileEnd$ = Left$( FileSectionRead, Remainder% )
+    If CountFileSections% > 0 Then
+        CountFileSections% = CountFileSections% - 1
+    End If
+    ReDim Preserve FileSections( CountFileSections% )
+    FileSections( CountFileSections% ) = FileEnd$
+End If
+
+Close #FileNumber%
+Reset
+
+End Sub
+
+'****************************************************************************************
+
+Sub SortMacroNames( NewestName$ )
+
+' This subprogram builds the main array of unique macro names.
+
+Const BIN_ENTRY     As Integer = 36  'The length of the macro name string from the ".BIN" stream.
+Const BIN_SRC_ENTRY As Integer = 52  'The length of the string resulting from merging the ".BIN" and ".SRC" streams.
+Const SRC_ENTRY     As Integer = 44  'The length of the macro name string from the ".SRC" stream.
+
+Dim Existing$
+Dim Incoming$
+Dim Incumbent$
+Dim Start%
+
+Dim j As Integer, k As Integer
+
+' For sorting, consider only the leftmost 28 characters.
+
+Incoming$ = Trim$( Left$( NewestName$, MAX_LEN_MACRO_NAME ) )
+
+ReDim Preserve MacroListPlus( MacroCount% )
+If MacroCount% = 0 Then
+
+' The very first name is added without any more ado.
+
+    MacroListPlus( MacroCount% ) = NewestName$
+    PreviousEntry% = 0
+  Else
+    Existing$ = Trim$( Left$( MacroListPlus( PreviousEntry% ), MAX_LEN_MACRO_NAME ) )
+
+    Select Case StrComp( Incoming$, Existing$ )
+
+      Case STRING1_LESS_THAN             'new name less than last name added: start comparing at entry 0 in array
+        Start% = 0
+
+      Case Else           'otherwise, start comparing with last name added
+        Start% = PreviousEntry%
+
+    End Select
+
+    For j = Start% To MacroCount%
+      Incumbent$ = MacroListPlus( j )
+      Existing$  = Trim$( Left$( Incumbent$, MAX_LEN_MACRO_NAME ) )
+
+      Select Case StrComp( Incoming$, Existing$ )
+
+' If the two names are identical (except for capitalization), merge them. The final
+' result of merging will be a single element of a string array that contains information
+' about each macro, some for display, some for further calculation. This string consists
+' of five elements, positionally defined:
+'   characters  1-28  the macro name
+'              29-36  the sector number of the beginning of the macro source text
+'              37-44  the length of the data stream of the source text
+'              45-52  the length of the data stream of the compiled binary code
+'              53-    the macro description
+' In the merge process, always replace (or simply don't add) the ".BIN" name as its case
+' may not be correct, but keep the length of its data stream as the fourth element in the
+' string. Otherwise, data may be added to the ".SRC" string or inserted into the ".DES"
+' string. Distinguish between the different strings by their lengths, which are constant.
+' Don't increase the count of macros for a replacement!.
+
+        Case STRING1_EQUAL_TO
+
+          Select Case Len( Incumbent$ )   'The existing entry in the array is identified by its length
+
+            Case BIN_ENTRY                 'Always replace an existing ".BIN" name
+              If Len( NewestName$ ) = SRC_ENTRY Then
+                  MacroListPlus( j ) = NewestName$ & Right$( Incumbent$, 8 )
+                Else
+                  MacroListPlus( j ) = Left$( NewestName$, SRC_ENTRY ) & Right$( Incumbent$, 8 ) & Mid$( NewestName$, OFFSET_DESC )
+              End If
+
+            Case SRC_ENTRY
+              If Len( NewestName$ ) = BIN_ENTRY Then
+                  MacroListPlus( j ) = Incumbent$ & Right$( NewestName$, 8 )
+                Else
+                  MacroListPlus( j ) = Incumbent$ & "        " & Mid$( NewestName$, OFFSET_DESC )
+              End If
+
+            Case BIN_SRC_ENTRY
+              MacroListPlus( j ) = Incumbent$ & Mid$( NewestName$, OFFSET_DESC )
+
+            Case Else
+              If Len( NewestName$ ) = BIN_ENTRY Then
+                  MacroListPlus( j ) = Left$( Incumbent$, SRC_ENTRY ) & Right$( NewestName$, 8 ) & Mid$( Incumbent$, OFFSET_DESC )
+                Else
+                  MacroListPlus( j ) = NewestName$ & Mid$( Incumbent$, OFFSET_BIN_LENGTH )
+              End If
+
+          End Select
+
+          MacroCount%    = MacroCount% - 1
+          PreviousEntry% = j
+          Exit For
+
+' If the newest macro name files before the one in this position in the array, insert it,
+' bumping all subsequent names one position toward the end.
+
+        Case STRING1_LESS_THAN
+          For k = MacroCount% To j + 1 Step -1
+            MacroListPlus( k ) = MacroListPlus( k - 1 )
+          Next k
+          MacroListPlus( j ) = NewestName$
+          PreviousEntry%     = j
+          Exit For
+
+' If the newest macro name files after the one with which it has just been compared,
+' recycle to continue comparing--unless the end of the array has been reached, in which
+' case the name is simply added.
+
+        Case STRING1_GREATER_THAN
+          If j = MacroCount% Then
+              MacroListPlus( MacroCount% ) = NewestName$
+              PreviousEntry%               = j
+          End If
+      End Select
+    Next j
+End If
+
+MacroCount% = MacroCount% + 1
+
+End Sub
+
+'****************************************************************************************
+
+Function FindRevisionDate( MacroLine$ ) As String
+
+' This function attempts to find a date of revision in the first 20 lines of a macro.
+
+Dim DateFound$
+Dim FirstChar%
+Dim RevDate%
+Dim RevWord%
+Dim TempString$
+
+Dim j As Integer, k As Integer
+
+TempString$ = MacroLine$
+
+For j = 0 To UBound( UpdateDate )
+  RevDate% = InStr( TempString$, UpdateDate( j ) )
+  If RevDate% <> 0 Then
+
+' If a date (that is, a year; searching for month and date also would be a big task) is
+' found, isolate it for easier comparison. Compare it with any date found in a previous
+' line and discard the earlier date (that is, earlier in terms of the year; assume that
+' the same year found on a later line represents a later revision).
+
+      DateFound$ = Mid$( TempString$, RevDate%, 4 )
+      If StrComp( DateFound$, Left$( TestString$, 4 ) ) = STRING1_LESS_THAN Then
+          Exit For
+        Else
+
+' If a lot of text follows or precedes the date, discard it.
+
+          If Len( TempString$ ) - RevDate% > 4 Then
+              TempString$ = Trim$( Left$( TempString$, RevDate% + 4 ) ) & "..."
+          End If
+          If RevDate% > 40 Then
+              TempString$ = "..." & Trim$( Mid$( TempString$, RevDate% - 28 ) )
+          End If
+
+' Now look for a word indicating revision.
+
+          For k = 0 To UBound( UpdateClues )
+            RevWord% = InStr( TempString$, UpdateClues( k ) )
+            If RevWord% <> 0 Then             'a revision word is found.
+                If RevWord% > 7 Then          'if the word is far enough along in the string, check for "Last" preceding it.
+                    If Mid$( TempString$, RevWord% - 4, 4 ) = "ast " Then   'if "Last" is found before the revision word,
+                        If RevWord% > 10 Then                               'chop off all preceding it.
+                            TempString$ = Mid$( TempString$, RevWord% - 6 )
+                        End If
+                      Else
+                        TempString$ = Mid$( TempString$, RevWord% - 1 )
+                    End If
+                End If
+                j = UBound( UpdateDate )
+                Exit For
+            End If
+          Next k
+          If RevWord% > 0 Then
+              TestString$ = DateFound$ & TempString$
+            Else         'Date found, but no revision word: Accept it anyway
+              TestString$ = "    " & TempString$
+              Exit For
+          End If
+      End If
+  End If
+Next j
+
+TempString$ = Mid$( TestString$, 5 )
+If TempString$ = " " Then
+    FindRevisionDate = ""
+  Else
+    If Left$( TempString$, 1 ) = "'" Then
+        TempString$ = Trim$( Mid$( TempString$, 2 ) )
+    End If
+    FirstChar% = Asc( Left$( TempString$, 1 ) )
+    If FirstChar% > 96 And FirstChar% < 123 Then
+        FirstChar% = FirstChar% - 32
+        Mid( TempString$, 1, 1 ) = Chr$( FirstChar% )
+    End If
+    FindRevisionDate = Trim$( TempString$ )
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function GetSectorData( SectorID&, WhichDataArray% ) As String
+
+' Given a sector ID and the appropriate array (that containing file data or that
+' containing Ministream data), this function retrieves the data in that sector. Since the
+' first character in a string is at position 1, but the first element of an array is
+' numbered 0, an offset of 1 has to be added.
+
+Dim StartPos&
+Dim WhichElement%
+
+If WhichDataArray% = MAIN_C Then
+    StartPos&     = ( SectorID& * SECTOR_SIZE ) + SECTOR_SIZE + STRING_OFFSET
+    WhichElement% = Int( StartPos& / MAX_STRING_LENGTH )
+    StartPos&     = StartPos& - ( MAX_STRING_LENGTH * CLng( WhichElement% ) )
+    GetSectorData = Mid$( FileSectors( WhichElement% ), StartPos&, SECTOR_SIZE )
+  Else
+    StartPos&     = ( SectorID& * MINI_SECTOR_SIZE ) + STRING_OFFSET
+    WhichElement% = Int( StartPos& / MAX_STRING_LENGTH )
+    StartPos&     = StartPos& - ( MAX_STRING_LENGTH * CLng( WhichElement% ) )
+    GetSectorData = Mid$( MinistreamSectors( WhichElement% ), StartPos&, MINI_SECTOR_SIZE )
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function HexVal( InBytes$ ) As Long
+
+' This function converts the string of bytes to a hex number and then to decimal (thanks
+' to Joel Hahn for insight into this function).
+
+Dim ASCIIChar%
+Dim Byte$
+Dim HexString$
+
+Dim i As Integer
+
+For i = 1 To Len( InBytes$ )
+  ASCIIChar% = Asc( Mid$( InBytes$, i, 1 ) )
+  Byte$      = Hex$( ASCIIChar% )
+  If Len(Byte$) = 1 Then
+      Byte$ = "0" & Byte$
+  End If
+  HexString$ = Byte$ & HexString$
+Next i
+
+HexString$ = "&H" & Trim$( UCase$( HexString$ ) )
+HexVal     = Val( HexString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SuppVal& )
+
+' This function controls the initial setup and subsequent behavior of the main dialog
+' box.
+
+Const CONTROL_CHANGE      As Integer = 2
+Const INFORMATION_MESSAGE As Integer = 64
+Const INITIALIZE          As Integer = 1
+Const INVISIBLE           As Integer = 0
+Const VISIBLE             As Integer = 1
+
+Dim FileUpDate$
+Dim InfoProcessed$
+Dim InfoRetrieved$
+Dim MacroListSelection$
+Dim SelectedFile1%
+Dim SelectedFile2%
+Dim SummaryCount1$
+Dim SummaryCount2$
+Dim ViewedMacroStr$
+
+Dim AlreadyInList            : AlreadyInList = FALSE
+
+Dim EmptyArray( 1 ) As String
+EmptyArray( 0 ) = "The list of macros will appear here"
+EmptyArray( 1 ) = "when a macro book is selected."
+
+Dim i As Integer, x As Integer, y As Integer, z As Integer
+
+If SelectedMbkFile1$ = "" And "SelectedMbkFile2$" = "" Then
+    FileUpDate$ = ""
+  ElseIf SelectedMbkFile1$ <> "" And "SelectedMbkFile2$" <> "" Then
+    FileUpDate$ = "Files last updated:"
+  Else
+    FileUpDate$ = "File last updated:"
+End If
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible      "Cancel",      INVISIBLE
+    DlgVisible      "Desc1",       INVISIBLE
+    DlgVisible      "Desc2",       INVISIBLE
+    DlgVisible      "FileInfo1",   INVISIBLE
+    DlgVisible      "FileInfo2",   INVISIBLE
+    DlgVisible      "FileUpdate",  INVISIBLE
+    DlgVisible      "Identical",   INVISIBLE
+    DlgVisible      "LineCount1",  INVISIBLE
+    DlgVisible      "LineCount2",  INVISIBLE
+    DlgVisible      "MacroCount1", INVISIBLE
+    DlgVisible      "MacroCount2", INVISIBLE
+    DlgListBoxArray "MacroList1",  EmptyArray()
+    DlgListBoxArray "MacroList2",  EmptyArray()
+    DlgValue        "MbkList1",    0
+    DlgFocus        "MbkList1"
+    DlgValue        "MbkList2",    0
+    DlgVisible      "RevDate1",    INVISIBLE
+    DlgVisible      "RevDate2",    INVISIBLE
+    DlgVisible      "SizeBytes1",  INVISIBLE
+    DlgVisible      "SizeBytes2",  INVISIBLE
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' When a macro book is selected, make the list of its macros.
+
+      Case "MbkList1"
+        SelectedFile1% = DlgValue( "MbkList1" )
+        If SelectedFile1% > 0 Then
+            DlgVisible      "Desc1",       INVISIBLE
+            DlgVisible      "FileUpdate",  VISIBLE
+            DlgText         "FileUpdate",  FileUpDate$
+            DlgVisible      "LineCount1",  INVISIBLE
+            DlgVisible      "RevDate1",    INVISIBLE
+            DlgVisible      "SizeBytes1",  INVISIBLE
+            SelectedMbkFile1$ = MacroBooks( SelectedFile1% )
+            Call GetFileInfo( SelectedMbkFile1$ )
+            FileInfo1$               = FileInfo$
+            Call MakeMacroList( SelectedMbkFile1$ )
+            Call CopyArrays( LEFT_SIDE, FROM_PRIMARY )
+            ReDim MacroListPlus1( TotalMacroCount% )
+            For i = 0 To TotalMacroCount%
+              MacroListPlus1( i ) = MacroListPlus( i )
+            Next i
+            ReDim MacroListNames1( TotalMacroCount% )
+            For i = 0 To TotalMacroCount%
+              MacroListNames1( i ) = Trim$( Mid$( MacroListPlus1( i ), 5, MAX_LEN_MACRO_NAME ) )
+            Next i
+            SummaryCount1$    = SummaryMacroCount$
+            DlgVisible      "FileInfo1",   VISIBLE
+            DlgText         "FileInfo1",   FileInfo1$
+            DlgVisible      "MacroCount1", VISIBLE
+            DlgText         "MacroCount1", SummaryCount1$
+            DlgListBoxArray "MacroList1",  MacroListNames1()
+            DlgValue        "MacroList1",  0
+          Else
+            SelectedMbkFile1$ = ""
+            DlgVisible      "Desc1",       INVISIBLE
+            DlgVisible      "FileInfo1",   INVISIBLE
+            DlgText         "FileUpdate",  FileUpDate$
+            DlgVisible      "LineCount1",  INVISIBLE
+            DlgVisible      "MacroCount1", INVISIBLE
+            DlgValue        "MbkList1",    0
+            DlgFocus        "MbkList1"
+            DlgVisible      "RevDate1",    INVISIBLE
+            DlgVisible      "SizeBytes1",  INVISIBLE
+        End If
+
+      Case "MbkList2"
+        SelectedFile2% = DlgValue( "MbkList2" )
+        If SelectedFile2% > 0 Then
+            DlgVisible      "Desc2",       INVISIBLE
+            DlgVisible      "FileUpdate",  VISIBLE
+            DlgText         "FileUpdate",  FileUpDate$
+            DlgVisible      "LineCount2",  INVISIBLE
+            DlgVisible      "RevDate2",    INVISIBLE
+            DlgVisible      "SizeBytes2",  INVISIBLE
+            SelectedMbkFile2$ = MacroBooks( SelectedFile2% )
+            Call GetFileInfo( SelectedMbkFile2$ )
+            FileInfo2$               = FileInfo$
+            Call MakeMacroList( SelectedMbkFile2$ )
+            Call CopyArrays( RIGHT_SIDE, FROM_PRIMARY )
+            ReDim MacroListPlus2( TotalMacroCount% )
+            For i = 0 To TotalMacroCount%
+              MacroListPlus2( i ) = MacroListPlus( i )
+            Next i
+            ReDim MacroListNames2( TotalMacroCount% )
+            For i = 0 To TotalMacroCount%
+              MacroListNames2( i ) = Trim$( Mid$( MacroListPlus( i ), 5, MAX_LEN_MACRO_NAME ) )
+            Next i
+            SummaryCount2$    = SummaryMacroCount$
+            DlgVisible      "FileInfo2",   VISIBLE
+            DlgText         "FileInfo2",   FileInfo2$
+            DlgVisible      "MacroCount2", VISIBLE
+            DlgText         "MacroCount2", SummaryCount2$
+            DlgListBoxArray "MacroList2",  MacroListNames2()
+            DlgValue        "MacroList2",  0
+          Else
+            SelectedMbkFile2$ = ""
+            DlgVisible      "Desc2",       INVISIBLE
+            DlgVisible      "FileInfo2",   INVISIBLE
+            DlgText         "FileUpdate",  FileUpDate$
+            DlgVisible      "LineCount2",  INVISIBLE
+            DlgVisible      "MacroCount2", INVISIBLE
+            DlgValue        "MbkList2",    0
+            DlgFocus        "MbkList2"
+            DlgVisible      "RevDate2",    INVISIBLE
+            DlgVisible      "SizeBytes2",  INVISIBLE
+        End If
+
+' A macro is selected: display its information.
+
+      Case "MacroList1"
+        If DlgValue( "MbkList1" ) = 0 Then  'No macrobook is selected: do nothing
+            DlgFocus        "MbkList1"
+            MacroOpen1$ = ""
+          Else
+            SelectedMacroIndex% = DlgValue( "MacroList1" )
+            MacroListSelection$ = MacroListPlus1( SelectedMacroIndex% )
+            SelectedMacroName$  = Trim$( Mid$( MacroListSelection$, 5, MAX_LEN_MACRO_NAME ) )
+            FullMacroName$      = SelectedMbkFile1$ & "!" & SelectedMacroName$
+            If SelectedMacroName$ = MacroOpen1$ Or _
+               SelectedMbkFile1$ = SelectedMbkFile2$ And SelectedMacroName$ = MacroOpen2$ Then
+                DlgVisible      "Identical",   VISIBLE
+            End If
+            If Left$( MacroListSelection$, DWORD ) = "0000" Then
+                Call CopyArrays( LEFT_SIDE, TO_PRIMARY )
+                Call GetMacroInfo( Mid$( MacroListSelection$, 5 ) )
+
+' Retrieved information is stored for repeated display in the string "InfoProcessed$"
+' positionally as follows:
+'        1-8      [8]  LineCountStr, number of lines in macro
+'        9-32    [24]  MacroSizeStr, size of macro in bytes
+'       33-160  [128]  MacroRevisionDate$, possible date of last revision of macro
+' and then each line is stored in the array "ProcessedMacros"
+
+                InfoProcessed$     = LineCountStr & MacroSizeStr
+                InfoProcessed$     = InfoProcessed$ & MacroRevisionDate$
+                ReDim Preserve ProcessedMacros( ViewedMacroCount% )
+                ProcessedMacros( ViewedMacroCount% ) = InfoProcessed$
+                ViewedMacroStr$    = Trim$( Str$( ViewedMacroCount% ) )
+                Mid$( MacroListSelection$, 1, DWORD ) = String$( DWORD - Len( ViewedMacroStr$ ), "0" ) & ViewedMacroStr$
+                MacroListPlus1( SelectedMacroIndex% ) = MacroListSelection$
+                ViewedMacroCount%  = ViewedMacroCount% + 1
+              Else
+                MacroSequence%     = Val( Left$( MacroListSelection$, DWORD ) )
+                InfoRetrieved$     = ProcessedMacros( MacroSequence% )
+                LineCountStr       = Trim$( Left$( InfoRetrieved$, 8 ) )
+                MacroSizeStr       = Trim$( Mid$ ( InfoRetrieved$, 9, 24 ) )
+                MacroRevisionDate$ = Trim$( Mid$ ( InfoRetrieved$, 33 ) )
+            End If
+            DlgVisible      "Desc1",       VISIBLE
+            DlgText         "Desc1",       Trim$( Mid$( MacroListPlus1( SelectedMacroIndex% ), OFFSET_DESC + DWORD ) )
+            DlgVisible      "LineCount1",  VISIBLE
+            DlgText         "LineCount1",  LineCountStr
+            DlgVisible      "RevDate1",    VISIBLE
+            DlgText         "RevDate1",    MacroRevisionDate$
+            DlgVisible      "SizeBytes1",  VISIBLE
+            DlgText         "SizeBytes1",  Trim$( MacroSizeStr ) & Trim$( Mid$( MacroListPlus1( SelectedMacroIndex% ), OFFSET_BIN_LENGTH + DWORD, 8 ) )
+            MacroOpen1$ = SelectedMacroName$
+            If MacroOpen2$ = "" Then
+                DlgFocus        "MbkList2"
+            End If
+        End If
+
+      Case "MacroList2"
+        If DlgValue( "MbkList2" ) = 0 Then
+            DlgFocus        "MbkList2"
+            MacroOpen2$ = ""
+          Else
+            SelectedMacroIndex% = DlgValue( "MacroList2" )
+            MacroListSelection$ = MacroListPlus2( SelectedMacroIndex% )
+            SelectedMacroName$  = Trim$( Mid$( MacroListSelection$, 5, MAX_LEN_MACRO_NAME ) )
+            FullMacroName$      = SelectedMbkFile2$ & "!" & SelectedMacroName$
+            If SelectedMacroName$ = MacroOpen2$ Or _
+               SelectedMbkFile1$ = SelectedMbkFile2$ And SelectedMacroName$ = MacroOpen1$ Then
+                DlgVisible      "Identical",   VISIBLE
+            End If
+            If Left$( MacroListSelection$, DWORD ) = "0000" Then
+                Call CopyArrays( RIGHT_SIDE, TO_PRIMARY )
+                Call GetMacroInfo( Mid$( MacroListSelection$, 5 ) )
+                InfoProcessed$     = LineCountStr & MacroSizeStr
+                InfoProcessed$     = InfoProcessed$ & MacroRevisionDate$
+                ReDim Preserve ProcessedMacros( ViewedMacroCount% )
+                ProcessedMacros( ViewedMacroCount% ) = InfoProcessed$
+                ViewedMacroStr$    = Trim$( Str$( ViewedMacroCount% ) )
+                Mid$( MacroListSelection$, 1, DWORD ) = String$( DWORD - Len( ViewedMacroStr$ ), "0" ) & ViewedMacroStr$
+                MacroListPlus2( SelectedMacroIndex% ) = MacroListSelection$
+                ViewedMacroCount%  = ViewedMacroCount% + 1
+              Else
+                MacroSequence%     = Val( Left$( MacroListSelection$, DWORD ) )
+                InfoRetrieved$     = ProcessedMacros( MacroSequence% )
+                LineCountStr       = Trim$( Left$( InfoRetrieved$, 8 ) )
+                MacroSizeStr       = Trim$( Mid$ ( InfoRetrieved$, 9, 24 ) )
+                MacroRevisionDate$ = Trim$( Mid$ ( InfoRetrieved$, 33 ) )
+            End If
+            DlgVisible      "Desc2",       VISIBLE
+            DlgText         "Desc2",       Trim$( Mid$( MacroListPlus2( SelectedMacroIndex% ), OFFSET_DESC + DWORD ) )
+            DlgVisible      "LineCount2",  VISIBLE
+            DlgText         "LineCount2",  LineCountStr
+            DlgVisible      "RevDate2",    VISIBLE
+            DlgText         "RevDate2",    MacroRevisionDate$
+            DlgVisible      "SizeBytes2",  VISIBLE
+            DlgText         "SizeBytes2",  Trim$( MacroSizeStr ) & Trim$( Mid$( MacroListPlus2( SelectedMacroIndex% ), OFFSET_BIN_LENGTH + DWORD, 8 ) )
+            MacroOpen2$               = SelectedMacroName$
+            If MacroOpen1$ = "" Then
+                DlgFocus        "MbkList1"
+            End If
+      End If
+
+    End Select
+
+  End Select
+
+End Function
+'154158942
+'
+'Macro name: MacroComparator
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
+'Saved: 4/17/2023 10:01:49 AM using "MacroBookInspector" macro by Walter F. Nickeson.

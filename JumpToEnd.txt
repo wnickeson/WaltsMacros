@@ -1,0 +1,68 @@
+'MacroName:JumpToEnd.2023.01
+'MacroDescription:Moves the cursor to the very end of the field.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 107 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro to move the cursor to the end of the field in which the
+' cursor is placed. OCLC has programmed the Client so that pressing the keyboard's [END]
+' key moves the cursor to the end of whatever cell the cursor is in, not to the absolute
+' end of the field, which is the last character of the field's actual data. That means
+' that if the cursor is in the cell that contains the tag, several keystrokes are needed
+' to put the cursor at the end of the field, to add more information at the end, for
+' example. This simple macro eliminates those keystrokes.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:JumpToBeginning"
+Dim WindowType%
+
+' This macro works only in a record.
+
+WindowType% = CS.ItemType
+Select Case WindowType%
+  Case -1, 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only in a bibliographic or authority record.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' If the cursor is not in the fixed field, move it to the beginning of the cell
+' containing the field's contents (column 6), then invoke the "EndCell" command to move
+' the cursor to the last position in the cell.
+
+If CS.CursorColumn > 0 Then
+    If CS.CursorColumn < 6 Then
+        CS.CursorColumn = 6
+    End If
+    CS.EndCell
+End If
+
+End Sub
+'652455
+'
+'Macro name: JumpToEnd
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 4/17/2023 10:00:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,1184 @@
+'MacroName:SubjectSubfieldsTool.2022.02
+'MacroDescription:Helps in adding subdivision strings to, or removing them from, LC
+' subject heading fields. UNDER DEVELOPMENT
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 27 September 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works. In a bibliographic record, place the cursor in a 6XX field containing an
+' LC subject heading that includes one or more subject subdivisions (subfields $v, $x,
+' $y, and $z). Then run the macro to copy that subdivision string to, or remove it from,
+' other subject fields. This can be helpful when adding form or geographic subdivisions,
+' such as "$v Fiction", "$v Early works to 1800," "$x History $y 20th century," "$v
+' Bibliography $v Catalogs," "$z Idaho $z Boise $v Case studies," to several fields, if
+' that string is already present in at least one of those fields. The reverse operation,
+' to remove a subdivision string from several fields at once, is also almost always an
+' option. While this macro was designed to copy or delete subfields in bulk, it can copy
+' to or delete from single fields as well.
+'
+' A subdivision string consists of one or more subject subfields (subfields $v, $x, $y,
+' and $z) at the end of the subject heading field. (The macro won't copy or delete a
+' single subfield unless it is the last one in the field.) To select the subfield to
+' copy or delete, put the cursor anywhere in that subfield. The macro considers a
+' subfield to be the string of characters beginning with the delimiter and subfield code,
+' and continuing until the next delimiter; the last subfield includes any terminal
+' punctuation. To copy or delete the whole string of subdivisions, put the cursor in
+' the first subfield, or anywhere in the field preceding it. Otherwise, the string begins
+' with the field in which the cursor is placed, and includes all following, to the end of
+' the field.
+'
+' A copied string is always pasted into another field at the end of the field. A string
+' to be deleted is always removed from the end of a field.
+'
+' Generally, the macro requires user input about whether to copy or delete the selected
+' subfields, and which other fields they should be copied to or removed from. However,
+' there is one situation in which the macro operates immediately, and that is if only one
+' subject field contains the target subdivision string, and all the other fields in the
+' record are of the same tag and lack the subfield(s). In that case, the macro silently
+' copies the string to those other fields. However, the macro always asks for
+' confirmation before deleting anything.
+'
+' The macro copies a subdivision string to, or removes it from, tag groups, rather than
+' individual tags. The first option is to perform the operation--to copy a string to
+' fields that lack it, or to remove it from fields in which it appears--on other fields
+' of the same tag. If the field containing the string is a name heading (fields 600, 610,
+' and 611), the second option is to copy it to or remove it from other name subject
+' fields. Finally, the macro offers a third option: to perform the operation on all
+' relevant subject fields.
+'
+' If a subfield, or string of subfields, may be copied or deleted, the macro guesses
+' which operation might be most appropriate, and presents that as the default when the
+' dialog box opens; but the option to do the other operation is almost always available.
+' It bases its guess on its assessment of which operation would be the most work if done
+' manually. If a subdivision string is found in fewer than half the fields with the same
+' tag, then copying the string to all those other fields would be a greater task than
+' deleting it from them, so the default option is to copy. The assessment always begins
+' with an evaluation of subject headings of the same tag. If the answer to this first
+' consideration is not clear--such as if the field is the only one of its kind--the macro
+' then evaluates other name fields (for a name heading), and finally it considers all
+' subject fields.
+'
+' The macro does not, of course, check the validity of the heading to which subdivisions
+' have been added.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function NoOptionButtonsDialogBox    As String
+Declare Function ThreeOptionButtonsDialogBox As String
+Declare Function TwoOptionButtonsDialogBox   As String
+
+Declare Function DialogBoxControlFunction( Id$, Action%, SVal& )
+
+Global Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Global Const NO_OPTION_BUTTONS    As Integer = 0
+Global Const THREE_OPTION_BUTTONS As Integer = 2
+Global Const TWO_OPTION_BUTTONS   As Integer = 1
+
+Global COPY   As String*1
+Global QUIT   As String*1
+Global QUOTE  As String*1
+Global REMOVE As String*1
+
+Global DBID%
+Global NameTypes$
+Global NoOptionButtonsText$
+Global Operation$
+Global OptionButton1Tag$
+Global OptionButton1Text$
+Global OptionButton2Tag$
+Global OptionButton2Text$
+Global OptionButton3Text$
+Global SourceTag$
+Global SubdivisionDisplayString$
+Global TagTypes$
+Global WaltsMacros$
+Global WhichDialogBox%
+
+Global SwitchButtonVisible
+Global Switched
+
+Type SH
+ tContent    As String
+ tIndicators As String
+ tIsName     As Variant
+ tLine       As Integer
+ tSubDivPos  As Integer
+ tTag        As String
+End Type
+
+Global SHFields() As SH
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE    As Integer = 16
+Const INFORMATION_MESSAGE As Integer = 64
+
+Const LCSH                As String  = "0"
+
+Dim DELIMITER    As String*1 : DELIMITER    = Chr$( 223 )
+Dim UNDETERMINED As String*1 : UNDETERMINED = "?"
+
+Dim a As String
+Dim CandidateTag$
+Dim CountOfAllNames%            'Total count of names as subject headings, including the current heading.
+Dim CountOfAllOther6XX%         'Make sure "all" means values that include the current heading.
+Dim CountOfAllWith%
+Dim CountOfAllWithout%
+Dim CountOfOtherNamesWith%
+Dim CountOfOtherNamesWithout%
+Dim CountOfOthersWith%
+Dim CountOfOthersWithout%
+Dim CountOfSameTag%             'Count of all other subject headings with the same tag as the one in which the cursor is placed.
+Dim CountOfSameTagWith%
+Dim CountOfSameTagWithout%
+Dim CountOfSubdivisions%
+Dim CurrentColumn%
+Dim CurrentRow%
+Dim FailCount%
+Dim FieldCount%
+Dim FieldData$
+Dim NewField$
+Dim PreviousDelimiter%
+Dim SourceField$
+Dim Start%
+Dim SubdivisionString$
+Dim SubdivisionStringStart%
+Dim SubfieldCode$
+Dim SuccessCount%
+Dim TargetTag$
+Dim TestTag$
+Dim TypeOfWindow%
+
+Dim FoundField
+Dim NameHeading              : NameHeading  = FALSE
+Dim SkipLine
+
+Dim i As Integer, p As Integer, x As Integer
+
+COPY                      = "C"
+DBID%                     = 0
+NameTypes$                = ""
+NoOptionButtonsText$      = ""
+NoOptionButtonsText$      = ""
+Operation$                = ""
+OptionButton1Tag$         = ""
+OptionButton1Text$        = ""
+OptionButton1Text$        = ""
+OptionButton2Tag$         = ""
+OptionButton2Text$        = ""
+OptionButton2Text$        = ""
+OptionButton3Text$        = ""
+OptionButton3Text$        = ""
+QUIT                      = "Q"
+QUOTE                     = Chr$( 034 )
+REMOVE                    = "R"
+SourceTag$                = ""
+SubdivisionDisplayString$ = ""
+SwitchButtonVisible       = TRUE
+TagTypes$                 = ""
+WaltsMacros$              = "[Walt's macros] Extras1:SubjectSubfieldsTool"
+WhichDialogBox%           = 0
+
+Switched = FALSE
+
+' First, make sure that a bibliographic record is open.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro works only in bibliographic records.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' The cursor position is critical.
+
+CurrentRow%    = CS.CursorRow
+CurrentColumn% = CS.CursorColumn
+
+' Verify that the field in which the cursor is placed is an LC subject heading, and
+' determine what kind of subject it is.
+
+If CS.GetFieldLine( CurrentRow%, SourceField$ ) Then
+    SourceTag$ = Left( SourceField$, 3 )
+    If SourceTag$ Like "6[0135][01]" Then
+        If Mid$( SourceField$, 5, 1 ) <> LCSH Then
+            MsgBox "This macro works only with LC subject headings.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+          Else
+            If SourceTag$ Like "6[01][01]" Then
+                NameHeading = TRUE
+            End If
+        End If
+
+' Then ascertain where the cursor is placed with regard to the field's subject
+' subdivisions, in order to determine the beginning of the string to select. If no
+' subdivisions are found, the macro quits.
+
+        Start% = 1
+        Do
+          p = InStr( Start%, SourceField$, DELIMITER )
+          If p > 0 Then
+              SubfieldCode$ = Mid$( SourceField$, p + 1, 1 )
+              If SubfieldCode$ Like "[vxyz]" Then
+                  If p > CurrentColumn% Then
+                      If CountOfSubdivisions% = 0 Then
+                          SubdivisionStringStart% = p
+                          CountOfSubdivisions%    = 1
+                          Exit Do
+                        Else
+                          SubdivisionStringStart% = PreviousDelimiter%
+                          Exit Do
+                      End If
+                    Else
+                      SubdivisionStringStart% = p
+                      PreviousDelimiter%      = p
+                  End If
+                  CountOfSubdivisions% = CountOfSubdivisions% + 1
+              End If
+            Else
+              If Start% = 1 Then
+                  MsgBox "This subject heading has no subdivisions to copy or remove.", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+              End If
+          End If
+          Start% = p + 1
+        Loop Until p = 0
+
+' If the cursor hasn't been placed in a subject field, display an error message, and
+' quit.
+
+      Else
+        MsgBox "Please place the cursor in a subdivision string in a subject field to continue.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If no appropriate subdivisions are in the field, quit the macro.
+
+If CountOfSubdivisions% = 0 Then
+    MsgBox "This subject heading has no subdivisions to copy or remove.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Check for the presence of the subdivision string in other subject headings. Go through
+' the record, line by line, and process all the LC subject headings. Note which headings
+' match the source field and whether they contain the subdivision string. If a field
+' contains the string, its starting position is recorded, which serves as the flag to
+' indicate its appearance. Keep count of how many fields contain and lack the subfield
+' string, and how they relate to the source field.
+
+SubdivisionString$ = Mid$( SourceField$, SubdivisionStringStart% )
+If Right$( SubdivisionString$, 1 ) = "." Then
+    SubdivisionString$ = Left$( SubdivisionString$, Len( SubdivisionString$ ) - 1 )
+End If
+
+i = 1
+Do
+  FoundField = CS.GetFieldLine( i, FieldData$ )
+  If FoundField Then
+      CandidateTag$ = Left$( FieldData$, 3 )
+      If CandidateTag$ Like "6[0135][01]" Then
+          If Mid$( FieldData$, 5, 1 ) = LCSH Then
+              ReDim Preserve SHFields( FieldCount% )
+              SHFields( FieldCount% ).tLine       = i
+              SHFields( FieldCount% ).tTag        = CandidateTag$
+              SHFields( FieldCount% ).tIndicators = Mid$( FieldData$, 4, 2 )
+              SHFields( FieldCount% ).tContent    = Mid$( FieldData$, 6 )
+              SHFields( FieldCount% ).tSubDivPos  = InStr( FieldData$, SubdivisionString$ ) - 5
+              If CandidateTag$ Like "6[01][01]" Then
+                  SHFields( FieldCount% ).tIsName = TRUE
+                  CountOfAllNames% = CountOfAllNames% + 1
+                Else
+                  SHFields( FieldCount% ).tIsName = FALSE
+              End If
+              If i <> CurrentRow% Then
+                  p = InStr( FieldData$, SubdivisionString$ )
+                  If p > 0 And ( p + Len( SubdivisionString$ ) ) >= Len( FieldData$ ) Then
+                      CountOfAllWith% = CountOfAllWith% + 1
+                      Select Case CandidateTag$
+                        Case "600"
+                          If SourceTag$ = "600" Then
+                              CountOfSameTagWith%    = CountOfSameTagWith% + 1
+                            ElseIf SourceTag$ = "610" Or SourceTag$ = "611" Then
+                              CountOfOtherNamesWith% = CountOfOtherNamesWith% + 1
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                            Else
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                          End If
+                        Case "610"
+                          If SourceTag$ = "610" Then
+                              CountOfSameTagWith%    = CountOfSameTagWith% + 1
+                            ElseIf SourceTag$ = "600" Or SourceTag$ = "611" Then
+                              CountOfOtherNamesWith% = CountOfOtherNamesWith% + 1
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                            Else
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                          End If
+                        Case "611"
+                          If SourceTag$ = "611" Then
+                              CountOfSameTagWith%    = CountOfSameTagWith% + 1
+                            ElseIf SourceTag$ = "600" Or SourceTag$ = "610" Then
+                              CountOfOtherNamesWith% = CountOfOtherNamesWith% + 1
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                            Else
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                          End If
+                        Case "630"
+                          If SourceTag$ = "630" Then
+                              CountOfSameTagWith%    = CountOfSameTagWith% + 1
+                            Else
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                          End If
+                        Case "650"
+                          If SourceTag$ = "650" Then
+                              CountOfSameTagWith%    = CountOfSameTagWith% + 1
+                            Else
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                          End If
+                        Case "651"
+                          If SourceTag$ = "651" Then
+                              CountOfSameTagWith%    = CountOfSameTagWith% + 1
+                            Else
+                              CountOfOthersWith%     = CountOfOthersWith% + 1
+                          End If
+                      End Select
+                    Else
+                      CountOfAllWithout% = CountOfAllWithout% + 1
+                      Select Case CandidateTag$
+                        Case "600"
+                          If SourceTag$ = "600" Then
+                              CountOfSameTagWithout%    = CountOfSameTagWithout% + 1
+                            ElseIf SourceTag$ = "610" Or SourceTag$ = "611" Then
+                              CountOfOtherNamesWithout% = CountOfOtherNamesWithout% + 1
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                            Else
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                          End If
+                        Case "610"
+                          If SourceTag$ = "610" Then
+                              CountOfSameTagWithout%    = CountOfSameTagWithout% + 1
+                            ElseIf SourceTag$ = "600" Or SourceTag$ = "611" Then
+                              CountOfOtherNamesWithout% = CountOfOtherNamesWithout% + 1
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                            Else
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                          End If
+                        Case "611"
+                          If SourceTag$ = "611" Then
+                              CountOfSameTagWithout%    = CountOfSameTagWithout% + 1
+                            ElseIf SourceTag$ = "600" Or SourceTag$ = "610" Then
+                              CountOfOtherNamesWithout% = CountOfOtherNamesWithout% + 1
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                            Else
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                          End If
+                        Case "630"
+                          If SourceTag$ = "630" Then
+                              CountOfSameTagWithout%    = CountOfSameTagWithout% + 1
+                            Else
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                          End If
+                        Case "650"
+                          If SourceTag$ = "650" Then
+                              CountOfSameTagWithout%    = CountOfSameTagWithout% + 1
+                            Else
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                          End If
+                        Case "651"
+                          If SourceTag$ = "651" Then
+                              CountOfSameTagWithout%    = CountOfSameTagWithout% + 1
+                            Else
+                              CountOfOthersWithout%     = CountOfOthersWithout% + 1
+                          End If
+                      End Select
+                  End If
+              End If
+              FieldCount% = FieldCount% + 1
+          End If
+          CountOfAllOther6XX% = CountOfAllOther6XX% + 1
+      End If
+  End If
+  i = i + 1
+Loop Until FoundField = FALSE
+
+CountOfSameTag%     = CountOfSameTagWith% + CountOfSameTagWithout%
+CountOfAllOther6XX% = CountOfAllOther6XX% - 1
+
+' Prepare the subdivision string for display.
+
+SubdivisionDisplayString$ = "$" & Mid$( SubdivisionString$, 2 )
+Do
+  p = InStr$( SubdivisionDisplayString$, DELIMITER )
+  If p > 0 Then
+      SubdivisionDisplayString$ = Left$( SubdivisionDisplayString$, p - 1 ) & "$" & Mid$( SubdivisionDisplayString$, p + 1 )
+  End If
+Loop Until p = 0
+If Len( SubdivisionDisplayString$ ) > 40 Then
+    SubdivisionDisplayString$ = Left$( SubdivisionDisplayString$, 40 ) & "..."
+End If
+
+' If all the subject headings in the record are the same tag, and the subdivision appears
+' in only one instance, simply copy the subdivision to all the other occurrences without
+' asking for confirmation.
+
+If CountOfSameTagWith% = 0 And ( CountOfSameTagWithout% = CountOfAllOther6XX% ) Then
+    If CountOfSameTagWithout% = 0 Then
+        Operation$ = REMOVE
+        TagTypes$  = SourceTag$
+        GoTo SetupDialogBoxes:
+      Else
+        Operation$ = COPY
+        TargetTag$ = SourceTag$
+        GoTo DoTheWork:
+    End If
+End If
+
+' The next step is to determine whether the default operation in a dialog box will be to
+' copy or delete the subdivision string. If the string appears in half or more of the
+' other fields, the default option will be to delete it. To make the determination, begin
+' by checking the ratio of the string's appearance in all the other fields with the same
+' tag; if there are no other such fields, check for the presence of the string in all
+' tags. However, if the current heading is a name field, after checking for the
+' subdivision string in fields with the same tag, check the other name fields, and if
+' still no determination can be been made, check for the presence of the subdivision in
+' all tags.
+
+If CountOfSameTag% > 0 Then
+    If CountOfSameTagWith% >= CountOfSameTagWithout% Then
+        Operation$ = REMOVE
+      Else
+        Operation$ = COPY
+    End If
+  Else
+    Operation$ = UNDETERMINED
+End If
+
+If Operation$ = UNDETERMINED Then
+    If NameHeading Then
+        If CountOfOtherNamesWith% > 0 Then
+            If CountOfOtherNamesWith% >= CountOfOtherNamesWithout% Then
+                Operation$ = REMOVE
+              Else
+                Operation$ = COPY
+            End If
+          Else
+            Operation$ = UNDETERMINED
+        End If
+    End If
+End If
+
+If Operation$ = UNDETERMINED Then
+    If CountOfAllWith% >= CountOfAllWithout% Then
+        Operation$ = REMOVE
+      Else
+        Operation$ = COPY
+    End If
+End If
+
+' A subdivision can always be removed from a field, but the reverse operation is not
+' always true: If all the headings contain a specific subdivision string, it can't be
+' copied anywhere. When a reverse operation is possible, the dialog boxes will display a
+' button to do so. That may mean re-presenting a dialog box. So in this next part of the
+' macro determine what the dialog box should be, depending on which operation has been
+' chosen--chosen by default, when the macro is invoked, or chosen by selection, after the
+' dialog box has been presented and the default option rejected.
+
+' If a subdivision string can be copied, it can also be deleted, so a "copy" dialog box
+' will always display the button to reverse the operation and delete the string instead.
+' To copy a subdivision string, the dialog box needs to ask if it should be added to the
+' same tag only, or to other tags.
+
+' The boxes need to be re-drawn if
+' the switch is toggled because the operation is not symmetrical. A field into which a
+' subdivision can be copied is not one from which it can be removed. So if the operation
+' switch is flipped the subdivision count must be re-evaluated so the proper dialog boxes
+' can be shown.
+
+' The operation isn't known if the field the cursor is in is the only such field in the
+' record. In this case, test for the presence of the subdivision in other fields. If it's
+' present in more fields than it's absent from, the operation is to delete; if vice
+' versa, the operation is to remove. Since the operation involves other tags, present the
+' confirmation box. There will be no option buttons because the question is about an
+' operation on all the other fields. The "switch" button must be present if the subfield
+' is in some of the other fields but not all of them. "SourceTag$" can be "6XX" if the
+' tags are mixed, but named precisely if they are not.
+
+SetupDialogBoxes:
+
+If Operation$ = COPY Then
+
+'########################################################################################
+'#####                                    COPY                                      #####
+'########################################################################################
+
+' The dialog box displays a phrase regarding other subject headings to include in the
+' operation. From the array of subject heading fields, get the specific tag if they are
+' all the same, or the generic "name" or "6XX" if they are a variety.
+
+    For i = 0 To UBound( SHFields )
+      TestTag$ = SHFields( i ).tTag
+      If SHFields( i ).tLine <> CurrentRow% Then
+          If SHFields( i ).tSubDivPos < 0 Then
+              If TagTypes$ = "" Then
+                  TagTypes$ = TestTag$
+                Else
+                  If TestTag$ <> TagTypes$ Then
+                      TagTypes$ = "6XX"
+                      Exit For
+                  End If
+              End If
+          End If
+      End If
+    Next i
+
+    If NameHeading Then
+        For i = 0 To UBound( SHFields )
+          TestTag$ = SHFields( i ).tTag
+          If SHFields( i ).tLine <> CurrentRow% Then
+              If SHFields( i ).tSubDivPos < 0 Then
+                  If SHFields( i ).tIsName Then
+                      If NameTypes$ = "" Then
+                          NameTypes$ = TestTag$
+                        Else
+                          If TestTag$ <> NameTypes$ Then
+                              NameTypes$ = "name"
+                              Exit For
+                          End If
+                      End If
+                  End If
+              End If
+          End If
+        Next i
+    End If
+
+' First step, regardless of what the type of heading is: Determine if any other of the
+' same tag is available to be copied to.
+
+    If CountOfSameTagWithout% > 0 Then
+        If CountOfSameTagWithout% = 1 Then
+            NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to other " & SourceTag$ & " field?"
+            OptionButton1Text$   = "Other " & SourceTag$ & " field"
+          Else
+            NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to " & Trim$( Str$( CountOfSameTagWithout% ) ) & " other " & SourceTag$ & " fields?"
+            OptionButton1Text$   = Trim$( Str$( CountOfSameTagWithout% ) ) & " other " & SourceTag$ & " fields"
+        End If
+        OptionButton1Tag$ = SourceTag$
+        If CountOfOthersWithout% = 0 Then
+            WhichDialogBox% = NO_OPTION_BUTTONS
+            DBID% = 1
+            GoTo ShowDialogBox:
+        End If
+    End If
+
+    If NameHeading Then
+
+        If NoOptionButtonsText$ = "" Then
+            If CountOfOtherNamesWithout% > 0 Then
+                If CountOfOtherNamesWithout% = 1 Then
+                    NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to " & NameTypes$ & " field?"
+                    OptionButton1Text$   = NameTypes$ & " field"
+                    OptionButton1Tag$    = NameTypes$
+                  Else
+                    If NameTypes$ = "name" Then
+                        NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to " & _
+                                                Trim$( Str$( CountOfOtherNamesWithout% ) ) & " other " & NameTypes$ & " fields?"
+                        OptionButton1Text$   = Trim$( Str$( CountOfOtherNamesWithout% ) ) & " other " & NameTypes$ & " fields"
+                        OptionButton1Tag$    = NameTypes$
+                      Else
+                        NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to " & _
+                                                Trim$( Str$( CountOfOtherNamesWithout% ) ) & " " & NameTypes$ & " fields?"
+                        OptionButton1Text$   = Trim$( Str$( CountOfOtherNamesWithout% ) ) & " " & NameTypes$ & " fields"
+                        OptionButton1Tag$    = NameTypes$
+                    End If
+                End If
+                If CountOfOthersWithout% <= CountOfOtherNamesWithout% Then
+                    WhichDialogBox% = NO_OPTION_BUTTONS
+                    DBID% = 2
+                    GoTo ShowDialogBox:
+                  Else
+                    If CountOfOthersWithout% = 1 Then
+                        OptionButton2Text$ = TagTypes$ & " field"
+                      Else
+                        OptionButton2Text$ = "All " & Trim$( Str$( CountOfOthersWithout% ) ) & " other " & TagTypes$ & " fields"
+                    End If
+                    OptionButton2Tag$ = TagTypes$
+                    WhichDialogBox%   = TWO_OPTION_BUTTONS
+                    DBID% = 3
+                    GoTo ShowDialogBox:
+                End If
+              Else
+                If CountOfOthersWithout% = 1 Then
+                    NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to " & TagTypes$ & " field?"
+                  Else
+                    NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to all " & Trim$( Str$( CountOfOthersWithout% ) ) & " " & TagTypes$ & " fields?"
+                End If
+                OptionButton1Tag$ = TagTypes$
+                WhichDialogBox%   = NO_OPTION_BUTTONS
+                DBID% = 4
+                GoTo ShowDialogBox:
+            End If
+
+          Else
+
+            Select Case CountOfOtherNamesWithout%
+              Case 0
+                Select Case CountOfAllWithout%
+                  Case 0
+                    MsgBox "Stuck 3.1"
+                    Exit Sub
+                  Case 1
+                    WhichDialogBox% = NO_OPTION_BUTTONS
+                    DBID% = 5
+                    GoTo ShowDialogBox:
+                  Case Else
+                    OptionButton2Text$ = "All " & Trim$( Str$( CountOfOthersWithout% ) ) & " other " & TagTypes$ & " fields"
+                    OptionButton2Tag$  = TagTypes$
+                    WhichDialogBox%    = TWO_OPTION_BUTTONS
+                    DBID% = 6
+                    GoTo ShowDialogBox:
+                End Select
+              Case 1
+                OptionButton1Text$ = "Other " & SourceTag$ & " field only"
+              Case 2
+                OptionButton1Text$ = "Both other " & SourceTag$ & " fields only"
+              Case Else
+                OptionButton1Text$ = Trim$( Str$( CountOfSameTagWithout% ) ) & " other " & SourceTag$ & " fields"
+            End Select
+            OptionButton1Tag$ = SourceTag$
+            Select Case CountOfOtherNamesWithout% + CountOfSameTagWithout%
+              Case 1
+                OptionButton2Text$ = "Other " & NameTypes$ & " field"
+              Case 2
+                OptionButton2Text$ = "Both other " & NameTypes$ & " fields"
+              Case Else
+                OptionButton2Text$ = "All " & Trim$( Str$( CountOfOtherNamesWithout% ) ) & " other " & NameTypes$ & " fields"
+            End Select
+            OptionButton2Tag$ = NameTypes$
+            Select Case CountOfAllWithout%
+              Case 0
+                WhichDialogBox% = TWO_OPTION_BUTTONS
+                DBID% = 7
+                GoTo ShowDialogBox:
+              Case 1
+                OptionButton3Text$ = "Other " & TagTypes$ & " field"
+              Case 2
+                OptionButton3Text$ = "Both " & TagTypes$ & " fields"
+              Case Else
+                OptionButton3Text$ = "All " & Trim$( Str$( CountOfAllWithout% ) ) & " other " & TagTypes$ & " fields"
+            End Select
+            WhichDialogBox% = THREE_OPTION_BUTTONS
+            DBID% = 8
+            GoTo ShowDialogBox:
+        End If
+
+      Else
+
+        If NoOptionButtonsText$ = "" Then
+            If CountOfOthersWithout% > 0 Then
+                If CountOfOthersWithout% = 1 Then
+                    NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to " & TagTypes$ & " field?"
+                  Else
+                    NoOptionButtonsText$ = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to " & Trim$( Str$( CountOfOthersWithout% ) ) & " other " & TagTypes$ & " fields?"
+                End If
+                OptionButton1Tag$ = TagTypes$
+                WhichDialogBox%   = NO_OPTION_BUTTONS
+                DBID% = 9
+                GoTo ShowDialogBox:
+              Else
+                MsgBox "What is this case?"
+                Exit Sub
+            End If
+          Else
+            If CountOfAllWithout% = 1 Then
+                OptionButton1Text$ = "Other " & SourceTag$ & " field only"
+                OptionButton2Text$ = "Other " & TagTypes$ & " field"
+              ElseIf CountOfAllWithout% = 2 Then
+                OptionButton1Text$ = "Both other " & SourceTag$ & " fields only"
+                OptionButton2Text$ = "Both " & TagTypes$ & " fields"
+              ElseIf CountOfAllWithout% > 2 Then
+                OptionButton1Text$ = Trim$( Str$( CountOfSameTagWithout% ) ) & " other " & SourceTag$ & " fields"
+                OptionButton2Text$ = "All " & Trim$( Str$( CountOfAllWithout% ) ) & " other " & TagTypes$ & " fields"
+            End If
+            OptionButton1Tag$ = SourceTag$
+            WhichDialogBox%   = TWO_OPTION_BUTTONS
+            DBID% = 10
+            GoTo ShowDialogBox:
+        End If
+
+    End If
+
+  Else
+
+'########################################################################################
+'#####                                   REMOVE                                     #####
+'########################################################################################
+
+' Set the text for description of the fields in general as for copying, except add a test
+' to include only fields in which the subdivision occurs.
+
+    For i = 0 To UBound( SHFields )
+      If SHFields( i ).tLine <> CurrentRow% Then
+          If SHFields( i ).tSubDivPos > 0 Then
+              TestTag$ = SHFields( i ).tTag
+              If TagTypes$ = "" Then
+                  TagTypes$ = TestTag$
+                Else
+                  If TestTag$ <> TagTypes$ Then
+                      TagTypes$ = "6XX"
+                      Exit For
+                  End If
+              End If
+          End If
+      End If
+    Next i
+
+    If NameHeading Then
+        For i = 0 To UBound( SHFields )
+          TestTag$ = SHFields( i ).tTag
+          If SHFields( i ).tLine <> CurrentRow% Then
+              If SHFields( i ).tSubDivPos > 0 Then
+                  If SHFields( i ).tIsName Then
+                      If NameTypes$ = "" Then
+                          NameTypes$ = TestTag$
+                        Else
+                          If TestTag$ <> NameTypes$ Then
+                              NameTypes$ = "name"
+                              Exit For
+                          End If
+                      End If
+                  End If
+              End If
+          End If
+        Next i
+    End If
+
+' A subdivision string can always be deleted, because it has to appear at least once in
+' the record, but it may not be able to be copied, so the switch button should not
+' automatically display. To delete a subdivision string, the dialog box needs to ask if
+' it should be deleted from that field only, all fields of the same tag, or all tags.
+
+    If CountOfAllWithout% = 0 Then
+        SwitchButtonVisible = FALSE
+    End If
+
+    If CountOfSameTagWith% = ( CountOfAllWith% - 1 ) Then
+        NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from"
+        Select Case CountOfSameTagWith%
+          Case 0
+            NoOptionButtonsText$ = NoOptionButtonsText$ & " this " & SourceTag$ & " field?"
+          Case 1
+            NoOptionButtonsText$ = NoOptionButtonsText$ & " both " & SourceTag$ & " fields?"
+          Case Else
+            NoOptionButtonsText$ = NoOptionButtonsText$ & " all " & SourceTag$ & " fields?"
+        End Select
+        WhichDialogBox% = NO_OPTION_BUTTONS
+        DBID% = 11
+        GoTo ShowDialogBox:
+      Else
+        If CountOfSameTagWith% > 0 Then
+            NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from"
+            If CountOfSameTagWith% = 1 Then
+                NoOptionButtonsText$ = NoOptionButtonsText$ & " both " & SourceTag$ & " fields?"
+                OptionButton1Text$   = "Both " & SourceTag$ & " fields"
+              Else
+                NoOptionButtonsText$ = NoOptionButtonsText$ & " all " & SourceTag$ & " fields?"
+                OptionButton1Text$   = "All " & Trim$( Str$( CountOfSameTagWith% ) ) & " " & SourceTag$ & " fields"
+            End If
+            If CountOfSameTagWith% = CountOfAllWith% Then
+                WhichDialogBox%   = NO_OPTION_BUTTONS
+                OptionButton1Tag$ = SourceTag$
+                DBID% = 12
+                GoTo ShowDialogBox:
+            End If
+          Else
+            OptionButton1Text$ = "This " & SourceTag$ & " field only"
+            OptionButton1Tag$  = SourceTag$
+        End If
+    End If
+
+    If NameHeading Then
+
+        If NoOptionButtonsText$ = "" Then
+            If CountOfOtherNamesWith% > 0 Then
+                If CountOfOthersWithout% = 0 Then
+                    If CountOfOtherNamesWith% = 1 Then
+                        OptionButton2Text$ = "Both name fields"
+                      Else
+                        OptionButton2Text$ = "All name fields"
+                    End If
+                    OptionButton2Tag$ = "name"
+                  Else
+                    If CountOfOthersWithout% = 1 Then
+                        OptionButton1Text$ = TagTypes$ & " field only"
+                      Else
+                        OptionButton1Text$ = "All " & Trim$( Str$( CountOfAllWith% ) ) & " 6XX fields containing string"
+                    End If
+                    WhichDialogBox% = TWO_OPTION_BUTTONS
+                    DBID% = 13
+                    GoTo ShowDialogBox:
+                End If
+              Else
+                Select Case CountOfSameTagWith%
+                  Case 0
+                    NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from this " & SourceTag$ & " field only?"
+                    OptionButton1Text$   = "This " & SourceTag$ & " field only"
+                  Case 1
+                    NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from both " & SourceTag$ & " fields only?"
+                    OptionButton1Text$   = "Both " & SourceTag$ & " fields only"
+                  Case Else
+                    NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from all " & SourceTag$ & " fields?"
+                    OptionButton1Text$   = "All " & SourceTag$ & " fields only"
+                End Select
+                OptionButton1Tag$ = SourceTag$
+                If CountOfOthersWith% > 0 Then
+                    OptionButton2Text$ = "All " & TagTypes$ & " fields"
+                    WhichDialogBox%    = TWO_OPTION_BUTTONS
+                    DBID% = 14
+                    GoTo ShowDialogBox:
+                  Else
+                    WhichDialogBox% = NO_OPTION_BUTTONS
+                    DBID% = 15
+                    GoTo ShowDialogBox:
+                End If
+            End If
+            OptionButton3Text$ = "All " & Trim$( Str$( CountOfAllWith% + 1 ) ) & " " & TagTypes$ & " fields"
+            WhichDialogBox%    = THREE_OPTION_BUTTONS
+            DBID% = 16
+            GoTo ShowDialogBox:
+          Else
+            Select Case CountOfAllWith%
+              Case 1
+                OptionButton1Text$ = "Other " & SourceTag$ & " fields only?"
+                OptionButton2Text$ = "This field and " & TagTypes$ & " field"
+              Case 2
+                OptionButton1Text$ = "Both other " & SourceTag$ & " fields only"
+                OptionButton2Text$ = "This field and both " & TagTypes$ & " fields"
+              Case Else
+                OptionButton1Text$ = "All " & Trim$( Str$( CountOfSameTagWith% + 1 ) ) & " " & SourceTag$ & " fields"
+                OptionButton2Text$ = "All " & Trim$( Str$( CountOfAllWith% ) ) & " " & TagTypes$ & " fields"
+            End Select
+            If CountOfAllWithout% = 0 Then
+                SwitchButtonVisible = FALSE
+            End If
+            WhichDialogBox% = TWO_OPTION_BUTTONS
+            DBID% = 17
+        End If
+'    End If
+
+      Else
+        If NoOptionButtonsText$ = "" Then
+            If CountOfOthersWith% > 0 Then
+                If CountOfOthersWith% = 1 Then
+                    OptionButton2Text$ = "Both " & TagTypes$ & " fields"
+'                    NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from " & TagTypes$ & " field?"
+                  Else
+                    OptionButton2Text$ = "All " & Trim$( Str$( CountOfAllWith% + 1 ) ) & " " & TagTypes$ & " fields"
+'                    NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from " & Trim$( Str$( CountOfOthersWith% ) ) & " other " & TagTypes$ & " fields?"
+                End If
+                WhichDialogBox% = TWO_OPTION_BUTTONS
+'                OptionButton1Tag$      = TagTypes$
+                DBID% = 18
+                GoTo ShowDialogBox:
+              Else
+                NoOptionButtonsText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from this " & SourceTag$ & " field?"
+                WhichDialogBox%      = NO_OPTION_BUTTONS
+                OptionButton1Tag$    = SourceTag$
+                DBID% = 19
+                GoTo ShowDialogBox:
+            End If
+          Else
+            If CountOfAllWith% = 1 Then
+                OptionButton2Text$ = "Other " & TagTypes$ & " field"
+              ElseIf CountOfAllWith% = 2 Then
+                OptionButton2Text$ = "Both " & TagTypes$ & " fields"
+              ElseIf CountOfAllWith% > 2 Then
+                OptionButton2Text$ = "All " & Trim$( Str$( CountOfAllWith% + 1 ) ) & " " & TagTypes$ & " fields"
+            End If
+            WhichDialogBox% = TWO_OPTION_BUTTONS
+            DBID% = 20
+            GoTo ShowDialogBox:
+        End If
+    End If
+
+End If
+
+MsgBox "This message should never appear"
+
+' This section of the macro sets up the dialog boxes to complete the editing.
+
+ShowDialogBox:
+
+Select Case WhichDialogBox%
+
+  Case NO_OPTION_BUTTONS
+    TargetTag$ = NoOptionButtonsDialogBox
+
+  Case TWO_OPTION_BUTTONS
+    TargetTag$ = TwoOptionButtonsDialogBox
+
+  Case THREE_OPTION_BUTTONS
+    TargetTag$ = ThreeOptionButtonsDialogBox
+
+End Select
+
+If TargetTag$ = "Q" Then Exit Sub
+
+If Switched Then
+    DBID%                = 0
+    WhichDialogBox%      = 0
+    NoOptionButtonsText$ = ""
+    OptionButton1Tag$    = ""
+    OptionButton1Text$   = ""
+    OptionButton2Tag$    = ""
+    OptionButton2Text$   = ""
+    OptionButton3Text$   = ""
+    SwitchButtonVisible  = TRUE
+    Switched             = FALSE
+    GoTo SetupDialogBoxes:
+End If
+
+' To add or delete the subdivision, go through the array of subjects. The tags selected
+' in the dialog box must match the tag of each field in the array in order to carry out
+' the operation. If the operation is to copy the subdivision, the fields lacking it have
+' no starting position for the subdivision string; that is the flag to add the string to
+' the end. If the operation is to delete the subdivision string, the fields that contain
+' it have a position at which the field may be truncated. For each addition or deletion,
+' the whole field will be replaced with the "SetFieldLine" command.
+
+DoTheWork:
+
+For i = 0 To UBound( SHFields )
+  If TargetTag$ = "6XX" Or _
+     TargetTag$ = "name" And SHFields( i ).tIsName = TRUE Or _
+     TargetTag$ Like "6[0-9][0-9]" And TargetTag$ = SHFields( i ).tTag Then
+      FieldData$ = SHFields( i ).tContent
+      If Operation$ = COPY Then
+          If SHFields( i ).tLine = CurrentRow% Then
+              SkipLine = TRUE
+            Else
+              If SHFields( i ).tSubDivPos < 0 Then
+                  SkipLine = FALSE
+                  If Right$( FieldData$, 1 ) = "." Then
+                      FieldData$ = Left$( FieldData$, Len( FieldData$ ) - 1 )
+                  End If
+                  NewField$ = SHFields( i ).tTag & SHFields( i ).tIndicators & FieldData$ & " " & SubdivisionString$
+                Else
+                  SkipLine  = TRUE
+              End If
+          End If
+        Else
+          p = SHFields( i ).tSubDivPos
+          If p > 0 Then
+              SkipLine   = FALSE
+              FieldData$ = Trim$( Left$( FieldData$, p - 1 ) )
+              If Right$( FieldData$, 1 ) Like "[!-)]" Or Right$( FieldData$, 1 ) = Chr$( 034 ) Then
+                  FieldData$ = FieldData$ & "."
+              End If
+              NewField$ = SHFields( i ).tTag & SHFields( i ).tIndicators & FieldData$
+            Else
+              SkipLine  = TRUE
+          End If
+      End If
+      If SkipLine = FALSE Then
+          If CS.SetFieldLine( SHFields( i ).tLine, NewField$ ) Then
+              SuccessCount% = SuccessCount% + 1
+            Else
+              FailCount%    = FailCount% + 1
+          End If
+      End If
+  End If
+Next i
+
+' Display problem messages.
+
+If Operation$ = COPY Then
+    If FailCount% > 0 Then
+        MsgBox "Sorry, the copied subdivisions could not be added.", CRITICAL_MESSAGE, WaltsMacros$
+      ElseIf SuccessCount% = 0 Then
+        MsgBox "No subdivisions were copied.", INFORMATION_MESSAGE, WaltsMacros$
+    End If
+  Else
+    If FailCount% > 0 Then
+        MsgBox "Sorry, the selected subdivisions could not be deleted.", CRITICAL_MESSAGE, WaltsMacros$
+      ElseIf SuccessCount% = 0 Then
+        MsgBox "No subdivisions were deleted.", INFORMATION_MESSAGE, WaltsMacros$
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function NoOptionButtonsDialogBox As String
+
+Begin Dialog NoButtonsDefinition  256,  54, WaltsMacros$, .DialogBoxControlFunction
+  ButtonGroup                                             .ButtonGroup
+  OkButton      134,  32,  52,  14
+  CancelButton  194,  32,  52,  14
+   PushButton    10,  30,  80,  16, "",                   .SwitchButton
+  Text           10,   6, 236,  16, NoOptionButtonsText$
+  Text          112,  34,  16,   8, "",                   .Wherefrom
+End Dialog
+
+Dim NoButtons As NoButtonsDefinition
+On Error Resume Next
+Dialog NoButtons
+If Err = DLG_STATEMENT_CANCEL Then
+    NoOptionButtonsDialogBox = QUIT
+  Else
+    NoOptionButtonsDialogBox = OptionButton1Tag$  '???TagTypes$
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function TwoOptionButtonsDialogBox As String
+
+Begin Dialog TwoButtonsDefinition  256,  72, WaltsMacros$, .DialogBoxControlFunction
+  OkButton       134,  50,  52,  14
+  CancelButton   194,  50,  52,  14
+  PushButton      10,  48,  80,  16, "",                 .SwitchButton
+  Text            10,   6, 236,   8, "",                 .Legend
+  OptionGroup                                            .OptionGroup1
+   OptionButton   16,  18, 230,  12, OptionButton1Text$, .OptionButton1
+   OptionButton   16,  30, 230,  12, OptionButton2Text$
+  Text           112,  52,  16,   8, "",                 .Wherefrom
+End Dialog
+
+Dim TwoButtons As TwoButtonsDefinition
+On Error Resume Next
+Dialog TwoButtons
+If Err = DLG_STATEMENT_CANCEL Then
+    TwoOptionButtonsDialogBox = QUIT
+  Else
+    If TwoButtons.OptionGroup1 = 0 Then
+        TwoOptionButtonsDialogBox = OptionButton1Tag$
+      Else
+        TwoOptionButtonsDialogBox = TagTypes$
+    End If
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function ThreeOptionButtonsDialogBox As String
+
+Begin Dialog ThreeButtonsDefinition  256,  80, WaltsMacros$, .DialogBoxControlFunction
+  OkButton       134,  58,  52,  14
+  CancelButton   194,  58,  52,  14
+  PushButton      10,  56,  80,  16, "",                 .SwitchButton
+  Text            10,   6, 236,   8, "",                 .Legend
+  OptionGroup                                            .OptionGroup1
+   OptionButton   16,  18, 230,  12, OptionButton1Text$, .OptionButton1
+   OptionButton   16,  30, 230,  12, OptionButton2Text$
+   OptionButton   16,  42, 230,  12, OptionButton3Text$
+  Text           112,  60,  16,   8, "",                 .Wherefrom
+End Dialog
+
+Dim ThreeButtons As ThreeButtonsDefinition
+On Error Resume Next
+Dialog ThreeButtons
+If Err = DLG_STATEMENT_CANCEL Then
+    ThreeOptionButtonsDialogBox = QUIT
+  Else
+    Select Case ThreeButtons.OptionGroup1
+      Case 0
+        ThreeOptionButtonsDialogBox = OptionButton1Tag$
+      Case 1
+        ThreeOptionButtonsDialogBox = OptionButton2Tag$
+      Case 2
+        ThreeOptionButtonsDialogBox = TagTypes$
+    End Select
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function DialogBoxControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const INITIALIZE     As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const INVISIBLE      As Integer = 0   'The value to make a dialog box control invisible.
+Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+Const VISIBLE        As Integer = 1   'The value to make a dialog box control visible.
+
+Dim CopyText$
+Dim RemoveText$
+
+CopyText$   = "Copy subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " to--"
+RemoveText$ = "Remove subdivision string " & QUOTE & SubdivisionDisplayString$ & QUOTE & " from--"
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If Operation$ = REMOVE Then
+        DlgText    "SwitchButton",   "&Copy string instead"
+      Else
+        DlgText    "SwitchButton",   "&Remove string instead"
+    End If
+
+    If SwitchButtonVisible Then
+        DlgVisible "SwitchButton",   VISIBLE
+      Else
+        DlgVisible "SwitchButton",   INVISIBLE
+    End If
+
+    If WhichDialogBox% <> NO_OPTION_BUTTONS Then
+        If Operation$ = REMOVE Then
+            DlgText    "Legend",         RemoveText$
+          Else
+            DlgText    "Legend",         CopyText$
+        End If
+        DlgFocus   "OptionButton1"
+    End If
+
+    DlgText "Wherefrom", Str$( DBID% )
+
+
+  Case CONTROL_CHANGE
+
+    If Id$ = "SwitchButton" Then
+        If Operation$ = COPY Then
+            Operation$ = REMOVE
+          Else
+            Operation$ = COPY
+        End If
+        Switched = TRUE
+        DlgEnd 0
+    End If
+
+End Select
+
+End Function
+'118151134
+'
+'Macro name: SubjectSubfieldsTool
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 4/17/2023 9:55:20 AM using "MacroBookInspector" macro by Walter F. Nickeson.

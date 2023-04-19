@@ -1,0 +1,1419 @@
+'MacroName:WadeGilesToPinyin.2022.71
+'MacroDescription:Converts a Wade-Giles string to a Pinyin string, following LC
+' practice.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 21 December 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro to convert a string of Chinese syllables in Wade-Giles
+' romanization to Pinyin, according to guidelines used in the Library of Congress Pinyin
+' Conversion Project of 2000. The conversion takes place as the string is typed into the
+' macro's input box, but the macro will also instantly convert text copied and pasted
+' into that box. For all input, use the apostrophe for the ayn character, and enter the
+' letter "ü" ("u" with umlaut) as it appears. Input a hyphen used to join two syllables.
+' Don't input any other diacritical marks (the breve and circumflex are the only ones
+' likely to be encountered) or special characters. The macro retains in the output
+' string any characters it doesn't recognize as part of a Wade-Giles syllable, so
+' extraneous characters may produce strange results. When entering an inverted personal
+' name, retain the comma to properly browse for that name.
+'
+' The letter "ü" may be entered in a number of ways. One is by using the pushbutton at
+' the end of the input box. Unfortunately, the pushbutton can only add the "u" at the
+' end of the string, regardless of the cursor position in the input box. If the letter
+' must be added inside the string, another entry method is to hold down the [ALT] key and
+' press either [1][2][9] or [0][2][5][2] on the numeric keypad. (The macro shows "129"
+' below the button as a reminder of the first method.) Finally, copying and pasting from
+' another source is an option.
+'
+' The output will be all lower case, except that initial capitals in the input string are
+' kept. Unknown entries are not transformed: terms or words not in the macro's vocabulary
+' will appear in the output string just as they were entered. If you are logged on, the
+' macro helps you use that output string as a quick browse or search of WorldCat or the
+' authority file. For a title browse, the macro will attempt to truncate a string longer
+' than the system's 60-character limit. For a derived title search, the macro reduces the
+' converted string to the familiar 3,2,2,1 pattern, and to the 4,3,1 pattern for a
+' derived name search. For all derived searches, slash qualifiers, such as date and
+' format, may be added to the search string. A checkbox allows for limiting the results
+' of a search to records cataloged in English. If a browse or search fails, the dialog
+' box remains open for a revision of the search string. Note that the system returns a
+' count of zero records found both for no records retrieved, but also for too many
+' retrieved. There is no way to distinguish between the two.
+'
+' To convert the input string to Pinyin romanization this macro uses, with minor
+' modifications, the table originally created in October 2000 by the Library of Congress
+' in its Pinyin Conversion Project. Subleties in capitalization and syllable joining or
+' separation are beyond the capabilities of the macro, so its output must be verified
+' before use.
+'
+' This macro is in large part an exercise to see if I could program a macro to respond to
+' input on the fly, acting upon input as it is entered, character by character. The macro
+' would be much simpler if it waited until the whole input string were entered and then
+' it manipulated the data--typing into an input box and then pressing the Enter key. I
+' wanted to get immediate feedback upon input. The chief problem I have encounted with
+' the macro is that if the input is keyed in too quickly, execution halts, seemingly
+' like on an old manual typewriter when the keys jam up.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillArray
+
+Declare Function DeleteCommas( InString$ ) As String
+Declare Function GetPYWord   ( InString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog3ControlFunction( Id$, Action%, SVal& )
+
+Type WordType
+ tBeginPos     As Integer
+ tEndPos       As Integer
+ tWG_Word      As String
+ tPY_Word      As String
+ tSeparator    As String
+ tOutputString As String
+End Type
+
+Global Const CONTROL_CHANGE        As Integer = 2
+Global Const CRITICAL_MESSAGE      As Integer = 16
+Global Const DISABLED              As Integer = 0
+Global Const ENABLED               As Integer = 1
+Global Const INITIALIZE            As Integer = 1
+Global Const KEEP_DLG_OPEN         As Integer = -1
+
+Global Const CONVERSION_TABLE_SIZE As Integer = 263
+Global Const PY_WORD               As Integer = 1
+Global Const WG_WORD               As Integer = 0
+
+Global BrowseString$
+Global CS As Object
+Global DerivedAuthorString$
+Global DerivedTitleString$
+Global tOutputString$
+Global PNameBrowseString$
+Global WaltsMacros$
+Global WshShell As Object
+
+Global Truncation
+
+Global AuthoritySearches( 5 ) As String
+Global WorldCatSearches ( 8 )  As String
+
+Global ConversionTable( CONVERSION_TABLE_SIZE, 1 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Const COPY_PINYIN_STRING    As Integer = 2
+Const LOGON_ONLY            As Integer = 1
+Const MAX_LEN_BROWSE_STRING As Integer = 60
+Const SEARCH_PINYIN_STRING  As Integer = 1
+
+Dim Candidate$
+Dim DialogChoice%
+Dim Start%
+Dim TempString$
+Dim WordCount%
+
+Dim i As Integer, p As Integer
+
+Truncation   = FALSE
+WaltsMacros$ = "[Walt's macros] Extras2:WadeGilesToPinyin"
+
+AuthoritySearches( 0 ) = "Browse personal author"
+AuthoritySearches( 1 ) = "Browse corporate author"
+AuthoritySearches( 2 ) = "Search personal author keywords"
+AuthoritySearches( 3 ) = "Search corporate author keywords"
+AuthoritySearches( 4 ) = "Browse title"
+AuthoritySearches( 5 ) = "Search title keywords"
+
+WorldCatSearches( 0 )  = "Browse title"
+WorldCatSearches( 1 )  = "Search (derived) title"
+WorldCatSearches( 2 )  = "Search title keywords"
+WorldCatSearches( 3 )  = "Browse personal author"
+WorldCatSearches( 4 )  = "Browse corporate author"
+WorldCatSearches( 5 )  = "Search (derived) personal author"
+WorldCatSearches( 6 )  = "Search (derived) corporate author"
+WorldCatSearches( 7 )  = "Search personal author keywords"
+WorldCatSearches( 8 )  = "Search corporate author keywords"
+
+' The Windows Scripting Host (WSH) seems to provide a more stable environment for using
+' the SendKeys method than OML. SendKeys will be used in the text input box when the
+' character "ü" needs to be inserted.
+
+Set WshShell = CreateObject("WScript.Shell")
+
+FillArray
+
+Begin Dialog Dialog1Definition  264, 60, WaltsMacros$, .Dialog1ControlFunction
+  PushButton    138,  38,  52,  14, "&Search ...",            .Search
+  PushButton     74,  38,  52,  14, "&Copy && close",         .Copy
+  PushButton     10,  38,  52,  14, "Clea&r",                 .Clear
+  PushButton    244,   6,  10,  12, Chr$(252),                .u
+  CancelButton  202,  38,  52,  14
+  TextBox        86,   6, 154,  12,                           .TextBoxInput
+  Text           86,  20, 154,   8, "",                       .Output
+  Text           10,   8,  72,   8, "Enter Wade-Giles text:"
+  Text           10,  20,  56,   8, "Pinyin equivalent:"
+  Text          240,  20,  16,   8, "[129]"
+'  Text           10,  64, 128,   8, "",                       .T1
+'  Text           10,  74, 128,   8, "",                       .T2
+'  Text           10,  84, 128,   8, "",                       .T3
+'  Text           10,  94, 128,   8, "",                       .T4
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+
+DialogChoice% = Dialog( Dialog1 )
+
+' The macro converts the input string as it is being entered. When input ends, the
+' choices are to copy the converted string to the Clipboard (possibly to paste it into a
+' record), or to use it to browse or search WorldCat.
+
+Select Case DialogChoice%
+
+  Case COPY_PINYIN_STRING
+
+    ClipBoard.Clear
+    ClipBoard.SetText tOutputString$
+
+  Case SEARCH_PINYIN_STRING
+
+' If the user is not logged on, offer the option to do so with the default authorization,
+' so a search can be made with the converted string.
+
+    If CS.IsOnline = FALSE Then
+
+        Begin Dialog Dialog2Definition  192,  74, WaltsMacros$
+          OkButton        70,  50,  52,  14
+          CancelButton   130,  50,  52,  14
+          Text            10,   4, 137,  12, "You are not logged on! What now?"
+          OptionGroup                                                                           .OptionGroup1
+           OptionButton   16,  16, 160,  12, "&Log on with default authorization and continue", .OptionButton1
+           OptionButton   16,  30, 108,  12, "Log on &only",                                    .OptionButton2
+        End Dialog
+
+        Dim Dialog2 As Dialog2Definition
+        On Error Resume Next
+        Dialog Dialog2
+        If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+        If CS.Logon( "", "", "" ) Then
+            If Dialog2.OptionGroup1 = LOGON_ONLY Then
+                Exit Sub
+            End If
+          Else
+            MsgBox "Sorry, the macro could not log you on.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+
+    End If
+
+' Now build the search strings. The output string just produced serves for all the browse
+' and keyword searches. It needs to be transformed, however, for the author and title
+' derived searches.
+
+' First, any "ü" must be converted to plain "u", for both searching and browsing, and the
+' whole string converted to lower case.
+
+    tOutputString$ = LCase$( tOutputString$ )
+    Do
+      p = InStr( tOutputString$, "ü" )
+      If p > 0 Then
+          Mid$( tOutputString$, p, 1 ) = "u"
+      End If
+    Loop Until p = 0
+
+' The character limit for a browse search string is 60, so truncate the string at the
+' nearest convenient space below that position, if necessary.
+
+    If Len( tOutputString$ ) > MAX_LEN_BROWSE_STRING Then
+        For i = MAX_LEN_BROWSE_STRING To 1 Step -1
+          If Mid$( tOutputString$, i, 1 ) Like "[!0-9a-z]" Then
+              BrowseString$ = Left$( tOutputString$, i - 1 )
+              If Truncation Then
+                  Exit For
+                Else
+                  Truncation = TRUE
+              End If
+          End If
+        Next i
+      Else
+        BrowseString$ = tOutputString$
+    End If
+
+' A personal name requires a comma after the surname to browse properly. If the browse
+' string doesn't contain a comma, add it in the first space. If there is more than one
+' comma, keep only the first.
+
+    Start% = 1
+    p = InStr( Start%, tOutputString$, "," )
+    If p = 0 Then
+        p = InStr( tOutputString$, " " )
+        If p > 0 Then
+            PNameBrowseString$ = Left$( tOutputString$, p - 1 ) & "," & Mid$( tOutputString$, p )
+          Else
+            PNameBrowseString$ = tOutputString$
+        End If
+      Else
+        PNameBrowseString$ = Left$( tOutputString$, p ) & DeleteCommas( Mid$( tOutputString$, p + 1 ) )
+    End If
+
+' Create the derived title search. Begin by removing all commas. Because they are part of
+' the search pattern, they should not be part of the search string.
+
+    tOutputString$ = DeleteCommas( tOutputString$ )
+    TempString$   = tOutputString$
+    Start% = 1
+    Do
+      p = InStr( Start%, TempString$, " " )
+      If p = 0 Then
+          If Start% = 1 Then
+              DerivedTitleString$ = Left$( TempString$, 3 )
+              WordCount%          = 1
+              Exit Do
+            Else
+              Candidate$          = Mid$( TempString$, Start% )
+          End If
+        Else
+          If Start% = 1 Then
+              Candidate$ = Left$( TempString$, p - 1 )
+            Else
+              Candidate$ = Mid$( TempString$, Start%, ( p - Start% ) )
+          End If
+      End If
+      Select Case WordCount%
+        Case 0
+          DerivedTitleString$ = Left$( Candidate$, 3 )
+        Case 1, 2
+          DerivedTitleString$ = DerivedTitleString$ & "," & Left$( Candidate$, 2 )
+        Case 3
+          DerivedTitleString$ = DerivedTitleString$ & "," & Left$( Candidate$, 1 )
+      End Select
+      WordCount% = WordCount% + 1
+      If WordCount% = 4 Then
+          Exit Do
+      End If
+      Start% = p + 1
+    Loop Until p = 0
+    Select Case WordCount%
+      Case 1
+        DerivedTitleString$ = DerivedTitleString$ & ",,,"
+      Case 2
+        DerivedTitleString$ = DerivedTitleString$ & ",,"
+      Case 3
+        DerivedTitleString$ = DerivedTitleString$ & ","
+    End Select
+
+' Now create the derived author search.
+
+    TempString$ = tOutputString$
+    WordCount%  = 0
+
+    Start% = 1
+    Do
+      p = InStr( Start%, tOutputString$, " " )
+      If p = 0 Then
+          If Start% = 1 Then
+              DerivedAuthorString$ = Left$( tOutputString$, 4 )
+              WordCount%           = 1
+              Exit Do
+            Else
+              Candidate$           = Mid$( tOutputString$, Start% )
+          End If
+        Else
+          If Start% = 1 Then
+              Candidate$ = Left$( tOutputString$, p - 1 )
+            Else
+              Candidate$ = Mid$( tOutputString$, Start%, ( p - Start% ) )
+          End If
+      End If
+      Select Case WordCount%
+        Case 0
+          DerivedAuthorString$ = Left$( Candidate$, 4 )
+        Case 1
+          DerivedAuthorString$ = DerivedAuthorString$ & "," & Left$( Candidate$, 3 )
+        Case 2
+          DerivedAuthorString$ = DerivedAuthorString$ & "," & Left$( Candidate$, 1 )
+      End Select
+      WordCount% = WordCount% + 1
+      If WordCount% = 3 Then
+          Exit Do
+      End If
+      Start% = p + 1
+    Loop Until p = 0
+    Select Case WordCount%
+      Case 1
+        DerivedAuthorString$ = DerivedAuthorString$ & ",,"
+      Case 2
+        DerivedAuthorString$ = DerivedAuthorString$ & ","
+    End Select
+
+    Begin Dialog Dialog3Definition  196, 112, WaltsMacros$, .Dialog3ControlFunction
+      OkButton        74,  88,  52,  14
+      CancelButton   134,  88,  52,  14
+      OptionGroup                                                          .OptionGroup1
+       OptionButton   10,  18,  48,  12, "&WorldCat",                      .SearchWCButton
+       OptionButton   64,  18,  56,  12, "&Authority File",                .SearchAFButton
+      DropListBox     10,  42, 128,  88, "",                               .SearchChoicesList
+      TextBox         10,  60, 176,  12,                                   .SearchString
+      CheckBox        10,  28, 108,  12, "English-language records only",  .English
+      Text            10,   6,  32,   8, "Search ..."
+      Text            10,  74,  99,   8, "The string has been truncated.", .Truncate
+    End Dialog
+
+    Dim Dialog3 As Dialog3Definition
+    On Error Resume Next
+    Dialog Dialog3
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray
+
+' The table from which this array is drawn was created by LC for its Pinyin Conversion
+' Project. This array differs from that original table in that terms common to both
+' systems are omitted. Thus, the first two terms in the table, "a" and "ai," are the same
+' in both Wade-Giles and Pinyin, so they do not appear in the array. Exluding syllables
+' that are the same in both systems allowed for a reduction of one third in the size of
+' the array, from 396 entries down to 264.
+
+ConversionTable( 0,   WG_WORD ) = "ch'a"    : ConversionTable( 0,   PY_WORD ) = "cha"
+ConversionTable( 1,   WG_WORD ) = "ch'ai"   : ConversionTable( 1,   PY_WORD ) = "chai"
+ConversionTable( 2,   WG_WORD ) = "ch'an"   : ConversionTable( 2,   PY_WORD ) = "chan"
+ConversionTable( 3,   WG_WORD ) = "ch'ang"  : ConversionTable( 3,   PY_WORD ) = "chang"
+ConversionTable( 4,   WG_WORD ) = "ch'ao"   : ConversionTable( 4,   PY_WORD ) = "chao"
+ConversionTable( 5,   WG_WORD ) = "ch'e"    : ConversionTable( 5,   PY_WORD ) = "che"
+ConversionTable( 6,   WG_WORD ) = "ch'en"   : ConversionTable( 6,   PY_WORD ) = "chen"
+ConversionTable( 7,   WG_WORD ) = "ch'eng"  : ConversionTable( 7,   PY_WORD ) = "cheng"
+ConversionTable( 8,   WG_WORD ) = "ch'i"    : ConversionTable( 8,   PY_WORD ) = "qi"
+ConversionTable( 9,   WG_WORD ) = "ch'ia"   : ConversionTable( 9,   PY_WORD ) = "qia"
+ConversionTable( 10,  WG_WORD ) = "ch'iang" : ConversionTable( 10,  PY_WORD ) = "qiang"
+ConversionTable( 11,  WG_WORD ) = "ch'iao"  : ConversionTable( 11,  PY_WORD ) = "qiao"
+ConversionTable( 12,  WG_WORD ) = "ch'ieh"  : ConversionTable( 12,  PY_WORD ) = "qie"
+ConversionTable( 13,  WG_WORD ) = "ch'ien"  : ConversionTable( 13,  PY_WORD ) = "qian"
+ConversionTable( 14,  WG_WORD ) = "ch'ih"   : ConversionTable( 14,  PY_WORD ) = "chi"
+ConversionTable( 15,  WG_WORD ) = "ch'in"   : ConversionTable( 15,  PY_WORD ) = "qin"
+ConversionTable( 16,  WG_WORD ) = "ch'ing"  : ConversionTable( 16,  PY_WORD ) = "qing"
+ConversionTable( 17,  WG_WORD ) = "ch'iu"   : ConversionTable( 17,  PY_WORD ) = "qiu"
+ConversionTable( 18,  WG_WORD ) = "ch'iung" : ConversionTable( 18,  PY_WORD ) = "qiong"
+ConversionTable( 19,  WG_WORD ) = "ch'o"    : ConversionTable( 19,  PY_WORD ) = "chuo"
+ConversionTable( 20,  WG_WORD ) = "ch'ou"   : ConversionTable( 20,  PY_WORD ) = "chou"
+ConversionTable( 21,  WG_WORD ) = "ch'u"    : ConversionTable( 21,  PY_WORD ) = "chu"
+ConversionTable( 22,  WG_WORD ) = "ch'uai"  : ConversionTable( 22,  PY_WORD ) = "chuai"
+ConversionTable( 23,  WG_WORD ) = "ch'uan"  : ConversionTable( 23,  PY_WORD ) = "chuan"
+ConversionTable( 24,  WG_WORD ) = "ch'uang" : ConversionTable( 24,  PY_WORD ) = "chuang"
+ConversionTable( 25,  WG_WORD ) = "ch'ui"   : ConversionTable( 25,  PY_WORD ) = "chui"
+ConversionTable( 26,  WG_WORD ) = "ch'un"   : ConversionTable( 26,  PY_WORD ) = "chun"
+ConversionTable( 27,  WG_WORD ) = "ch'ung"  : ConversionTable( 27,  PY_WORD ) = "chong"
+ConversionTable( 28,  WG_WORD ) = "ch'ü"    : ConversionTable( 28,  PY_WORD ) = "qu"
+ConversionTable( 29,  WG_WORD ) = "ch'üan"  : ConversionTable( 29,  PY_WORD ) = "quan"
+ConversionTable( 30,  WG_WORD ) = "ch'üeh"  : ConversionTable( 30,  PY_WORD ) = "que"
+ConversionTable( 31,  WG_WORD ) = "ch'ün"   : ConversionTable( 31,  PY_WORD ) = "qun"
+ConversionTable( 32,  WG_WORD ) = "cha"     : ConversionTable( 32,  PY_WORD ) = "zha"
+ConversionTable( 33,  WG_WORD ) = "chai"    : ConversionTable( 33,  PY_WORD ) = "zhai"
+ConversionTable( 34,  WG_WORD ) = "chan"    : ConversionTable( 34,  PY_WORD ) = "zhan"
+ConversionTable( 35,  WG_WORD ) = "chang"   : ConversionTable( 35,  PY_WORD ) = "zhang"
+ConversionTable( 36,  WG_WORD ) = "chao"    : ConversionTable( 36,  PY_WORD ) = "zhao"
+ConversionTable( 37,  WG_WORD ) = "che"     : ConversionTable( 37,  PY_WORD ) = "zhe"
+ConversionTable( 38,  WG_WORD ) = "chen"    : ConversionTable( 38,  PY_WORD ) = "zhen"
+ConversionTable( 39,  WG_WORD ) = "cheng"   : ConversionTable( 39,  PY_WORD ) = "zheng"
+ConversionTable( 40,  WG_WORD ) = "chi"     : ConversionTable( 40,  PY_WORD ) = "ji"
+ConversionTable( 41,  WG_WORD ) = "chia"    : ConversionTable( 41,  PY_WORD ) = "jia"
+ConversionTable( 42,  WG_WORD ) = "chiang"  : ConversionTable( 42,  PY_WORD ) = "jiang"
+ConversionTable( 43,  WG_WORD ) = "chiao"   : ConversionTable( 43,  PY_WORD ) = "jiao"
+ConversionTable( 44,  WG_WORD ) = "chieh"   : ConversionTable( 44,  PY_WORD ) = "jie"
+ConversionTable( 45,  WG_WORD ) = "chien"   : ConversionTable( 45,  PY_WORD ) = "jian"
+ConversionTable( 46,  WG_WORD ) = "chih"    : ConversionTable( 46,  PY_WORD ) = "zhi"
+ConversionTable( 47,  WG_WORD ) = "chin"    : ConversionTable( 47,  PY_WORD ) = "jin"
+ConversionTable( 48,  WG_WORD ) = "ching"   : ConversionTable( 48,  PY_WORD ) = "jing"
+ConversionTable( 49,  WG_WORD ) = "chiu"    : ConversionTable( 49,  PY_WORD ) = "jiu"
+ConversionTable( 50,  WG_WORD ) = "chiung"  : ConversionTable( 50,  PY_WORD ) = "jiong"
+ConversionTable( 51,  WG_WORD ) = "cho"     : ConversionTable( 51,  PY_WORD ) = "zhuo"
+ConversionTable( 52,  WG_WORD ) = "chou"    : ConversionTable( 52,  PY_WORD ) = "zhou"
+ConversionTable( 53,  WG_WORD ) = "chu"     : ConversionTable( 53,  PY_WORD ) = "zhu"
+ConversionTable( 54,  WG_WORD ) = "chua"    : ConversionTable( 54,  PY_WORD ) = "zhua"
+ConversionTable( 55,  WG_WORD ) = "chuai"   : ConversionTable( 55,  PY_WORD ) = "zhuai"
+ConversionTable( 56,  WG_WORD ) = "chuan"   : ConversionTable( 56,  PY_WORD ) = "zhuan"
+ConversionTable( 57,  WG_WORD ) = "chuang"  : ConversionTable( 57,  PY_WORD ) = "zhuang"
+ConversionTable( 58,  WG_WORD ) = "chui"    : ConversionTable( 58,  PY_WORD ) = "zhui"
+ConversionTable( 59,  WG_WORD ) = "chun"    : ConversionTable( 59,  PY_WORD ) = "zhun"
+ConversionTable( 60,  WG_WORD ) = "chung"   : ConversionTable( 60,  PY_WORD ) = "zhong"
+ConversionTable( 61,  WG_WORD ) = "chü"     : ConversionTable( 61,  PY_WORD ) = "ju"
+ConversionTable( 62,  WG_WORD ) = "chüan"   : ConversionTable( 62,  PY_WORD ) = "juan"
+ConversionTable( 63,  WG_WORD ) = "chüeh"   : ConversionTable( 63,  PY_WORD ) = "jue"
+ConversionTable( 64,  WG_WORD ) = "chün"    : ConversionTable( 64,  PY_WORD ) = "jun"
+ConversionTable( 65,  WG_WORD ) = "erh"     : ConversionTable( 65,  PY_WORD ) = "er"
+ConversionTable( 66,  WG_WORD ) = "ho"      : ConversionTable( 66,  PY_WORD ) = "he"
+ConversionTable( 67,  WG_WORD ) = "hsi"     : ConversionTable( 67,  PY_WORD ) = "xi"
+ConversionTable( 68,  WG_WORD ) = "hsia"    : ConversionTable( 68,  PY_WORD ) = "xia"
+ConversionTable( 69,  WG_WORD ) = "hsiang"  : ConversionTable( 69,  PY_WORD ) = "xiang"
+ConversionTable( 70,  WG_WORD ) = "hsiao"   : ConversionTable( 70,  PY_WORD ) = "xiao"
+ConversionTable( 71,  WG_WORD ) = "hsieh"   : ConversionTable( 71,  PY_WORD ) = "xie"
+ConversionTable( 72,  WG_WORD ) = "hsien"   : ConversionTable( 72,  PY_WORD ) = "xian"
+ConversionTable( 73,  WG_WORD ) = "hsin"    : ConversionTable( 73,  PY_WORD ) = "xin"
+ConversionTable( 74,  WG_WORD ) = "hsing"   : ConversionTable( 74,  PY_WORD ) = "xing"
+ConversionTable( 75,  WG_WORD ) = "hsiu"    : ConversionTable( 75,  PY_WORD ) = "xiu"
+ConversionTable( 76,  WG_WORD ) = "hsiung"  : ConversionTable( 76,  PY_WORD ) = "xiong"
+ConversionTable( 77,  WG_WORD ) = "hsü"     : ConversionTable( 77,  PY_WORD ) = "xu"
+ConversionTable( 78,  WG_WORD ) = "hsüan"   : ConversionTable( 78,  PY_WORD ) = "xuan"
+ConversionTable( 79,  WG_WORD ) = "hsüeh"   : ConversionTable( 79,  PY_WORD ) = "xue"
+ConversionTable( 80,  WG_WORD ) = "hsün"    : ConversionTable( 80,  PY_WORD ) = "xun"
+ConversionTable( 81,  WG_WORD ) = "hung"    : ConversionTable( 81,  PY_WORD ) = "hong"
+ConversionTable( 82,  WG_WORD ) = "i"       : ConversionTable( 82,  PY_WORD ) = "yi"
+ConversionTable( 83,  WG_WORD ) = "jan"     : ConversionTable( 83,  PY_WORD ) = "ran"
+ConversionTable( 84,  WG_WORD ) = "jang"    : ConversionTable( 84,  PY_WORD ) = "rang"
+ConversionTable( 85,  WG_WORD ) = "jao"     : ConversionTable( 85,  PY_WORD ) = "rao"
+ConversionTable( 86,  WG_WORD ) = "je"      : ConversionTable( 86,  PY_WORD ) = "re"
+ConversionTable( 87,  WG_WORD ) = "jen"     : ConversionTable( 87,  PY_WORD ) = "ren"
+ConversionTable( 88,  WG_WORD ) = "jeng"    : ConversionTable( 88,  PY_WORD ) = "reng"
+ConversionTable( 89,  WG_WORD ) = "jih"     : ConversionTable( 89,  PY_WORD ) = "ri"
+ConversionTable( 90,  WG_WORD ) = "jo"      : ConversionTable( 90,  PY_WORD ) = "ruo"
+ConversionTable( 91,  WG_WORD ) = "jou"     : ConversionTable( 91,  PY_WORD ) = "rou"
+ConversionTable( 92,  WG_WORD ) = "ju"      : ConversionTable( 92,  PY_WORD ) = "ru"
+ConversionTable( 93,  WG_WORD ) = "juan"    : ConversionTable( 93,  PY_WORD ) = "ruan"
+ConversionTable( 94,  WG_WORD ) = "jui"     : ConversionTable( 94,  PY_WORD ) = "rui"
+ConversionTable( 95,  WG_WORD ) = "jun"     : ConversionTable( 95,  PY_WORD ) = "run"
+ConversionTable( 96,  WG_WORD ) = "jung"    : ConversionTable( 96,  PY_WORD ) = "rong"
+ConversionTable( 97,  WG_WORD ) = "k'a"     : ConversionTable( 97,  PY_WORD ) = "ka"
+ConversionTable( 98,  WG_WORD ) = "k'ai"    : ConversionTable( 98,  PY_WORD ) = "kai"
+ConversionTable( 99,  WG_WORD ) = "k'an"    : ConversionTable( 99,  PY_WORD ) = "kan"
+ConversionTable( 100, WG_WORD ) = "k'ang"   : ConversionTable( 100, PY_WORD ) = "kang"
+ConversionTable( 101, WG_WORD ) = "k'ao"    : ConversionTable( 101, PY_WORD ) = "kao"
+ConversionTable( 102, WG_WORD ) = "k'en"    : ConversionTable( 102, PY_WORD ) = "ken"
+ConversionTable( 103, WG_WORD ) = "k'eng"   : ConversionTable( 103, PY_WORD ) = "keng"
+ConversionTable( 104, WG_WORD ) = "k'o"     : ConversionTable( 104, PY_WORD ) = "ke"
+ConversionTable( 105, WG_WORD ) = "k'ou"    : ConversionTable( 105, PY_WORD ) = "kou"
+ConversionTable( 106, WG_WORD ) = "k'u"     : ConversionTable( 106, PY_WORD ) = "ku"
+ConversionTable( 107, WG_WORD ) = "k'ua"    : ConversionTable( 107, PY_WORD ) = "kua"
+ConversionTable( 108, WG_WORD ) = "k'uai"   : ConversionTable( 108, PY_WORD ) = "kuai"
+ConversionTable( 109, WG_WORD ) = "k'uan"   : ConversionTable( 109, PY_WORD ) = "kuan"
+ConversionTable( 110, WG_WORD ) = "k'uang"  : ConversionTable( 110, PY_WORD ) = "kuang"
+ConversionTable( 111, WG_WORD ) = "k'uei"   : ConversionTable( 111, PY_WORD ) = "kui"
+ConversionTable( 112, WG_WORD ) = "k'un"    : ConversionTable( 112, PY_WORD ) = "kun"
+ConversionTable( 113, WG_WORD ) = "k'ung"   : ConversionTable( 113, PY_WORD ) = "kong"
+ConversionTable( 114, WG_WORD ) = "k'uo"    : ConversionTable( 114, PY_WORD ) = "kuo"
+ConversionTable( 115, WG_WORD ) = "ka"      : ConversionTable( 115, PY_WORD ) = "ga"
+ConversionTable( 116, WG_WORD ) = "kai"     : ConversionTable( 116, PY_WORD ) = "gai"
+ConversionTable( 117, WG_WORD ) = "kan"     : ConversionTable( 117, PY_WORD ) = "gan"
+ConversionTable( 118, WG_WORD ) = "kang"    : ConversionTable( 118, PY_WORD ) = "gang"
+ConversionTable( 119, WG_WORD ) = "kao"     : ConversionTable( 119, PY_WORD ) = "gao"
+ConversionTable( 120, WG_WORD ) = "ken"     : ConversionTable( 120, PY_WORD ) = "gen"
+ConversionTable( 121, WG_WORD ) = "keng"    : ConversionTable( 121, PY_WORD ) = "geng"
+ConversionTable( 122, WG_WORD ) = "ko"      : ConversionTable( 122, PY_WORD ) = "ge"
+ConversionTable( 123, WG_WORD ) = "kou"     : ConversionTable( 123, PY_WORD ) = "gou"
+ConversionTable( 124, WG_WORD ) = "ku"      : ConversionTable( 124, PY_WORD ) = "gu"
+ConversionTable( 125, WG_WORD ) = "kua"     : ConversionTable( 125, PY_WORD ) = "gua"
+ConversionTable( 126, WG_WORD ) = "kuai"    : ConversionTable( 126, PY_WORD ) = "guai"
+ConversionTable( 127, WG_WORD ) = "kuan"    : ConversionTable( 127, PY_WORD ) = "guan"
+ConversionTable( 128, WG_WORD ) = "kuang"   : ConversionTable( 128, PY_WORD ) = "guang"
+ConversionTable( 129, WG_WORD ) = "kuei"    : ConversionTable( 129, PY_WORD ) = "gui"
+ConversionTable( 130, WG_WORD ) = "kun"     : ConversionTable( 130, PY_WORD ) = "gun"
+ConversionTable( 131, WG_WORD ) = "kung"    : ConversionTable( 131, PY_WORD ) = "gong"
+ConversionTable( 132, WG_WORD ) = "kuo"     : ConversionTable( 132, PY_WORD ) = "guo"
+ConversionTable( 133, WG_WORD ) = "lieh"    : ConversionTable( 133, PY_WORD ) = "lie"
+ConversionTable( 134, WG_WORD ) = "lien"    : ConversionTable( 134, PY_WORD ) = "lian"
+ConversionTable( 135, WG_WORD ) = "lo"      : ConversionTable( 135, PY_WORD ) = "luo"
+ConversionTable( 136, WG_WORD ) = "lung"    : ConversionTable( 136, PY_WORD ) = "long"
+ConversionTable( 137, WG_WORD ) = "lüan"    : ConversionTable( 137, PY_WORD ) = "luan"
+ConversionTable( 138, WG_WORD ) = "lüeh"    : ConversionTable( 138, PY_WORD ) = "lue"
+ConversionTable( 139, WG_WORD ) = "mieh"    : ConversionTable( 139, PY_WORD ) = "mie"
+ConversionTable( 140, WG_WORD ) = "mien"    : ConversionTable( 140, PY_WORD ) = "mian"
+ConversionTable( 141, WG_WORD ) = "nieh"    : ConversionTable( 141, PY_WORD ) = "nie"
+ConversionTable( 142, WG_WORD ) = "nien"    : ConversionTable( 142, PY_WORD ) = "nian"
+ConversionTable( 143, WG_WORD ) = "no"      : ConversionTable( 143, PY_WORD ) = "nuo"
+ConversionTable( 144, WG_WORD ) = "nung"    : ConversionTable( 144, PY_WORD ) = "nong"
+ConversionTable( 145, WG_WORD ) = "nüeh"    : ConversionTable( 145, PY_WORD ) = "nue"
+ConversionTable( 146, WG_WORD ) = "o"       : ConversionTable( 146, PY_WORD ) = "e"
+ConversionTable( 147, WG_WORD ) = "p'a"     : ConversionTable( 147, PY_WORD ) = "pa"
+ConversionTable( 148, WG_WORD ) = "p'ai"    : ConversionTable( 148, PY_WORD ) = "pai"
+ConversionTable( 149, WG_WORD ) = "p'an"    : ConversionTable( 149, PY_WORD ) = "pan"
+ConversionTable( 150, WG_WORD ) = "p'ang"   : ConversionTable( 150, PY_WORD ) = "pang"
+ConversionTable( 151, WG_WORD ) = "p'ao"    : ConversionTable( 151, PY_WORD ) = "pao"
+ConversionTable( 152, WG_WORD ) = "p'ei"    : ConversionTable( 152, PY_WORD ) = "pei"
+ConversionTable( 153, WG_WORD ) = "p'en"    : ConversionTable( 153, PY_WORD ) = "pen"
+ConversionTable( 154, WG_WORD ) = "p'eng"   : ConversionTable( 154, PY_WORD ) = "peng"
+ConversionTable( 155, WG_WORD ) = "p'i"     : ConversionTable( 155, PY_WORD ) = "pi"
+ConversionTable( 156, WG_WORD ) = "p'iao"   : ConversionTable( 156, PY_WORD ) = "piao"
+ConversionTable( 157, WG_WORD ) = "p'ieh"   : ConversionTable( 157, PY_WORD ) = "pie"
+ConversionTable( 158, WG_WORD ) = "p'ien"   : ConversionTable( 158, PY_WORD ) = "pian"
+ConversionTable( 159, WG_WORD ) = "p'in"    : ConversionTable( 159, PY_WORD ) = "pin"
+ConversionTable( 160, WG_WORD ) = "p'ing"   : ConversionTable( 160, PY_WORD ) = "ping"
+ConversionTable( 161, WG_WORD ) = "p'o"     : ConversionTable( 161, PY_WORD ) = "po"
+ConversionTable( 162, WG_WORD ) = "p'ou"    : ConversionTable( 162, PY_WORD ) = "pou"
+ConversionTable( 163, WG_WORD ) = "p'u"     : ConversionTable( 163, PY_WORD ) = "pu"
+ConversionTable( 164, WG_WORD ) = "pa"      : ConversionTable( 164, PY_WORD ) = "ba"
+ConversionTable( 165, WG_WORD ) = "pai"     : ConversionTable( 165, PY_WORD ) = "bai"
+ConversionTable( 166, WG_WORD ) = "pan"     : ConversionTable( 166, PY_WORD ) = "ban"
+ConversionTable( 167, WG_WORD ) = "pang"    : ConversionTable( 167, PY_WORD ) = "bang"
+ConversionTable( 168, WG_WORD ) = "pao"     : ConversionTable( 168, PY_WORD ) = "bao"
+ConversionTable( 169, WG_WORD ) = "pei"     : ConversionTable( 169, PY_WORD ) = "bei"
+ConversionTable( 170, WG_WORD ) = "pen"     : ConversionTable( 170, PY_WORD ) = "ben"
+ConversionTable( 171, WG_WORD ) = "peng"    : ConversionTable( 171, PY_WORD ) = "beng"
+ConversionTable( 172, WG_WORD ) = "pi"      : ConversionTable( 172, PY_WORD ) = "bi"
+ConversionTable( 173, WG_WORD ) = "piao"    : ConversionTable( 173, PY_WORD ) = "biao"
+ConversionTable( 174, WG_WORD ) = "pieh"    : ConversionTable( 174, PY_WORD ) = "bie"
+ConversionTable( 175, WG_WORD ) = "pien"    : ConversionTable( 175, PY_WORD ) = "bian"
+ConversionTable( 176, WG_WORD ) = "pin"     : ConversionTable( 176, PY_WORD ) = "bin"
+ConversionTable( 177, WG_WORD ) = "ping"    : ConversionTable( 177, PY_WORD ) = "bing"
+ConversionTable( 178, WG_WORD ) = "po"      : ConversionTable( 178, PY_WORD ) = "bo"
+ConversionTable( 179, WG_WORD ) = "pu"      : ConversionTable( 179, PY_WORD ) = "bu"
+ConversionTable( 180, WG_WORD ) = "shih"    : ConversionTable( 180, PY_WORD ) = "shi"
+ConversionTable( 181, WG_WORD ) = "so"      : ConversionTable( 181, PY_WORD ) = "suo"
+ConversionTable( 182, WG_WORD ) = "ssu"     : ConversionTable( 182, PY_WORD ) = "si"
+ConversionTable( 183, WG_WORD ) = "sung"    : ConversionTable( 183, PY_WORD ) = "song"
+ConversionTable( 184, WG_WORD ) = "t'a"     : ConversionTable( 184, PY_WORD ) = "ta"
+ConversionTable( 185, WG_WORD ) = "t'ai"    : ConversionTable( 185, PY_WORD ) = "tai"
+ConversionTable( 186, WG_WORD ) = "t'an"    : ConversionTable( 186, PY_WORD ) = "tan"
+ConversionTable( 187, WG_WORD ) = "t'ang"   : ConversionTable( 187, PY_WORD ) = "tang"
+ConversionTable( 188, WG_WORD ) = "t'ao"    : ConversionTable( 188, PY_WORD ) = "tao"
+ConversionTable( 189, WG_WORD ) = "t'e"     : ConversionTable( 189, PY_WORD ) = "te"
+ConversionTable( 190, WG_WORD ) = "t'eng"   : ConversionTable( 190, PY_WORD ) = "teng"
+ConversionTable( 191, WG_WORD ) = "t'i"     : ConversionTable( 191, PY_WORD ) = "ti"
+ConversionTable( 192, WG_WORD ) = "t'iao"   : ConversionTable( 192, PY_WORD ) = "tiao"
+ConversionTable( 193, WG_WORD ) = "t'ien"   : ConversionTable( 193, PY_WORD ) = "tian"
+ConversionTable( 194, WG_WORD ) = "t'ing"   : ConversionTable( 194, PY_WORD ) = "ting"
+ConversionTable( 195, WG_WORD ) = "t'o"     : ConversionTable( 195, PY_WORD ) = "tuo"
+ConversionTable( 196, WG_WORD ) = "t'oeh"   : ConversionTable( 196, PY_WORD ) = "tie"
+ConversionTable( 197, WG_WORD ) = "t'ou"    : ConversionTable( 197, PY_WORD ) = "tou"
+ConversionTable( 198, WG_WORD ) = "t'u"     : ConversionTable( 198, PY_WORD ) = "tu"
+ConversionTable( 199, WG_WORD ) = "t'uan"   : ConversionTable( 199, PY_WORD ) = "tuan"
+ConversionTable( 200, WG_WORD ) = "t'ui"    : ConversionTable( 200, PY_WORD ) = "tui"
+ConversionTable( 201, WG_WORD ) = "t'un"    : ConversionTable( 201, PY_WORD ) = "tun"
+ConversionTable( 202, WG_WORD ) = "t'ung"   : ConversionTable( 202, PY_WORD ) = "tong"
+ConversionTable( 203, WG_WORD ) = "ta"      : ConversionTable( 203, PY_WORD ) = "da"
+ConversionTable( 204, WG_WORD ) = "tai"     : ConversionTable( 204, PY_WORD ) = "dai"
+ConversionTable( 205, WG_WORD ) = "tan"     : ConversionTable( 205, PY_WORD ) = "dan"
+ConversionTable( 206, WG_WORD ) = "tang"    : ConversionTable( 206, PY_WORD ) = "dang"
+ConversionTable( 207, WG_WORD ) = "tao"     : ConversionTable( 207, PY_WORD ) = "dao"
+ConversionTable( 208, WG_WORD ) = "te"      : ConversionTable( 208, PY_WORD ) = "de"
+ConversionTable( 209, WG_WORD ) = "teng"    : ConversionTable( 209, PY_WORD ) = "deng"
+ConversionTable( 210, WG_WORD ) = "ti"      : ConversionTable( 210, PY_WORD ) = "di"
+ConversionTable( 211, WG_WORD ) = "tiao"    : ConversionTable( 211, PY_WORD ) = "diao"
+ConversionTable( 212, WG_WORD ) = "tieh"    : ConversionTable( 212, PY_WORD ) = "die"
+ConversionTable( 213, WG_WORD ) = "tien"    : ConversionTable( 213, PY_WORD ) = "dian"
+ConversionTable( 214, WG_WORD ) = "ting"    : ConversionTable( 214, PY_WORD ) = "ding"
+ConversionTable( 215, WG_WORD ) = "tiu"     : ConversionTable( 215, PY_WORD ) = "diu"
+ConversionTable( 216, WG_WORD ) = "to"      : ConversionTable( 216, PY_WORD ) = "duo"
+ConversionTable( 217, WG_WORD ) = "tou"     : ConversionTable( 217, PY_WORD ) = "dou"
+ConversionTable( 218, WG_WORD ) = "ts'a"    : ConversionTable( 218, PY_WORD ) = "ca"
+ConversionTable( 219, WG_WORD ) = "ts'ai"   : ConversionTable( 219, PY_WORD ) = "cai"
+ConversionTable( 220, WG_WORD ) = "ts'an"   : ConversionTable( 220, PY_WORD ) = "can"
+ConversionTable( 221, WG_WORD ) = "ts'ang"  : ConversionTable( 221, PY_WORD ) = "cang"
+ConversionTable( 222, WG_WORD ) = "ts'ao"   : ConversionTable( 222, PY_WORD ) = "cao"
+ConversionTable( 223, WG_WORD ) = "ts'e"    : ConversionTable( 223, PY_WORD ) = "ce"
+ConversionTable( 224, WG_WORD ) = "ts'en"   : ConversionTable( 224, PY_WORD ) = "cen"
+ConversionTable( 225, WG_WORD ) = "ts'eng"  : ConversionTable( 225, PY_WORD ) = "ceng"
+ConversionTable( 226, WG_WORD ) = "ts'o"    : ConversionTable( 226, PY_WORD ) = "cuo"
+ConversionTable( 227, WG_WORD ) = "ts'ou"   : ConversionTable( 227, PY_WORD ) = "cou"
+ConversionTable( 228, WG_WORD ) = "ts'u"    : ConversionTable( 228, PY_WORD ) = "cu"
+ConversionTable( 229, WG_WORD ) = "ts'uan"  : ConversionTable( 229, PY_WORD ) = "cuan"
+ConversionTable( 230, WG_WORD ) = "ts'ui"   : ConversionTable( 230, PY_WORD ) = "cui"
+ConversionTable( 231, WG_WORD ) = "ts'un"   : ConversionTable( 231, PY_WORD ) = "cun"
+ConversionTable( 232, WG_WORD ) = "ts'ung"  : ConversionTable( 232, PY_WORD ) = "cong"
+ConversionTable( 233, WG_WORD ) = "tsa"     : ConversionTable( 233, PY_WORD ) = "za"
+ConversionTable( 234, WG_WORD ) = "tsai"    : ConversionTable( 234, PY_WORD ) = "zai"
+ConversionTable( 235, WG_WORD ) = "tsan"    : ConversionTable( 235, PY_WORD ) = "zan"
+ConversionTable( 236, WG_WORD ) = "tsang"   : ConversionTable( 236, PY_WORD ) = "zang"
+ConversionTable( 237, WG_WORD ) = "tsao"    : ConversionTable( 237, PY_WORD ) = "zao"
+ConversionTable( 238, WG_WORD ) = "tse"     : ConversionTable( 238, PY_WORD ) = "ze"
+ConversionTable( 239, WG_WORD ) = "tsei"    : ConversionTable( 239, PY_WORD ) = "zei"
+ConversionTable( 240, WG_WORD ) = "tsen"    : ConversionTable( 240, PY_WORD ) = "zen"
+ConversionTable( 241, WG_WORD ) = "tseng"   : ConversionTable( 241, PY_WORD ) = "zeng"
+ConversionTable( 242, WG_WORD ) = "tso"     : ConversionTable( 242, PY_WORD ) = "zuo"
+ConversionTable( 243, WG_WORD ) = "tsou"    : ConversionTable( 243, PY_WORD ) = "zou"
+ConversionTable( 244, WG_WORD ) = "tsu"     : ConversionTable( 244, PY_WORD ) = "zu"
+ConversionTable( 245, WG_WORD ) = "tsuan"   : ConversionTable( 245, PY_WORD ) = "zuan"
+ConversionTable( 246, WG_WORD ) = "tsui"    : ConversionTable( 246, PY_WORD ) = "zui"
+ConversionTable( 247, WG_WORD ) = "tsun"    : ConversionTable( 247, PY_WORD ) = "zun"
+ConversionTable( 248, WG_WORD ) = "tsung"   : ConversionTable( 248, PY_WORD ) = "zong"
+ConversionTable( 249, WG_WORD ) = "tu"      : ConversionTable( 249, PY_WORD ) = "du"
+ConversionTable( 250, WG_WORD ) = "tuan"    : ConversionTable( 250, PY_WORD ) = "duan"
+ConversionTable( 251, WG_WORD ) = "tui"     : ConversionTable( 251, PY_WORD ) = "dui"
+ConversionTable( 252, WG_WORD ) = "tun"     : ConversionTable( 252, PY_WORD ) = "dun"
+ConversionTable( 253, WG_WORD ) = "tung"    : ConversionTable( 253, PY_WORD ) = "dong"
+ConversionTable( 254, WG_WORD ) = "tz'u"    : ConversionTable( 254, PY_WORD ) = "ci"
+ConversionTable( 255, WG_WORD ) = "tzu"     : ConversionTable( 255, PY_WORD ) = "zi"
+ConversionTable( 256, WG_WORD ) = "yeh"     : ConversionTable( 256, PY_WORD ) = "ye"
+ConversionTable( 257, WG_WORD ) = "yen"     : ConversionTable( 257, PY_WORD ) = "yan"
+ConversionTable( 258, WG_WORD ) = "yu"      : ConversionTable( 258, PY_WORD ) = "you"
+ConversionTable( 259, WG_WORD ) = "yung"    : ConversionTable( 259, PY_WORD ) = "yong"
+ConversionTable( 260, WG_WORD ) = "yü"      : ConversionTable( 260, PY_WORD ) = "yu"
+ConversionTable( 261, WG_WORD ) = "yüan"    : ConversionTable( 261, PY_WORD ) = "yuan"
+ConversionTable( 262, WG_WORD ) = "yüeh"    : ConversionTable( 262, PY_WORD ) = "yue"
+ConversionTable( 263, WG_WORD ) = "yün"     : ConversionTable( 263, PY_WORD ) = "yun"
+
+End Sub
+
+'****************************************************************************************
+
+Function DeleteCommas( InString$ )
+
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = InString$
+
+Do
+  p = InStr( TempString$, "," )
+  If p > 0 Then
+      TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
+  End If
+Loop Until p = 0
+
+DeleteCommas = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function GetPYWord( InString$ ) As String
+
+Const ALL     As Integer = 1
+Const INITIAL As Integer = -1
+Const NONE    As Integer = 0
+
+Dim Capitalization%
+Dim Cease%
+Dim CharA%
+Dim Start%
+Dim TempString$
+
+Dim i As Integer
+
+' Check the first two or three characters of each input syllable for capitalization. If
+' only the first character is capitalized, assume an initial capital, and capitalize the
+' first character of the output term. If both characters are capitalized, assume the
+' whole term is in uppercase, and simply convert everything to lowercase. (The reason for
+' checking a third character is if the second character is an apostrophe, which is
+' irrelevant for determining case.)
+
+For i = 1 To Len( InString$ )
+  CharA% = Asc( Mid$( InString$, i, 1 ) )
+  Select Case i
+    Case 1
+      If CharA% < 97 Then
+          Capitalization% = INITIAL
+        Else
+          Capitalization% = NONE
+          Exit For
+      End If
+    Case 2
+      If CharA% <> 39 Then
+          If CharA% < 96 Then
+              Capitalization% = ALL
+              Exit For
+          End If
+      End If
+    Case 3
+      If CharA% < 97 Then
+          Capitalization% = ALL
+          Exit For
+      End If
+  End Select
+Next i
+
+' The macro will try to fix some character input, such as the spacing grave and single
+' quotation marks used for the apostrophe, and letters "ê" and "û" (with the circumflex).
+
+For i = 1 To Len( InString$ )
+  CharA% = Asc( Mid$( InString$, i, 1 ) )
+  Select Case CharA%
+    Case 96, 145, 146
+      Mid$( InString$, i, 1 ) = Chr$( 039 )
+    Case 202
+      Mid$( InString$, i, 1 ) = "E"
+    Case 219
+      Mid$( InString$, i, 1 ) = "U"
+    Case 234
+      Mid$( InString$, i, 1 ) = "e"
+    Case 251
+      Mid$( InString$, i, 1 ) = "u"
+  End Select
+Next i
+
+' Speed up the search a bit by identifying a chunk of the table to search in.
+
+Select Case Left$( InString$, 1 )
+  Case "a" To "d"
+    Start% = 1
+    Cease% = 64
+  Case "e" To "i"
+    Start% = 65
+    Cease% = 82
+  Case "j"
+    Start% = 83
+    Cease% = 96
+  Case "k"
+    Start% = 97
+    Cease% = 132
+  Case "l" To "o"
+    Start% = 133
+    Cease% = 146
+  Case "p"
+    Start% = 147
+    Cease% = 179
+  Case "q" To "t"
+    Start% = 180
+    Cease% = 255
+  Case "u" To "z"
+    Start% = 256
+    Cease% = CONVERSION_TABLE_SIZE
+End Select
+For i = Start% To Cease%
+  If InString$ = ConversionTable( i, WG_WORD ) Then
+      TempString$ = ConversionTable( i, PY_WORD )
+      Exit For
+  End If
+Next i
+
+If TempString$ = "" Then
+    GetPYWord = InString$
+  Else
+    If Capitalization% = INITIAL Then
+        Mid$( TempString$, 1, 1 ) = UCase$( Left$( TempString$, 1 ) )
+    End If
+    GetPYWord = TempString$
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' This is the function in which all the work is done--Pinyin syllables are created from
+' the input as it is created.
+
+Const IDLE_STATE As Integer = 5
+
+Static BeginCurrentWord%
+Static CurrentInputString$
+Static CurrentInputStringIndex%
+Static CurrentInputWord$
+Static LenPreviousInputString%
+Static PreviousInputString$
+Static PrevioustOutputString$
+Static PreviousWord$
+Static WordStoreIndex%
+
+Static EndOfWord
+
+Dim CurrentStringChar$
+Dim LenCurrentInputString%
+Dim LenCurrentWord%
+Dim NewWord$
+Dim PreviousStringChar$
+Dim SepChar$
+Dim UBWordStore%
+
+Static WordStore() As WordType
+
+Dim i As Integer, x As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgEnable "Clear",              DISABLED
+    DlgEnable "Copy",               DISABLED
+    DlgEnable "Search",             DISABLED
+    DlgFocus  "TextBoxInput"
+    CurrentInputStringIndex% = 1
+    BeginCurrentWord%        = 1
+    LenCurrentWord%          = 0
+    EndOfWord                = TRUE
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "Clear"
+        DlgText   "TextBoxInput",       ""
+        BeginCurrentWord%     = 1
+        CurrentInputWord$     = ""
+        tOutputString$         = ""
+        PreviousInputString$  = ""
+        PreviousWord$         = ""
+        PrevioustOutputString$ = ""
+        WordStoreIndex%       = 0
+        EndOfWord             = TRUE
+        DlgFocus  "TextBoxInput"
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "u"
+
+        DlgText   "TextBoxInput",       CurrentInputString$ & Chr$( 252 )
+        DlgFocus  "TextBoxInput"
+
+' Adding the letter "ü" to the input string poses some challenges. Perhaps the easiest
+' way to insert that character when typing input is to use the numeric keypad (by holding
+' down the [ALT] key and pressing either [1][2][9] or [0][2][5][2]). But because that
+' knowledge may not be in everyone's head, the macro offers a pushbutton to use to enter
+' the "ü". The first drawback of this method is that the character must be added to the
+' end of the input string; OML has no way to tell where the cursor is in a text input
+' box, so it can't put the character into the string at the current cursor position. The
+' second drawback is that after the macro sets the text of the dialog box with the new
+' string, the pushbutton still has the focus. Nothing more can be added to the input box
+' until it gets the focus back, and that is done by using the "DlgFocus" command. Which
+' adds a further drawback, because when the focus is returned to the text input box, the
+' cursor appears at the beginning of the input string. This isn't helpful if the "ü" is
+' being added in the middle of the string. This last drawback can be partially overcome
+' by using the SendKeys command "{END}" to move the cursor to the end of the input
+' string. This action makes sense if the character was just added as the last character
+' in the course of typing in the syllables. However, I have not had success using OML
+' SendKeys. On the other hand, I have had success using the Windows Shell command "WSH
+' 'SendKeys'", which is the method adopted in this macro.
+
+        WshShell.SendKeys "{END}", 0
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+
+  Case IDLE_STATE
+
+' The dialog box is in the "idle state" while text is being entered in the text box. It
+' takes the input string and compares each word (defined as a string bounded by spaces or
+' hyphens) with the contents of the array of Chinese syllables. As the string changes
+' with input--characters being added and deleted--and matches are found (or not) for the
+' words of that string at any instant, the output string too changes.
+
+    CurrentInputString$ = LTrim$( DlgText( "TextBoxInput" ) )
+    If CurrentInputString$ = "" Then
+        BeginCurrentWord%     = 1
+        CurrentInputWord$     = ""
+        tOutputString$         = ""
+        PreviousInputString$  = ""
+        PreviousWord$         = ""
+        PrevioustOutputString$ = ""
+        DlgText   "Output",             tOutputString$
+        DlgEnable "Clear",              DISABLED
+        DlgEnable "Copy",               DISABLED
+        DlgEnable "Search",             DISABLED
+        DlgText   "TextBoxInput",       ""
+      Else
+        DlgEnable "Clear",              ENABLED
+        DlgEnable "Copy",               ENABLED
+        DlgEnable "Search",             ENABLED
+
+        LenCurrentInputString%  = Len( CurrentInputString$ )
+        LenPreviousInputString% = Len( PreviousInputString$ )
+        If LenCurrentInputString% <> LenPreviousInputString Then
+
+' If the macro is just starting out with the first character having been entered in the
+' text box, the array of words must be initialized, with the starting point for reading
+' the string being that character in the first position. This is also true if text has
+' been pasted into the text box for conversion. The clue to this situation is the
+' difference between the length of the input string and the previous length of the input
+' string is more than one, because with normal text entry (or deletion) by the keyboard
+' the string grows or shrinks by one each cycle of this function.
+
+            If LenCurrentInputString% = 1 Or Abs( LenCurrentInputString% - LenPreviousInputString > 1 ) Then
+                BeginCurrentWord%       = 1
+                ReDim Preserve WordStore( 0 )
+                WordStore( 0 ).tBeginPos = 1
+            End If
+
+' In the "idle state" (the term given in the documentation), this function is called
+' continuously as soon as the dialog box is initialized. If the input string changes from
+' one call to the next, indicated by a change in its length as a character is added or
+' removed, it will differ from its predecessor. This loop runs through the input string
+' and compares it with the previous version of the input string to identify at what
+' position the strings differ.
+
+            CurrentInputStringIndex% = 1
+
+' If text has been pasted into the text box the string length doesn't change, just the
+' position in the string of the current character being read.
+
+ContinueInInputString:
+
+            Do
+              CurrentStringChar$  = Mid$( CurrentInputString$, CurrentInputStringIndex%, 1 )
+              PreviousStringChar$ = Mid$( PreviousInputString$, CurrentInputStringIndex%, 1 )
+              If CurrentStringChar$ <> PreviousStringChar$ Then
+                  If CurrentInputStringIndex% = LenCurrentInputString% Then
+
+' If the difference between the input string and the previous input string is in the last
+' character of the former, either the string is being added to at the end, and the array
+' is growing, or the last character has been deleted, and the current string is shorter
+' than the previous version. First consider the case where the string is being entered
+' and growing at the end.
+
+                      If LenCurrentInputString% > LenPreviousInputString% Then
+                          WordStoreIndex% = UBound( WordStore )
+                          If EndOfWord Then
+                              If LenCurrentInputString% > 1 Then
+                                  WordStoreIndex% = WordStoreIndex% + 1
+                                  ReDim Preserve WordStore( WordStoreIndex% )
+                                  With WordStore( WordStoreIndex% )
+                                   .tBeginPos     = WordStore( WordStoreIndex% - 1 ).tEndPos + 1
+                                   .tOutputString = tOutputString$
+                                  End With
+                              End If
+                          End If
+                          BeginCurrentWord%                    = WordStore( WordStoreIndex% ).tBeginPos
+                          LenCurrentWord%                      = LenCurrentInputString% - WordStore( WordStoreIndex% ).tBeginPos + 1
+                          CurrentInputWord$                    = Mid$( CurrentInputString$, BeginCurrentWord%, LenCurrentWord% )
+                          WordStore( WordStoreIndex% ).tWG_Word = CurrentInputWord$
+                          WordStore( WordStoreIndex% ).tPY_Word = GetPYWord( WordStore( WordStoreIndex% ).tWG_Word )
+                          EndOfWord                            = FALSE
+                          If CurrentStringChar$ Like "[- ]" Then
+                              EndOfWord = TRUE
+                              If CurrentStringChar$ = "-" Then
+                                  CurrentStringChar$ = ""
+                              End If
+                              With WordStore( WordStoreIndex% )
+                               .tSeparator = CurrentStringChar$
+                               .tWG_Word   = Left$( WordStore( WordStoreIndex% ).tWG_Word, LenCurrentWord% - 1 )
+                               .tPY_Word   = GetPYWord( WordStore( WordStoreIndex% ).tWG_Word )
+                               .tEndPos    = CurrentInputStringIndex%
+                              End With
+                              BeginCurrentWord% = WordStore( WordStoreIndex% ).tBeginPos
+                          End If
+                          CurrentInputStringIndex% = CurrentInputStringIndex% + 1
+                        Else
+                          GoTo Shorter:
+                      End If
+                    Else
+
+' If the difference between the two strings is somewhere in the middle, the situation is
+' a bit more complicated, because the result may not simply be a changed word, but a
+' deleted or added word. Whatever the change in the imput string was, the whole array
+' will require some adjustments. The positions of all the words within the string will
+' need to be increased or decreased, depending on whether the changed word is longer or
+' shorter than its previous version, and rows of the array may need to be added or
+' removed if spaces or hyphens are inserted or deleted. In any case, the first step is to
+' find the row containing the word in which the difference appears.
+
+Shorter:
+
+                      UBWordStore% = UBound( WordStore )
+                      For i = 0 To UBWordStore%
+                        If CurrentInputStringIndex% >= WordStore( i ).tBeginPos And ( CurrentInputStringIndex% <= WordStore( i ).tEndPos Or WordStore( i ).tEndPos = 0 ) Then
+                            WordStoreIndex% = i
+                            Exit For
+                        End If
+                      Next i
+
+' If a space or a hyphen was inserted into the input string, it created two new words.
+' The first word, the part of the original word before the separator, simply gets a new
+' end position within the input string. The second word requires that a new row in the
+' array be inserted, shifting all subsequent words up a row. Beginning and ending
+' positions of those words must all be adjusted.
+
+                      If CurrentStringChar$ Like "[- ]" Then
+                          If CurrentStringChar$ = " " Then
+                              SepChar$ = CurrentStringChar$
+                            Else
+                              SepChar$ = ""
+                          End If
+                          If WordStoreIndex% = UBWordStore% Then
+                              x = UBWordStore%
+                            Else
+                              x = WordStoreIndex%
+                          End If
+                          NewWord$ = Mid$( WordStore( x ).tWG_Word, ( CurrentInputStringIndex% - WordStore( x ).tBeginPos ) + 1 )
+                          With WordStore( x )
+                           .tWG_Word   = Mid$( CurrentInputString$, WordStore( x ).tBeginPos, CurrentInputStringIndex% - WordStore( x ).tBeginPos )
+                           .tPY_Word   = GetPYWord( WordStore( x ).tWG_Word )
+                           .tEndPos    = CurrentInputStringIndex%
+                           .tSeparator = SepChar$
+                          End With
+                          UBWordStore% = UBWordStore% + 1
+                          ReDim Preserve WordStore( UBWordStore% )
+                          If x <> UBWordStore% - 1 Then
+                              For i = UBWordStore% To x + 2 Step -1
+                                WordStore( i ) = WordStore( i - 1 )
+                              Next i
+                          End If
+                          With WordStore( x + 1 )
+                           .tBeginPos  = CurrentInputStringIndex% + 1
+                           .tWG_Word   = NewWord$
+                           .tPY_Word   = GetPYWord( WordStore( x + 1 ).tWG_Word )
+                           .tEndPos    = LenCurrentInputString%
+                           .tSeparator = SepChar$
+                           .tOutputString = WordStore( x ).tOutputString & WordStore( x ).tPY_Word & WordStore( x ).tSeparator
+                          End With
+                          If x <> UBWordStore% - 1 Then
+                              For i = x + 1 To UBWordStore%
+                                WordStore( i ).tOutputString = WordStore( i - 1 ).tOutputString & WordStore( i - 1 ).tPY_Word & WordStore( i - 1 ).tSeparator
+                                WordStore( i ).tBeginPos     = WordStore( i - 1 ).tEndPos + 1
+                                If WordStore( i ).tEndPos > 0 Then
+                                    WordStore( i ).tEndPos = WordStore( i ).tBeginPos + Len( WordStore( i ).tWG_Word )
+                                End If
+                              Next i
+                          End If
+                          GoTo Display:
+                        Else
+
+' If a character other than a separator was inserted into or removed from the input
+' string, the end position of that word in the string changes, which affects the
+' positions of all the following words in the array, so every row must be adjusted.
+
+                          WordStore( WordStoreIndex% ).tWG_Word   = ""
+                          WordStore( WordStoreIndex% ).tPY_Word   = ""
+                          WordStore( WordStoreIndex% ).tSeparator = ""
+                          BeginCurrentWord%                      = WordStore( WordStoreIndex% ).tBeginPos
+                          LenCurrentWord%                        = 1
+                          Do
+                            CurrentInputWord$                    = Mid$( CurrentInputString$, BeginCurrentWord%, LenCurrentWord% )
+                            WordStore( WordStoreIndex% ).tWG_Word = CurrentInputWord$
+                            WordStore( WordStoreIndex% ).tPY_Word = GetPYWord( WordStore( WordStoreIndex% ).tWG_Word )
+                            LenCurrentWord%                      = LenCurrentWord% + 1
+                            SepChar$                             = Right$( CurrentInputWord$, 1 )
+                          Loop Until SepChar$ Like "[- ]" Or BeginCurrentWord% + LenCurrentWord% > LenCurrentInputString% + 1
+                          If SepChar$ Like "[- ]" Then
+                              If SepChar$ = " " Then
+                                  WordStore( WordStoreIndex% ).tSeparator = SepChar$
+                                  WordStore( WordStoreIndex% ).tWG_Word   = Left$( CurrentInputWord$, Len( CurrentInputWord$ ) - 1 )
+                                Else
+                                  WordStore( WordStoreIndex% ).tWG_Word   = CurrentInputWord$
+                              End If
+                            Else
+                              WordStore( WordStoreIndex% ).tWG_Word = CurrentInputWord$
+                          End If
+                          WordStore( WordStoreIndex% ).tPY_Word = GetPYWord( WordStore( WordStoreIndex% ).tWG_Word )
+                          If BeginCurrentWord% + LenCurrentWord% > LenCurrentInputString% + 1 Then
+                              GoTo Collapse:
+                          End If
+                      End If
+
+' The deletion of a space or hyphen between two words results in one fewer word in the
+' array. The test for this is if the current word seems to extend into the next word's
+' space, that is, its length, and therefore its end position, is beyond the beginning
+' position of the next word. The row following the row containing the first of the words
+' (the separator is considered part of the word it follows) must be deleted and all the
+' positions of the subsequent words must be decreased.
+
+Collapse:
+
+                      If WordStoreIndex% < UBWordStore% Then
+                          If WordStore( WordStoreIndex% ).tBeginPos + ( Len( CurrentInputWord$ ) - 1 ) > WordStore( WordStoreIndex + 1 ).tBeginPos Or _
+                             WordStore( WordStoreIndex% ).tBeginPos + ( Len( CurrentInputWord$ ) - 1 ) = LenCurrentInputString% Then
+                              If WordStoreIndex% = UBWordStore% - 1 Then
+                                  ReDim Preserve WordStore( WordStoreIndex% )
+                                  WordStore( WordStoreIndex% ).tEndPos = 0
+                                Else
+                                  For i = WordStoreIndex% + 1 To UBWordStore% - 1
+                                    WordStore( i ) = WordStore( i + 1 )
+                                  Next i
+                                  ReDim Preserve WordStore( UBWordStore% - 1 )
+                              End If
+                          End If
+                      End If
+                      WordStore( WordStoreIndex% ).tEndPos = WordStore( WordStoreIndex% ).tBeginPos + ( Len( CurrentInputWord$ ) - 1 )
+                      For i = WordStoreIndex% + 1 To UBound( WordStore )
+                        WordStore( i ).tOutputString = WordStore( i - 1 ).tOutputString & WordStore( i - 1 ).tPY_Word & WordStore( i - 1 ).tSeparator
+                        WordStore( i ).tBeginPos     = WordStore( i - 1 ).tEndPos + 1
+                        If WordStore( i ).tEndPos > 0 Then
+                            WordStore( i ).tEndPos  = WordStore( i ).tBeginPos + Len( WordStore( i ).tWG_Word )
+                        End If
+                      Next i
+
+' For a text string pasted into the text box, the position of the next character to read
+' is after the end of the last word read.
+
+                      CurrentInputStringIndex% = WordStore( i - 1 ).tEndPos + 1
+                      WordStoreIndex% = UBound( WordStore )
+                      GoTo Display:
+                  End If
+                Else
+
+' If characters are being deleted from the end, the current input string will match the
+' previous version all the way to the end, but then the previous input string will be one
+' character longer.
+
+                  If CurrentInputStringIndex% = LenCurrentInputString% Then
+                      LenCurrentWord% = LenCurrentInputString% - WordStore( WordStoreIndex% ).tBeginPos + 1
+                      If LenCurrentWord% < 0 Then
+                          WordStoreIndex% = WordStoreIndex% - 1
+                          ReDim Preserve WordStore( WordStoreIndex% )
+                          LenCurrentWord% = LenCurrentInputString% - WordStore( WordStoreIndex% ).tBeginPos + 1
+                      End If
+                      BeginCurrentWord%                    = WordStore( WordStoreIndex% ).tBeginPos
+                      CurrentInputWord$                    = Mid$( CurrentInputString$, BeginCurrentWord%, LenCurrentWord% )
+                      WordStore( WordStoreIndex% ).tWG_Word = CurrentInputWord$
+                      WordStore( WordStoreIndex% ).tPY_Word = WordStore( WordStoreIndex% ).tWG_Word
+                      If Len( WordStore( WordStoreIndex% ).tWG_Word ) = LenCurrentWord% Then
+                          WordStore( WordStoreIndex% ).tSeparator = ""
+                          EndOfWord = FALSE
+                      End If
+                  End If
+                  CurrentInputStringIndex% = CurrentInputStringIndex% + 1
+              End If
+              If CurrentInputStringIndex% > LenCurrentInputString% Then
+                  Exit Do
+              End If
+            Loop Until CurrentInputStringIndex% > LenCurrentInputString%
+
+Display:
+
+            WordStoreIndex%      = UBound( WordStore )
+            PreviousInputString$ = CurrentInputString$
+            tOutputString$        = WordStore( WordStoreIndex% ).tOutputString & WordStore( WordStoreIndex% ).tPY_Word & WordStore( WordStoreIndex% ).tSeparator
+            If tOutputString$ <> PrevioustOutputString$ Then
+                If tOutputString$ <> DlgText( "Output" ) Then
+                    DlgText   "Output",             tOutputString$
+                End If
+                PrevioustOutputString$ = tOutputString$
+            End If
+
+' For the case of a text string having been pasted into the dialog box, the position of
+' the character being read is less than the string length until the whole string has been
+' processed. So the reading of the next word starts somewhere inside the string, which
+' means skipping the beginning of the loop where things are initialized.
+
+            If CurrentInputStringIndex% < LenCurrentInputString% Then
+                GoTo ContinueInInputString:
+            End If
+        End If
+
+    End If
+
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog3ControlFunction( Id$, Action%, SVal& )
+
+' The dialog box which controls the search.
+
+Const CHECKED        As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const UNCHECKED      As Integer = 0
+Const VISIBLE        As Integer = 1
+
+Const BROWSE         As Integer = 0
+Const SEARCH         As Integer = 1
+Const WORLDCAT       As Integer = 0
+
+Static Index$
+Static TypeOfSearch%
+
+Static ControlChanged
+
+Dim Database$
+Dim SearchSelection%
+Dim SearchString$
+
+Dim SearchResults
+
+Dim i As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText         "SearchString",      BrowseString$
+    DlgValue        "English",           UNCHECKED
+    DlgEnable       "English",           DISABLED
+    If Truncation Then
+        DlgVisible      "Truncate",          VISIBLE
+      Else
+        DlgVisible      "Truncate",          INVISIBLE
+    End If
+    DlgListBoxArray "SearchChoicesList", WorldCatSearches()
+    DlgValue        "SearchChoicesList", 0
+    DlgFocus        "SearchString"
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "SearchAFButton", "SearchWCButton"
+
+        If DlgValue( "OptionGroup1" ) = WORLDCAT Then
+            DlgListBoxArray "SearchChoicesList", WorldCatSearches()
+            DlgValue        "SearchChoicesList", 0
+            TypeOfSearch% = BROWSE
+            Index$        = "tiw"
+            SearchString$ = BrowseString$
+          Else
+            DlgListBoxArray "SearchChoicesList", AuthoritySearches()
+            DlgValue        "SearchChoicesList", 0
+            TypeOfSearch% = BROWSE
+            Index$        = "pn"
+            SearchString$ = BrowseString$
+            DlgEnable       "English",           DISABLED
+        End If
+        DlgText         "SearchString",      SearchString$
+        ControlChanged = TRUE
+        DlgFocus "SearchChoicesList"
+
+      Case "SearchChoicesList"
+
+        SearchSelection% = DlgValue( "SearchChoicesList" )
+        If DlgValue( "OptionGroup1" ) = WORLDCAT Then
+            Select Case SearchSelection%
+              Case 0
+                TypeOfSearch% = BROWSE
+                DlgValue        "English",           UNCHECKED
+                DlgEnable       "English",           DISABLED
+                Index$        = "tiw"
+                SearchString$ = BrowseString$
+              Case 1
+                TypeOfSearch% = SEARCH
+                DlgValue        "English",           CHECKED
+                DlgEnable       "English",           ENABLED
+                Index$        = "td:"
+                SearchString$ = DerivedTitleString$
+              Case 2
+                TypeOfSearch% = SEARCH
+                DlgValue        "English",           CHECKED
+                DlgEnable       "English",           ENABLED
+                Index$        = "ti:"
+                SearchString$ = DeleteCommas( BrowseString$ )
+              Case 3
+                TypeOfSearch% = BROWSE
+                DlgValue        "English",           UNCHECKED
+                DlgEnable       "English",           DISABLED
+                Index$        = "pnw"
+                SearchString$ = PNameBrowseString$
+              Case 4
+                TypeOfSearch% = BROWSE
+                DlgValue        "English",           UNCHECKED
+                DlgEnable       "English",           DISABLED
+                Index$        = "cnw"
+                SearchString$ = BrowseString$
+              Case 5
+                TypeOfSearch% = SEARCH
+                DlgValue        "English",           CHECKED
+                DlgEnable       "English",           ENABLED
+                Index$        = "pd:"
+                SearchString$ = DerivedAuthorString$
+              Case 6
+                TypeOfSearch% = SEARCH
+                DlgValue        "English",           CHECKED
+                DlgEnable       "English",           ENABLED
+                Index$        = "cd:"
+                SearchString$ = DerivedAuthorString$
+              Case 7
+                TypeOfSearch% = SEARCH
+                DlgValue        "English",           CHECKED
+                DlgEnable       "English",           ENABLED
+                Index$        = "pn:"
+                SearchString$ = DeleteCommas( BrowseString$ )
+              Case 8
+                TypeOfSearch% = SEARCH
+                DlgValue        "English",           CHECKED
+                DlgEnable       "English",           ENABLED
+                Index$        = "cn:"
+                SearchString$ = DeleteCommas( BrowseString$ )
+            End Select
+          Else
+            DlgValue        "English",           UNCHECKED
+            DlgEnable       "English",           DISABLED
+            Select Case SearchSelection%
+              Case 0
+                TypeOfSearch% = BROWSE
+                Index$        = "pn"
+                SearchString$ = BrowseString$
+              Case 1
+                TypeOfSearch% = BROWSE
+                Index$        = "cn"
+                SearchString$ = BrowseString$
+              Case 2
+                TypeOfSearch% = SEARCH
+                Index$        = "pn:"
+                SearchString$ = DeleteCommas( BrowseString$ )
+              Case 3
+                TypeOfSearch% = SEARCH
+                Index$        = "cn:"
+                SearchString$ = DeleteCommas( BrowseString$ )
+              Case 4
+                TypeOfSearch% = BROWSE
+                Index$        = "ti"
+                SearchString$ = BrowseString$
+              Case 5
+                TypeOfSearch% = SEARCH
+                Index$        = "ti:"
+                SearchString$ = DeleteCommas( BrowseString$ )
+            End Select
+        End If
+        ControlChanged = TRUE
+        DlgText         "SearchString",      SearchString$
+
+      Case "OK"
+
+' If nothing in the dialog box has changed, supply the default values displayed when the
+' box initializes.
+
+        If ControlChanged = FALSE Then
+            Index$        = "tiw"
+            SearchString$ = BrowseString$
+            TypeOfSearch% = BROWSE
+        End If
+
+        SearchString$ = Trim$( DlgText( "SearchString" ) )
+        If DlgValue( "OptionGroup1" ) = WORLDCAT Then
+            Database$ = "WC"
+          Else
+            Database$ = "AF"
+        End If
+        If TypeOfSearch% = BROWSE Then
+            If CS.Browse( Database$, Index$, SearchString$ ) = FALSE Then
+                If Database$ = "WC" Then
+                    MsgBox "Sorry, the WorldCat browse failed.", CRITICAL_MESSAGE, WaltsMacros$
+                  Else
+                    MsgBox "Sorry, the Authority File browse failed.", CRITICAL_MESSAGE, WaltsMacros$
+                End If
+            End If
+          Else
+            If DlgValue( "English" ) = CHECKED Then
+                SearchString$ = "ll:eng and " & Index$ & SearchString$
+            End If
+            If Database$ = "AF" Then
+                SearchResults = CS.Search( Database$, Index$ & SearchString$ )
+              Else
+                SearchResults = CS.Search( Database$, SearchString$ )
+            End If
+
+' If there are no results, keep the dialog box open for a possible refinement of the
+' search or browse.
+
+            If SearchResults = 0 Then
+                MsgBox "WorldCat reports no records found.", CRITICAL_MESSAGE, WaltsMacros$
+                Dialog3ControlFunction = KEEP_DLG_OPEN
+                DlgFocus "Cancel"
+            End If
+        End If
+
+    End Select
+
+End Select
+
+End Function
+'141672257
+'
+'Macro name: WadeGilesToPinyin
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:59:23 AM using "MacroBookInspector" macro by Walter F. Nickeson.

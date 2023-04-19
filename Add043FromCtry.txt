@@ -1,0 +1,568 @@
+'MacroName:Add043FromCtry.2023.10
+'MacroDescription:Adds an 043 field from the place of publication in the fixed field
+' element "Ctry".
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 5 February 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro in a bibliographic record (cursor position is irrelevant)
+' to quickly add a Geographic Area Code ("GAC") in an 043 field based on the code in the
+' fixed field element "Ctry". Usually the GAC is based on information in the record's
+' subject headings, and 043 fields can be easily added using OCLC's "Generate043" in the
+' OCLC-supplied macrobook. But GACs can also be added when no geographic subject headings
+' exist. Bibliographic Formats & Standards currently says, "Assign geographic area codes
+' for corporate bodies," and offers two examples of GACs assigned for works about
+' corporate bodies, presumably in records containing no subject headings. A 2013 version
+' of this documentation included the more general statement, "Assign geographic area
+' codes if the subject matter warrants, even if the subject heading does not use a
+' specific geographic term." If the place of publication could serve as a geographic
+' subject access point to the resource, this macro can instantly add the corresponding
+' GAC in an 043 field.
+'
+' All Country of Publication codes can be matched with a Geographic Area Code except in
+' three cases. An unknown place of publication (code "xx") and multiple places of
+' publication (the old "Various places," "vp") can't be used to generate an 043 field.
+' And the "Ctry" code for the Caribbean Netherlands requires choosing between three
+' specific areas for the GAC. In this last case, the macro offers a dialog box with
+' checkboxes to add codes for these places.
+'
+' Some of the matching GACs are general in nature and have only the first few positions
+' coded. This macro adds hyphens to the remaining positions to extend the string to the
+' required length of seven characters.
+'
+' The macro works by simply matching every valid "Ctry" code with its corresponding
+' geographic area code. It then adds a new 043 field with the selected code, the new
+' field following existing 043 fields. The macro checks for duplication of codes, so it
+' won't add a new field if the calculated GAC is already present in an 043 field.
+'****************************************************************************************
+
+Option Compare Text
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CHECKED              As Integer = 1
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const DISPLAY_FF_AT_TOP    As Integer = 1
+Const INFORMATION_MESSAGE  As Integer = 64
+
+Const CTRY_CODE            As Integer = 0
+Const GAC_CODE             As Integer = 1
+
+Const EQUAL_TO             As Integer = 0
+Const GREATER_THAN         As Integer = 1
+Const LESS_THAN            As Integer = -1
+
+Dim DELIMITER As String* 1   : DELIMITER     = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE  = Chr$( 034 )
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE  = Chr$( 039 )
+
+Dim Compare%
+Dim Ctry$
+Dim FieldData$
+Dim GAC$
+Dim High%
+Dim Low%
+Dim Middle%
+Dim MsgText$
+Dim PosFF%
+Dim Result%
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:Add043FromCtry"
+
+Dim ChangedFFView            : ChangedFFView = FALSE
+Dim FoundField
+
+Dim i As Integer
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then get the code from the fixed field element "Ctry".
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+
+If CS.GetFixedField( "Ctry", Ctry$ ) = FALSE Then
+    MsgBox "Sorry, this macro couldn't get a code from the fixed field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Good to go? Fill the array.
+
+Dim Ctry_GAC_Table( 1, 332 ) As String
+
+Ctry_GAC_Table( CTRY_CODE,   0 ) = "aa"  : Ctry_GAC_Table( GAC_CODE,   0 ) = "e-aa---"
+Ctry_GAC_Table( CTRY_CODE,   1 ) = "abc" : Ctry_GAC_Table( GAC_CODE,   1 ) = "n-cn-ab"
+Ctry_GAC_Table( CTRY_CODE,   2 ) = "aca" : Ctry_GAC_Table( GAC_CODE,   2 ) = "u-at-ac"
+Ctry_GAC_Table( CTRY_CODE,   3 ) = "ae"  : Ctry_GAC_Table( GAC_CODE,   3 ) = "f-ae---"
+Ctry_GAC_Table( CTRY_CODE,   4 ) = "af"  : Ctry_GAC_Table( GAC_CODE,   4 ) = "a-af---"
+Ctry_GAC_Table( CTRY_CODE,   5 ) = "ag"  : Ctry_GAC_Table( GAC_CODE,   5 ) = "s-ag---"
+Ctry_GAC_Table( CTRY_CODE,   6 ) = "ai"  : Ctry_GAC_Table( GAC_CODE,   6 ) = "a-ai---"
+Ctry_GAC_Table( CTRY_CODE,   7 ) = "aj"  : Ctry_GAC_Table( GAC_CODE,   7 ) = "a-aj---"
+Ctry_GAC_Table( CTRY_CODE,   8 ) = "aku" : Ctry_GAC_Table( GAC_CODE,   8 ) = "n-us-ak"
+Ctry_GAC_Table( CTRY_CODE,   9 ) = "alu" : Ctry_GAC_Table( GAC_CODE,   9 ) = "n-us-al"
+Ctry_GAC_Table( CTRY_CODE,  10 ) = "am"  : Ctry_GAC_Table( GAC_CODE,  10 ) = "nwxa---"
+Ctry_GAC_Table( CTRY_CODE,  11 ) = "an"  : Ctry_GAC_Table( GAC_CODE,  11 ) = "e-an---"
+Ctry_GAC_Table( CTRY_CODE,  12 ) = "ao"  : Ctry_GAC_Table( GAC_CODE,  12 ) = "f-ao---"
+Ctry_GAC_Table( CTRY_CODE,  13 ) = "aq"  : Ctry_GAC_Table( GAC_CODE,  13 ) = "nwaq---"
+Ctry_GAC_Table( CTRY_CODE,  14 ) = "aru" : Ctry_GAC_Table( GAC_CODE,  14 ) = "n-us-ar"
+Ctry_GAC_Table( CTRY_CODE,  15 ) = "as"  : Ctry_GAC_Table( GAC_CODE,  15 ) = "poas---"
+Ctry_GAC_Table( CTRY_CODE,  16 ) = "at"  : Ctry_GAC_Table( GAC_CODE,  16 ) = "u-at---"
+Ctry_GAC_Table( CTRY_CODE,  17 ) = "au"  : Ctry_GAC_Table( GAC_CODE,  17 ) = "e-au---"
+Ctry_GAC_Table( CTRY_CODE,  18 ) = "aw"  : Ctry_GAC_Table( GAC_CODE,  18 ) = "nwaw---"
+Ctry_GAC_Table( CTRY_CODE,  19 ) = "ay"  : Ctry_GAC_Table( GAC_CODE,  19 ) = "t------"
+Ctry_GAC_Table( CTRY_CODE,  20 ) = "azu" : Ctry_GAC_Table( GAC_CODE,  20 ) = "n-us-az"
+Ctry_GAC_Table( CTRY_CODE,  21 ) = "ba"  : Ctry_GAC_Table( GAC_CODE,  21 ) = "a-ba---"
+Ctry_GAC_Table( CTRY_CODE,  22 ) = "bb"  : Ctry_GAC_Table( GAC_CODE,  22 ) = "nwbb---"
+Ctry_GAC_Table( CTRY_CODE,  23 ) = "bcc" : Ctry_GAC_Table( GAC_CODE,  23 ) = "n-cn-bc"
+Ctry_GAC_Table( CTRY_CODE,  24 ) = "bd"  : Ctry_GAC_Table( GAC_CODE,  24 ) = "f-bd---"
+Ctry_GAC_Table( CTRY_CODE,  25 ) = "be"  : Ctry_GAC_Table( GAC_CODE,  25 ) = "e-be---"
+Ctry_GAC_Table( CTRY_CODE,  26 ) = "bf"  : Ctry_GAC_Table( GAC_CODE,  26 ) = "nwbf---"
+Ctry_GAC_Table( CTRY_CODE,  27 ) = "bg"  : Ctry_GAC_Table( GAC_CODE,  27 ) = "a-bg---"
+Ctry_GAC_Table( CTRY_CODE,  28 ) = "bh"  : Ctry_GAC_Table( GAC_CODE,  28 ) = "ncbh---"
+Ctry_GAC_Table( CTRY_CODE,  29 ) = "bi"  : Ctry_GAC_Table( GAC_CODE,  29 ) = "i-bi---"
+Ctry_GAC_Table( CTRY_CODE,  30 ) = "bl"  : Ctry_GAC_Table( GAC_CODE,  30 ) = "s-bl---"
+Ctry_GAC_Table( CTRY_CODE,  31 ) = "bm"  : Ctry_GAC_Table( GAC_CODE,  31 ) = "lnbm---"
+Ctry_GAC_Table( CTRY_CODE,  32 ) = "bn"  : Ctry_GAC_Table( GAC_CODE,  32 ) = "e-bn---"
+Ctry_GAC_Table( CTRY_CODE,  33 ) = "bo"  : Ctry_GAC_Table( GAC_CODE,  33 ) = "s-bo---"
+Ctry_GAC_Table( CTRY_CODE,  34 ) = "bp"  : Ctry_GAC_Table( GAC_CODE,  34 ) = "pobp---"
+Ctry_GAC_Table( CTRY_CODE,  35 ) = "br"  : Ctry_GAC_Table( GAC_CODE,  35 ) = "a-br---"
+Ctry_GAC_Table( CTRY_CODE,  36 ) = "bs"  : Ctry_GAC_Table( GAC_CODE,  36 ) = "f-bs---"
+Ctry_GAC_Table( CTRY_CODE,  37 ) = "bt"  : Ctry_GAC_Table( GAC_CODE,  37 ) = "a-bt---"
+Ctry_GAC_Table( CTRY_CODE,  38 ) = "bu"  : Ctry_GAC_Table( GAC_CODE,  38 ) = "e-bu---"
+Ctry_GAC_Table( CTRY_CODE,  39 ) = "bv"  : Ctry_GAC_Table( GAC_CODE,  39 ) = "lsbv---"
+Ctry_GAC_Table( CTRY_CODE,  40 ) = "bw"  : Ctry_GAC_Table( GAC_CODE,  40 ) = "e-bw---"
+Ctry_GAC_Table( CTRY_CODE,  41 ) = "bx"  : Ctry_GAC_Table( GAC_CODE,  41 ) = "a-bx---"
+Ctry_GAC_Table( CTRY_CODE,  42 ) = "ca"  : Ctry_GAC_Table( GAC_CODE,  42 ) = "CARIBBEAN NETHERLANDS"
+Ctry_GAC_Table( CTRY_CODE,  43 ) = "cau" : Ctry_GAC_Table( GAC_CODE,  43 ) = "n-us-ca"
+Ctry_GAC_Table( CTRY_CODE,  44 ) = "cb"  : Ctry_GAC_Table( GAC_CODE,  44 ) = "a-cb---"
+Ctry_GAC_Table( CTRY_CODE,  45 ) = "cc"  : Ctry_GAC_Table( GAC_CODE,  45 ) = "a-cc---"
+Ctry_GAC_Table( CTRY_CODE,  46 ) = "cd"  : Ctry_GAC_Table( GAC_CODE,  46 ) = "f-cd---"
+Ctry_GAC_Table( CTRY_CODE,  47 ) = "ce"  : Ctry_GAC_Table( GAC_CODE,  47 ) = "a-ce---"
+Ctry_GAC_Table( CTRY_CODE,  48 ) = "cf"  : Ctry_GAC_Table( GAC_CODE,  48 ) = "f-cf---"
+Ctry_GAC_Table( CTRY_CODE,  49 ) = "cg"  : Ctry_GAC_Table( GAC_CODE,  49 ) = "f-cg---"
+Ctry_GAC_Table( CTRY_CODE,  50 ) = "ch"  : Ctry_GAC_Table( GAC_CODE,  50 ) = "a-ch---"
+Ctry_GAC_Table( CTRY_CODE,  51 ) = "ci"  : Ctry_GAC_Table( GAC_CODE,  51 ) = "e-ci---"
+Ctry_GAC_Table( CTRY_CODE,  52 ) = "cj"  : Ctry_GAC_Table( GAC_CODE,  52 ) = "nwcj---"
+Ctry_GAC_Table( CTRY_CODE,  53 ) = "ck"  : Ctry_GAC_Table( GAC_CODE,  53 ) = "s-ck---"
+Ctry_GAC_Table( CTRY_CODE,  54 ) = "cl"  : Ctry_GAC_Table( GAC_CODE,  54 ) = "s-cl---"
+Ctry_GAC_Table( CTRY_CODE,  55 ) = "cm"  : Ctry_GAC_Table( GAC_CODE,  55 ) = "f-cm---"
+Ctry_GAC_Table( CTRY_CODE,  56 ) = "co"  : Ctry_GAC_Table( GAC_CODE,  56 ) = "nwco---"
+Ctry_GAC_Table( CTRY_CODE,  57 ) = "cou" : Ctry_GAC_Table( GAC_CODE,  57 ) = "n-us-co"
+Ctry_GAC_Table( CTRY_CODE,  58 ) = "cq"  : Ctry_GAC_Table( GAC_CODE,  58 ) = "i-cq---"
+Ctry_GAC_Table( CTRY_CODE,  59 ) = "cr"  : Ctry_GAC_Table( GAC_CODE,  59 ) = "nccr---"
+Ctry_GAC_Table( CTRY_CODE,  60 ) = "ctu" : Ctry_GAC_Table( GAC_CODE,  60 ) = "n-us-ct"
+Ctry_GAC_Table( CTRY_CODE,  61 ) = "cu"  : Ctry_GAC_Table( GAC_CODE,  61 ) = "nwcu---"
+Ctry_GAC_Table( CTRY_CODE,  62 ) = "cv"  : Ctry_GAC_Table( GAC_CODE,  62 ) = "lncv---"
+Ctry_GAC_Table( CTRY_CODE,  63 ) = "cw"  : Ctry_GAC_Table( GAC_CODE,  63 ) = "pocw---"
+Ctry_GAC_Table( CTRY_CODE,  64 ) = "cx"  : Ctry_GAC_Table( GAC_CODE,  64 ) = "f-cx---"
+Ctry_GAC_Table( CTRY_CODE,  65 ) = "cy"  : Ctry_GAC_Table( GAC_CODE,  65 ) = "a-cy---"
+Ctry_GAC_Table( CTRY_CODE,  66 ) = "dcu" : Ctry_GAC_Table( GAC_CODE,  66 ) = "n-us-dc"
+Ctry_GAC_Table( CTRY_CODE,  67 ) = "deu" : Ctry_GAC_Table( GAC_CODE,  67 ) = "n-us-de"
+Ctry_GAC_Table( CTRY_CODE,  68 ) = "dk"  : Ctry_GAC_Table( GAC_CODE,  68 ) = "e-dk---"
+Ctry_GAC_Table( CTRY_CODE,  69 ) = "dm"  : Ctry_GAC_Table( GAC_CODE,  69 ) = "f-dm---"
+Ctry_GAC_Table( CTRY_CODE,  70 ) = "dq"  : Ctry_GAC_Table( GAC_CODE,  70 ) = "nwdq---"
+Ctry_GAC_Table( CTRY_CODE,  71 ) = "dr"  : Ctry_GAC_Table( GAC_CODE,  71 ) = "nwdr---"
+Ctry_GAC_Table( CTRY_CODE,  72 ) = "ea"  : Ctry_GAC_Table( GAC_CODE,  72 ) = "f-ea---"
+Ctry_GAC_Table( CTRY_CODE,  73 ) = "ec"  : Ctry_GAC_Table( GAC_CODE,  73 ) = "s-ec---"
+Ctry_GAC_Table( CTRY_CODE,  74 ) = "eg"  : Ctry_GAC_Table( GAC_CODE,  74 ) = "f-eg---"
+Ctry_GAC_Table( CTRY_CODE,  75 ) = "em"  : Ctry_GAC_Table( GAC_CODE,  75 ) = "a-em---"
+Ctry_GAC_Table( CTRY_CODE,  76 ) = "enk" : Ctry_GAC_Table( GAC_CODE,  76 ) = "e-uk-en"
+Ctry_GAC_Table( CTRY_CODE,  77 ) = "er"  : Ctry_GAC_Table( GAC_CODE,  77 ) = "e-er---"
+Ctry_GAC_Table( CTRY_CODE,  78 ) = "es"  : Ctry_GAC_Table( GAC_CODE,  78 ) = "nces---"
+Ctry_GAC_Table( CTRY_CODE,  79 ) = "et"  : Ctry_GAC_Table( GAC_CODE,  79 ) = "f-et---"
+Ctry_GAC_Table( CTRY_CODE,  80 ) = "fa"  : Ctry_GAC_Table( GAC_CODE,  80 ) = "lnfa---"
+Ctry_GAC_Table( CTRY_CODE,  81 ) = "fg"  : Ctry_GAC_Table( GAC_CODE,  81 ) = "s-fg---"
+Ctry_GAC_Table( CTRY_CODE,  82 ) = "fi"  : Ctry_GAC_Table( GAC_CODE,  82 ) = "e-fi---"
+Ctry_GAC_Table( CTRY_CODE,  83 ) = "fj"  : Ctry_GAC_Table( GAC_CODE,  83 ) = "pofj---"
+Ctry_GAC_Table( CTRY_CODE,  84 ) = "fk"  : Ctry_GAC_Table( GAC_CODE,  84 ) = "lsfk---"
+Ctry_GAC_Table( CTRY_CODE,  85 ) = "flu" : Ctry_GAC_Table( GAC_CODE,  85 ) = "n-us-fl"
+Ctry_GAC_Table( CTRY_CODE,  86 ) = "fm"  : Ctry_GAC_Table( GAC_CODE,  86 ) = "pomi---"
+Ctry_GAC_Table( CTRY_CODE,  87 ) = "fp"  : Ctry_GAC_Table( GAC_CODE,  87 ) = "pofp---"
+Ctry_GAC_Table( CTRY_CODE,  88 ) = "fr"  : Ctry_GAC_Table( GAC_CODE,  88 ) = "e-fr---"
+Ctry_GAC_Table( CTRY_CODE,  89 ) = "fs"  : Ctry_GAC_Table( GAC_CODE,  89 ) = "i-fs---"
+Ctry_GAC_Table( CTRY_CODE,  90 ) = "ft"  : Ctry_GAC_Table( GAC_CODE,  90 ) = "f-ft---"
+Ctry_GAC_Table( CTRY_CODE,  91 ) = "gau" : Ctry_GAC_Table( GAC_CODE,  91 ) = "n-us-ga"
+Ctry_GAC_Table( CTRY_CODE,  92 ) = "gb"  : Ctry_GAC_Table( GAC_CODE,  92 ) = "pokb---"
+Ctry_GAC_Table( CTRY_CODE,  93 ) = "gd"  : Ctry_GAC_Table( GAC_CODE,  93 ) = "nwgd---"
+Ctry_GAC_Table( CTRY_CODE,  94 ) = "gg"  : Ctry_GAC_Table( GAC_CODE,  94 ) = "e-gg---"
+Ctry_GAC_Table( CTRY_CODE,  95 ) = "gh"  : Ctry_GAC_Table( GAC_CODE,  95 ) = "f-gh---"
+Ctry_GAC_Table( CTRY_CODE,  96 ) = "gi"  : Ctry_GAC_Table( GAC_CODE,  96 ) = "e-gi---"
+Ctry_GAC_Table( CTRY_CODE,  97 ) = "gl"  : Ctry_GAC_Table( GAC_CODE,  97 ) = "n-gl---"
+Ctry_GAC_Table( CTRY_CODE,  98 ) = "gm"  : Ctry_GAC_Table( GAC_CODE,  98 ) = "f-gm---"
+Ctry_GAC_Table( CTRY_CODE,  99 ) = "go"  : Ctry_GAC_Table( GAC_CODE,  99 ) = "f-go---"
+Ctry_GAC_Table( CTRY_CODE, 100 ) = "gp"  : Ctry_GAC_Table( GAC_CODE, 100 ) = "nwgp---"
+Ctry_GAC_Table( CTRY_CODE, 101 ) = "gr"  : Ctry_GAC_Table( GAC_CODE, 101 ) = "e-gr---"
+Ctry_GAC_Table( CTRY_CODE, 102 ) = "gs"  : Ctry_GAC_Table( GAC_CODE, 102 ) = "a-gs---"
+Ctry_GAC_Table( CTRY_CODE, 103 ) = "gt"  : Ctry_GAC_Table( GAC_CODE, 103 ) = "ncgt---"
+Ctry_GAC_Table( CTRY_CODE, 104 ) = "gu"  : Ctry_GAC_Table( GAC_CODE, 104 ) = "pogu---"
+Ctry_GAC_Table( CTRY_CODE, 105 ) = "gv"  : Ctry_GAC_Table( GAC_CODE, 105 ) = "f-gv---"
+Ctry_GAC_Table( CTRY_CODE, 106 ) = "gw"  : Ctry_GAC_Table( GAC_CODE, 106 ) = "e-gx---"
+Ctry_GAC_Table( CTRY_CODE, 107 ) = "gy"  : Ctry_GAC_Table( GAC_CODE, 107 ) = "s-gy---"
+Ctry_GAC_Table( CTRY_CODE, 108 ) = "gz"  : Ctry_GAC_Table( GAC_CODE, 108 ) = "awgz---"
+Ctry_GAC_Table( CTRY_CODE, 109 ) = "hiu" : Ctry_GAC_Table( GAC_CODE, 109 ) = "n-us-hi"
+Ctry_GAC_Table( CTRY_CODE, 110 ) = "hm"  : Ctry_GAC_Table( GAC_CODE, 110 ) = "i-hm---"
+Ctry_GAC_Table( CTRY_CODE, 111 ) = "ho"  : Ctry_GAC_Table( GAC_CODE, 111 ) = "ncho---"
+Ctry_GAC_Table( CTRY_CODE, 112 ) = "ht"  : Ctry_GAC_Table( GAC_CODE, 112 ) = "nwht---"
+Ctry_GAC_Table( CTRY_CODE, 113 ) = "hu"  : Ctry_GAC_Table( GAC_CODE, 113 ) = "e-hu---"
+Ctry_GAC_Table( CTRY_CODE, 114 ) = "iau" : Ctry_GAC_Table( GAC_CODE, 114 ) = "n-us-ia"
+Ctry_GAC_Table( CTRY_CODE, 115 ) = "ic"  : Ctry_GAC_Table( GAC_CODE, 115 ) = "e-ic---"
+Ctry_GAC_Table( CTRY_CODE, 116 ) = "idu" : Ctry_GAC_Table( GAC_CODE, 116 ) = "n-us-id"
+Ctry_GAC_Table( CTRY_CODE, 117 ) = "ie"  : Ctry_GAC_Table( GAC_CODE, 117 ) = "e-ie---"
+Ctry_GAC_Table( CTRY_CODE, 118 ) = "ii"  : Ctry_GAC_Table( GAC_CODE, 118 ) = "a-ii---"
+Ctry_GAC_Table( CTRY_CODE, 119 ) = "ilu" : Ctry_GAC_Table( GAC_CODE, 119 ) = "n-us-il"
+Ctry_GAC_Table( CTRY_CODE, 120 ) = "im"  : Ctry_GAC_Table( GAC_CODE, 120 ) = "e-im---"
+Ctry_GAC_Table( CTRY_CODE, 121 ) = "inu" : Ctry_GAC_Table( GAC_CODE, 121 ) = "n-us-in"
+Ctry_GAC_Table( CTRY_CODE, 122 ) = "io"  : Ctry_GAC_Table( GAC_CODE, 122 ) = "a-io---"
+Ctry_GAC_Table( CTRY_CODE, 123 ) = "iq"  : Ctry_GAC_Table( GAC_CODE, 123 ) = "a-iq---"
+Ctry_GAC_Table( CTRY_CODE, 124 ) = "ir"  : Ctry_GAC_Table( GAC_CODE, 124 ) = "a-ir---"
+Ctry_GAC_Table( CTRY_CODE, 125 ) = "is"  : Ctry_GAC_Table( GAC_CODE, 125 ) = "a-is---"
+Ctry_GAC_Table( CTRY_CODE, 126 ) = "it"  : Ctry_GAC_Table( GAC_CODE, 126 ) = "e-it---"
+Ctry_GAC_Table( CTRY_CODE, 127 ) = "iv"  : Ctry_GAC_Table( GAC_CODE, 127 ) = "f-iv---"
+Ctry_GAC_Table( CTRY_CODE, 128 ) = "ja"  : Ctry_GAC_Table( GAC_CODE, 128 ) = "a-ja---"
+Ctry_GAC_Table( CTRY_CODE, 129 ) = "je"  : Ctry_GAC_Table( GAC_CODE, 129 ) = "e-je---"
+Ctry_GAC_Table( CTRY_CODE, 130 ) = "ji"  : Ctry_GAC_Table( GAC_CODE, 130 ) = "poji---"
+Ctry_GAC_Table( CTRY_CODE, 131 ) = "jm"  : Ctry_GAC_Table( GAC_CODE, 131 ) = "nwjm---"
+Ctry_GAC_Table( CTRY_CODE, 132 ) = "jo"  : Ctry_GAC_Table( GAC_CODE, 132 ) = "a-jo---"
+Ctry_GAC_Table( CTRY_CODE, 133 ) = "ke"  : Ctry_GAC_Table( GAC_CODE, 133 ) = "f-ke---"
+Ctry_GAC_Table( CTRY_CODE, 134 ) = "kg"  : Ctry_GAC_Table( GAC_CODE, 134 ) = "a-kg---"
+Ctry_GAC_Table( CTRY_CODE, 135 ) = "kn"  : Ctry_GAC_Table( GAC_CODE, 135 ) = "a-kn---"
+Ctry_GAC_Table( CTRY_CODE, 136 ) = "ko"  : Ctry_GAC_Table( GAC_CODE, 136 ) = "a-ko---"
+Ctry_GAC_Table( CTRY_CODE, 137 ) = "ksu" : Ctry_GAC_Table( GAC_CODE, 137 ) = "n-us-ks"
+Ctry_GAC_Table( CTRY_CODE, 138 ) = "ku"  : Ctry_GAC_Table( GAC_CODE, 138 ) = "a-ku---"
+Ctry_GAC_Table( CTRY_CODE, 139 ) = "kv"  : Ctry_GAC_Table( GAC_CODE, 139 ) = "e-kv---"
+Ctry_GAC_Table( CTRY_CODE, 140 ) = "kyu" : Ctry_GAC_Table( GAC_CODE, 140 ) = "n-us-ky"
+Ctry_GAC_Table( CTRY_CODE, 141 ) = "kz"  : Ctry_GAC_Table( GAC_CODE, 141 ) = "a-kz---"
+Ctry_GAC_Table( CTRY_CODE, 142 ) = "lau" : Ctry_GAC_Table( GAC_CODE, 142 ) = "n-us-la"
+Ctry_GAC_Table( CTRY_CODE, 143 ) = "lb"  : Ctry_GAC_Table( GAC_CODE, 143 ) = "f-lb---"
+Ctry_GAC_Table( CTRY_CODE, 144 ) = "le"  : Ctry_GAC_Table( GAC_CODE, 144 ) = "a-le---"
+Ctry_GAC_Table( CTRY_CODE, 145 ) = "lh"  : Ctry_GAC_Table( GAC_CODE, 145 ) = "e-lh---"
+Ctry_GAC_Table( CTRY_CODE, 146 ) = "li"  : Ctry_GAC_Table( GAC_CODE, 146 ) = "e-li---"
+Ctry_GAC_Table( CTRY_CODE, 147 ) = "lo"  : Ctry_GAC_Table( GAC_CODE, 147 ) = "f-lo---"
+Ctry_GAC_Table( CTRY_CODE, 148 ) = "ls"  : Ctry_GAC_Table( GAC_CODE, 148 ) = "a-ls---"
+Ctry_GAC_Table( CTRY_CODE, 149 ) = "lu"  : Ctry_GAC_Table( GAC_CODE, 149 ) = "e-lu---"
+Ctry_GAC_Table( CTRY_CODE, 150 ) = "lv"  : Ctry_GAC_Table( GAC_CODE, 150 ) = "e-lv---"
+Ctry_GAC_Table( CTRY_CODE, 151 ) = "ly"  : Ctry_GAC_Table( GAC_CODE, 151 ) = "f-ly---"
+Ctry_GAC_Table( CTRY_CODE, 152 ) = "mau" : Ctry_GAC_Table( GAC_CODE, 152 ) = "n-us-ma"
+Ctry_GAC_Table( CTRY_CODE, 153 ) = "mbc" : Ctry_GAC_Table( GAC_CODE, 153 ) = "n-cn-mb"
+Ctry_GAC_Table( CTRY_CODE, 154 ) = "mc"  : Ctry_GAC_Table( GAC_CODE, 154 ) = "e-mc---"
+Ctry_GAC_Table( CTRY_CODE, 155 ) = "mdu" : Ctry_GAC_Table( GAC_CODE, 155 ) = "n-us-md"
+Ctry_GAC_Table( CTRY_CODE, 156 ) = "meu" : Ctry_GAC_Table( GAC_CODE, 156 ) = "n-us-me"
+Ctry_GAC_Table( CTRY_CODE, 157 ) = "mf"  : Ctry_GAC_Table( GAC_CODE, 157 ) = "i-mf---"
+Ctry_GAC_Table( CTRY_CODE, 158 ) = "mg"  : Ctry_GAC_Table( GAC_CODE, 158 ) = "f-mg---"
+Ctry_GAC_Table( CTRY_CODE, 159 ) = "miu" : Ctry_GAC_Table( GAC_CODE, 159 ) = "n-us-mi"
+Ctry_GAC_Table( CTRY_CODE, 160 ) = "mj"  : Ctry_GAC_Table( GAC_CODE, 160 ) = "nwmj---"
+Ctry_GAC_Table( CTRY_CODE, 161 ) = "mk"  : Ctry_GAC_Table( GAC_CODE, 161 ) = "a-mk---"
+Ctry_GAC_Table( CTRY_CODE, 162 ) = "ml"  : Ctry_GAC_Table( GAC_CODE, 162 ) = "f-ml---"
+Ctry_GAC_Table( CTRY_CODE, 163 ) = "mm"  : Ctry_GAC_Table( GAC_CODE, 163 ) = "e-mm---"
+Ctry_GAC_Table( CTRY_CODE, 164 ) = "mnu" : Ctry_GAC_Table( GAC_CODE, 164 ) = "n-us-mn"
+Ctry_GAC_Table( CTRY_CODE, 165 ) = "mo"  : Ctry_GAC_Table( GAC_CODE, 165 ) = "e-mo---"
+Ctry_GAC_Table( CTRY_CODE, 166 ) = "mou" : Ctry_GAC_Table( GAC_CODE, 166 ) = "n-us-mo"
+Ctry_GAC_Table( CTRY_CODE, 167 ) = "mp"  : Ctry_GAC_Table( GAC_CODE, 167 ) = "a-mp---"
+Ctry_GAC_Table( CTRY_CODE, 168 ) = "mq"  : Ctry_GAC_Table( GAC_CODE, 168 ) = "nwmq---"
+Ctry_GAC_Table( CTRY_CODE, 169 ) = "mr"  : Ctry_GAC_Table( GAC_CODE, 169 ) = "f-mr---"
+Ctry_GAC_Table( CTRY_CODE, 170 ) = "msu" : Ctry_GAC_Table( GAC_CODE, 170 ) = "n-us-ms"
+Ctry_GAC_Table( CTRY_CODE, 171 ) = "mtu" : Ctry_GAC_Table( GAC_CODE, 171 ) = "n-us-mt"
+Ctry_GAC_Table( CTRY_CODE, 172 ) = "mu"  : Ctry_GAC_Table( GAC_CODE, 172 ) = "f-mu---"
+Ctry_GAC_Table( CTRY_CODE, 173 ) = "mv"  : Ctry_GAC_Table( GAC_CODE, 173 ) = "e-mv---"
+Ctry_GAC_Table( CTRY_CODE, 174 ) = "mw"  : Ctry_GAC_Table( GAC_CODE, 174 ) = "f-mw---"
+Ctry_GAC_Table( CTRY_CODE, 175 ) = "mx"  : Ctry_GAC_Table( GAC_CODE, 175 ) = "n-mx---"
+Ctry_GAC_Table( CTRY_CODE, 176 ) = "my"  : Ctry_GAC_Table( GAC_CODE, 176 ) = "a-my---"
+Ctry_GAC_Table( CTRY_CODE, 177 ) = "mz"  : Ctry_GAC_Table( GAC_CODE, 177 ) = "f-mz---"
+Ctry_GAC_Table( CTRY_CODE, 178 ) = "nbu" : Ctry_GAC_Table( GAC_CODE, 178 ) = "n-us-nb"
+Ctry_GAC_Table( CTRY_CODE, 179 ) = "ncu" : Ctry_GAC_Table( GAC_CODE, 179 ) = "n-us-nc"
+Ctry_GAC_Table( CTRY_CODE, 180 ) = "ndu" : Ctry_GAC_Table( GAC_CODE, 180 ) = "n-us-nd"
+Ctry_GAC_Table( CTRY_CODE, 181 ) = "ne"  : Ctry_GAC_Table( GAC_CODE, 181 ) = "e-ne---"
+Ctry_GAC_Table( CTRY_CODE, 182 ) = "nfc" : Ctry_GAC_Table( GAC_CODE, 182 ) = "n-cn-nf"
+Ctry_GAC_Table( CTRY_CODE, 183 ) = "ng"  : Ctry_GAC_Table( GAC_CODE, 183 ) = "f-ng---"
+Ctry_GAC_Table( CTRY_CODE, 184 ) = "nhu" : Ctry_GAC_Table( GAC_CODE, 184 ) = "n-us-nh"
+Ctry_GAC_Table( CTRY_CODE, 185 ) = "nik" : Ctry_GAC_Table( GAC_CODE, 185 ) = "e-uk-ni"
+Ctry_GAC_Table( CTRY_CODE, 186 ) = "nju" : Ctry_GAC_Table( GAC_CODE, 186 ) = "n-us-nj"
+Ctry_GAC_Table( CTRY_CODE, 187 ) = "nkc" : Ctry_GAC_Table( GAC_CODE, 187 ) = "n-cn-nk"
+Ctry_GAC_Table( CTRY_CODE, 188 ) = "nl"  : Ctry_GAC_Table( GAC_CODE, 188 ) = "ponl---"
+Ctry_GAC_Table( CTRY_CODE, 189 ) = "nmu" : Ctry_GAC_Table( GAC_CODE, 189 ) = "n-us-nm"
+Ctry_GAC_Table( CTRY_CODE, 190 ) = "nn"  : Ctry_GAC_Table( GAC_CODE, 190 ) = "ponn---"
+Ctry_GAC_Table( CTRY_CODE, 191 ) = "no"  : Ctry_GAC_Table( GAC_CODE, 191 ) = "e-no---"
+Ctry_GAC_Table( CTRY_CODE, 192 ) = "np"  : Ctry_GAC_Table( GAC_CODE, 192 ) = "a-np---"
+Ctry_GAC_Table( CTRY_CODE, 193 ) = "nq"  : Ctry_GAC_Table( GAC_CODE, 193 ) = "ncnq---"
+Ctry_GAC_Table( CTRY_CODE, 194 ) = "nr"  : Ctry_GAC_Table( GAC_CODE, 194 ) = "f-nr---"
+Ctry_GAC_Table( CTRY_CODE, 195 ) = "nsc" : Ctry_GAC_Table( GAC_CODE, 195 ) = "n-cn-ns"
+Ctry_GAC_Table( CTRY_CODE, 196 ) = "ntc" : Ctry_GAC_Table( GAC_CODE, 196 ) = "n-cn-nt"
+Ctry_GAC_Table( CTRY_CODE, 197 ) = "nu"  : Ctry_GAC_Table( GAC_CODE, 197 ) = "ponu---"
+Ctry_GAC_Table( CTRY_CODE, 198 ) = "nuc" : Ctry_GAC_Table( GAC_CODE, 198 ) = "n-cn-nu"
+Ctry_GAC_Table( CTRY_CODE, 199 ) = "nvu" : Ctry_GAC_Table( GAC_CODE, 199 ) = "n-us-nv"
+Ctry_GAC_Table( CTRY_CODE, 200 ) = "nw"  : Ctry_GAC_Table( GAC_CODE, 200 ) = "poxd---"
+Ctry_GAC_Table( CTRY_CODE, 201 ) = "nx"  : Ctry_GAC_Table( GAC_CODE, 201 ) = "u-at---"
+Ctry_GAC_Table( CTRY_CODE, 202 ) = "nyu" : Ctry_GAC_Table( GAC_CODE, 202 ) = "n-us-ny"
+Ctry_GAC_Table( CTRY_CODE, 203 ) = "nz"  : Ctry_GAC_Table( GAC_CODE, 203 ) = "u-nz---"
+Ctry_GAC_Table( CTRY_CODE, 204 ) = "ohu" : Ctry_GAC_Table( GAC_CODE, 204 ) = "n-us-oh"
+Ctry_GAC_Table( CTRY_CODE, 205 ) = "oku" : Ctry_GAC_Table( GAC_CODE, 205 ) = "n-us-ok"
+Ctry_GAC_Table( CTRY_CODE, 206 ) = "onc" : Ctry_GAC_Table( GAC_CODE, 206 ) = "n-cn-on"
+Ctry_GAC_Table( CTRY_CODE, 207 ) = "oru" : Ctry_GAC_Table( GAC_CODE, 207 ) = "n-us-or"
+Ctry_GAC_Table( CTRY_CODE, 208 ) = "ot"  : Ctry_GAC_Table( GAC_CODE, 208 ) = "i-my---"
+Ctry_GAC_Table( CTRY_CODE, 209 ) = "pau" : Ctry_GAC_Table( GAC_CODE, 209 ) = "n-us-pa"
+Ctry_GAC_Table( CTRY_CODE, 210 ) = "pc"  : Ctry_GAC_Table( GAC_CODE, 210 ) = "popc---"
+Ctry_GAC_Table( CTRY_CODE, 211 ) = "pe"  : Ctry_GAC_Table( GAC_CODE, 211 ) = "s-pe---"
+Ctry_GAC_Table( CTRY_CODE, 212 ) = "pf"  : Ctry_GAC_Table( GAC_CODE, 212 ) = "aopf---"
+Ctry_GAC_Table( CTRY_CODE, 213 ) = "pg"  : Ctry_GAC_Table( GAC_CODE, 213 ) = "f-pg---"
+Ctry_GAC_Table( CTRY_CODE, 214 ) = "ph"  : Ctry_GAC_Table( GAC_CODE, 214 ) = "a-ph---"
+Ctry_GAC_Table( CTRY_CODE, 215 ) = "pic" : Ctry_GAC_Table( GAC_CODE, 215 ) = "n-cn-pi"
+Ctry_GAC_Table( CTRY_CODE, 216 ) = "pk"  : Ctry_GAC_Table( GAC_CODE, 216 ) = "a-pk---"
+Ctry_GAC_Table( CTRY_CODE, 217 ) = "pl"  : Ctry_GAC_Table( GAC_CODE, 217 ) = "e-pl---"
+Ctry_GAC_Table( CTRY_CODE, 218 ) = "pn"  : Ctry_GAC_Table( GAC_CODE, 218 ) = "ncpn---"
+Ctry_GAC_Table( CTRY_CODE, 219 ) = "po"  : Ctry_GAC_Table( GAC_CODE, 219 ) = "e-po---"
+Ctry_GAC_Table( CTRY_CODE, 220 ) = "pp"  : Ctry_GAC_Table( GAC_CODE, 220 ) = "a-pp---"
+Ctry_GAC_Table( CTRY_CODE, 221 ) = "pr"  : Ctry_GAC_Table( GAC_CODE, 221 ) = "nwpr---"
+Ctry_GAC_Table( CTRY_CODE, 222 ) = "pw"  : Ctry_GAC_Table( GAC_CODE, 222 ) = "popl---"
+Ctry_GAC_Table( CTRY_CODE, 223 ) = "py"  : Ctry_GAC_Table( GAC_CODE, 223 ) = "s-py---"
+Ctry_GAC_Table( CTRY_CODE, 224 ) = "qa"  : Ctry_GAC_Table( GAC_CODE, 224 ) = "a-qa---"
+Ctry_GAC_Table( CTRY_CODE, 225 ) = "qea" : Ctry_GAC_Table( GAC_CODE, 225 ) = "u-at-qn"
+Ctry_GAC_Table( CTRY_CODE, 226 ) = "quc" : Ctry_GAC_Table( GAC_CODE, 226 ) = "n-cn-qu"
+Ctry_GAC_Table( CTRY_CODE, 227 ) = "rb"  : Ctry_GAC_Table( GAC_CODE, 227 ) = "e-rb---"
+Ctry_GAC_Table( CTRY_CODE, 228 ) = "re"  : Ctry_GAC_Table( GAC_CODE, 228 ) = "i-re---"
+Ctry_GAC_Table( CTRY_CODE, 229 ) = "rh"  : Ctry_GAC_Table( GAC_CODE, 229 ) = "f-rh---"
+Ctry_GAC_Table( CTRY_CODE, 230 ) = "riu" : Ctry_GAC_Table( GAC_CODE, 230 ) = "n-us-ri"
+Ctry_GAC_Table( CTRY_CODE, 231 ) = "rm"  : Ctry_GAC_Table( GAC_CODE, 231 ) = "e-rm---"
+Ctry_GAC_Table( CTRY_CODE, 232 ) = "ru"  : Ctry_GAC_Table( GAC_CODE, 232 ) = "e-ru---"
+Ctry_GAC_Table( CTRY_CODE, 233 ) = "rw"  : Ctry_GAC_Table( GAC_CODE, 233 ) = "f-rw---"
+Ctry_GAC_Table( CTRY_CODE, 234 ) = "sa"  : Ctry_GAC_Table( GAC_CODE, 234 ) = "f-sa---"
+Ctry_GAC_Table( CTRY_CODE, 235 ) = "sc"  : Ctry_GAC_Table( GAC_CODE, 235 ) = "nwsc---"
+Ctry_GAC_Table( CTRY_CODE, 236 ) = "scu" : Ctry_GAC_Table( GAC_CODE, 236 ) = "n-us-sc"
+Ctry_GAC_Table( CTRY_CODE, 237 ) = "sd"  : Ctry_GAC_Table( GAC_CODE, 237 ) = "f-sd---"
+Ctry_GAC_Table( CTRY_CODE, 238 ) = "sdu" : Ctry_GAC_Table( GAC_CODE, 238 ) = "n-us-sd"
+Ctry_GAC_Table( CTRY_CODE, 239 ) = "se"  : Ctry_GAC_Table( GAC_CODE, 239 ) = "i-se---"
+Ctry_GAC_Table( CTRY_CODE, 240 ) = "sf"  : Ctry_GAC_Table( GAC_CODE, 240 ) = "f-sf---"
+Ctry_GAC_Table( CTRY_CODE, 241 ) = "sg"  : Ctry_GAC_Table( GAC_CODE, 241 ) = "f-sg---"
+Ctry_GAC_Table( CTRY_CODE, 242 ) = "sh"  : Ctry_GAC_Table( GAC_CODE, 242 ) = "f-sh---"
+Ctry_GAC_Table( CTRY_CODE, 243 ) = "si"  : Ctry_GAC_Table( GAC_CODE, 243 ) = "a-si---"
+Ctry_GAC_Table( CTRY_CODE, 244 ) = "sj"  : Ctry_GAC_Table( GAC_CODE, 244 ) = "f-sj---"
+Ctry_GAC_Table( CTRY_CODE, 245 ) = "sl"  : Ctry_GAC_Table( GAC_CODE, 245 ) = "f-sl---"
+Ctry_GAC_Table( CTRY_CODE, 246 ) = "sm"  : Ctry_GAC_Table( GAC_CODE, 246 ) = "e-sm---"
+Ctry_GAC_Table( CTRY_CODE, 247 ) = "sn"  : Ctry_GAC_Table( GAC_CODE, 247 ) = "nwsn---"
+Ctry_GAC_Table( CTRY_CODE, 248 ) = "snc" : Ctry_GAC_Table( GAC_CODE, 248 ) = "n-cn-sn"
+Ctry_GAC_Table( CTRY_CODE, 249 ) = "so"  : Ctry_GAC_Table( GAC_CODE, 249 ) = "f-so---"
+Ctry_GAC_Table( CTRY_CODE, 250 ) = "sp"  : Ctry_GAC_Table( GAC_CODE, 250 ) = "e-sp---"
+Ctry_GAC_Table( CTRY_CODE, 251 ) = "sq"  : Ctry_GAC_Table( GAC_CODE, 251 ) = "f-sq---"
+Ctry_GAC_Table( CTRY_CODE, 252 ) = "sr"  : Ctry_GAC_Table( GAC_CODE, 252 ) = "s-sr---"
+Ctry_GAC_Table( CTRY_CODE, 253 ) = "ss"  : Ctry_GAC_Table( GAC_CODE, 253 ) = "f-ss---"
+Ctry_GAC_Table( CTRY_CODE, 254 ) = "st"  : Ctry_GAC_Table( GAC_CODE, 254 ) = "nwst---"
+Ctry_GAC_Table( CTRY_CODE, 255 ) = "stk" : Ctry_GAC_Table( GAC_CODE, 255 ) = "e-uk-st"
+Ctry_GAC_Table( CTRY_CODE, 256 ) = "su"  : Ctry_GAC_Table( GAC_CODE, 256 ) = "a-su---"
+Ctry_GAC_Table( CTRY_CODE, 257 ) = "sw"  : Ctry_GAC_Table( GAC_CODE, 257 ) = "e-sw---"
+Ctry_GAC_Table( CTRY_CODE, 258 ) = "sx"  : Ctry_GAC_Table( GAC_CODE, 258 ) = "f-sx---"
+Ctry_GAC_Table( CTRY_CODE, 259 ) = "sy"  : Ctry_GAC_Table( GAC_CODE, 259 ) = "a-sy---"
+Ctry_GAC_Table( CTRY_CODE, 260 ) = "sz"  : Ctry_GAC_Table( GAC_CODE, 260 ) = "e-sz---"
+Ctry_GAC_Table( CTRY_CODE, 261 ) = "ta"  : Ctry_GAC_Table( GAC_CODE, 261 ) = "a-ta---"
+Ctry_GAC_Table( CTRY_CODE, 262 ) = "tc"  : Ctry_GAC_Table( GAC_CODE, 262 ) = "nwtc---"
+Ctry_GAC_Table( CTRY_CODE, 263 ) = "tg"  : Ctry_GAC_Table( GAC_CODE, 263 ) = "f-tg---"
+Ctry_GAC_Table( CTRY_CODE, 264 ) = "th"  : Ctry_GAC_Table( GAC_CODE, 264 ) = "a-th---"
+Ctry_GAC_Table( CTRY_CODE, 265 ) = "ti"  : Ctry_GAC_Table( GAC_CODE, 265 ) = "f-ti---"
+Ctry_GAC_Table( CTRY_CODE, 266 ) = "tk"  : Ctry_GAC_Table( GAC_CODE, 266 ) = "a-tk---"
+Ctry_GAC_Table( CTRY_CODE, 267 ) = "tl"  : Ctry_GAC_Table( GAC_CODE, 267 ) = "potl---"
+Ctry_GAC_Table( CTRY_CODE, 268 ) = "tma" : Ctry_GAC_Table( GAC_CODE, 268 ) = "u-at-tm"
+Ctry_GAC_Table( CTRY_CODE, 269 ) = "tnu" : Ctry_GAC_Table( GAC_CODE, 269 ) = "n-us-tn"
+Ctry_GAC_Table( CTRY_CODE, 270 ) = "to"  : Ctry_GAC_Table( GAC_CODE, 270 ) = "poto---"
+Ctry_GAC_Table( CTRY_CODE, 271 ) = "tr"  : Ctry_GAC_Table( GAC_CODE, 271 ) = "nwtr---"
+Ctry_GAC_Table( CTRY_CODE, 272 ) = "ts"  : Ctry_GAC_Table( GAC_CODE, 272 ) = "a-ts---"
+Ctry_GAC_Table( CTRY_CODE, 273 ) = "tu"  : Ctry_GAC_Table( GAC_CODE, 273 ) = "a-tu---"
+Ctry_GAC_Table( CTRY_CODE, 274 ) = "tv"  : Ctry_GAC_Table( GAC_CODE, 274 ) = "potv---"
+Ctry_GAC_Table( CTRY_CODE, 275 ) = "txu" : Ctry_GAC_Table( GAC_CODE, 275 ) = "n-us-tx"
+Ctry_GAC_Table( CTRY_CODE, 276 ) = "tz"  : Ctry_GAC_Table( GAC_CODE, 276 ) = "f-tz---"
+Ctry_GAC_Table( CTRY_CODE, 277 ) = "ua"  : Ctry_GAC_Table( GAC_CODE, 277 ) = "f-ua---"
+Ctry_GAC_Table( CTRY_CODE, 278 ) = "uc"  : Ctry_GAC_Table( GAC_CODE, 278 ) = "nwuc---"
+Ctry_GAC_Table( CTRY_CODE, 279 ) = "ug"  : Ctry_GAC_Table( GAC_CODE, 279 ) = "f-ug---"
+Ctry_GAC_Table( CTRY_CODE, 280 ) = "un"  : Ctry_GAC_Table( GAC_CODE, 280 ) = "e-un---"
+Ctry_GAC_Table( CTRY_CODE, 281 ) = "up"  : Ctry_GAC_Table( GAC_CODE, 281 ) = "poup---"
+Ctry_GAC_Table( CTRY_CODE, 282 ) = "utu" : Ctry_GAC_Table( GAC_CODE, 282 ) = "n-us-ut"
+Ctry_GAC_Table( CTRY_CODE, 283 ) = "uv"  : Ctry_GAC_Table( GAC_CODE, 283 ) = "f-uv---"
+Ctry_GAC_Table( CTRY_CODE, 284 ) = "uy"  : Ctry_GAC_Table( GAC_CODE, 284 ) = "s-uy---"
+Ctry_GAC_Table( CTRY_CODE, 285 ) = "uz"  : Ctry_GAC_Table( GAC_CODE, 285 ) = "a-uz---"
+Ctry_GAC_Table( CTRY_CODE, 286 ) = "vau" : Ctry_GAC_Table( GAC_CODE, 286 ) = "n-us-va"
+Ctry_GAC_Table( CTRY_CODE, 287 ) = "vb"  : Ctry_GAC_Table( GAC_CODE, 287 ) = "nwvb---"
+Ctry_GAC_Table( CTRY_CODE, 288 ) = "vc"  : Ctry_GAC_Table( GAC_CODE, 288 ) = "e-vc---"
+Ctry_GAC_Table( CTRY_CODE, 289 ) = "ve"  : Ctry_GAC_Table( GAC_CODE, 289 ) = "s-ve---"
+Ctry_GAC_Table( CTRY_CODE, 290 ) = "vi"  : Ctry_GAC_Table( GAC_CODE, 290 ) = "nwvi---"
+Ctry_GAC_Table( CTRY_CODE, 291 ) = "vm"  : Ctry_GAC_Table( GAC_CODE, 291 ) = "a-vt---"
+Ctry_GAC_Table( CTRY_CODE, 292 ) = "vp"  : Ctry_GAC_Table( GAC_CODE, 292 ) = "NOT POSSIBLE"
+Ctry_GAC_Table( CTRY_CODE, 293 ) = "vra" : Ctry_GAC_Table( GAC_CODE, 293 ) = "u-at-vi"
+Ctry_GAC_Table( CTRY_CODE, 294 ) = "vtu" : Ctry_GAC_Table( GAC_CODE, 294 ) = "n-us-vt"
+Ctry_GAC_Table( CTRY_CODE, 295 ) = "wau" : Ctry_GAC_Table( GAC_CODE, 295 ) = "n-us-wa"
+Ctry_GAC_Table( CTRY_CODE, 296 ) = "wea" : Ctry_GAC_Table( GAC_CODE, 296 ) = "u-at-we"
+Ctry_GAC_Table( CTRY_CODE, 297 ) = "wf"  : Ctry_GAC_Table( GAC_CODE, 297 ) = "powf---"
+Ctry_GAC_Table( CTRY_CODE, 298 ) = "wiu" : Ctry_GAC_Table( GAC_CODE, 298 ) = "n-us-wi"
+Ctry_GAC_Table( CTRY_CODE, 299 ) = "wj"  : Ctry_GAC_Table( GAC_CODE, 299 ) = "awba---"
+Ctry_GAC_Table( CTRY_CODE, 300 ) = "wk"  : Ctry_GAC_Table( GAC_CODE, 300 ) = "powk---"
+Ctry_GAC_Table( CTRY_CODE, 301 ) = "wlk" : Ctry_GAC_Table( GAC_CODE, 301 ) = "e-uk-wl"
+Ctry_GAC_Table( CTRY_CODE, 302 ) = "ws"  : Ctry_GAC_Table( GAC_CODE, 302 ) = "pows---"
+Ctry_GAC_Table( CTRY_CODE, 303 ) = "wvu" : Ctry_GAC_Table( GAC_CODE, 303 ) = "n-us-wv"
+Ctry_GAC_Table( CTRY_CODE, 304 ) = "wyu" : Ctry_GAC_Table( GAC_CODE, 304 ) = "n-us-wy"
+Ctry_GAC_Table( CTRY_CODE, 305 ) = "xa"  : Ctry_GAC_Table( GAC_CODE, 305 ) = "i-xa---"
+Ctry_GAC_Table( CTRY_CODE, 306 ) = "xb"  : Ctry_GAC_Table( GAC_CODE, 306 ) = "i-xb---"
+Ctry_GAC_Table( CTRY_CODE, 307 ) = "xc"  : Ctry_GAC_Table( GAC_CODE, 307 ) = "i-xc---"
+Ctry_GAC_Table( CTRY_CODE, 308 ) = "xd"  : Ctry_GAC_Table( GAC_CODE, 308 ) = "nwxi---"
+Ctry_GAC_Table( CTRY_CODE, 309 ) = "xe"  : Ctry_GAC_Table( GAC_CODE, 309 ) = "poxe---"
+Ctry_GAC_Table( CTRY_CODE, 310 ) = "xf"  : Ctry_GAC_Table( GAC_CODE, 310 ) = "poxf---"
+Ctry_GAC_Table( CTRY_CODE, 311 ) = "xga" : Ctry_GAC_Table( GAC_CODE, 311 ) = "u-cs---"
+Ctry_GAC_Table( CTRY_CODE, 312 ) = "xh"  : Ctry_GAC_Table( GAC_CODE, 312 ) = "poxh---"
+Ctry_GAC_Table( CTRY_CODE, 313 ) = "xj"  : Ctry_GAC_Table( GAC_CODE, 313 ) = "lsxj---"
+Ctry_GAC_Table( CTRY_CODE, 314 ) = "xk"  : Ctry_GAC_Table( GAC_CODE, 314 ) = "nwxk---"
+Ctry_GAC_Table( CTRY_CODE, 315 ) = "xl"  : Ctry_GAC_Table( GAC_CODE, 315 ) = "n-xl---"
+Ctry_GAC_Table( CTRY_CODE, 316 ) = "xm"  : Ctry_GAC_Table( GAC_CODE, 316 ) = "nwxm---"
+Ctry_GAC_Table( CTRY_CODE, 317 ) = "xn"  : Ctry_GAC_Table( GAC_CODE, 317 ) = "e-xn---"
+Ctry_GAC_Table( CTRY_CODE, 318 ) = "xna" : Ctry_GAC_Table( GAC_CODE, 318 ) = "u-at-ne"
+Ctry_GAC_Table( CTRY_CODE, 319 ) = "xo"  : Ctry_GAC_Table( GAC_CODE, 319 ) = "e-xo---"
+Ctry_GAC_Table( CTRY_CODE, 320 ) = "xoa" : Ctry_GAC_Table( GAC_CODE, 320 ) = "u-at-no"
+Ctry_GAC_Table( CTRY_CODE, 321 ) = "xp"  : Ctry_GAC_Table( GAC_CODE, 321 ) = "aoxp---"
+Ctry_GAC_Table( CTRY_CODE, 322 ) = "xr"  : Ctry_GAC_Table( GAC_CODE, 322 ) = "e-xr---"
+Ctry_GAC_Table( CTRY_CODE, 323 ) = "xra" : Ctry_GAC_Table( GAC_CODE, 323 ) = "u-at-sa"
+Ctry_GAC_Table( CTRY_CODE, 324 ) = "xs"  : Ctry_GAC_Table( GAC_CODE, 324 ) = "lsxs---"
+Ctry_GAC_Table( CTRY_CODE, 325 ) = "xv"  : Ctry_GAC_Table( GAC_CODE, 325 ) = "e-xv---"
+Ctry_GAC_Table( CTRY_CODE, 326 ) = "xx"  : Ctry_GAC_Table( GAC_CODE, 326 ) = "NOT POSSIBLE"
+Ctry_GAC_Table( CTRY_CODE, 327 ) = "xxc" : Ctry_GAC_Table( GAC_CODE, 327 ) = "n-cn---"
+Ctry_GAC_Table( CTRY_CODE, 328 ) = "xxk" : Ctry_GAC_Table( GAC_CODE, 328 ) = "e-uk---"
+Ctry_GAC_Table( CTRY_CODE, 329 ) = "xxu" : Ctry_GAC_Table( GAC_CODE, 329 ) = "n-us---"
+Ctry_GAC_Table( CTRY_CODE, 330 ) = "ye"  : Ctry_GAC_Table( GAC_CODE, 330 ) = "a-ye---"
+Ctry_GAC_Table( CTRY_CODE, 331 ) = "ykc" : Ctry_GAC_Table( GAC_CODE, 331 ) = "n-cn-yk"
+Ctry_GAC_Table( CTRY_CODE, 332 ) = "za"  : Ctry_GAC_Table( GAC_CODE, 332 ) = "f-za---"
+
+' Do a binary search in the array to find the geographic area code corresponding to the
+' selected place of publication. The codes for "Ctry" are in alphabetical order, thus
+' allowing for this kind of search.
+
+High% = 332
+Low%  = 0
+
+Do While Low% <= High%
+  Middle%  = Int( ( High% + Low% ) / 2 )
+  Compare% = StrComp( Ctry_GAC_Table( CTRY_CODE, Middle% ), Ctry$ )
+  Select Case Compare%
+    Case LESS_THAN
+      Low%    = Middle% + 1
+    Case EQUAL_TO
+      Result% = Middle%
+      Exit Do
+    Case GREATER_THAN
+      High%   = Middle% - 1
+  End Select
+Loop
+
+If Low% > High% Then
+    MsgBox "The code " & DOUBLE_QUOTE & Ctry$ & DOUBLE_QUOTE & " is not a valid code. Please correct it and try again.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+GAC$ = Ctry_GAC_Table( GAC_CODE, Result% )
+
+' Display an information message for the two cases in which an 043 field can't be added.
+
+If GAC$ = "NOT POSSIBLE" Then
+
+    MsgBox "It is not possible to add a geographic area code for " & SINGLE_QUOTE & "Ctry" & SINGLE_QUOTE & " code " & DOUBLE_QUOTE & Ctry$ & DOUBLE_QUOTE & ".", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+
+' Display a dialog box to present the options for entering the correct GAC for the
+' Caribbean Netherlands.
+
+  ElseIf GAC$ = "CARIBBEAN NETHERLANDS" Then
+
+    GAC$     = ""
+    MsgText$ = "There are three geographic area codes possible for " & SINGLE_QUOTE & "Ctry" & SINGLE_QUOTE & " code " & DOUBLE_QUOTE & "ca" & DOUBLE_QUOTE & ". "
+    MsgText$ = MsgText$ & "Please choose which to add:"
+
+    Begin Dialog Dialog1Definition  184, 94, WaltsMacros$
+      OkButton       62,  70,  52,  14
+      CancelButton  122,  70,  52,  14
+      Text           10,   6, 164,  16, MsgText$
+      CheckBox       18,  26,  92,  12, "&Bonaire",        .Bonaire
+      CheckBox       18,  38,  92,  12, "Sint &Eustatius", .SintEustatius
+      CheckBox       18,  50,  92,  12, "&Saba",           .Saba
+    End Dialog
+
+    Dim Dialog1 As Dialog1Definition
+    On Error Resume Next
+    Dialog Dialog1
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+    If Dialog1.Bonaire = CHECKED Then
+        GAC$ = "nwbn---"
+    End If
+    If Dialog1.SintEustatius = CHECKED Then
+        If GAC$ = "" Then
+            GAC$ = "nweu---"
+          Else
+            GAC$ = GAC$ & DELIMITER & "a" & "nwbn---"
+        End If
+    End If
+    If Dialog1.Saba = CHECKED Then
+        If GAC$ = "" Then
+            GAC$ = "nwsd---"
+          Else
+            GAC$ = GAC$ & DELIMITER & "a" & "nwsd---"
+        End If
+    End If
+
+End If
+
+' Check for the existence of an 043 field that also contains the GAC. If one is found,
+' quit.
+
+i = 1
+Do
+  FoundField = CS.GetField( "043", i, FieldData$ )
+  If FoundField Then
+      If InStr( FieldData$, GAC$ ) > 0 Then
+          MsgBox "This record already has an 043 field with the Geographic Area Code " & DOUBLE_QUOTE & GAC$ & DOUBLE_QUOTE & "!", INFORMATION_MESSAGE, WaltsMacros$
+          Exit Sub
+      End If
+  End If
+  i = i + 1
+Loop Until FoundField = FALSE
+
+' Otherwise, add the new field as the ninth 043 field. The GAC could be integrated into
+' an existing 043 field, but that might introduce an undesirable order of codes (BF&S:
+' "Enter codes in order of importance"). So the best solution is for the macro to add a
+' new field and manually integrate its code into an existing field as appropriate.
+
+If CS.AddField( 9, "043  " & GAC$ ) = FALSE Then
+    MsgBox "Sorry, the macro failed to add an 043 field.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+CS.HomeRecord
+
+End Sub
+'56537975
+'
+'Macro name: Add043FromCtry
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:56:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,1278 @@
+'MacroName:MakeTitleAddedEntry.2023.44
+'MacroDescription:Helps to quickly add selected text to a bibliographic record as a title
+' added entry or uniform title heading, and also checks indicators in those title fields.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 18 March 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Select text in a bibliographic record to add it as a new title field
+' (130, 240, 246, 730, or 740) and run the macro. The macro displays a dialog box for
+' selecting which field to add, and shows the indicator values for that field. Select the
+' appropriate tag and indicator values, and the macro adds the field.
+'
+' Or, run the macro with the cursor anywhere in the record to check the indicator values
+' for all those title fields, if present, and quickly change them, if necessary. The
+' macro displays the fields found in a list; select one to see the valid indicator
+' values, and the definition of each value, for that field. Select a different indicator
+' value from the drop-down list to make a change. This feature of the macro is probably
+' most useful for checking the 246 field, which has a lot of different indicator values
+' that may be hard to keep in mind if that field isn't dealt with frequently, but the
+' macro can be used like an in-record help system for the five title fields it is
+' designed for.
+'
+' Because of the limits of the macro language, fields with Unicode characters won't
+' display properly. The macro therefore replaces an undisplayable Unicode character with
+' a pair of brackets to simulate an empty box [].
+'
+' The macro will always add 246, 730, and 740 fields from selected text, but it won't
+' create additional 130 or 240 fields, as those fields are nonrepeatable. A 130 field
+' won't be added if a 1XX field is already in the record, and a 240 field won't be added
+' if a 130 field is present.
+'
+' When adding a title field from a selection, the macro capitalizes the first letter,
+' and adds a period or full stop to fields 130, 730, and 740. It removes that period
+' from the end of fields 240 and 246.
+'
+' If the language of the resource is English, the macro automatically does these things
+' with selected text:
+'
+'  + If it detects alternative titles, by the presence of the connecting string ", or, ",
+'    it will add the two titles as separate fields, each with indicators "30".
+'  + If the first word of the selection, and if the first word of either of the
+'    alternative titles to be added, is one of the articles "a", "an", and "the", the
+'    macro will remove it.
+'  + If it finds an ampersand in the selection, it will change the first one to the word
+'    "and".
+'
+' It is good practice to not include an initial article when selecting text for this
+' macro to add a title access point.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillArrays
+
+Declare Function ConvertTo1252       ( InputString$ )      As String
+Declare Function ConvertUnicode      ( InputString$ )      As String
+Declare Function MakeInitialCapital  ( SelectedText$ )     As String
+Declare Function RemoveInitialArticle( SelectedText$ )     As String
+Declare Function SetDisplayArrays    ( TitleFieldsIndex% ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVAl& )
+
+Global Const ABSENT        As Integer = 0  'Subfield $i in 246 is not present.
+Global Const IND_2_INVALID As Integer = 2  'Subfield $i in 246 is present but 2nd indicator value is not blank, as it should be.
+Global Const IND_2_VALID   As Integer = 1  'Subfield $i in 246 is present and 2nd indicator value is (correctly) blank.
+
+Global NAME_1XX         As String*1
+Global NO_1XX           As String*1
+Global SUBFIELD_I_STATE As Integer
+Global TITLE_1XX        As String*1
+
+Global Field1XX$
+Global Indicator1$
+Global Indicator2$
+Global ListBox1Selection%
+Global ListBox2Selection%
+Global SelectedText$
+
+Global English
+Global Field240
+Global UnicodeFound
+
+Type FieldInfo
+ tDisplayData As String
+ tLineNumber  As Integer
+ tRawData     As String
+End Type
+
+Global Indicator1Array ( )  As String
+Global Indicator2Array ( )  As String
+Global NonFiling      ( 9 ) As String
+Global TitleFields     ( )  As FieldInfo
+Global [240_Ind1]     ( 1 ) As String
+Global [246_Ind1]     ( 3 ) As String
+Global [246_Ind2]     ( 9 ) As String
+Global [730/740_Ind2] ( 1 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DISPLAY_FF_AT_TOP    As Integer = 1
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const INFORMATION_MESSAGE  As Integer = 64
+
+Const FIXED_FIELD          As Integer = 0
+
+Const ADD_130              As Integer = 4
+Const ADD_240              As Integer = 0
+Const ADD_246              As Integer = 1
+Const ADD_730              As Integer = 2
+Const ADD_740              As Integer = 3
+
+Dim Col%
+Dim CurrentRow%
+Dim CursorFieldTag$
+Dim DialogLegend$
+Dim DisplayTextIndicatorProblem$ : DisplayTextIndicatorProblem$ = "*When subfield $i is present, 2nd indicator must be blank."
+Dim FieldData$
+Dim Lang$
+Dim LineNumber%
+Dim NewField$
+Dim OptionButton1Text$ 'The first option button text depends on whether a 1XX field is present.
+Dim OptionButton2Text$           : OptionButton2Text            = "&246 Varying form of title"
+Dim OptionButton3Text$           : OptionButton3Text            = "7&30 Added entry--Uniform title"
+Dim OptionButton4Text$           : OptionButton4Text            = "&740 Added Entry--Uncontrolled related/analytical title"
+Dim OptionButtonSelection%
+Dim PosFF%
+Dim SelectedField%
+Dim SelectedIndicator1$
+Dim SelectedIndicator2$
+Dim Tag$
+Dim Title1$
+Dim Title2$
+Dim TitleFieldCount%
+Dim TypeOfWindow%
+Dim WaltsMacros$                 : WaltsMacros$                 = "[Walt's macros] Extras1:MakeTitleAddedEntry"
+
+Dim ChangedFFView                : ChangedFFView                = FALSE
+Dim FoundField
+
+Dim i As Integer, p As Integer
+
+Field1XX$    = NO_1XX
+Field240     = FALSE
+NAME_1XX     = "N"
+NO_1XX       = " "
+TITLE_1XX    = "T"
+UnicodeFound = FALSE
+
+' First, make sure that a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then get the cursor position. If it's in a variable field, get the tag.
+
+Col% = CS.CursorColumn
+If Col% = FIXED_FIELD Then
+    MsgBox "This macro works only with the variable fields!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    CurrentRow% = CS.CursorRow
+    If CS.GetFieldLineUnicode( CurrentRow%, FieldData$ ) Then
+        CursorFieldTag$ = Left$( FieldData$, 3 )
+    End If
+End If
+
+' Check for the presence of a 1XX field and a 240 field. These are the nonrepeatable
+' title fields, and their addition depends upon the presence or absence of other fields.
+
+If CS.GetFieldUnicode( "1..", 1, FieldData$ ) Then
+    If Left$( FieldData$, 3 ) = "130" Then
+        OptionButton1Text$ = "Main or name entry--Uniform title"
+        Field1XX$          = TITLE_1XX
+      Else
+        OptionButton1Text$ = "2&40 Uniform title"
+        Field1XX$          = NAME_1XX
+    End If
+    If CS.GetField( "240", 1, FieldData$ ) Then
+        Field240 = TRUE
+      Else
+        Field240 = FALSE
+    End If
+  Else
+    OptionButton1Text$ = "&130 Main entry--Uniform title"
+    Field1XX$          = NO_1XX
+End If
+
+' If all is OK to proceed, fill the arrays of indicator values.
+
+FillArrays
+
+' The macro bifurcates here, depending on whether text has been selected.
+
+If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
+
+' OCLC's macro language unfortunately cannot work with selected text that contains
+' Unicode characters. (There is no command such as "GetSelectedTextUnicode" to correspond
+' with the commands that enable working with whole fields that contain Unicode
+' characters.) If the text selection is seen by the macro as "Data contains non-latin
+' script", the macro has to quit, as there is no text to manipulate. But if the
+' "GetSelectedText" command is successful, that is, if Latin script text has been
+' selected to add as a new field, start by checking if the cursor is in the 245 field.
+' That suggests the field to add is the 246 field, a varying form of title, and the macro
+' offers that choice as the default, with indicator values identifying it as a portion of
+' the title. However, the selection can be added as any one of the five fields.
+
+    If SelectedText$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro works only with text in Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+    SelectedText$ = Trim$( SelectedText$ )
+    If CursorFieldTag$ = "245" Then
+        ListBox2Selection% = 1
+      Else
+        ListBox2Selection% = 0
+    End If
+    DialogLegend$ = "Add selected text as title field:"
+
+' If the language of the resource is English, the macro is able to do more than simply
+' add the text as a new field. Otherwise, the language of the resource is of no concern
+' to the macro.
+
+    PosFF% = CS.FixedFieldPosition
+    If PosFF% <> DISPLAY_FF_AT_TOP Then
+        CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+        ChangedFFView         = TRUE
+    End If
+    If CS.GetFixedField ( "Lang", Lang$ ) Then
+        If Lang$ = "eng" Or Lang$ = "zxx" Then
+            English = TRUE
+          Else
+            English = FALSE
+        End If
+    End If
+    If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+    Begin Dialog Dialog1Definition  268, 156, WaltsMacros$, .Dialog1ControlFunction
+      OkButton       146, 132,  52,  14
+      CancelButton   206, 132,  52,  14
+      DropListBox     18, 102, 112,  56, "",                 .ListBoxInd1
+      DropListBox    138, 102, 112, 104, "",                 .ListBoxInd2
+      OptionGroup                                            .OptionButtonGroup
+       OptionButton   16,  18, 128,  12, OptionButton1Text$, .OptionButton1
+       OptionButton   16,  32, 128,  12, OptionButton2Text$, .OptionButton2
+       OptionButton   16,  46, 128,  12, OptionButton3Text$, .OptionButton3
+       OptionButton   16,  60, 192,  12, OptionButton4Text$, .OptionButton4
+      Text            10,   6,  96,   8, DialogLegend$
+      Text            18,  80,  48,   8, "1st indicator"
+      Text           138,  80,  48,   8, "2nd indicator"
+      Text            18,  92, 112,   8, "",                 .Ind1Description
+      Text           138,  92, 112,   8, "",                 .Ind2Description
+      GroupBox        10,  73, 248,  51, ""
+    End Dialog
+
+    Dim Dialog1 As Dialog1Definition
+    On Error Resume Next
+    Dialog Dialog1
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+    OptionButtonSelection% = Dialog1.OptionButtonGroup
+    ListBox1Selection%     = Dialog1.ListBoxInd1
+    ListBox2Selection%     = Dialog1.ListBoxInd2
+
+    Select Case OptionButtonSelection%
+
+      Case ADD_240, ADD_246
+
+' Excise a terminal full stop.
+
+        If Right$( SelectedText$, 1 ) = "." Then
+            SelectedText$ = Left$( SelectedText$, Len( SelectedText$ ) - 1 )
+            SelectedText$ = Trim$( SelectedText$ )
+        End If
+
+        If OptionButtonSelection% = ADD_246 Then
+            Indicator1$ = Left$( [246_Ind1]( ListBox1Selection% ), 1 )
+            Indicator2$ = Left$( [246_Ind2]( ListBox2Selection% ), 1 )
+            If Indicator2$ = "[" Then
+                Indicator2$ = " "
+            End If
+
+' Capitalize the first letter of the selection. For resources in English, remove the
+' initial articles "a", "an", and "the" from the beginning of the selection. Also look
+' for the string ", or, ", which indicates there are two titles in the selection
+' ("alternative" titles); if the string is found, add each title in its own 246 field,
+' removing an initial article from either or both. In such a case, the indicator values
+' are for a portion of the title.
+
+            If English Then
+                p = InStr( SelectedText$, ", or, " )
+                If p <> 0 Then
+                    Title1$ = Left$( SelectedText$, p - 1 )
+                    Title2$ = Mid$( SelectedText$, p + 6 )
+                    Title1$ = RemoveInitialArticle( Title1$ )
+                    Title2$ = RemoveInitialArticle( Title2$ )
+                    Title1$ = "24630" & MakeInitialCapital( Title1$ )
+                    Title2$ = "24630" & MakeInitialCapital( Title2$ )
+                    If CS.AddField (1, Title1$) = FALSE Or CS.AddField (2, Title2$) = FALSE Then
+                        MsgBox "Sorry, cannot create 246.", CRITICAL_MESSAGE, WaltsMacros$
+                        Exit Sub
+                    End If
+                  Else
+
+' If there is no alternative title, convert the first ampersand found in the selection to
+' the word "and".
+
+                    Title1$ = MakeInitialCapital( RemoveInitialArticle( SelectedText$ ) )
+                    p       = InStr( Title1$, " & " )
+                    If p <> 0 Then
+                        Title1$ = Left$( Title1$, p ) & "and" & Mid$( Title1$, p + 2 )
+                        Title1$ = "2463 " & Title1$
+                    End If
+                    Title1$ = "246" & Indicator1$ & Indicator2$ & Title1$
+                    If CS.AddField (1, Title1$) = FALSE Then
+                        MsgBox "Sorry, cannot create 246.", CRITICAL_MESSAGE, WaltsMacros$
+                        Exit Sub
+                    End If
+                End If
+
+              Else
+
+                Title1$ = MakeInitialCapital( SelectedText$ )
+                Title1$ = "246" & Indicator1$ & Indicator2$ & Title1$
+                If CS.AddField (1, Title1$) = FALSE Then
+                    MsgBox "Sorry, cannot create 246.", CRITICAL_MESSAGE, WaltsMacros$
+                    Exit Sub
+                End If
+            End If
+
+          Else
+
+' For a uniform title, simply remove an initial article (if possible), and capitalize the
+' first word of what remains.
+
+            Indicator1$ = Left$( [240_Ind1]( ListBox1Selection% ), 1 )
+            Indicator2$ = Left$( NonFiling( ListBox2Selection% ), 1 )
+            Title1$     = RemoveInitialArticle( SelectedText$ )
+            Title1$     = "240" & Indicator1$ & Indicator2$ & MakeInitialCapital( Title1$ )
+            If CS.AddField (1, Title1$) = FALSE Then
+                MsgBox "Sorry, cannot create 240.", CRITICAL_MESSAGE, WaltsMacros$
+            End If
+        End If
+
+      Case ADD_130, ADD_730, ADD_740
+
+' For an uncontrolled title added entry, remove the initial article (this is recommended
+' practice), capitalize the first letter of the remainder, and make the field end with a
+' period or full stop.
+
+        Indicator1$ = Left$( NonFiling( ListBox1Selection% ), 1 )
+        If OptionButtonSelection% = ADD_130 Then
+            Indicator2$ = " "
+          Else
+            Indicator2$ = Left$( [730/740_Ind2]( ListBox2Selection% ), 1 )
+        End If
+        Title1$ = RemoveInitialArticle( SelectedText$ )
+        Select Case OptionButtonSelection%
+          Case ADD_130
+            Tag$ = "130"
+          Case ADD_730
+            Tag$ = "730"
+          Case ADD_740
+            Tag$ = "740"
+        End Select
+        Title1$ = Tag$ & Indicator1$ & Indicator2$ & MakeInitialCapital( Title1$ )
+        If Right$( Title1$, 1 ) <> "." Then Title1$ = Title1$ & "."
+        If CS.AddField (1, Title1$) = FALSE Then
+            MsgBox "Sorry, cannot create 740.", CRITICAL_MESSAGE, WaltsMacros$
+        End If
+
+    End Select
+
+    Exit Sub
+
+  Else
+
+' If no text has been selected, the macro displays the contents of all the title fields
+' 130, 240, 246, 730, and 740, present in the record. This display shows the valid
+' indicator values in each field, to help explain them or to guide changing them. Because
+' the dialog box may not be able to display the full set of characters in the record, the
+' raw data from the field is manipulated for display. MARC characters may need to be
+' converted into Windows equivalents, if possible, and Unicode characters are turned into
+' apparent empty boxes, formed by adjacent brackets []. The row number of each field is
+' also stored in case the field is to be replaced because the indicators have been
+' changed.
+
+    SelectedText$ = ""
+    LineNumber%   = 1
+      Do
+        FoundField = CS.GetFieldLineUnicode( LineNumber%, FieldData$ )
+        If FoundField Then
+            Tag$ = Left$( FieldData$, 3 )
+            If Tag$ Like "[127][34][06]" Then
+                ReDim Preserve TitleFields( TitleFieldCount% )
+                TitleFields( TitleFieldCount% ).tRawData    = FieldData$
+                TitleFields( TitleFieldCount% ).tLineNumber = LineNumber%
+                If InStr( FieldData$, "&#x" ) > 0 Then
+                    TitleFields( TitleFieldCount% ).tDisplayData = ConvertUnicode( FieldData$ )
+                    UnicodeFound = TRUE
+                  Else
+                    TitleFields( TitleFieldCount% ).tDisplayData = ConvertTo1252( FieldData$ )
+                End If
+                TitleFieldCount% = TitleFieldCount% + 1
+            End If
+        End If
+        LineNumber% = LineNumber% + 1
+      Loop Until FoundField = FALSE
+
+    If TitleFieldCount% = 0 Then
+        MsgBox "Please select some text to add as a title field!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+    DialogLegend$ = "Select a title field to check its indicators:"
+
+    Begin Dialog Dialog2Definition  268, 138, WaltsMacros$, .Dialog1ControlFunction
+      OkButton      146, 114,  52,  14
+      CancelButton  206, 114,  52,  14
+      ListBox        10,  16, 248,  42, "",                             .FieldList
+      DropListBox    18,  84, 112,  56, "",                             .ListBoxInd1
+      DropListBox   138,  84, 112, 104, "",                             .ListBoxInd2
+      Text           18,  62,  48,   8, "1st indicator"
+      Text          138,  62,  48,   8, "2nd indicator"
+      Text           18,  74, 112,   8, "",                             .Ind1Description
+      Text          138,  74, 112,   8, "",                             .Ind2Description
+      Text           10,   6, 128,   8, DialogLegend$
+      Text          164,   6,  94,   8, "[Unicode characters present]", .Unicode
+      Text           24, 112,  96,  16, DisplayTextIndicatorProblem$,   .DisplayTextNote
+     GroupBox        10,  55, 248,  51, ""
+    End Dialog
+
+    Dim Dialog2 As Dialog2Definition
+    On Error Resume Next
+    Dialog Dialog2
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+' If the indicators in the dialog box are different from those in the original field,
+' replace the field.
+
+    SelectedField%      = Dialog2.FieldList
+    Tag$                = Left$( TitleFields( SelectedField% ).tDisplayData, 3 )
+    Indicator1$         = Mid$( TitleFields( SelectedField% ).tDisplayData, 4, 1 )
+    Indicator2$         = Mid$( TitleFields( SelectedField% ).tDisplayData, 5, 1 )
+
+    SelectedIndicator1$ = Left$( Indicator1Array( Dialog2.ListBoxInd1 ), 1 )
+    If SelectedIndicator1$ = "[" Then
+        SelectedIndicator1$ = " "
+    End If
+
+    SelectedIndicator2$ = Left$( Indicator2Array( Dialog2.ListBoxInd2 ), 1 )
+    If SelectedIndicator2$ = "[" Or SelectedIndicator2$ = "" Then
+        SelectedIndicator2$ = " "
+    End If
+
+    If SelectedIndicator1$ <> Indicator1$ Or SelectedIndicator2$ <> Indicator2$ Then
+        LineNumber% = TitleFields( SelectedField% ).tLineNumber
+        NewField$   = Tag$ & SelectedIndicator1$ & SelectedIndicator2$ & Mid$( TitleFields( SelectedField% ).tRawData, 6 )
+        If CS.SetFieldLine( LineNumber%, NewField$ ) = FALSE Then
+            MsgBox "Sorry, could not change the indicators.", CRITICAL_MESSAGE, WaltsMacros$
+        End If
+      Else
+        MsgBox "No change was made to the indicators.", INFORMATION_MESSAGE, WaltsMacros$
+    End If
+
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrays
+
+[240_Ind1]( 0 )     = "0 - Not printed or displayed"
+[240_Ind1]( 1 )     = "1 - Printed or displayed"
+
+[246_Ind1]( 0 )     = "0 - Note, no added entry"
+[246_Ind1]( 1 )     = "1 - Note, added entry"
+[246_Ind1]( 2 )     = "2 - No note, no added entry"
+[246_Ind1]( 3 )     = "3 - No note, added entry"
+
+[246_Ind2]( 0 )     = "[blank] - No type specified"
+[246_Ind2]( 1 )     = "0 - Portion of title"
+[246_Ind2]( 2 )     = "1 - Parallel title"
+[246_Ind2]( 3 )     = "2 - Distinctive title"
+[246_Ind2]( 4 )     = "3 - Other title"
+[246_Ind2]( 5 )     = "4 - Cover title"
+[246_Ind2]( 6 )     = "5 - Added title page title"
+[246_Ind2]( 7 )     = "6 - Caption title"
+[246_Ind2]( 8 )     = "7 - Running title"
+[246_Ind2]( 9 )     = "8 - Spine title"
+
+[730/740_Ind2]( 0 ) = "[blank] - No type specified"
+[730/740_Ind2]( 1 ) = "2 - Analytical entry"
+
+NonFiling( 0 )   = "0"
+NonFiling( 1 )   = "1"
+NonFiling( 2 )   = "2"
+NonFiling( 3 )   = "3"
+NonFiling( 4 )   = "4"
+NonFiling( 5 )   = "5"
+NonFiling( 6 )   = "6"
+NonFiling( 7 )   = "7"
+NonFiling( 8 )   = "8"
+NonFiling( 9 )   = "9"
+
+End Sub
+
+'****************************************************************************************
+
+Function ConvertTo1252( InputString$ ) As String
+
+' This function converts the MARC21 string to the subset of Windows-1252 that can display
+' in the dialog box, just to make it easier to read.
+
+Dim Character$               : Character$ = " "
+Dim CharNext%
+Dim CharRead%
+Dim TempString$
+
+Dim i As Integer
+
+InputString$ = InputString$ & Character$
+For i = 1 To Len( InputString$ ) - 1
+  CharRead% = Asc( Mid$( InputString$, i, 1 ) )
+  CharNext% = Asc( Mid$( InputString$, i + 1, 1 ) )
+
+  Select Case CharRead%
+
+    Case 32 To 64
+      Character$ = Chr$( CharRead% )
+
+' OCLC-MARC modified characters are turned into precomposed characters, when possible.
+
+    Case 32 To 64, 66, 68, 70 To 72, 74 To 77, 80 To 82, 84, 86 To 88, 91 To 96
+      Character$ = Chr$( CharRead% )
+
+    Case 98, 100, 102 To 104, 106 To 109, 112 To 114, 116, 118 To 120, 123 To 128
+      Character$ = Chr$( CharRead% )
+
+    Case 65, 97   'A, a
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 127 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 128 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 129 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 130 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 234  'ring
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224, 229 To 231, 233, 235 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 67, 99   'C, c
+      Select Case CharNext%
+        Case 240  'cedilla
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224 To 239, 241 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 69, 101  'E, e
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 73, 105  'I, i
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 78, 110  'N, n
+      Select Case CharNext%
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 224 To 227, 229 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 79, 111  'O, o
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 229 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 83, 115  'S, s
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 85, 117  'U, u
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 89, 121  'Y, y
+      Select Case CharNext%
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 232  'diaeresis
+          If CharRead% = 121 Then
+              Character$ = Chr$( 255 )
+            Else
+              Character$ = Chr$( CharRead% )
+          End If
+          i = i + 1
+        Case 224 To 225, 227 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 90, 122  'Z, z
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 158   'Degree sign
+      Character$ = Chr$( 176 )
+    Case 160   'Euro
+      Character$ = Chr$( 128 )
+    Case 162   'Crossed O
+      Character$ = Chr$( 216 )
+    Case 163   'Eth
+      Character$ = Chr$( 208 )
+    Case 164   'Thorn
+      Character$ = Chr$( 222 )
+    Case 165   'AE Ligature
+      Character$ = Chr$( 198 )
+    Case 166   'OE Ligature
+      Character$ = "Oe"
+    Case 169   'Musical flat: does not copy
+      Character$ = Chr$( 129 )
+    Case 170   'registered
+      Character$ = Chr$( 174 )
+    Case 171   'Plus-minus
+      Character$ = Chr$( 177 )
+    Case 178   'crossed o
+      Character$ = Chr$( 248 )
+    Case 179   'eth
+      Character$ = Chr$( 240 )
+    Case 180   'thorn
+      Character$ = Chr$( 254 )
+    Case 181   'ae ligature
+      Character$ = Chr$( 230 )
+    Case 182   'oe ligature
+      Character$ = "oe"
+    Case 185   'Pound
+      Character$ = Chr$( 163 )
+    Case 202   'Copyright
+      Character$ = Chr$( 169 )
+    Case 203   'Sound recording copyright: does not copy
+      Character$ = "p"
+    Case 204   'Musical sharp: does not copy
+      Character$ = "#"
+    Case 223   'Delimiter
+      If ( Character$ = " " And Mid$( InputString$, i + 1, 2 ) Like "[a-z0-9] " ) Or _
+         ( Character$ <> " " And i = 6 ) Then
+          Character$ = "$"
+        Else
+          Character$ = Chr$( 223 )
+      End If
+    Case Else
+      Character$ = Chr$( CharRead% )
+
+  End Select
+
+  TempString$ = TempString$ & Character$
+
+Next i
+
+ConvertTo1252 = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function ConvertUnicode( InputString$ ) As String
+
+' Because Unicode characters are unlikely to be able to be displayed in the dialog box,
+' change them to appear as empty boxes [].
+
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = InputString$
+
+Do
+  p = InStr( TempString$, "&#x01C2;" )
+  If p <> 0 Then
+      TempString$ = Left$( TempString$, p - 1 ) & "$" & Mid$( TempString$, p + 8 )
+  End If
+Loop Until p = 0
+Do
+  p = InStr( TempString$, "&#x" )
+  If p <> 0 Then
+      TempString$ = Left$( TempString$, p - 1 ) & "[]" & Mid$( TempString$, p + 8 )
+  End If
+Loop Until p = 0
+
+ConvertUnicode = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeInitialCapital( InputString$ ) As String
+
+' This function will fail if the first character of the selection is actually a
+' precomposed character, that is, if it is not MARC-8. The result will likely be a
+' strange character rather than the expected capital letter.
+
+If Left$( InputString$, 1 ) Like "[a-z]" Then
+    Mid( InputString$, 1, 1 ) = UCase$( Left$( InputString$, 1 ) )
+End If
+MakeInitialCapital = InputString$
+
+End Function
+
+'****************************************************************************************
+
+Function RemoveInitialArticle( InputString$ ) As String
+
+If English = TRUE Then
+    If Left$( InputString$, 2 ) = "A " Or Left$( InputString$, 2 ) = "a " Then
+        RemoveInitialArticle$ = Mid$( InputString$, 3 )
+      ElseIf Left$( InputString$, 3 ) = "An " Or Left$( InputString$, 3 ) = "an " Then
+        RemoveInitialArticle$ = Mid$( InputString$, 4 )
+      ElseIf Left$( InputString$, 4 ) = "The " Or Left$( InputString$, 4 ) = "the " Then
+        RemoveInitialArticle$ = Mid$( InputString$, 5 )
+      Else
+        RemoveInitialArticle = InputString$
+    End If
+  Else
+    RemoveInitialArticle = InputString$
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function SetDisplayArrays( TitleFieldsIndex% ) As String
+
+' This function sets the arrays of values of the indicators for display. When showing the
+' possible values of each indicator, the arrays are simply what is defined in MARC. When
+' showing what is actually in the record, however, if the record is in error, the
+' selected array has to have an initial row added showing the incorrect value.
+'
+' When the arrays display, the current value of each indicator is selected.
+
+Dim DELIMITER As String* 1   : DELIMITER = Chr$( 223 )
+Dim QUOTE As String*1        : QUOTE     = Chr$( 034 )
+Dim Tag$
+Dim TempString$
+
+Dim DisplayTextPresent
+
+ListBox1Selection% = 0
+ListBox2Selection% = 0
+
+Dim i As Integer, x As Integer
+
+TempString$ = TitleFields( TitleFieldsIndex% ).tRawData
+Tag$        = Left$( TempString$, 3 )
+Indicator1$ = Mid$( TempString$, 4, 1 )
+Indicator2$ = Mid$( TempString$, 5, 1 )
+If InStr( TempString$, DELIMITER & "i" ) > 0 Then
+    DisplayTextPresent = TRUE
+  Else
+    DisplayTextPresent = FALSE
+    SUBFIELD_I_STATE       = ABSENT
+End If
+
+Select Case Tag$
+
+  Case "130"
+
+    If Indicator1$ Like "[0-9]" Then
+        x = 0
+        ListBox1Selection% = Val( Indicator1$ )
+      Else
+        x = 1
+        ListBox2Selection% = 0
+        If Indicator1$ = " " Then
+            Indicator1$ = "[blank]"
+          Else
+            Indicator1$ = QUOTE & Indicator1$ & QUOTE
+        End If
+    End If
+
+    ReDim Indicator1Array( x + 9 )
+    If x = 1 Then
+        Indicator1Array( 0 ) = Indicator1$ & " - INVALID VALUE!"
+    End If
+    For i = 0 To 9
+        Indicator1Array( i + x ) = NonFiling( i )
+    Next i
+
+  Case "240"
+
+    If Indicator1$ Like "[01]" Then
+        x = 0
+        ListBox1Selection% = Val( Indicator1$ )
+      Else
+        x = 1
+        ListBox1Selection% = 0
+        If Indicator1$ = " " Then
+            Indicator1$ = "[blank]"
+          Else
+            Indicator1$ = QUOTE & Indicator1$ & QUOTE
+        End If
+    End If
+
+    ReDim Indicator1Array( x + 1 )
+    If x = 1 Then
+        Indicator1Array( 0 ) = Indicator1$ & " - INVALID VALUE!"
+    End If
+    For i = 0 To 1
+      Indicator1Array( i + x ) = [240_Ind1]( i )
+    Next i
+
+    If Indicator2$ Like "[0-9]" Then
+        x = 0
+        ListBox2Selection% = Val( Indicator2$ )
+      Else
+        x = 1
+        ListBox2Selection% = 0
+        If Indicator2$ = " " Then
+            Indicator2$ = "[blank]"
+          Else
+            Indicator2$ = QUOTE & Indicator2$ & QUOTE
+        End If
+    End If
+
+    ReDim Indicator2Array( x + 9 )
+    If x = 1 Then
+        Indicator2Array( 0 ) = Indicator2$ & " - INVALID VALUE!"
+    End If
+    For i = 0 To 9
+        Indicator2Array( i + x ) = NonFiling( i )
+    Next i
+
+  Case "246"
+
+    If Indicator1$ Like "[0-3]" Then
+        x = 0
+        ListBox1Selection% = Val( Indicator1$ )
+      Else
+        x = 1
+        ListBox1Selection% = 0
+        If Indicator1$ = " " Then
+            Indicator1$ = "[blank]"
+          ElseIf Indicator1$ Like "[!0-9]" Then
+            Indicator1$ = QUOTE & Indicator1$ & QUOTE
+        End If
+    End If
+
+    ReDim Indicator1Array( x + 3 )
+    If x = 1 Then
+        Indicator1Array( 0 ) = Indicator1$ & " - INVALID VALUE!"
+    End If
+    For i = 0 To 3
+      Indicator1Array( i + x ) = [246_Ind1]( i )
+    Next i
+
+    If ( Indicator2$ Like "[0-8]" And DisplayTextPresent = FALSE ) Or _
+       ( Indicator2$ = " " And DisplayTextPresent ) Then
+        x = 0
+        If Indicator2$ = " " Then
+            ListBox2Selection% = 0
+            SUBFIELD_I_STATE = IND_2_VALID
+          Else
+            ListBox2Selection% = Val( Indicator2$ ) + 1
+        End If
+      Else
+        x = 1
+        ListBox2Selection% = 0
+        If Indicator2$ Like "[!0-9]" Then
+            Indicator2$ = QUOTE & Indicator2$ & QUOTE
+        End If
+    End If
+
+    ReDim Indicator2Array( x + 9 )
+    If x = 1 Then
+        If DisplayTextPresent Then
+            Indicator2Array( 0 ) = Indicator2$ & " - INVALID VALUE!*"
+            SUBFIELD_I_STATE = IND_2_INVALID
+          Else
+            Indicator2Array( 0 ) = Indicator2$ & " - INVALID VALUE!"
+        End If
+    End If
+    For i = 0 To 9
+      Indicator2Array( i + x ) = [246_Ind2]( i )
+    Next i
+
+  Case "730", "740"
+
+    If Indicator1$ Like "[0-9]" Then
+        x = 0
+        ListBox1Selection% = Val( Indicator1$ )
+      Else
+        x = 1
+        ListBox1Selection% = 0
+        If Indicator1$ = " " Then
+            Indicator1$ = "[blank]"
+          Else
+            Indicator1$ = QUOTE & Indicator1$ & QUOTE
+        End If
+    End If
+
+    ReDim Indicator1Array( x + 9 )
+    If x = 1 Then
+        Indicator1Array( 0 ) = Indicator1$ & " - INVALID VALUE!"
+    End If
+    For i = 0 To 9
+        Indicator1Array( i + x ) = NonFiling( i )
+    Next i
+
+    If Indicator2$ Like "[ 2]" Then
+        x = 0
+        If Indicator2$ = " " Then
+            ListBox2Selection% = 0
+          Else
+            ListBox2Selection% = 1
+        End If
+      Else
+        x = 1
+        ListBox2Selection% = 0
+        If Indicator2$ = " " Then
+            Indicator2$ = "[blank]"
+          Else
+            Indicator2$ = QUOTE & Indicator2$ & QUOTE
+        End If
+    End If
+
+    ReDim Indicator2Array( x + 1 )
+    If x = 1 Then
+        Indicator2Array( 0 ) = Indicator2$ & " - INVALID VALUE!"
+    End If
+    For i = 0 To 1
+      Indicator2Array( i + x ) = [730/740_Ind2]( i )
+    Next i
+
+End Select
+
+SetDisplayArrays = Tag$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVAl& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const DISABLED       As Integer = 0
+Const ENABLED        As Integer = 1
+Const IDLE_STATE     As Integer = 5
+Const INITIALIZE     As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const KEEP_DLG_OPEN  As Integer = -1
+Const VISIBLE        As Integer = 1
+
+Const COUNTDOWN      As Integer = 4   'The number of seconds the warning about the second indicator needing to be blank remains
+                                      ' visible.
+
+Static PreviousSecondsRemaining%
+Static StartTimer&
+Static WarningCounter
+
+Dim ElapsedSeconds%
+Dim FieldSelection%
+Dim IndicatorSelection%
+Dim SecondsRemaining%
+Dim Tag$
+
+Dim i As Integer
+
+Static TitleArray() As String
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If SelectedText$ <> "" Then
+
+        If Field1XX$ = TITLE_1XX Then
+            DlgEnable       "OptionButton1",     DISABLED
+          Else
+            If Field240 Then
+                DlgEnable       "OptionButton1",     DISABLED
+              Else
+                DlgEnable       "OptionButton1",     ENABLED
+            End If
+        End If
+        DlgListBoxArray "ListBoxInd1",       [246_Ind1]()
+        DlgListBoxArray "ListBoxInd2",       [246_Ind2]()
+        DlgValue        "ListBoxInd1",       3
+        If ListBox2Selection% > 0 Then
+            DlgValue        "ListBoxInd2",       ListBox2Selection%
+          Else
+            DlgValue        "ListBoxInd2",       0
+        End If
+        DlgValue        "OptionButtonGroup", 1
+        DlgText         "Ind1Description",   "Note/added entry controller"
+        DlgText         "Ind2Description",   "Type of title"
+
+      Else
+
+        Tag$ = SetDisplayArrays( 0 )
+        ReDim TitleArray( UBound( TitleFields ) )
+        For i = 0 To UBound( TitleFields )
+          TitleArray( i ) = Left$( TitleFields( i ).tDisplayData, 3 ) & " " & Mid$( TitleFields( i ).tDisplayData, 4, 2 ) & "  " & Mid$( TitleFields( i ).tDisplayData, 6 )
+        Next i
+        DlgListBoxArray "FieldList",         TitleArray()
+        DlgListBoxArray "ListBoxInd1",       Indicator1Array()
+        DlgListBoxArray "ListBoxInd2",       Indicator2Array()
+        Select Case Tag$
+          Case "130"
+            DlgText         "Ind1Description",   "Nonfiling characters"
+            DlgText         "Ind2Description",   "Undefined"
+            DlgVisible      "ListBoxInd2",       INVISIBLE
+          Case "240"
+            DlgText         "Ind1Description",   "Uniform title printed or displayed"
+            DlgText         "Ind2Description",   "Nonfiling characters"
+          Case "246"
+            DlgText         "Ind1Description",   "Note/added entry controller"
+            DlgText         "Ind2Description",   "Type of title"
+          Case "730", "740"
+            DlgText         "Ind1Description",   "Nonfiling characters"
+            DlgText         "Ind2Description",   "Type of added entry"
+        End Select
+        DlgValue        "ListBoxInd1",       ListBox1Selection%
+        If Tag$ <> "130" Then
+            DlgValue        "ListBoxInd2",       ListBox2Selection%
+        End If
+        DlgValue        "FieldList",         0
+        If UnicodeFound Then
+            DlgVisible      "Unicode",           VISIBLE
+          Else
+            DlgVisible      "Unicode",           INVISIBLE
+        End If
+        If SUBFIELD_I_STATE <> IND_2_INVALID Then
+            DlgVisible      "DisplayTextNote",   INVISIBLE
+        End If
+        WarningCounter = FALSE
+
+    End If
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "OptionButton1", "OptionButton2", "OptionButton3", "OptionButton4"
+
+        Select Case DlgValue( "OptionButtonGroup" )
+
+          Case 0
+            If Field1XX$ = NAME_1XX Then
+                DlgListBoxArray "ListBoxInd1",       [240_Ind1]()
+                DlgListBoxArray "ListBoxInd2",       NonFiling()
+                DlgText         "Ind1Description",   "Uniform title printed or displayed"
+                DlgText         "Ind2Description",   "Non-filing characters"
+                DlgValue        "ListBoxInd1",       1
+                DlgValue        "ListBoxInd2",       0
+                DlgVisible      "ListBoxInd2",       VISIBLE
+              Else
+                DlgListBoxArray "ListBoxInd1",       NonFiling()
+                DlgText         "Ind1Description",   "Non-filing characters"
+                DlgText         "Ind2Description",   "Undefined"
+                DlgValue        "ListBoxInd1",       0
+                DlgVisible      "ListBoxInd2",       INVISIBLE
+            End If
+          Case 1
+            DlgListBoxArray "ListBoxInd1",       [246_Ind1]()
+            DlgListBoxArray "ListBoxInd2",       [246_Ind2]()
+            DlgText         "Ind1Description",   "Note/added entry controller"
+            DlgText         "Ind2Description",   "Type of title"
+            DlgValue        "ListBoxInd1",       3
+            DlgValue        "ListBoxInd2",       0
+          Case 2
+            DlgListBoxArray "ListBoxInd1",       NonFiling()
+            DlgListBoxArray "ListBoxInd2",       [730/740_Ind2]()
+            DlgText         "Ind1Description",   "Non-filing characters"
+            DlgText         "Ind2Description",   "Type of added entry"
+            DlgValue        "ListBoxInd1",       0
+            DlgValue        "ListBoxInd2",       1
+          Case 3
+            DlgListBoxArray "ListBoxInd1",       NonFiling()
+            DlgListBoxArray "ListBoxInd2",       [730/740_Ind2]()
+            DlgText         "Ind1Description",   "Non-filing characters"
+            DlgText         "Ind2Description",   "Type of added entry"
+            DlgValue        "ListBoxInd1",       0
+            DlgValue        "ListBoxInd2",       1
+
+        End Select
+
+      Case "FieldList"
+
+        FieldSelection% = DlgValue( "FieldList" )
+        Tag$            = SetDisplayArrays( FieldSelection% )
+        DlgListBoxArray "ListBoxInd1",       Indicator1Array()
+        DlgListBoxArray "ListBoxInd2",       Indicator2Array()
+        DlgValue        "ListBoxInd1",       ListBox1Selection%
+        DlgValue        "ListBoxInd2",       ListBox2Selection%
+        Select Case Tag$
+
+          Case "130"
+            DlgText         "Ind1Description",   "Nonfiling characters"
+            DlgText         "Ind2Description",   "Undefined"
+            DlgVisible      "ListBoxInd2",       INVISIBLE
+
+          Case "240"
+            DlgText         "Ind1Description",   "Uniform title printed or displayed"
+            DlgText         "Ind2Description",   "Nonfiling characters"
+
+          Case "246"
+            DlgText         "Ind1Description",   "Note/added entry controller"
+            DlgText         "Ind2Description",   "Type of title"
+            If SUBFIELD_I_STATE = IND_2_INVALID Then
+                DlgVisible      "DisplayTextNote",   VISIBLE
+              Else
+                DlgVisible      "DisplayTextNote",   INVISIBLE
+            End If
+
+          Case "730", "740"
+            DlgText         "Ind1Description",   "Nonfiling characters"
+            DlgText         "Ind2Description",   "Type of added entry"
+
+        End Select
+
+      Case "ListBoxInd2"
+
+        On Error Resume Next
+        FieldSelection% = DlgValue( "FieldList" )
+        If Err <> 140 Then 'This error shows up if the second indicator value is changed when adding a field
+            If Left$( TitleArray( FieldSelection%), 3 ) = "246" Then
+                IndicatorSelection% = DlgValue( "ListBoxInd2" )
+
+' The only case in which a change in an indicator value is not allowed is if a selected
+' 246 field contains subfield $i with display text and the second indicator is correctly
+' coded "blank." In this case, if the user tries to select another value, snap the
+' selection back to "blank" and display the warning message for 4 seconds.
+
+                If IndicatorSelection% > 0 And SUBFIELD_I_STATE = IND_2_VALID Then
+                    DlgValue        "ListBoxInd2",       0
+                    DlgVisible      "DisplayTextNote",   VISIBLE
+                    WarningCounter = TRUE
+                    StartTimer&    = Timer
+                  Else
+
+' But if a subfield $i is present with an invalid second indicator value, and it is
+' corrected, then the error message can go away.
+
+                    If Left$( Indicator2Array( 0 ), 1 ) = "[" Then
+                        i = 0
+                      Else
+                        i = 1
+                    End If
+                    If IndicatorSelection% = i And SUBFIELD_I_STATE <> ABSENT Then
+                        DlgVisible      "DisplayTextNote",   INVISIBLE
+                    End If
+                End If
+            End If
+        End If
+
+    End Select
+
+
+  Case IDLE_STATE
+
+    If WarningCounter Then
+        ElapsedSeconds%   = Timer - StartTimer&
+        SecondsRemaining% = COUNTDOWN - ElapsedSeconds%
+        If SecondsRemaining% > 0 Then
+            If DlgVisible( "DisplayTextNote") = INVISIBLE Then
+                DlgVisible      "DisplayTextNote",   VISIBLE
+            End If
+          Else
+            DlgVisible      "DisplayTextNote",   INVISIBLE
+            WarningCounter = FALSE
+        End If
+    End If
+    PreviousSecondsRemaining% = SecondsRemaining%
+    Dialog1ControlFunction    = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'127547008
+'
+'Macro name: MakeTitleAddedEntry
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 4/17/2023 9:53:40 AM using "MacroBookInspector" macro by Walter F. Nickeson.

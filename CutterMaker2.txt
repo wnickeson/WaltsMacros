@@ -1,0 +1,2623 @@
+'MacroName:CutterMaker2.2023.31
+'MacroDescription:Creates an alphanumeric Cutter, or a numeric Cutter to fit into a
+' specified range, for selected or copied text, with an option to paste the output
+' directly into a call number field. Supplies a Cutter from LC's tables for U.S. states,
+' Canadian provinces, and certain other governments and geographic areas.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 6 April 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Select a text string in a Connexion record and run the macro to generate
+' a Cutter number derived from that string. Or, place the cursor in a heading field in a
+' bibliographic record that contains a geographic entity or jurisdiction and run the
+' macro to retrieve the standard LC Cutter number (if established) for that entity. Or,
+' copy some text from any source to the Clipboard and run the macro to generate a Cutter
+' from it. (Whatever its origin, all copied text must be in Latin script.) This macro is
+' designed to help quickly add information to a call number field, but it doesn't need to
+' run in a bibliographic record, as the Cutter it creates can be copied to any
+' destination. If the macro is run in a bibliographic record, it offers to add the Cutter
+' it creates at the end of a call number field, or it can put that string on the
+' Clipboard for pasting.
+'
+' For any selected text, the macro calculates, following LC's published guidelines, a
+' two- to four-character Cutter. The macro ignores case, punctuation, and diacritics in
+' its calculation, and uses only the the first four alphanumeric characters. A space or a
+' period will be considered by the macro to be the end of the selection. Some special
+' characters are converted to their nearest Latin alphabet equivalents; for example, the
+' letter "o" with slash ("ø") is considered to be a simple "o" by the macro. Text copied
+' from outside Connexion--that is, that uses the Windows character set rather than MARC-
+' OCLC--that contains diacritical marks or special characters may produce strange
+' results. The default output of the macro is a Cutter consisting of the first letter of
+' the selection, followed by one to four digits representing the succeeding characters.
+' If the selection begins with a digit, or is composed of only digits, the macro creates
+' a Cutter beginning with the letter "A" which will place it in the span A12-A19.
+
+' The macro can also calculate a Cutter to fit into any range. Usually this will be a
+' string of digits, rather than an alphanumeric string. For example, if the text selected
+' is the word "general," the macro's default result is "G46", but it also offers the
+' numeric string "4137." The macro offers shortcuts for the specific ranges used in Table
+' P-PZ40. For example, Cuttering the word "apple" produces not only "A67", but for a
+' literature call number that uses that table, the other Cutters generated are "A882" (to
+' fit into the range A61-A9999) and "Z552" (to fit into the range Z4581-Z9999).
+' Similarly, Cuttering the string "zither" results in the options "Z58," "Z271," and
+' "Z99." But it can also generate a Cutter beginning with a letter to fit into any range.
+'
+' To fit a number into a range: Enter in each of the macro's two text input boxes up to
+' four digits, for the lower and upper limits of the range. If fewer than four digits are
+' entered, the macro pads the number for the lower end of the range with 0 (zero), and
+' the number for the upper end with 9. For example, entering the range limits of "1" and
+' "4" in the dialog box will generate a Cutter falling between 1000 and 4999 (see
+' Classification and Shelflisting Manual (July 2013) section G58, "Interpreting the
+' Classification Schedules"). To force the number generated to be only up to, but not
+' including, 4, enter "4000" or "3999" as the upper limit. For example, to fit the word
+' "Life" into the range allotted by LC Classification Table P-PZ38 for "Autobiography,
+' journals, memoirs. By title", enter as the upper and lower limits of the range "8" and
+' "829" and run the macro to receive the suggestion "8152".
+'
+' If a bibliographic record is open but no text is selected, and the cursor is in any
+' 110, 610, 650, 651, or 710 field that contains a geographic area or jurisdiction for
+' which a Cutter has been established in either the "Regions and Countries Table" (CSM
+' section G300) or the "U.S. States and Canadian Provinces" table (CSM section G302),
+' the macro will offer that Cutter for use. For a geographic heading followed by a
+' smaller or contained geographic area (for example, "Minnesota $z Mesabi Range"), the
+' macro takes only the first entity from which to generate a Cutter. It can also extract
+' a geographic Cutter from some qualifiers, such as "Cambridge (England)", and "Cuyuna
+' (Minn.)". (Abbreviations are only recognized for U.S. states and Canadian provinces.)
+' Non-LC subject fields may not contain authorized headings, so the macro may not be able
+' to find a Cutter for a heading in such a field.
+'
+' If no text is selected, and the cursor is not in a heading field, or a bibliographic
+' record is not displayed, the macro will try to use whatever it finds on the Clipboard
+' to create a Cutter.
+'
+' Regular Cutters are generated following LC's published guidelines (see CSM G63, "Cutter
+' Numbers"). Cutters that must fit into a range are generated using a table of frequency
+' of occurence for letters in the English language. To get the range into which to fit
+' the Cutter, the limits are padded to four digits as explained above, and then shrunk
+' slightly to allow for modification at each end. Thus, although the limits of a range
+' might be entered as 1-4, the range in which the macro does its calculation is actually
+' 1200-4919, or a span of 3719. The process by which the macro does this is explained
+' more fully below in the comments introducing the function "CalculateBaseCutter."
+'
+' It should go without saying that the Cutters produced by the macro are suggestions
+' only, and should be rounded up or down, or shortened or lengthened, as appropriate, to
+' fit into specific shelflists. Also, the macro may generate a Cutter that ends with "1",
+' which LC recommends against, and which therefore should be omitted or considered for
+' rounding to fit a particular situation. The macro will not produce a Cutter that ends
+' with zero.
+'
+' After creating a Cutter, if a bibliographic record is open the macro shows a list of
+' all the call number fields (050, 055, 060, 070, 090, and 099) in the record, to paste
+' the Cutter at the end of one of them. If there are several such fields, the macro tries
+' to present as the default selection a field which doesn't already have a Cutter; but
+' any call number field in the record may be selected. If the call number field ends with
+' a blank subfield $b, the macro prefixes the Cutter with a decimal point; if there is no
+' delimiter "$b", the macro provides one; otherwise, it does not try to format the call
+' number. Use my macro "FormatCallNumber" to quickly format the call number
+' appropriately. Or, the Cutter may be copied to the Clipboard, for pasting into a field
+' at a specific position, or into another application.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillArray1
+Declare Sub FillArray2
+Declare Sub FillArray3
+
+Declare Function CalculateBaseCutter     ( SelectionString$, RangeSpan% ) As Integer
+Declare Function CalculateCutterWithRange( LowerEndOfRange%, UpperEndOfRange%, StringIn$, OutputLength% ) As String
+Declare Function CheckTerminalZero       ( InString$ )                    As String
+Declare Function CuttersForDigits        ( ASCIIValues% )                 As String
+Declare Function RankFields              ( InString$ )                    As Integer
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Type FieldInfo
+ tContent    As String
+ tLineNumber As Integer
+ tRank       As Integer
+End Type
+
+Global Const RANK_1 As Integer = 3   'Numeric values to rank call number fields so as to try to present a preferred default
+Global Const RANK_2 As Integer = 2   'field for addition of the Cutter.
+Global Const RANK_3 As Integer = 1
+
+Global DELIMITER As String*1
+
+Global CountOfTopRank%
+Global Cutter$
+Global CutterSource$
+Global DefaultSelection%
+Global FirstCutter$
+Global HelpHeading$
+Global HelpSelection$
+Global SelectionString$
+Global WaltsMacros$
+
+Global SelectionFound
+Global StartsWithDigit
+
+Global Abbrevs( 1, 55 )   As String
+Global Areas  ( 2, 455 )  As String
+Global CallNumberFields() As FieldInfo
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS as Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE            As Integer = 16
+Const DLG_FUNCTION_CANCEL         As Integer = 0
+Const INFORMATION_MESSAGE         As Integer = 64
+Const MAX_SELECTION_LENGTH        As Integer = 4
+Const MSGBOX_RETURN_CANCEL        As Integer = 2
+Const MSGBOX_SETBUTTONS_OK_CANCEL As Integer = 1
+Const PUSHBUTTON_ADD              As Integer = 1
+Const PUSHBUTTON_CLOSE            As Integer = 2
+Const WARNING_QUERY               As Integer = 32
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE  = Chr$( 034 )
+
+Dim Candidate$
+Dim CharA%
+Dim CharT$
+Dim ClipboardError$
+Dim CurrentField As FieldInfo
+Dim CurrentRow%
+Dim DialogResult%
+Dim FieldData$
+Dim FieldRank%
+Dim LineToChange%
+Dim ListSelection%
+Dim ModifiedSelection$
+Dim RawSelection$
+Dim SelectionLength%
+Dim SelectionStringChar1$
+Dim SelectionStringChar2%
+Dim SelectionStringChar3%
+Dim SelectionStringChar4%
+Dim Tag$
+Dim TempString$
+Dim TypeOfWindow%
+Dim UBCallNumberFields%
+
+Dim BibRecord
+Dim FoundField
+
+Dim i As Integer, j As Integer, p As Integer
+
+Dim DisplayFields() As String
+
+DELIMITER       = Chr$( 223 )
+StartsWithDigit = FALSE
+WaltsMacros$    = "[Walt's macros] Essentials:CutterMaker2"
+
+HelpSelection$  = "To fit a Cutter into a range, enter one to four digits in each of the two input boxes, from the lower end "
+HelpSelection$  = HelpSelection$ & "of the range to the upper. If either number string contains fewer than four digits, the "
+HelpSelection$  = HelpSelection$ & "macro will automatically pad it: A short number string in the input box for the lower end "
+HelpSelection$  = HelpSelection$ & "of the range will be padded with zeros; for the upper end of the range, it will be padded "
+HelpSelection$  = HelpSelection$ & "with nines. For example, entering " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE & " and "
+HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & "3" & DOUBLE_QUOTE & " as the bounds of the range is automatically "
+HelpSelection$  = HelpSelection$ & "considered by the macro to define a range from " & DOUBLE_QUOTE & "2000" & DOUBLE_QUOTE
+HelpSelection$  = HelpSelection$ & " to " & DOUBLE_QUOTE & "3999" & DOUBLE_QUOTE & ", or a span of 1999. To make the macro "
+HelpSelection$  = HelpSelection$ & "consider the upper end number to be an exclusive limit, either add zeros or enter a "
+HelpSelection$  = HelpSelection$ & "number one lower than the limit. For example, to find a Cutter between 2 and 3, but not "
+HelpSelection$  = HelpSelection$ & "greater than 3, enter " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE & " for the lower end of the "
+HelpSelection$  = HelpSelection$ & "range, and either " & DOUBLE_QUOTE & "3000" & DOUBLE_QUOTE & " or " & DOUBLE_QUOTE & "2999"
+HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & " as the upper limit. Note that you can enter the same number in both "
+HelpSelection$  = HelpSelection$ & "boxes. For example, a range from " & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " to "
+HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " is considered by the macro to be actually "
+HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & "5000" & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "5999" & DOUBLE_QUOTE & "."
+
+HelpHeading$    = "Because no text was selected, the macro looked for a geographic area in the heading in which the cursor is "
+HelpHeading$    = HelpHeading$ & "placed, and found an established Cutter for that geographic area from LC's tables. For a "
+HelpHeading$    = HelpHeading$ & "string of areas, the macro takes for the source of the Cutter the first area, assuming it "
+HelpHeading$    = HelpHeading$ & "is the top jurisdiction in the hierarchy. Because this is an established Cutter, it cannot "
+HelpHeading$    = HelpHeading$ & "be modified."
+
+' First, find out if a bibliographic record is displayed, although the macro doesn't need
+' to run in one.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case 0 To 2, 17, 19
+    BibRecord = TRUE
+  Case Else
+    BibRecord = FALSE
+End Select
+
+If BibRecord Then
+
+' If the macro is running in a bibliographic record, get the row number of the line the
+' cursor is in. Follow by checking for selected text in the record. If text is not
+' selected, check if the cursor is in a field that could contain an authorized form of an
+' geographic name or jurisdiction (fields 110, 610, 650, 651, or 710), and if it is, fill
+' the arrays with the predetermined Cutters. If the cursor is not in one of those fields,
+' check if text is on the Clipboard. If nothing is available from which a Cutter may be
+' generated, display a warning and quit the macro. Otherwise, calculate or look up the
+' Cutter.
+
+    CurrentRow% = CS.CursorRow
+
+    If CS.GetSelectedText( RawSelection$ ) = FALSE Then
+        SelectionFound = FALSE
+        If CS.GetFieldLine( CurrentRow%, FieldData$ ) Then
+            Tag$        = Left$( FieldData$, 3 )
+            TempString$ = Trim$( Mid$( FieldData$, 6 ) )
+            Select Case Tag$
+
+' For corporate bodies and geographic headings, all that is needed to create a term to
+' look up in the Cutter table is the contents of subfield $a.
+
+              Case "110", "610", "651", "710"
+                p = InStr( TempString$, DELIMITER )
+                If p = 0 Then
+                    Candidate$ = TempString$
+                  Else
+                    Candidate$ = Trim$( Left$( TempString$, p - 1 ) )
+                End If
+
+' For topical headings, find the first subfield $z.
+
+              Case "650"
+                p = InStr( TempString$, DELIMITER & "z" )
+                If p = 0 Then
+                    GoTo TryClipboard:
+                  Else
+                    TempString$ = Trim$( Mid$( TempString$, p + 2 ) )
+                    p = InStr( TempString$, DELIMITER )
+                      If p = 0 Then
+                          Candidate$ = TempString$
+                        Else
+                          Candidate$ = Trim$( Left$( TempString$, p - 1 ) )
+                      End If
+                End If
+            End Select
+
+            If Right$( Candidate$, 1 ) = "." Then
+                Candidate$ = Left$( Candidate$, Len( Candidate$ ) - 1 )
+            End If
+
+' If the heading contains a parenthetical term, consider that to be the geographic area
+' or government entity. Close up any spaces within it that separate parts of an
+' abbreviation.
+
+            If Right$( Candidate$, 1 ) = ")" Then
+                p = InStr( Candidate$, "(" )
+                If p > 1 Then
+                    Candidate$ = Mid$( Candidate$, p + 1, Len( Candidate$ ) - p - 1 )
+                    p = InStr( Candidate$, "," )
+                    If p > 1 Then
+                        Candidate$ = Trim$( Mid$( Candidate$, p + 1 ) )
+                    End If
+                End If
+                Do
+                  p = InStr( Candidate$, ". " )
+                  If p > 0 Then
+                      Candidate$ = Left$( Candidate$, p ) & Mid$( Candidate$, p + 2 )
+                  End If
+                Loop Until p = 0
+              Else
+
+' Make uppercase headings that aren't qualifiers.
+
+                Candidate$ = UCase$( Candidate$ )
+            End If
+
+' Fill the arrays to begin searching.
+
+            FillArray1
+            FillArray2
+            FillArray3
+
+' Start with the shorter array containing abbreviations.
+
+            For i = 0 To 55
+              If Candidate$ = Abbrevs( 0, i ) Then
+                  Cutter$       = Abbrevs( 1, i )
+                  CutterSource$ = "Cutter for " & DOUBLE_QUOTE & Candidate$ & DOUBLE_QUOTE & " from " & DOUBLE_QUOTE
+                  CutterSource$ = CutterSource$ & "U.S. States and" & " Canadian Provinces" & DOUBLE_QUOTE & " table"
+                  CutterSource$ = CutterSource$ & " (Classification and Shelflisting Manual, section G302)."
+                  GoTo Finish:
+              End If
+            Next i
+
+' If the matching heading isn't found in the array for abbreviations, go to the bigger
+' array to look for a match. A match selects the Cutter and acquires the table source. If
+' no match is found, suggest generating a Cutter from a text selection. If a match is
+' found, the Cutter is presented for copying and the macro quits.
+
+            If Right$( Candidate$, 1 ) = "." Then Candidate$ = Left$( Candidate$, Len( Candidate$ ) - 1 )
+            For i = 0 To 455
+              If Candidate$ = Areas( 0, i ) Then
+                  Cutter$ = Areas( 1, i )
+                  If Areas( 2, i ) = "A" Then
+                      CutterSource$ = "Cutter for " & DOUBLE_QUOTE & Candidate$ & DOUBLE_QUOTE & " from " & DOUBLE_QUOTE
+                      CutterSource$ = CutterSource$ & "Regions and Countries Table" & DOUBLE_QUOTE & " (Classification"
+                      CutterSource$ = CutterSource$ & " and Shelflisting Manual, section G300)."
+                    Else
+                      CutterSource$ = "Cutter for " & DOUBLE_QUOTE & Candidate$ & DOUBLE_QUOTE & " from " & DOUBLE_QUOTE
+                      CutterSource$ = CutterSource$ & "U.S. States and" & " Canadian Provinces" & DOUBLE_QUOTE & " table"
+                      CutterSource$ = CutterSource$ & " (Classification and Shelflisting Manual, section G302)."
+                  End If
+                  Exit For
+              End If
+            Next i
+            If i > 455 Then
+                MsgBox "A geographic heading was found, but no Cutter has been established for it. Please select text to Cutter.", CRITICAL_MESSAGE, WaltsMacros$
+                Exit Sub
+            End If
+            GoTo Finish:
+        End If
+      Else
+        SelectionFound = TRUE
+    End If
+End If
+
+' If there is nothing selected in the record, and the cursor is not in a heading field,
+' or there is no record displayed at all, offer to generate a Cutter from the content of
+' the Clipboard.
+
+If BibRecord = FALSE Or SelectionFound = FALSE Then
+
+TryClipboard:
+
+    On Error Resume Next
+    RawSelection$ = Clipboard.GetText()
+    If Err > 0 Then
+        ClipboardError$ = "There was a problem accessing the content of the Clipboard. Please check the copied text and try"
+        ClipboardError$ = ClipboardError$ & " again, or select a text string and run the macro."
+        MsgBox ClipboardError$, CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+    If RawSelection$ = "" Then
+        MsgBox "Please select text to Cutter!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        If Len( RawSelection$ ) > 16 Then
+            RawSelection$ = Left$( RawSelection$, 16 ) & "... "
+        End If
+        If MsgBox( "Continue and generate Cutter from Clipboard contents " & DOUBLE_QUOTE & RawSelection$ & DOUBLE_QUOTE & "?", _
+                   WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
+            Exit Sub
+          Else
+            CutterSource$ = "Clipboard"
+        End If
+    End If
+End If
+
+' If a selection has been made in a Connexion record, check if the Client has warned
+' about the presence of non-Latin characters in the selection or in the field in which
+' the cursor is placed. A Cutter can't be calculated from those characters.
+
+If TypeOfWindow% > -1 Then
+    If RawSelection$ = "Data contains non-latin script" Then
+        MsgBox "The selection contains non-latin script! Macro exiting.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' Modify the text string, if necessary, in order to calculate the Cutter. Start by
+' converting the selection to uppercase, then go through it to get the first four
+' alphanumeric characters. Discard punctuation (but stop at a period, considering it to
+' mark the end of the selection) and diacritics, and change some special characters to
+' simple ASCII equivalents. The macro can't tell where the selection comes from, but as
+' it assumes OCLC-MARC, if the character encoding is something different, the result will
+' probably be unexpected (and useless).
+
+ModifiedSelection$ = Trim$( UCase$( RawSelection$ ) )
+
+i = 1
+SelectionLength% = 1
+Do
+  CharT$ = Mid$( ModifiedSelection$, i, 1 )
+  CharA% = Asc( CharT$ )
+
+  Select Case CharA%
+
+' Keep track of digits in the selection. If the selection starts with a digit, a normal
+' Cutter will begin with an "A". This will be the case whether the digit appears only as
+' the first character (as in the ordinal "1st") or the selection is only digits (like
+' "2001").
+
+    Case 48 To 57, 65 to 90                'Normal A-Z
+      SelectionString$ = SelectionString$ & CharT$
+      SelectionLength% = SelectionLength% + 1
+      If CharA% > 47 and CharA% < 58 Then  'Digits 0-9
+          If i = 1 Then
+              StartsWithDigit = TRUE
+          End If
+      End If
+    Case 159                               'Letter "eszett"
+      SelectionString$ = SelectionString$ & "SS"
+      SelectionLength% = SelectionLength% + 2
+    Case 161, 177, 190                     'Letter "L"
+      SelectionString$ = SelectionString$ & "L"
+      SelectionLength% = SelectionLength% + 1
+    Case 162, 172, 178, 188                'Letter "O"
+      SelectionString$ = SelectionString$ & "O"
+      SelectionLength% = SelectionLength% + 1
+    Case 163, 164, 179, 180, 186           'Letter "D"
+      SelectionString$ = SelectionString$ & "D"
+      SelectionLength% = SelectionLength% + 1
+    Case 165, 181                          'Digraph "AE"
+      SelectionString$ = SelectionString$ & "AE"
+      SelectionLength% = SelectionLength% + 2
+    Case 166, 182                          'Digraph "OE"
+      SelectionString$ = SelectionString$ & "OE"
+      SelectionLength% = SelectionLength% + 2
+    Case 173, 189                          'Letter "U"
+      SelectionString$ = SelectionString$ & "U"
+      SelectionLength% = SelectionLength% + 1
+    Case 184                               'Letter "I"
+      SelectionString$ = SelectionString$ & "I"
+      SelectionLength% = SelectionLength% + 1
+
+' Space or period (full stop): assume that the end of the word has been reached.
+
+    Case 32, 46
+      Exit Do
+
+' Ignore all other characters. If the first character is one that can't be used to
+' generate a Cutter, such as the dollar sign in "$10,000", remove it from the string.
+
+    Case Else
+      If i = 1 Then
+          ModifiedSelection$ = Mid$( ModifiedSelection$, 2 )
+          i = 0
+      End If
+
+  End Select
+  i = i + 1
+
+Loop Until SelectionLength% >= 5 Or i > Len( ModifiedSelection$ )
+
+' Does the selection begin with a digit? If so, prefix the string with "A".
+
+If StartsWithDigit Then
+    SelectionString$ = "A" & SelectionString$
+    If Len( SelectionString$ ) > MAX_SELECTION_LENGTH Then
+        SelectionString$ = Left$( SelectionString$, MAX_SELECTION_LENGTH )
+    End If
+End If
+
+If Len( SelectionString$ ) > 1 Then
+    SelectionStringChar1$ = Left$( SelectionString$, 1 )
+    SelectionStringChar2% = Asc( Mid$( SelectionString$, 2, 1 ) )
+
+' For a word of only one letter, arbitrarily assign the Cutter "12" to the letter.
+
+  Else
+    Cutter$ = SelectionString$ & "12"
+    GoTo Finish:
+End If
+
+If SelectionLength% > 3 Then
+    SelectionStringChar3% = Asc( Mid$( SelectionString$, 3, 1 ) )
+    SelectionStringChar4% = Asc( Right$( SelectionString$, 1 ) )
+End If
+
+' The first number (the second character) of the Cutter is determined by the first
+' character, depending on whether that first character is a vowel, a consonant, or the
+' letters Q and S.
+
+Select Case SelectionStringChar1$
+
+  Case "A", "E", "I", "O", "U"
+
+    Select Case SelectionStringChar2%
+      Case 48 To 57
+        Cutter$ = SelectionStringChar1$ & "1" & CuttersForDigits( SelectionStringChar2% )
+      Case 65 to 67
+        Cutter$ = SelectionStringChar1$ & "2"
+      Case 68 to 75
+        Cutter$ = SelectionStringChar1$ & "3"
+      Case 76 to 77
+        Cutter$ = SelectionStringChar1$ & "4"
+      Case 78 to 79
+        Cutter$ = SelectionStringChar1$ & "5"
+      Case 80 to 81
+        Cutter$ = SelectionStringChar1$ & "6"
+      Case 82
+        Cutter$ = SelectionStringChar1$ & "7"
+      Case 83 to 84
+        Cutter$ = SelectionStringChar1$ & "8"
+      Case 85 to 90
+        Cutter$ = SelectionStringChar1$ & "9"
+    End Select
+
+  Case "S"
+
+    Select Case SelectionStringChar2%
+      Case 48 To 57
+        Cutter$ = SelectionStringChar1$ & "1" & CuttersForDigits( SelectionStringChar2% )
+      Case 65 to 66
+        Cutter$ = SelectionStringChar1$ & "2"
+      Case 67
+        If SelectionStringChar3% = 72 Then
+            Cutter$ = SelectionStringChar1$ & "3"
+            Select Case SelectionStringChar4%
+              Case 48 To 57
+                Cutter$ = Cutter$ & "1" & CuttersForDigits( SelectionStringChar4% )
+              Case 65 To 68
+                Cutter$ = Cutter$ & "22"
+              Case 69 To 72
+                Cutter$ = Cutter$ & "24"
+              Case 73 To 75
+                Cutter$ = Cutter$ & "26"
+              Case 76
+                Cutter$ = Cutter$ & "28"
+              Case 77
+                Cutter$ = Cutter$ & "29"
+              Case 78
+                Cutter$ = Cutter$ & "32"
+              Case 79 To 81
+                Cutter$ = Cutter$ & "33"
+              Case 82 to 84
+                Cutter$ = Cutter$ & "35"
+              Case 85 to 86
+                Cutter$ = Cutter$ & "37"
+              Case 87 to 90
+                Cutter$ = Cutter$ & "38"
+            End Select
+        Else
+            Cutter$ = SelectionStringChar1$ & "3"
+        End If
+      Case 68 to 69
+        Cutter$ = SelectionStringChar1$ & "4"
+      Case 70 to 76
+        Cutter$ = SelectionStringChar1$ & "5"
+      Case 77 to 82
+        Cutter$ = SelectionStringChar1$ & "6"
+      Case 83 to 84
+        Cutter$ = SelectionStringChar1$ & "7"
+      Case 85
+        Cutter$ = SelectionStringChar1$ & "8"
+      Case 86 to 90
+        Cutter$ = SelectionStringChar1$ & "9"
+    End Select
+
+  Case "Q"
+
+    If SelectionStringChar2% = 85 Then
+        Select Case SelectionStringChar3%
+          Case 48 To 57
+            Cutter$ = SelectionStringChar1$ & "1" & CuttersForDigits( SelectionStringChar3% )
+          Case 65 to 68
+            Cutter$ = SelectionStringChar1$ & "3"
+          Case 69 to 72
+            Cutter$ = SelectionStringChar1$ & "4"
+          Case 73 to 78
+            Cutter$ = SelectionStringChar1$ & "5"
+          Case 79 to 81
+            Cutter$ = SelectionStringChar1$ & "6"
+          Case 82 to 83
+            Cutter$ = SelectionStringChar1$ & "7"
+          Case 84 to 88
+            Cutter$ = SelectionStringChar1$ & "8"
+          Case 89 to 90
+            Cutter$ = SelectionStringChar1$ & "9"
+        End Select
+      ElseIf SelectionStringChar2% > 85 Then
+        Cutter$ = SelectionStringChar1$ & "9"
+        Select Case SelectionStringChar2%
+          Case 48 To 57
+            Cutter$ = Cutter$ & "1" & CuttersForDigits( SelectionStringChar2% )
+          Case 65 to 68
+            Cutter$ = Cutter$ & "3"
+          Case 69 to 72
+            Cutter$ = Cutter$ & "4"
+          Case 73 to 75
+            Cutter$ = Cutter$ & "5"
+          Case 76 to 78
+            Cutter$ = Cutter$ & "6"
+          Case 79 to 81
+            Cutter$ = Cutter$ & "7"
+          Case 82 to 83
+            Cutter$ = Cutter$ & "8"
+          Case 84, 86 to 90
+            Cutter$ = Cutter$ & "9"
+        End Select
+      Else
+        Cutter$ = SelectionStringChar1$ & "2"
+        Select Case SelectionStringChar2%
+          Case 48 To 57
+            Cutter$ = Cutter$ & "1" & CuttersForDigits( SelectionStringChar2% )
+          Case 65 to 68
+            Cutter$ = Cutter$ & "3"
+          Case 69 to 72
+            Cutter$ = Cutter$ & "4"
+          Case 73 to 75
+            Cutter$ = Cutter$ & "5"
+          Case 76 to 78
+            Cutter$ = Cutter$ & "6"
+          Case 79 to 81
+            Cutter$ = Cutter$ & "7"
+          Case 82 to 83
+            Cutter$ = Cutter$ & "8"
+          Case 84, 86 to 90
+            Cutter$ = Cutter$ & "9"
+        End Select
+    End If
+
+  Case Else
+
+    Select Case SelectionStringChar2%
+      Case 48 To 57
+        Cutter$ = SelectionStringChar1$ & "1" & CuttersForDigits( SelectionStringChar2% )
+      Case 65 to 68
+        Cutter$ = SelectionStringChar1$ & "3"
+      Case 69 to 72
+        Cutter$ = SelectionStringChar1$ & "4"
+      Case 73 to 78
+        Cutter$ = SelectionStringChar1$ & "5"
+      Case 79 to 81
+        Cutter$ = SelectionStringChar1$ & "6"
+      Case 82 to 84
+        Cutter$ = SelectionStringChar1$ & "7"
+      Case 85 to 88
+        Cutter$ = SelectionStringChar1$ & "8"
+      Case 89 to 90
+        Cutter$ = SelectionStringChar1$ & "9"
+    End Select
+
+End Select
+
+' In this next part, if the word is three characters long, continue by selecting the next
+' letter for expansion.
+
+If SelectionLength% > 3 Then
+
+    Select Case SelectionStringChar3%
+      Case 48 To 57
+        Cutter$ = Cutter$ & CuttersForDigits( SelectionStringChar3% )
+      Case 65 to 68
+        Cutter$ = Cutter$ & "3"
+      Case 69 to 72
+        Cutter$ = Cutter$ & "4"
+      Case 73 to 76
+        Cutter$ = Cutter$ & "5"
+      Case 77 to 79
+        Cutter$ = Cutter$ & "6"
+      Case 80 to 83
+        Cutter$ = Cutter$ & "7"
+      Case 84 to 86
+        Cutter$ = Cutter$ & "8"
+      Case 87 to 90
+        Cutter$ = Cutter$ & "9"
+    End Select
+
+End If
+
+Finish:
+
+Cutter$      = Left$( Cutter$, MAX_SELECTION_LENGTH )
+FirstCutter$ = Cutter$
+
+' Make a list of all the relevant call number fields into which an alphanumeric Cutter
+' can be pasted. Attempt to rank the fields for suitability of pasting the Cutter at the
+' end of the field.
+
+i = 1
+Do
+  FoundField = CS.GetFieldLine( i, FieldData$ )
+  If FoundField Then
+      Tag$ = Left$( FieldData$, 3 )
+      Select Case Tag$
+        Case "050", "055", "060", "070", "090", "098", "099"
+          With CurrentField
+           .tContent    = Trim$( FieldData$ )
+           .tRank       = RankFields( FieldData$ )
+           .tLineNumber = i
+          End With
+          ReDim Preserve CallNumberFields( j )
+          CallNumberFields( j ) = CurrentField
+          j = j + 1
+      End Select
+  End If
+  i = i + 1
+Loop Until FoundField = FALSE
+
+' If there are no call number fields, simply display the generated Cutter and quit.
+
+If j = 0 Then
+    Clipboard.Clear
+    Clipboard.SetText Cutter$
+    MsgBox "Cutter copied to Clipboard: " & Cutter$, INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+UBCallNumberFields% = UBound( CallNumberFields )
+ReDim DisplayFields( UBCallNumberFields% )
+
+For i = 0 To UBCallNumberFields%
+  TempString$ = CallNumberFields( i ).tContent
+
+' Format each field for nice display. Change the delimiter to a dollar sign.
+
+  Do
+    p = InStr( TempString$, DELIMITER )
+    If p > 0 Then
+         TempString$ = Left$( TempString$, p - 1 ) & "$" & Mid$( TempString$, p + 1 )
+    End If
+  Loop Until p = 0
+
+' Change the value blank for an indicator to underscore.
+
+  For j = 4 To 5
+    If Mid$( TempString$, j, 1 ) = " " Then
+        Mid$( TempString$, j, 1 ) = "_"
+    End If
+  Next j
+  DisplayFields( i ) = Left$( TempString$, 3 ) & "  " & Mid$( TempString$, 4, 2 ) & "  " & Mid$( TempString$, 6 )
+
+' Keep track of which fields have highest rank; if there are two or more of them, the
+' focus of the dialog box will be the list of fields--not the action pushbutton--so the
+' arrow keys can quickly select the desired field from among the equally qualified
+' candidates.
+
+  If CallNumberFields( i ).tRank > FieldRank% Then
+      FieldRank%        = CallNumberFields( i ).tRank
+      CountOfTopRank%   = 1
+      DefaultSelection% = i
+    ElseIf CallNumberFields( i ).tRank = FieldRank% Then
+      CountOfTopRank%   = CountOfTopRank% + 1
+  End If
+Next i
+
+' Now the dialog box where all the action takes place can be run.
+
+Begin Dialog Dialog1Definition  340, 110, WaltsMacros$, .Dialog1ControlFunction
+  PushButton      10,  25,  80,  14, "&Add to selected field:",            .ButtonAdd
+  PushButton      98,  25,  58,  14, "&Copy && close",                     .ButtonCopyClose
+  CancelButton   278,  86,  52,  14
+  TextBox        206,  18,  24,  12,                                       .InputBox1
+  TextBox        242,  18,  24,  12,                                       .InputBox2
+  PushButton     272,  18,  24,  12, "&Go",                                .ButtonGoRange
+  PushButton     218,  86,  52,  14, "&Reset",                             .ButtonReset
+  PushButton     304,  18,  16,  12, "&?",                                 .ButtonHelp
+  ListBox         10,  44, 148,  44, DisplayFields(),                      .ListOfCallNumberFields
+  TextBox         10,   8,  26,  12,                                       .CutterDisplay
+  OptionGroup                                                              .OptionGroupCutterFormat
+   OptionButton   40,   8,  56,  12, "Al&phanumeric",                      .OptionAlphanumeric
+   OptionButton  100,   8,  56,  12, "&Numbers only",                      .OptionNumbersOnly
+  OptionGroup                                                              .OptionGroupRanges
+   OptionButton  174,  18,  30,  12, "",                                   .OptionGroupRangesDummy
+   OptionButton  174,  18,  30,  12, "&From",                              .OptionCustomRange
+   OptionButton  174,  48, 102,  12, "&Separate works (A61-Z458)",         .OptionPZSeparateWorks
+   OptionButton  174,  62, 121,  12, "&Biography and criticism (Z5-Z999)", .OptionPZBiogCriticism
+  GroupBox       166,   4, 164,  74, "Fit into range",                     .GBFitIntoRange
+  GroupBox       166,   4, 164,  52, "Source of Cutter",                   .GBCutterSource
+  GroupBox       166,  36, 164,  42, "Use Table P-PZ40",                   .GBUsePZTable
+  Text           174,  15, 148,  32, "",                                   .CutterSourceText
+  Text           232,  19,   8,   8, "to",                                 .To
+  Text           167,  49, 161,  27, "",                                   .WarningArea
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+DialogResult% = Dialog( Dialog1 )
+
+Select Case DialogResult%
+
+  Case DLG_FUNCTION_CANCEL
+
+    Exit Sub
+
+  Case PUSHBUTTON_ADD
+
+' If the Cutter is to be added to the end of the field, it needs to be prepared. Add a
+' decimal if the Cutter is to appear in subfield $b. If there is no subfield $b present
+' in the field, add one just to hold the Cutter.
+
+    ListSelection% = Dialog1.ListOfCallNumberFields
+    LineToChange%  = CallNumberFields( ListSelection% ).tLineNumber
+    FieldData$     = CallNumberFields( ListSelection% ).tContent
+    Tag$           = Left$( FieldData$, 3 )
+    FieldRank%     = CallNumberFields( ListSelection% ).tRank
+    If FieldRank% = RANK_1 Then
+        CountOfTopRank% = CountOfTopRank% + 1
+        If Tag$ = "099" Then
+            Cutter$ = " ." & Cutter$
+          Else
+            If Right$( FieldData$, 2 ) = DELIMITER & "b" Then
+                Cutter$ = " ." & Cutter$
+              Else
+                Cutter$ = " " & DELIMITER & "b ." & Cutter$
+            End If
+        End If
+      Else
+        If Right$( Trim$( FieldData$ ), 2 ) = DELIMITER & "b" Or Tag$ = "099" Then
+            Cutter$ = " ." & Cutter$
+        End If
+    End If
+    FieldData$ = FieldData$ & Cutter$
+    If CS.SetFieldLine( LineToChange%, FieldData$) = FALSE Then
+        MsgBox "Sorry, the macro failed to replace the field.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+    Exit Sub
+
+  Case PUSHBUTTON_CLOSE
+
+' "Copy & close" simply sets the Clipboard and ends the macro.
+
+    Clipboard.Clear
+    Clipboard.SetText Cutter$
+    Exit Sub
+
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray1
+
+' Three different procedures to fill the arrays, as trying to do it all in one would
+' exceed OML's capacity.
+
+'Normalized terms:
+'CURAÇAO
+'CÔTE D'IVOIRE
+'RÉUNION
+'TERRES AUSTRALES ET ANTARCTIQUES FRANÇAISES
+
+Areas( 0, 0   ) = "ABYSSINIA"
+Areas( 0, 1   ) = "AFGHANISTAN"
+Areas( 0, 2   ) = "AFRICA"
+Areas( 0, 3   ) = "AFRICA, CENTRAL"
+Areas( 0, 4   ) = "AFRICA, EAST"
+Areas( 0, 5   ) = "AFRICA, EASTERN"
+Areas( 0, 6   ) = "AFRICA, FRENCH-SPEAKING WEST"
+Areas( 0, 7   ) = "AFRICA, NORTH"
+Areas( 0, 8   ) = "AFRICA, NORTHEAST"
+Areas( 0, 9   ) = "AFRICA, NORTHWEST"
+Areas( 0, 10  ) = "AFRICA, SOUTH"
+Areas( 0, 11  ) = "AFRICA, SOUTHERN"
+Areas( 0, 12  ) = "AFRICA, SUB-SAHARAN"
+Areas( 0, 13  ) = "AFRICA, WEST"
+Areas( 0, 14  ) = "ALABAMA"
+Areas( 0, 15  ) = "ALASKA"
+Areas( 0, 16  ) = "ALBANIA"
+Areas( 0, 17  ) = "ALBERTA"
+Areas( 0, 18  ) = "ALGERIA"
+Areas( 0, 19  ) = "ALPS"
+Areas( 0, 20  ) = "AMERICA"
+Areas( 0, 21  ) = "AMERICAN SAMOA"
+Areas( 0, 22  ) = "ANDORRA"
+Areas( 0, 23  ) = "ANGOLA"
+Areas( 0, 24  ) = "ANGUILLA"
+Areas( 0, 25  ) = "ANTARCTICA"
+Areas( 0, 26  ) = "ANTIGUA"
+Areas( 0, 27  ) = "ANTIGUA AND BARBUDA"
+Areas( 0, 28  ) = "ARAB COUNTRIES"
+Areas( 0, 29  ) = "ARCTIC REGIONS"
+Areas( 0, 30  ) = "ARGENTINA"
+Areas( 0, 31  ) = "ARIZONA"
+Areas( 0, 32  ) = "ARKANSAS"
+Areas( 0, 33  ) = "ARMENIA"
+Areas( 0, 34  ) = "ARMENIA (REPUBLIC)"
+Areas( 0, 35  ) = "ARUBA"
+Areas( 0, 36  ) = "ASIA"
+Areas( 0, 37  ) = "ASIA, CENTRAL"
+Areas( 0, 38  ) = "ASIA, EAST"
+Areas( 0, 39  ) = "ASIA, SOUTH"
+Areas( 0, 40  ) = "ASIA, SOUTHEASTERN"
+Areas( 0, 41  ) = "ASIA, SOUTHWESTERN"
+Areas( 0, 42  ) = "AUSTRALASIA"
+Areas( 0, 43  ) = "AUSTRALIA"
+Areas( 0, 44  ) = "AUSTRIA"
+Areas( 0, 45  ) = "AZERBAIJAN"
+Areas( 0, 46  ) = "BAHAMAS"
+Areas( 0, 47  ) = "BAHRAIN"
+Areas( 0, 48  ) = "BALKAN PENINSULA"
+Areas( 0, 49  ) = "BALTIC STATES"
+Areas( 0, 50  ) = "BANGLADESH"
+Areas( 0, 51  ) = "BARBADOS"
+Areas( 0, 52  ) = "BARBUDA"
+Areas( 0, 53  ) = "BELARUS"
+Areas( 0, 54  ) = "BELGIUM"
+Areas( 0, 55  ) = "BELIZE"
+Areas( 0, 56  ) = "BENELUX COUNTRIES"
+Areas( 0, 57  ) = "BENGAL"
+Areas( 0, 58  ) = "BENIN"
+Areas( 0, 59  ) = "BERMUDA"
+Areas( 0, 60  ) = "BHUTAN"
+Areas( 0, 61  ) = "BOLIVIA"
+Areas( 0, 62  ) = "BONAIRE"
+Areas( 0, 63  ) = "BOSNIA AND HERZEGOVINA"
+Areas( 0, 64  ) = "BOTSWANA"
+Areas( 0, 65  ) = "BRAZIL"
+Areas( 0, 66  ) = "BRITISH COLUMBIA"
+Areas( 0, 67  ) = "BRITISH GUIANA"
+Areas( 0, 68  ) = "BRITISH HONDURAS"
+Areas( 0, 69  ) = "BRITISH ISLES"
+Areas( 0, 70  ) = "BRITISH VIRGIN ISLANDS"
+Areas( 0, 71  ) = "BRUNEI"
+Areas( 0, 72  ) = "BULGARIA"
+Areas( 0, 73  ) = "BURKINA FASO"
+Areas( 0, 74  ) = "BURMA"
+Areas( 0, 75  ) = "BURUNDI"
+Areas( 0, 76  ) = "BYZANTINE EMPIRE"
+Areas( 0, 77  ) = "CABO VERDE"
+Areas( 0, 78  ) = "CALIFORNIA"
+Areas( 0, 79  ) = "CAMBODIA"
+Areas( 0, 80  ) = "CAMEROON"
+Areas( 0, 81  ) = "CANADA"
+Areas( 0, 82  ) = "CANARY ISLANDS"
+Areas( 0, 83  ) = "CAPE VERDE"
+Areas( 0, 84  ) = "CARIBBEAN AREA"
+Areas( 0, 85  ) = "CAROLINE ISLANDS"
+Areas( 0, 86  ) = "CAUCASUS"
+Areas( 0, 87  ) = "CAYMAN ISLANDS"
+Areas( 0, 88  ) = "CENTRAL AFRICAN REPUBLIC"
+Areas( 0, 89  ) = "CENTRAL AMERICA"
+Areas( 0, 90  ) = "CENTRAL EUROPE"
+Areas( 0, 91  ) = "CEYLON"
+Areas( 0, 92  ) = "CHAD"
+Areas( 0, 93  ) = "CHANNEL ISLANDS"
+Areas( 0, 94  ) = "CHILE"
+Areas( 0, 95  ) = "CHINA"
+Areas( 0, 96  ) = "COLOMBIA"
+Areas( 0, 97  ) = "COLORADO"
+Areas( 0, 98  ) = "COMMONWEALTH COUNTRIES"
+Areas( 0, 99  ) = "COMMUNIST COUNTRIES"
+Areas( 0, 100 ) = "COMMUNIST COUNTRIES, FORMER"
+Areas( 0, 101 ) = "COMOROS"
+Areas( 0, 102 ) = "CONGO (BRAZZAVILLE)"
+Areas( 0, 103 ) = "CONGO (DEMOCRATIC REPUBLIC)"
+Areas( 0, 104 ) = "CONNECTICUT"
+Areas( 0, 105 ) = "COOK ISLANDS"
+Areas( 0, 106 ) = "COSTA RICA"
+Areas( 0, 107 ) = "COTE D'IVOIRE"
+Areas( 0, 108 ) = "CROATIA"
+Areas( 0, 109 ) = "CUBA"
+Areas( 0, 110 ) = "CURACAO"
+Areas( 0, 111 ) = "CYPRUS"
+Areas( 0, 112 ) = "CZECH REPUBLIC"
+Areas( 0, 113 ) = "CZECHOSLOVAKIA"
+Areas( 0, 114 ) = "DAHOMEY"
+Areas( 0, 115 ) = "DELAWARE"
+Areas( 0, 116 ) = "DENMARK"
+Areas( 0, 117 ) = "DEVELOPING COUNTRIES"
+Areas( 0, 118 ) = "DISTRICT OF COLUMBIA"
+Areas( 0, 119 ) = "DJIBOUTI"
+Areas( 0, 120 ) = "DOMINICA"
+Areas( 0, 121 ) = "DOMINICAN REPUBLIC"
+Areas( 0, 122 ) = "DUTCH EAST INDIES"
+Areas( 0, 123 ) = "DUTCH GUIANA"
+Areas( 0, 124 ) = "EAST ASIA"
+Areas( 0, 125 ) = "EAST TIMOR"
+Areas( 0, 126 ) = "ECUADOR"
+Areas( 0, 127 ) = "EGYPT"
+Areas( 0, 128 ) = "EL SALVADOR"
+Areas( 0, 129 ) = "ELLICE ISLANDS"
+Areas( 0, 130 ) = "ENGLAND"
+Areas( 0, 131 ) = "EQUATORIAL GUINEA"
+Areas( 0, 132 ) = "ERITREA"
+Areas( 0, 133 ) = "ESTONIA"
+Areas( 0, 134 ) = "ESWATINI"
+Areas( 0, 135 ) = "ETHIOPIA"
+Areas( 0, 136 ) = "EURASIA"
+Areas( 0, 137 ) = "EUROPE"
+Areas( 0, 138 ) = "EUROPE, CENTRAL"
+Areas( 0, 139 ) = "EUROPE, EASTERN"
+Areas( 0, 140 ) = "EUROPE, NORTHERN"
+Areas( 0, 141 ) = "EUROPE, SOUTHERN"
+Areas( 0, 142 ) = "EUROPE, WESTERN"
+Areas( 0, 143 ) = "EUROPEAN ECONOMIC COMMUNITY COUNTRIES"
+Areas( 0, 144 ) = "EUROPEAN FREE TRADE ASSOCIATION COUNTRIES"
+Areas( 0, 145 ) = "EUROPEAN UNION COUNTRIES"
+Areas( 0, 146 ) = "FALKLAND ISLANDS"
+Areas( 0, 147 ) = "FAROE ISLANDS"
+Areas( 0, 148 ) = "FIJI"
+Areas( 0, 149 ) = "FINLAND"
+Areas( 0, 150 ) = "FLORIDA"
+Areas( 0, 151 ) = "FORMER COMMUNIST COUNTRIES"
+Areas( 0, 152 ) = "FORMER SOVIET REPUBLICS"
+Areas( 0, 153 ) = "FORMOSA"
+Areas( 0, 154 ) = "FRANCE"
+Areas( 0, 155 ) = "FRENCH GUIANA"
+Areas( 0, 156 ) = "FRENCH POLYNESIA"
+Areas( 0, 157 ) = "GABON"
+Areas( 0, 158 ) = "GALAPAGOS ISLANDS"
+Areas( 0, 159 ) = "GAMBIA"
+Areas( 0, 160 ) = "GEORGIA"
+Areas( 0, 161 ) = "GEORGIA (REPUBLIC)"
+Areas( 0, 162 ) = "GERMANY"
+Areas( 0, 163 ) = "GERMANY (DEMOCRATIC REPUBLIC)"
+Areas( 0, 164 ) = "GERMANY (EAST)"
+Areas( 0, 165 ) = "GERMANY (FEDERAL REPUBLIC)"
+Areas( 0, 166 ) = "GERMANY (WEST)"
+Areas( 0, 167 ) = "GHANA"
+Areas( 0, 168 ) = "GIBRALTAR"
+Areas( 0, 169 ) = "GILBERT ISLANDS"
+Areas( 0, 170 ) = "GREAT BRITAIN"
+Areas( 0, 171 ) = "GREECE"
+Areas( 0, 172 ) = "GREENLAND"
+Areas( 0, 173 ) = "GRENADA"
+Areas( 0, 174 ) = "GUADELOUPE"
+Areas( 0, 175 ) = "GUAM"
+Areas( 0, 176 ) = "GUATEMALA"
+Areas( 0, 177 ) = "GUIANA"
+Areas( 0, 178 ) = "GUINEA"
+Areas( 0, 179 ) = "GUINEA-BISSAU"
+Areas( 0, 180 ) = "GUYANA"
+Areas( 0, 181 ) = "HAITI"
+Areas( 0, 182 ) = "HAWAII"
+Areas( 0, 183 ) = "HISPANIOLA"
+Areas( 0, 184 ) = "HOLLAND"
+Areas( 0, 185 ) = "HONDURAS"
+Areas( 0, 186 ) = "HONG KONG"
+Areas( 0, 187 ) = "HUNGARY"
+Areas( 0, 188 ) = "ICELAND"
+Areas( 0, 189 ) = "IDAHO"
+Areas( 0, 190 ) = "ILLINOIS"
+Areas( 0, 191 ) = "INDIA"
+Areas( 0, 192 ) = "INDIANA"
+Areas( 0, 193 ) = "INDOCHINA"
+Areas( 0, 194 ) = "INDONESIA"
+Areas( 0, 195 ) = "INNER MONGOLIA"
+Areas( 0, 196 ) = "IOWA"
+Areas( 0, 197 ) = "IRAN"
+Areas( 0, 198 ) = "IRAQ"
+Areas( 0, 199 ) = "IRELAND"
+Areas( 0, 200 ) = "ISLAMIC EMPIRE"
+Areas( 0, 201 ) = "ISLAMIC COUNTRIES"
+Areas( 0, 202 ) = "ISLANDS OF THE INDIAN OCEAN"
+Areas( 0, 203 ) = "ISRAEL"
+Areas( 0, 204 ) = "ITALY"
+Areas( 0, 205 ) = "IVORY COAST"
+Areas( 0, 206 ) = "JAMAICA"
+Areas( 0, 207 ) = "JAPAN"
+Areas( 0, 208 ) = "JAVA"
+Areas( 0, 209 ) = "JERUSALEM"
+Areas( 0, 210 ) = "JORDAN"
+Areas( 0, 211 ) = "JUGOSLAVIA"
+Areas( 0, 212 ) = "JUTLAND"
+Areas( 0, 213 ) = "KAMPUCHEA"
+Areas( 0, 214 ) = "KANSAS"
+Areas( 0, 215 ) = "KAZAKHSTAN"
+Areas( 0, 216 ) = "KENTUCKY"
+Areas( 0, 217 ) = "KENYA"
+Areas( 0, 218 ) = "KERGUELEN ISLANDS"
+Areas( 0, 219 ) = "KIRIBATI"
+Areas( 0, 220 ) = "KOREA"
+Areas( 0, 221 ) = "KOREA (DEMOCRATIC PEOPLE'S REPUBLIC)"
+Areas( 0, 222 ) = "KOREA (NORTH)"
+Areas( 0, 223 ) = "KOREA (REPUBLIC)"
+Areas( 0, 224 ) = "KOREA (SOUTH)"
+Areas( 0, 225 ) = "KOSOVO"
+Areas( 0, 226 ) = "KUWAIT"
+Areas( 0, 227 ) = "KYRGYZSTAN"
+Areas( 0, 228 ) = "LAOS"
+Areas( 0, 229 ) = "LATIN AMERICA"
+Areas( 0, 230 ) = "LATVIA"
+Areas( 0, 231 ) = "LEBANON"
+Areas( 0, 232 ) = "LESOTHO"
+Areas( 0, 233 ) = "LIBERIA"
+Areas( 0, 234 ) = "LIBYA"
+Areas( 0, 235 ) = "LIECHTENSTEIN"
+Areas( 0, 236 ) = "LITHUANIA"
+Areas( 0, 237 ) = "LOUISIANA"
+Areas( 0, 238 ) = "LUXEMBOURG"
+Areas( 0, 239 ) = "MACAO"
+Areas( 0, 240 ) = "MACARONESIA"
+Areas( 0, 241 ) = "MACEDONIA"
+Areas( 0, 242 ) = "MACEDONIA (REPUBLIC)"
+Areas( 0, 243 ) = "MADAGASCAR"
+Areas( 0, 244 ) = "MAINE"
+Areas( 0, 245 ) = "MALAGASY REPUBLIC"
+Areas( 0, 246 ) = "MALAWI"
+Areas( 0, 247 ) = "MALAY ARCHIPELAGO"
+Areas( 0, 248 ) = "MALAYA"
+Areas( 0, 249 ) = "MALAYSIA"
+Areas( 0, 250 ) = "MALDIVES"
+Areas( 0, 251 ) = "MALI"
+Areas( 0, 252 ) = "MALTA"
+Areas( 0, 253 ) = "MANITOBA"
+Areas( 0, 254 ) = "MARSHALL ISLANDS"
+Areas( 0, 255 ) = "MARTINIQUE"
+Areas( 0, 256 ) = "MARYLAND"
+Areas( 0, 257 ) = "MASSACHUSETTS"
+Areas( 0, 258 ) = "MAURITANIA"
+Areas( 0, 259 ) = "MAURITIUS"
+Areas( 0, 260 ) = "MELANESIA"
+Areas( 0, 261 ) = "MEXICAN-AMERICAN BORDER REGION"
+Areas( 0, 262 ) = "MEXICO"
+Areas( 0, 263 ) = "MICHIGAN"
+Areas( 0, 264 ) = "MICRONESIA"
+Areas( 0, 265 ) = "MICRONESIA (FEDERATED STATES)"
+Areas( 0, 266 ) = "MIDDLE EAST"
+Areas( 0, 267 ) = "MINNESOTA"
+Areas( 0, 268 ) = "MISSISSIPPI"
+Areas( 0, 269 ) = "MISSOURI"
+Areas( 0, 270 ) = "MOLDOVA"
+Areas( 0, 271 ) = "MONACO"
+Areas( 0, 272 ) = "MONGOLIA"
+Areas( 0, 273 ) = "MONGOLIA (MONGOLIAN PEOPLE'S REPUBLIC)"
+Areas( 0, 274 ) = "MONTANA"
+Areas( 0, 275 ) = "MONTENEGRO"
+Areas( 0, 276 ) = "MONTSERRAT"
+Areas( 0, 277 ) = "MOROCCO"
+Areas( 0, 278 ) = "MOZAMBIQUE"
+Areas( 0, 279 ) = "MYANMAR"
+Areas( 0, 280 ) = "NAMIBIA"
+Areas( 0, 281 ) = "NAURU"
+Areas( 0, 282 ) = "NEAR EAST"
+Areas( 0, 283 ) = "NEBRASKA"
+Areas( 0, 284 ) = "NEPAL"
+Areas( 0, 285 ) = "NETHERLANDS"
+Areas( 0, 286 ) = "NETHERLANDS ANTILLES"
+Areas( 0, 287 ) = "NEVADA"
+Areas( 0, 288 ) = "NEW BRUNSWICK"
+Areas( 0, 289 ) = "NEW CALEDONIA"
+Areas( 0, 290 ) = "NEW GUINEA"
+Areas( 0, 291 ) = "NEW HAMPSHIRE"
+Areas( 0, 292 ) = "NEW HEBRIDES"
+Areas( 0, 293 ) = "NEW JERSEY"
+Areas( 0, 294 ) = "NEW MEXICO"
+Areas( 0, 295 ) = "NEW YORK"
+Areas( 0, 296 ) = "NEW ZEALAND"
+Areas( 0, 297 ) = "NEWFOUNDLAND AND LABRADOR"
+Areas( 0, 298 ) = "NICARAGUA"
+Areas( 0, 299 ) = "NIGER"
+Areas( 0, 300 ) = "NIGERIA"
+Areas( 0, 301 ) = "NORTH AMERICA"
+Areas( 0, 302 ) = "NORTH CAROLINA"
+Areas( 0, 303 ) = "NORTH DAKOTA"
+Areas( 0, 304 ) = "NORTH MACEDONIA"
+Areas( 0, 305 ) = "NORTHERN IRELAND"
+Areas( 0, 306 ) = "NORTHERN RHODESIA"
+Areas( 0, 307 ) = "NORTHWEST TERRITORIES"
+Areas( 0, 308 ) = "NORWAY"
+Areas( 0, 309 ) = "NOVA SCOTIA"
+Areas( 0, 310 ) = "NUNAVUT"
+Areas( 0, 311 ) = "NYASALAND"
+Areas( 0, 312 ) = "OCEANIA"
+Areas( 0, 313 ) = "OHIO"
+Areas( 0, 314 ) = "OKLAHOMA"
+Areas( 0, 315 ) = "OMAN"
+Areas( 0, 316 ) = "ONTARIO"
+Areas( 0, 317 ) = "OREGON"
+Areas( 0, 318 ) = "OUTER MONGOLIA"
+Areas( 0, 319 ) = "PACIFIC AREA"
+Areas( 0, 320 ) = "PAKISTAN"
+Areas( 0, 321 ) = "PALAU"
+Areas( 0, 322 ) = "PALESTINE"
+Areas( 0, 323 ) = "PANAMA"
+Areas( 0, 324 ) = "PAPUA NEW GUINEA"
+Areas( 0, 325 ) = "PARAGUAY"
+Areas( 0, 326 ) = "PENNSYLVANIA"
+Areas( 0, 327 ) = "PERSIA"
+Areas( 0, 328 ) = "PERSIAN GULF REGION"
+Areas( 0, 329 ) = "PERU"
+Areas( 0, 330 ) = "PHILIPPINES"
+Areas( 0, 331 ) = "POLAND"
+Areas( 0, 332 ) = "POLYNESIA"
+Areas( 0, 333 ) = "PORTUGAL"
+Areas( 0, 334 ) = "PRINCE EDWARD ISLAND"
+Areas( 0, 335 ) = "PRUSSIA"
+Areas( 0, 336 ) = "PRUSSIA, EAST (POLAND AND RUSSIA)"
+Areas( 0, 337 ) = "PUERTO RICO"
+Areas( 0, 338 ) = "QATAR"
+Areas( 0, 339 ) = "QUEBEC (PROVINCE)"
+Areas( 0, 340 ) = "REUNION"
+Areas( 0, 341 ) = "RHODE ISLAND"
+Areas( 0, 342 ) = "RHODESIA, NORTHERN"
+Areas( 0, 343 ) = "RHODESIA, SOUTHERN"
+Areas( 0, 344 ) = "ROMAN EMPIRE"
+Areas( 0, 345 ) = "ROMANIA"
+Areas( 0, 346 ) = "RUMANIA"
+Areas( 0, 347 ) = "RUSSIA"
+Areas( 0, 348 ) = "RUSSIA (FEDERATION)"
+Areas( 0, 349 ) = "RWANDA"
+Areas( 0, 350 ) = "SAHEL"
+Areas( 0, 351 ) = "SAINT KITTS-NEVIS"
+Areas( 0, 352 ) = "SAINT LUCIA"
+Areas( 0, 353 ) = "SAINT VINCENT AND THE GRENADINES"
+Areas( 0, 354 ) = "SALVADOR"
+Areas( 0, 355 ) = "SAMOA"
+Areas( 0, 356 ) = "SAMOA, AMERICAN"
+Areas( 0, 357 ) = "SAMOAN ISLANDS"
+Areas( 0, 358 ) = "SAN MARINO"
+Areas( 0, 359 ) = "SAO TOME AND PRINCIPE"
+Areas( 0, 360 ) = "SASKATCHEWAN"
+Areas( 0, 361 ) = "SAUDI ARABIA"
+Areas( 0, 362 ) = "SCANDINAVIA"
+Areas( 0, 363 ) = "SCOTLAND"
+Areas( 0, 364 ) = "SENEGAL"
+Areas( 0, 365 ) = "SERBIA"
+Areas( 0, 366 ) = "SEYCHELLES"
+Areas( 0, 367 ) = "SIAM"
+Areas( 0, 368 ) = "SIBERIA"
+Areas( 0, 369 ) = "SIERRA LEONE"
+Areas( 0, 370 ) = "SINGAPORE"
+Areas( 0, 371 ) = "SLOVAKIA"
+Areas( 0, 372 ) = "SLOVENIA"
+Areas( 0, 373 ) = "SOLOMON ISLANDS"
+Areas( 0, 374 ) = "SOMALIA"
+Areas( 0, 375 ) = "SOUTH AFRICA"
+Areas( 0, 376 ) = "SOUTH AMERICA"
+Areas( 0, 377 ) = "SOUTH ASIA"
+Areas( 0, 378 ) = "SOUTH CAROLINA"
+Areas( 0, 379 ) = "SOUTH DAKOTA"
+Areas( 0, 380 ) = "SOUTH SUDAN"
+Areas( 0, 381 ) = "SOUTHEAST ASIA"
+Areas( 0, 382 ) = "SOUTHERN CONE OF SOUTH AMERICA"
+Areas( 0, 383 ) = "SOVIET UNION"
+Areas( 0, 384 ) = "SPAIN"
+Areas( 0, 385 ) = "SRI LANKA"
+Areas( 0, 386 ) = "SUDAN"
+Areas( 0, 387 ) = "SUDAN (REGION)"
+Areas( 0, 388 ) = "SURINAME"
+Areas( 0, 389 ) = "SWAZILAND"
+Areas( 0, 390 ) = "SWEDEN"
+Areas( 0, 391 ) = "SWITZERLAND"
+Areas( 0, 392 ) = "SYRIA"
+Areas( 0, 393 ) = "TAIWAN"
+Areas( 0, 394 ) = "TAJIKISTAN"
+Areas( 0, 395 ) = "TAMIL NADU"
+Areas( 0, 396 ) = "TANGANYIKA"
+Areas( 0, 397 ) = "TANZANIA"
+Areas( 0, 398 ) = "TASMANIA"
+Areas( 0, 399 ) = "TENNESSEE"
+Areas( 0, 400 ) = "TERRES AUSTRALES ET ANTARCTIQUES FRANCAISES"
+Areas( 0, 401 ) = "TEXAS"
+Areas( 0, 402 ) = "THAILAND"
+Areas( 0, 403 ) = "TIBET"
+Areas( 0, 404 ) = "TIMOR-LESTE"
+Areas( 0, 405 ) = "TOBAGO"
+Areas( 0, 406 ) = "TOGO"
+Areas( 0, 407 ) = "TONGA"
+Areas( 0, 408 ) = "TRANSVAAL"
+Areas( 0, 409 ) = "TRINIDAD"
+Areas( 0, 410 ) = "TRINIDAD AND TOBAGO"
+Areas( 0, 411 ) = "TROPICS"
+Areas( 0, 412 ) = "TUBUAI ISLANDS"
+Areas( 0, 413 ) = "TUNISIA"
+Areas( 0, 414 ) = "TURKEY"
+Areas( 0, 415 ) = "TURKMENISTAN"
+Areas( 0, 416 ) = "TURKS AND CAICOS ISLANDS"
+Areas( 0, 417 ) = "TUVALU"
+Areas( 0, 418 ) = "UGANDA"
+Areas( 0, 419 ) = "UKRAINE"
+Areas( 0, 420 ) = "UNITED ARAB EMIRATES"
+Areas( 0, 421 ) = "UNITED STATES"
+Areas( 0, 422 ) = "UNITED STATES VIRGIN ISLANDS"
+Areas( 0, 423 ) = "UPPER VOLTA"
+Areas( 0, 424 ) = "URUGUAY"
+Areas( 0, 425 ) = "UTAH"
+Areas( 0, 426 ) = "UZBEKISTAN"
+Areas( 0, 427 ) = "VANUATU"
+Areas( 0, 428 ) = "VATICAN CITY"
+Areas( 0, 429 ) = "VENEZUELA"
+Areas( 0, 430 ) = "VERMONT"
+Areas( 0, 431 ) = "VIETNAM"
+Areas( 0, 432 ) = "VIETNAM (DEMOCRATIC REPUBLIC)"
+Areas( 0, 433 ) = "VIRGIN ISLANDS"
+Areas( 0, 434 ) = "VIRGIN ISLANDS OF THE UNITED STATES"
+Areas( 0, 435 ) = "VIRGIN ISLANDS, BRITISH"
+Areas( 0, 436 ) = "VIRGINIA"
+Areas( 0, 437 ) = "WALES"
+Areas( 0, 438 ) = "WASHINGTON (D.C.)"
+Areas( 0, 439 ) = "WASHINGTON (STATE)"
+Areas( 0, 440 ) = "WEST INDIES, BRITISH"
+Areas( 0, 441 ) = "WEST INDIES, FRENCH"
+Areas( 0, 442 ) = "WEST VIRGINIA"
+Areas( 0, 443 ) = "WESTERN AUSTRALIA"
+Areas( 0, 444 ) = "WESTERN SAMOA"
+Areas( 0, 445 ) = "WISCONSIN"
+Areas( 0, 446 ) = "WYOMING"
+Areas( 0, 447 ) = "XIANGGANG"
+Areas( 0, 448 ) = "YEMEN"
+Areas( 0, 449 ) = "YEMEN (PEOPLE'S DEMOCRATIC REPUBLIC)"
+Areas( 0, 450 ) = "YUGOSLAVIA"
+Areas( 0, 451 ) = "YUKON"
+Areas( 0, 452 ) = "ZAIRE"
+Areas( 0, 453 ) = "ZAMBEZI RIVER REGION"
+Areas( 0, 454 ) = "ZAMBIA"
+Areas( 0, 455 ) = "ZIMBABWE"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray2
+
+' The third element of the first dimension of the array specifies the source of the
+' Cutter. "A" means the "Regions and Countries Table" (CSM G300), "B" means the "U.S.
+' States and Canadian Provinces" table (CSM G302)
+
+Areas( 1, 0   ) = "E8"    : Areas( 2, 0   ) = "A"
+Areas( 1, 1   ) = "A3"    : Areas( 2, 1   ) = "A"
+Areas( 1, 2   ) = "A35"   : Areas( 2, 2   ) = "A"
+Areas( 1, 3   ) = "A352"  : Areas( 2, 3   ) = "A"
+Areas( 1, 4   ) = "A353"  : Areas( 2, 4   ) = "A"
+Areas( 1, 5   ) = "A354"  : Areas( 2, 5   ) = "A"
+Areas( 1, 6   ) = "A3545" : Areas( 2, 6   ) = "A"
+Areas( 1, 7   ) = "A355"  : Areas( 2, 7   ) = "A"
+Areas( 1, 8   ) = "A3553" : Areas( 2, 8   ) = "A"
+Areas( 1, 9   ) = "A3554" : Areas( 2, 9   ) = "A"
+Areas( 1, 10  ) = "S6"    : Areas( 2, 10  ) = "A"
+Areas( 1, 11  ) = "A356"  : Areas( 2, 11  ) = "A"
+Areas( 1, 12  ) = "A357"  : Areas( 2, 12  ) = "A"
+Areas( 1, 13  ) = "A358"  : Areas( 2, 13  ) = "A"
+Areas( 1, 14  ) = "A2"    : Areas( 2, 14  ) = "B"
+Areas( 1, 15  ) = "A4"    : Areas( 2, 15  ) = "B"
+Areas( 1, 16  ) = "A38"   : Areas( 2, 16  ) = "A"
+Areas( 1, 17  ) = "A3"    : Areas( 2, 17  ) = "B"
+Areas( 1, 18  ) = "A4"    : Areas( 2, 18  ) = "A"
+Areas( 1, 19  ) = "A43"   : Areas( 2, 19  ) = "A"
+Areas( 1, 20  ) = "A45"   : Areas( 2, 20  ) = "A"
+Areas( 1, 21  ) = "A46"   : Areas( 2, 21  ) = "A"
+Areas( 1, 22  ) = "A48"   : Areas( 2, 22  ) = "A"
+Areas( 1, 23  ) = "A5"    : Areas( 2, 23  ) = "A"
+Areas( 1, 24  ) = "A54"   : Areas( 2, 24  ) = "A"
+Areas( 1, 25  ) = "A6"    : Areas( 2, 25  ) = "A"
+Areas( 1, 26  ) = "A63"   : Areas( 2, 26  ) = "A"
+Areas( 1, 27  ) = "A63"   : Areas( 2, 27  ) = "A"
+Areas( 1, 28  ) = "A65"   : Areas( 2, 28  ) = "A"
+Areas( 1, 29  ) = "A68"   : Areas( 2, 29  ) = "A"
+Areas( 1, 30  ) = "A7"    : Areas( 2, 30  ) = "A"
+Areas( 1, 31  ) = "A6"    : Areas( 2, 31  ) = "B"
+Areas( 1, 32  ) = "A8"    : Areas( 2, 32  ) = "B"
+Areas( 1, 33  ) = "A75"   : Areas( 2, 33  ) = "A"
+Areas( 1, 34  ) = "A76"   : Areas( 2, 34  ) = "A"
+Areas( 1, 35  ) = "A77"   : Areas( 2, 35  ) = "A"
+Areas( 1, 36  ) = "A78"   : Areas( 2, 36  ) = "A"
+Areas( 1, 37  ) = "A783"  : Areas( 2, 37  ) = "A"
+Areas( 1, 38  ) = "E18"   : Areas( 2, 38  ) = "A"
+Areas( 1, 39  ) = "S64"   : Areas( 2, 39  ) = "A"
+Areas( 1, 40  ) = "S644"  : Areas( 2, 40  ) = "A"
+Areas( 1, 41  ) = "M628"  : Areas( 2, 41  ) = "A"
+Areas( 1, 42  ) = "A788"  : Areas( 2, 42  ) = "A"
+Areas( 1, 43  ) = "A8"    : Areas( 2, 43  ) = "A"
+Areas( 1, 44  ) = "A9"    : Areas( 2, 44  ) = "A"
+Areas( 1, 45  ) = "A98"   : Areas( 2, 45  ) = "A"
+Areas( 1, 46  ) = "B24"   : Areas( 2, 46  ) = "A"
+Areas( 1, 47  ) = "B26"   : Areas( 2, 47  ) = "A"
+Areas( 1, 48  ) = "B28"   : Areas( 2, 48  ) = "A"
+Areas( 1, 49  ) = "B29"   : Areas( 2, 49  ) = "A"
+Areas( 1, 50  ) = "B3"    : Areas( 2, 50  ) = "A"
+Areas( 1, 51  ) = "B35"   : Areas( 2, 51  ) = "A"
+Areas( 1, 52  ) = "A63"   : Areas( 2, 52  ) = "A"
+Areas( 1, 53  ) = "B38"   : Areas( 2, 53  ) = "A"
+Areas( 1, 54  ) = "B4"    : Areas( 2, 54  ) = "A"
+Areas( 1, 55  ) = "B42"   : Areas( 2, 55  ) = "A"
+Areas( 1, 56  ) = "B425"  : Areas( 2, 56  ) = "A"
+Areas( 1, 57  ) = "B43"   : Areas( 2, 57  ) = "A"
+Areas( 1, 58  ) = "B45"   : Areas( 2, 58  ) = "A"
+Areas( 1, 59  ) = "B46"   : Areas( 2, 59  ) = "A"
+Areas( 1, 60  ) = "B47"   : Areas( 2, 60  ) = "A"
+Areas( 1, 61  ) = "B5"    : Areas( 2, 61  ) = "A"
+Areas( 1, 62  ) = "B52"   : Areas( 2, 62  ) = "A"
+Areas( 1, 63  ) = "B54"   : Areas( 2, 63  ) = "A"
+Areas( 1, 64  ) = "B55"   : Areas( 2, 64  ) = "A"
+Areas( 1, 65  ) = "B6"    : Areas( 2, 65  ) = "A"
+Areas( 1, 66  ) = "B8"    : Areas( 2, 66  ) = "B"
+Areas( 1, 67  ) = "G95"   : Areas( 2, 67  ) = "A"
+Areas( 1, 68  ) = "B42"   : Areas( 2, 68  ) = "A"
+Areas( 1, 69  ) = "B65"   : Areas( 2, 69  ) = "A"
+Areas( 1, 70  ) = "V6"    : Areas( 2, 70  ) = "A"
+Areas( 1, 71  ) = "B7"    : Areas( 2, 71  ) = "A"
+Areas( 1, 72  ) = "B9"    : Areas( 2, 72  ) = "A"
+Areas( 1, 73  ) = "B92"   : Areas( 2, 73  ) = "A"
+Areas( 1, 74  ) = "B93"   : Areas( 2, 74  ) = "A"
+Areas( 1, 75  ) = "B94"   : Areas( 2, 75  ) = "A"
+Areas( 1, 76  ) = "B97"   : Areas( 2, 76  ) = "A"
+Areas( 1, 77  ) = "C15"   : Areas( 2, 77  ) = "A"
+Areas( 1, 78  ) = "C2"    : Areas( 2, 78  ) = "B"
+Areas( 1, 79  ) = "C16"   : Areas( 2, 79  ) = "A"
+Areas( 1, 80  ) = "C17"   : Areas( 2, 80  ) = "A"
+Areas( 1, 81  ) = "C2"    : Areas( 2, 81  ) = "A"
+Areas( 1, 82  ) = "C23"   : Areas( 2, 82  ) = "A"
+Areas( 1, 83  ) = "C15"   : Areas( 2, 83  ) = "A"
+Areas( 1, 84  ) = "C27"   : Areas( 2, 84  ) = "A"
+Areas( 1, 85  ) = "C275"  : Areas( 2, 85  ) = "A"
+Areas( 1, 86  ) = "C28"   : Areas( 2, 86  ) = "A"
+Areas( 1, 87  ) = "C29"   : Areas( 2, 87  ) = "A"
+Areas( 1, 88  ) = "C33"   : Areas( 2, 88  ) = "A"
+Areas( 1, 89  ) = "C35"   : Areas( 2, 89  ) = "A"
+Areas( 1, 90  ) = "E8515" : Areas( 2, 90  ) = "A"
+Areas( 1, 91  ) = "S72"   : Areas( 2, 91  ) = "A"
+Areas( 1, 92  ) = "C45"   : Areas( 2, 92  ) = "A"
+Areas( 1, 93  ) = "C48"   : Areas( 2, 93  ) = "A"
+Areas( 1, 94  ) = "C5"    : Areas( 2, 94  ) = "A"
+Areas( 1, 95  ) = "C6"    : Areas( 2, 95  ) = "A"
+Areas( 1, 96  ) = "C7"    : Areas( 2, 96  ) = "A"
+Areas( 1, 97  ) = "C6"    : Areas( 2, 97  ) = "B"
+Areas( 1, 98  ) = "C723"  : Areas( 2, 98  ) = "A"
+Areas( 1, 99  ) = "C725"  : Areas( 2, 99  ) = "A"
+Areas( 1, 100 ) = "C727"  : Areas( 2, 100 ) = "A"
+Areas( 1, 101 ) = "C73"   : Areas( 2, 101 ) = "A"
+Areas( 1, 102 ) = "C74"   : Areas( 2, 102 ) = "A"
+Areas( 1, 103 ) = "C75"   : Areas( 2, 103 ) = "A"
+Areas( 1, 104 ) = "C8"    : Areas( 2, 104 ) = "B"
+Areas( 1, 105 ) = "C76"   : Areas( 2, 105 ) = "A"
+Areas( 1, 106 ) = "C8"    : Areas( 2, 106 ) = "A"
+Areas( 1, 107)  = "C85"   : Areas( 2, 107 ) = "A"
+Areas( 1, 108 ) = "C87"   : Areas( 2, 108 ) = "A"
+Areas( 1, 109 ) = "C9"    : Areas( 2, 109 ) = "A"
+Areas( 1, 110)  = "C92"   : Areas( 2, 110 ) = "A"
+Areas( 1, 111 ) = "C93"   : Areas( 2, 111 ) = "A"
+Areas( 1, 112 ) = "C94"   : Areas( 2, 112 ) = "A"
+Areas( 1, 113 ) = "C95"   : Areas( 2, 113 ) = "A"
+Areas( 1, 114 ) = "B45"   : Areas( 2, 114 ) = "A"
+Areas( 1, 115 ) = "D3"    : Areas( 2, 115 ) = "B"
+Areas( 1, 116 ) = "D4"    : Areas( 2, 116 ) = "A"
+Areas( 1, 117 ) = "D44"   : Areas( 2, 117 ) = "A"
+Areas( 1, 118 ) = "W18"   : Areas( 2, 118 ) = "B"
+Areas( 1, 119 ) = "D5"    : Areas( 2, 119 ) = "A"
+Areas( 1, 120 ) = "D6"    : Areas( 2, 120 ) = "A"
+Areas( 1, 121 ) = "D65"   : Areas( 2, 121 ) = "A"
+Areas( 1, 122 ) = "I5"    : Areas( 2, 122 ) = "A"
+Areas( 1, 123 ) = "S75"   : Areas( 2, 123 ) = "A"
+Areas( 1, 124 ) = "E18"   : Areas( 2, 124 ) = "A"
+Areas( 1, 125 ) = "T56"   : Areas( 2, 125 ) = "A"
+Areas( 1, 126 ) = "E2"    : Areas( 2, 126 ) = "A"
+Areas( 1, 127 ) = "E3"    : Areas( 2, 127 ) = "A"
+Areas( 1, 128 ) = "S2"    : Areas( 2, 128 ) = "A"
+Areas( 1, 129 ) = "T95"   : Areas( 2, 129 ) = "A"
+Areas( 1, 130 ) = "G7"    : Areas( 2, 130 ) = "A"
+Areas( 1, 131 ) = "E6"    : Areas( 2, 131 ) = "A"
+Areas( 1, 132 ) = "E65"   : Areas( 2, 132 ) = "A"
+Areas( 1, 133 ) = "E75"   : Areas( 2, 133 ) = "A"
+Areas( 1, 134 ) = "E77"   : Areas( 2, 134 ) = "A"
+Areas( 1, 135 ) = "E8"    : Areas( 2, 135 ) = "A"
+Areas( 1, 136 ) = "E83"   : Areas( 2, 136 ) = "A"
+Areas( 1, 137 ) = "E85"   : Areas( 2, 137 ) = "A"
+Areas( 1, 138 ) = "E8515" : Areas( 2, 138 ) = "A"
+Areas( 1, 139 ) = "E852"  : Areas( 2, 139 ) = "A"
+Areas( 1, 140 ) = "E853"  : Areas( 2, 140 ) = "A"
+Areas( 1, 141 ) = "E854"  : Areas( 2, 141 ) = "A"
+Areas( 1, 142 ) = "E85"   : Areas( 2, 142 ) = "A"
+Areas( 1, 143 ) = "E86"   : Areas( 2, 143 ) = "A"
+Areas( 1, 144 ) = "E87"   : Areas( 2, 144 ) = "A"
+Areas( 1, 145 ) = "E85"   : Areas( 2, 145 ) = "A"
+Areas( 1, 146 ) = "F3"    : Areas( 2, 146 ) = "A"
+Areas( 1, 147 ) = "F32"   : Areas( 2, 147 ) = "A"
+Areas( 1, 148 ) = "F4"    : Areas( 2, 148 ) = "A"
+Areas( 1, 149 ) = "F5"    : Areas( 2, 149 ) = "A"
+Areas( 1, 150 ) = "F6"    : Areas( 2, 150 ) = "B"
+Areas( 1, 151 ) = "C727"  : Areas( 2, 151 ) = "A"
+Areas( 1, 152 ) = "F6"    : Areas( 2, 152 ) = "A"
+Areas( 1, 153 ) = "T28"   : Areas( 2, 153 ) = "A"
+Areas( 1, 154 ) = "F8"    : Areas( 2, 154 ) = "A"
+Areas( 1, 155 ) = "F9"    : Areas( 2, 155 ) = "A"
+Areas( 1, 156 ) = "F93"   : Areas( 2, 156 ) = "A"
+Areas( 1, 157 ) = "G2"    : Areas( 2, 157 ) = "A"
+Areas( 1, 158 ) = "G23"   : Areas( 2, 158 ) = "A"
+Areas( 1, 159 ) = "G25"   : Areas( 2, 159 ) = "A"
+Areas( 1, 160 ) = "G4"    : Areas( 2, 160 ) = "B"
+Areas( 1, 161 ) = "G28"   : Areas( 2, 161 ) = "A"
+Areas( 1, 162 ) = "G3"    : Areas( 2, 162 ) = "A"
+Areas( 1, 163 ) = "G3"    : Areas( 2, 163 ) = "A"
+Areas( 1, 164 ) = "G3"    : Areas( 2, 164 ) = "A"
+Areas( 1, 165 ) = "G3"    : Areas( 2, 165 ) = "A"
+Areas( 1, 166 ) = "G3"    : Areas( 2, 166 ) = "A"
+Areas( 1, 167 ) = "G4"    : Areas( 2, 167 ) = "A"
+Areas( 1, 168 ) = "G5"    : Areas( 2, 168 ) = "A"
+Areas( 1, 169 ) = "K5"    : Areas( 2, 169 ) = "A"
+Areas( 1, 170 ) = "G7"    : Areas( 2, 170 ) = "A"
+Areas( 1, 171 ) = "G8"    : Areas( 2, 171 ) = "A"
+Areas( 1, 172 ) = "G83"   : Areas( 2, 172 ) = "A"
+Areas( 1, 173 ) = "G84"   : Areas( 2, 173 ) = "A"
+Areas( 1, 174 ) = "G845"  : Areas( 2, 174 ) = "A"
+Areas( 1, 175 ) = "G85"   : Areas( 2, 175 ) = "A"
+Areas( 1, 176 ) = "G9"    : Areas( 2, 176 ) = "A"
+Areas( 1, 177 ) = "G915"  : Areas( 2, 177 ) = "A"
+Areas( 1, 178 ) = "G92"   : Areas( 2, 178 ) = "A"
+Areas( 1, 179 ) = "G93"   : Areas( 2, 179 ) = "A"
+Areas( 1, 180 ) = "G95"   : Areas( 2, 180 ) = "A"
+Areas( 1, 181 ) = "H2"    : Areas( 2, 181 ) = "A"
+Areas( 1, 182 ) = "H3"    : Areas( 2, 182 ) = "B"
+Areas( 1, 183 ) = "H55"   : Areas( 2, 183 ) = "A"
+Areas( 1, 184 ) = "N4"    : Areas( 2, 184 ) = "A"
+Areas( 1, 185 ) = "H8"    : Areas( 2, 185 ) = "A"
+Areas( 1, 186 ) = "C6"    : Areas( 2, 186 ) = "A"
+Areas( 1, 187 ) = "H9"    : Areas( 2, 187 ) = "A"
+Areas( 1, 188 ) = "I2"    : Areas( 2, 188 ) = "A"
+Areas( 1, 189 ) = "I2"    : Areas( 2, 189 ) = "B"
+Areas( 1, 190 ) = "I3"    : Areas( 2, 190 ) = "B"
+Areas( 1, 191 ) = "I4"    : Areas( 2, 191 ) = "A"
+Areas( 1, 192 ) = "I6"    : Areas( 2, 192 ) = "B"
+Areas( 1, 193 ) = "I48"   : Areas( 2, 193 ) = "A"
+Areas( 1, 194 ) = "I5"    : Areas( 2, 194 ) = "A"
+Areas( 1, 195 ) = "C6"    : Areas( 2, 195 ) = "A"
+Areas( 1, 196 ) = "I8"    : Areas( 2, 196 ) = "B"
+Areas( 1, 197 ) = "I7"    : Areas( 2, 197 ) = "A"
+Areas( 1, 198 ) = "I72"   : Areas( 2, 198 ) = "A"
+Areas( 1, 199 ) = "I73"   : Areas( 2, 199 ) = "A"
+Areas( 1, 200 ) = "I742"  : Areas( 2, 200 ) = "A"
+Areas( 1, 201 ) = "I74"   : Areas( 2, 201 ) = "A"
+Areas( 1, 202 ) = "I743"  : Areas( 2, 202 ) = "A"
+Areas( 1, 203 ) = "I75"   : Areas( 2, 203 ) = "A"
+Areas( 1, 204 ) = "I8"    : Areas( 2, 204 ) = "A"
+Areas( 1, 205 ) = "C85"   : Areas( 2, 205 ) = "A"
+Areas( 1, 206 ) = "J25"   : Areas( 2, 206 ) = "A"
+Areas( 1, 207 ) = "J3"    : Areas( 2, 207 ) = "A"
+Areas( 1, 208 ) = "I5"    : Areas( 2, 208 ) = "A"
+Areas( 1, 209 ) = "J4"    : Areas( 2, 209 ) = "A"
+Areas( 1, 210 ) = "J6"    : Areas( 2, 210 ) = "A"
+Areas( 1, 211 ) = "Y8"    : Areas( 2, 211 ) = "A"
+Areas( 1, 212 ) = "D4"    : Areas( 2, 212 ) = "A"
+Areas( 1, 213 ) = "C16"   : Areas( 2, 213 ) = "A"
+Areas( 1, 214 ) = "K2"    : Areas( 2, 214 ) = "B"
+Areas( 1, 215 ) = "K3"    : Areas( 2, 215 ) = "A"
+Areas( 1, 216 ) = "K4"    : Areas( 2, 216 ) = "B"
+Areas( 1, 217 ) = "K4"    : Areas( 2, 217 ) = "A"
+Areas( 1, 218 ) = "K43"   : Areas( 2, 218 ) = "A"
+Areas( 1, 219 ) = "K5"    : Areas( 2, 219 ) = "A"
+Areas( 1, 220 ) = "K6"    : Areas( 2, 220 ) = "A"
+Areas( 1, 221 ) = "K7"    : Areas( 2, 221 ) = "A"
+Areas( 1, 222 ) = "K7"    : Areas( 2, 222 ) = "A"
+Areas( 1, 223 ) = "K6"    : Areas( 2, 223 ) = "A"
+Areas( 1, 224 ) = "K6"    : Areas( 2, 224 ) = "A"
+Areas( 1, 225 ) = "K8"    : Areas( 2, 225 ) = "A"
+Areas( 1, 226 ) = "K9"    : Areas( 2, 226 ) = "A"
+Areas( 1, 227 ) = "K98"   : Areas( 2, 227 ) = "A"
+Areas( 1, 228 ) = "L28"   : Areas( 2, 228 ) = "A"
+Areas( 1, 229 ) = "L29"   : Areas( 2, 229 ) = "A"
+Areas( 1, 230 ) = "L35"   : Areas( 2, 230 ) = "A"
+Areas( 1, 231 ) = "L4"    : Areas( 2, 231 ) = "A"
+Areas( 1, 232 ) = "L5"    : Areas( 2, 232 ) = "A"
+Areas( 1, 233 ) = "L7"    : Areas( 2, 233 ) = "A"
+Areas( 1, 234 ) = "L75"   : Areas( 2, 234 ) = "A"
+Areas( 1, 235 ) = "L76"   : Areas( 2, 235 ) = "A"
+Areas( 1, 236 ) = "L78"   : Areas( 2, 236 ) = "A"
+Areas( 1, 237 ) = "L8"    : Areas( 2, 237 ) = "B"
+Areas( 1, 238 ) = "L9"    : Areas( 2, 238 ) = "A"
+Areas( 1, 239 ) = "C6"    : Areas( 2, 239 ) = "A"
+Areas( 1, 240 ) = "M26"   : Areas( 2, 240 ) = "A"
+Areas( 1, 241 ) = "M27"   : Areas( 2, 241 ) = "A"
+Areas( 1, 242 ) = "N74"   : Areas( 2, 242 ) = "A"
+Areas( 1, 243 ) = "M28"   : Areas( 2, 243 ) = "A"
+Areas( 1, 244 ) = "M2"    : Areas( 2, 244 ) = "B"
+Areas( 1, 245 ) = "M28"   : Areas( 2, 245 ) = "A"
+Areas( 1, 246 ) = "M3"    : Areas( 2, 246 ) = "A"
+Areas( 1, 247 ) = "M35"   : Areas( 2, 247 ) = "A"
+Areas( 1, 248 ) = "M4"    : Areas( 2, 248 ) = "A"
+Areas( 1, 249 ) = "M4"    : Areas( 2, 249 ) = "A"
+Areas( 1, 250 ) = "M415"  : Areas( 2, 250 ) = "A"
+Areas( 1, 251 ) = "M42"   : Areas( 2, 251 ) = "A"
+Areas( 1, 252 ) = "M43"   : Areas( 2, 252 ) = "A"
+Areas( 1, 253 ) = "M3"    : Areas( 2, 253 ) = "B"
+Areas( 1, 254 ) = "M433"  : Areas( 2, 254 ) = "A"
+Areas( 1, 255 ) = "M435"  : Areas( 2, 255 ) = "A"
+Areas( 1, 256 ) = "M3"    : Areas( 2, 256 ) = "B"
+Areas( 1, 257 ) = "M4"    : Areas( 2, 257 ) = "B"
+Areas( 1, 258 ) = "M44"   : Areas( 2, 258 ) = "A"
+Areas( 1, 259 ) = "M45"   : Areas( 2, 259 ) = "A"
+Areas( 1, 260 ) = "M5"    : Areas( 2, 260 ) = "A"
+Areas( 1, 261 ) = "M58"   : Areas( 2, 261 ) = "A"
+Areas( 1, 262 ) = "M6"    : Areas( 2, 262 ) = "A"
+Areas( 1, 263 ) = "M5"    : Areas( 2, 263 ) = "B"
+Areas( 1, 264 ) = "M625"  : Areas( 2, 264 ) = "A"
+Areas( 1, 265 ) = "M626"  : Areas( 2, 265 ) = "A"
+Areas( 1, 266 ) = "M628"  : Areas( 2, 266 ) = "A"
+Areas( 1, 267 ) = "M6"    : Areas( 2, 267 ) = "B"
+Areas( 1, 268 ) = "M7"    : Areas( 2, 268 ) = "B"
+Areas( 1, 269 ) = "M8"    : Areas( 2, 269 ) = "B"
+Areas( 1, 270 ) = "M629"  : Areas( 2, 270 ) = "A"
+Areas( 1, 271 ) = "M63"   : Areas( 2, 271 ) = "A"
+Areas( 1, 272 ) = "M65"   : Areas( 2, 272 ) = "A"
+Areas( 1, 273 ) = "M65"   : Areas( 2, 273 ) = "A"
+Areas( 1, 274 ) = "M9"    : Areas( 2, 274 ) = "B"
+Areas( 1, 275 ) = "M68"   : Areas( 2, 275 ) = "A"
+Areas( 1, 276 ) = "M7"    : Areas( 2, 276 ) = "A"
+Areas( 1, 277 ) = "M8"    : Areas( 2, 277 ) = "A"
+Areas( 1, 278 ) = "M85"   : Areas( 2, 278 ) = "A"
+Areas( 1, 279 ) = "B93"   : Areas( 2, 279 ) = "A"
+Areas( 1, 280 ) = "N3"    : Areas( 2, 280 ) = "A"
+Areas( 1, 281 ) = "N32"   : Areas( 2, 281 ) = "A"
+Areas( 1, 282 ) = "M628"  : Areas( 2, 282 ) = "A"
+Areas( 1, 283 ) = "N2"    : Areas( 2, 283 ) = "B"
+Areas( 1, 284 ) = "N35"   : Areas( 2, 284 ) = "A"
+Areas( 1, 285 ) = "N4"    : Areas( 2, 285 ) = "A"
+Areas( 1, 286 ) = "N42"   : Areas( 2, 286 ) = "A"
+Areas( 1, 287 ) = "N3"    : Areas( 2, 287 ) = "B"
+Areas( 1, 288 ) = "N5"    : Areas( 2, 288 ) = "B"
+Areas( 1, 289 ) = "N425"  : Areas( 2, 289 ) = "A"
+Areas( 1, 290 ) = "N43"   : Areas( 2, 290 ) = "A"
+Areas( 1, 291 ) = "N4"    : Areas( 2, 291 ) = "B"
+Areas( 1, 292 ) = "V26"   : Areas( 2, 292 ) = "A"
+Areas( 1, 293 ) = "N5"    : Areas( 2, 293 ) = "B"
+Areas( 1, 294 ) = "N6"    : Areas( 2, 294 ) = "B"
+Areas( 1, 295 ) = "N7"    : Areas( 2, 295 ) = "B"
+Areas( 1, 296 ) = "N45"   : Areas( 2, 296 ) = "A"
+Areas( 1, 297 ) = "N6"    : Areas( 2, 297 ) = "B"
+Areas( 1, 298 ) = "N5"    : Areas( 2, 298 ) = "A"
+Areas( 1, 299 ) = "N55"   : Areas( 2, 299 ) = "A"
+Areas( 1, 300 ) = "N6"    : Areas( 2, 300 ) = "A"
+Areas( 1, 301 ) = "N7"    : Areas( 2, 301 ) = "A"
+Areas( 1, 302 ) = "N8"    : Areas( 2, 302 ) = "B"
+Areas( 1, 303 ) = "N9"    : Areas( 2, 303 ) = "B"
+Areas( 1, 304 ) = "N74"   : Areas( 2, 304 ) = "A"
+Areas( 1, 305 ) = "G7"    : Areas( 2, 305 ) = "A"
+Areas( 1, 306 ) = "Z33"   : Areas( 2, 306 ) = "A"
+Areas( 1, 307 ) = "N7"    : Areas( 2, 307 ) = "B"
+Areas( 1, 308 ) = "N8"    : Areas( 2, 308 ) = "A"
+Areas( 1, 309 ) = "N8"    : Areas( 2, 309 ) = "B"
+Areas( 1, 310 ) = "N9"    : Areas( 2, 310 ) = "B"
+Areas( 1, 311 ) = "M3"    : Areas( 2, 311 ) = "A"
+Areas( 1, 312 ) = "O3"    : Areas( 2, 312 ) = "A"
+Areas( 1, 313 ) = "O3"    : Areas( 2, 313 ) = "B"
+Areas( 1, 314 ) = "O5"    : Areas( 2, 314 ) = "B"
+Areas( 1, 315 ) = "O5"    : Areas( 2, 315 ) = "A"
+Areas( 1, 316 ) = "O6"    : Areas( 2, 316 ) = "B"
+Areas( 1, 317 ) = "O7"    : Areas( 2, 317 ) = "B"
+Areas( 1, 318 ) = "M65"   : Areas( 2, 318 ) = "A"
+Areas( 1, 319 ) = "P16"   : Areas( 2, 319 ) = "A"
+Areas( 1, 320 ) = "P18"   : Areas( 2, 320 ) = "A"
+Areas( 1, 321 ) = "P185"  : Areas( 2, 321 ) = "A"
+Areas( 1, 322 ) = "P19"   : Areas( 2, 322 ) = "A"
+Areas( 1, 323 ) = "P2"    : Areas( 2, 323 ) = "A"
+Areas( 1, 324 ) = "P26"   : Areas( 2, 324 ) = "A"
+Areas( 1, 325 ) = "P3"    : Areas( 2, 325 ) = "A"
+Areas( 1, 326 ) = "P4"    : Areas( 2, 326 ) = "B"
+Areas( 1, 327 ) = "I7"    : Areas( 2, 327 ) = "A"
+Areas( 1, 328 ) = "P35"   : Areas( 2, 328 ) = "A"
+Areas( 1, 329 ) = "P4"    : Areas( 2, 329 ) = "A"
+Areas( 1, 330 ) = "P6"    : Areas( 2, 330 ) = "A"
+Areas( 1, 331 ) = "P7"    : Areas( 2, 331 ) = "A"
+Areas( 1, 332 ) = "P75"   : Areas( 2, 332 ) = "A"
+Areas( 1, 333 ) = "P8"    : Areas( 2, 333 ) = "A"
+Areas( 1, 334 ) = "P8"    : Areas( 2, 334 ) = "B"
+Areas( 1, 335 ) = "G3"    : Areas( 2, 335 ) = "A"
+Areas( 1, 336 ) = "P85"   : Areas( 2, 336 ) = "A"
+Areas( 1, 337 ) = "P9"    : Areas( 2, 337 ) = "A"
+Areas( 1, 338 ) = "Q2"    : Areas( 2, 338 ) = "A"
+Areas( 1, 339 ) = "Q3"    : Areas( 2, 339 ) = "B"
+Areas( 1, 340)  = "R4"    : Areas( 2, 340 ) = "A"
+Areas( 1, 341 ) = "R4"    : Areas( 2, 341 ) = "B"
+Areas( 1, 342 ) = "Z33"   : Areas( 2, 342 ) = "A"
+Areas( 1, 343 ) = "Z55"   : Areas( 2, 343 ) = "A"
+Areas( 1, 344 ) = "R57"   : Areas( 2, 344 ) = "A"
+Areas( 1, 345 ) = "R6"    : Areas( 2, 345 ) = "A"
+Areas( 1, 346 ) = "R6"    : Areas( 2, 346 ) = "A"
+Areas( 1, 347 ) = "R8"    : Areas( 2, 347 ) = "A"
+Areas( 1, 348 ) = "R8"    : Areas( 2, 348 ) = "A"
+Areas( 1, 349 ) = "R95"   : Areas( 2, 349 ) = "A"
+Areas( 1, 350 ) = "S15"   : Areas( 2, 350 ) = "A"
+Areas( 1, 351 ) = "S16"   : Areas( 2, 351 ) = "A"
+Areas( 1, 352 ) = "S17"   : Areas( 2, 352 ) = "A"
+Areas( 1, 353 ) = "S18"   : Areas( 2, 353 ) = "A"
+Areas( 1, 354 ) = "S2"    : Areas( 2, 354 ) = "A"
+Areas( 1, 355 ) = "S23"   : Areas( 2, 355 ) = "A"
+Areas( 1, 356 ) = "A46"   : Areas( 2, 356 ) = "A"
+Areas( 1, 357 ) = "S24"   : Areas( 2, 357 ) = "A"
+Areas( 1, 358 ) = "S27"   : Areas( 2, 358 ) = "A"
+Areas( 1, 359 ) = "S3"    : Areas( 2, 359 ) = "A"
+Areas( 1, 360 ) = "S2"    : Areas( 2, 360 ) = "B"
+Areas( 1, 361 ) = "S33"   : Areas( 2, 361 ) = "A"
+Areas( 1, 362 ) = "S34"   : Areas( 2, 362 ) = "A"
+Areas( 1, 363 ) = "G7"    : Areas( 2, 363 ) = "A"
+Areas( 1, 364 ) = "S38"   : Areas( 2, 364 ) = "A"
+Areas( 1, 365 ) = "S4"    : Areas( 2, 365 ) = "A"
+Areas( 1, 366 ) = "S45"   : Areas( 2, 366 ) = "A"
+Areas( 1, 367 ) = "T5"    : Areas( 2, 367 ) = "A"
+Areas( 1, 368 ) = "R8"    : Areas( 2, 368 ) = "A"
+Areas( 1, 369 ) = "S5"    : Areas( 2, 369 ) = "A"
+Areas( 1, 370 ) = "S55"   : Areas( 2, 370 ) = "A"
+Areas( 1, 371 ) = "S56"   : Areas( 2, 371 ) = "A"
+Areas( 1, 372 ) = "S57"   : Areas( 2, 372 ) = "A"
+Areas( 1, 373 ) = "S575"  : Areas( 2, 373 ) = "A"
+Areas( 1, 374 ) = "S58"   : Areas( 2, 374 ) = "A"
+Areas( 1, 375 ) = "S6"    : Areas( 2, 375 ) = "A"
+Areas( 1, 376 ) = "S63"   : Areas( 2, 376 ) = "A"
+Areas( 1, 377 ) = "S64"   : Areas( 2, 377 ) = "A"
+Areas( 1, 378 ) = "S6"    : Areas( 2, 378 ) = "B"
+Areas( 1, 379 ) = "S8"    : Areas( 2, 379 ) = "B"
+Areas( 1, 380 ) = "S643"  : Areas( 2, 380 ) = "A"
+Areas( 1, 381 ) = "S644"  : Areas( 2, 381 ) = "A"
+Areas( 1, 382 ) = "S63"   : Areas( 2, 382 ) = "A"
+Areas( 1, 383 ) = "S65"   : Areas( 2, 383 ) = "A"
+Areas( 1, 384 ) = "S7"    : Areas( 2, 384 ) = "A"
+Areas( 1, 385 ) = "S72"   : Areas( 2, 385 ) = "A"
+Areas( 1, 386 ) = "S73"   : Areas( 2, 386 ) = "A"
+Areas( 1, 387 ) = "S74"   : Areas( 2, 387 ) = "A"
+Areas( 1, 388 ) = "S75"   : Areas( 2, 388 ) = "A"
+Areas( 1, 389 ) = "E77"   : Areas( 2, 389 ) = "A"
+Areas( 1, 390 ) = "S8"    : Areas( 2, 390 ) = "A"
+Areas( 1, 391 ) = "S9"    : Areas( 2, 391 ) = "A"
+Areas( 1, 392 ) = "S95"   : Areas( 2, 392 ) = "A"
+Areas( 1, 393 ) = "T28"   : Areas( 2, 393 ) = "A"
+Areas( 1, 394 ) = "T3"    : Areas( 2, 394 ) = "A"
+Areas( 1, 395 ) = "I4"    : Areas( 2, 395 ) = "A"
+Areas( 1, 396 ) = "T34"   : Areas( 2, 396 ) = "A"
+Areas( 1, 397 ) = "T34"   : Areas( 2, 397 ) = "A"
+Areas( 1, 398 ) = "A8"    : Areas( 2, 398 ) = "A"
+Areas( 1, 399 ) = "T2"    : Areas( 2, 399 ) = "B"
+Areas( 1, 400)  = "T47"   : Areas( 2, 400 ) = "A"
+Areas( 1, 401 ) = "T4"    : Areas( 2, 401 ) = "B"
+Areas( 1, 402 ) = "T5"    : Areas( 2, 402 ) = "A"
+Areas( 1, 403 ) = "C6"    : Areas( 2, 403 ) = "A"
+Areas( 1, 404 ) = "T56"   : Areas( 2, 404 ) = "A"
+Areas( 1, 405 ) = "T7"    : Areas( 2, 405 ) = "A"
+Areas( 1, 406 ) = "T6"    : Areas( 2, 406 ) = "A"
+Areas( 1, 407 ) = "T63"   : Areas( 2, 407 ) = "A"
+Areas( 1, 408 ) = "S6"    : Areas( 2, 408 ) = "A"
+Areas( 1, 409 ) = "T7"    : Areas( 2, 409 ) = "A"
+Areas( 1, 410 ) = "T7"    : Areas( 2, 410 ) = "A"
+Areas( 1, 411 ) = "T73"   : Areas( 2, 411 ) = "A"
+Areas( 1, 412 ) = "T77"   : Areas( 2, 412 ) = "A"
+Areas( 1, 413 ) = "T8"    : Areas( 2, 413 ) = "A"
+Areas( 1, 414 ) = "T9"    : Areas( 2, 414 ) = "A"
+Areas( 1, 415 ) = "T93"   : Areas( 2, 415 ) = "A"
+Areas( 1, 416 ) = "T94"   : Areas( 2, 416 ) = "A"
+Areas( 1, 417 ) = "T95"   : Areas( 2, 417 ) = "A"
+Areas( 1, 418 ) = "U33"   : Areas( 2, 418 ) = "A"
+Areas( 1, 419 ) = "U38"   : Areas( 2, 419 ) = "A"
+Areas( 1, 420 ) = "U5"    : Areas( 2, 420 ) = "A"
+Areas( 1, 421 ) = "U6"    : Areas( 2, 421 ) = "A"
+Areas( 1, 422 ) = "V63"   : Areas( 2, 422 ) = "A"
+Areas( 1, 423 ) = "B92"   : Areas( 2, 423 ) = "A"
+Areas( 1, 424 ) = "U8"    : Areas( 2, 424 ) = "A"
+Areas( 1, 425 ) = "U8"    : Areas( 2, 425 ) = "B"
+Areas( 1, 426 ) = "U9"    : Areas( 2, 426 ) = "A"
+Areas( 1, 427 ) = "V26"   : Areas( 2, 427 ) = "A"
+Areas( 1, 428 ) = "V3"    : Areas( 2, 428 ) = "A"
+Areas( 1, 429 ) = "V4"    : Areas( 2, 429 ) = "A"
+Areas( 1, 430 ) = "V5"    : Areas( 2, 430 ) = "B"
+Areas( 1, 431 ) = "V5"    : Areas( 2, 431 ) = "A"
+Areas( 1, 432 ) = "V5"    : Areas( 2, 432 ) = "A"
+Areas( 1, 433 ) = "V6"    : Areas( 2, 433 ) = "A"
+Areas( 1, 434 ) = "V63"   : Areas( 2, 434 ) = "A"
+Areas( 1, 435 ) = "V6"    : Areas( 2, 435 ) = "A"
+Areas( 1, 436 ) = "V8"    : Areas( 2, 436 ) = "B"
+Areas( 1, 437 ) = "G7"    : Areas( 2, 437 ) = "A"
+Areas( 1, 438 ) = "W18"   : Areas( 2, 438 ) = "B"
+Areas( 1, 439 ) = "W2"    : Areas( 2, 439 ) = "B"
+Areas( 1, 440 ) = "W47"   : Areas( 2, 440 ) = "A"
+Areas( 1, 441 ) = "W48"   : Areas( 2, 441 ) = "A"
+Areas( 1, 442 ) = "W4"    : Areas( 2, 442 ) = "B"
+Areas( 1, 443 ) = "A8"    : Areas( 2, 443 ) = "A"
+Areas( 1, 444 ) = "S23"   : Areas( 2, 444 ) = "A"
+Areas( 1, 445 ) = "W6"    : Areas( 2, 445 ) = "B"
+Areas( 1, 446 ) = "W8"    : Areas( 2, 446 ) = "B"
+Areas( 1, 447 ) = "C6"    : Areas( 2, 447 ) = "A"
+Areas( 1, 448 ) = "Y4"    : Areas( 2, 448 ) = "A"
+Areas( 1, 449 ) = "Y4"    : Areas( 2, 449 ) = "A"
+Areas( 1, 450 ) = "Y8"    : Areas( 2, 450 ) = "A"
+Areas( 1, 451 ) = "Y8"    : Areas( 2, 451 ) = "B"
+Areas( 1, 452 ) = "C75"   : Areas( 2, 452 ) = "A"
+Areas( 1, 453 ) = "Z32"   : Areas( 2, 453 ) = "A"
+Areas( 1, 454 ) = "Z33"   : Areas( 2, 454 ) = "A"
+Areas( 1, 455 ) = "Z55"   : Areas( 2, 455 ) = "A"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray3
+
+Abbrevs( 0, 0  ) = "Ala."   : Abbrevs( 1, 0  ) = "A2"
+Abbrevs( 0, 1  ) = "Alta."  : Abbrevs( 1, 1  ) = "A3"
+Abbrevs( 0, 2  ) = "Ariz."  : Abbrevs( 1, 2  ) = "A6"
+Abbrevs( 0, 3  ) = "Ark."   : Abbrevs( 1, 3  ) = "A8"
+Abbrevs( 0, 4  ) = "B.C."   : Abbrevs( 1, 4  ) = "B8"
+Abbrevs( 0, 5  ) = "Calif." : Abbrevs( 1, 5  ) = "C2"
+Abbrevs( 0, 6  ) = "Colo."  : Abbrevs( 1, 6  ) = "C6"
+Abbrevs( 0, 7  ) = "Conn."  : Abbrevs( 1, 7  ) = "C8"
+Abbrevs( 0, 8  ) = "D.C."   : Abbrevs( 1, 8  ) = "W18"
+Abbrevs( 0, 9  ) = "Del."   : Abbrevs( 1, 9  ) = "D3"
+Abbrevs( 0, 10 ) = "Fla."   : Abbrevs( 1, 10 ) = "F6"
+Abbrevs( 0, 11 ) = "Ga."    : Abbrevs( 1, 11 ) = "G4"
+Abbrevs( 0, 12 ) = "Ill."   : Abbrevs( 1, 12 ) = "I3"
+Abbrevs( 0, 13 ) = "Ind."   : Abbrevs( 1, 13 ) = "I6"
+Abbrevs( 0, 14 ) = "Kan."   : Abbrevs( 1, 14 ) = "K2"
+Abbrevs( 0, 15 ) = "Ky."    : Abbrevs( 1, 15 ) = "K4"
+Abbrevs( 0, 16 ) = "La."    : Abbrevs( 1, 16 ) = "L8"
+Abbrevs( 0, 17 ) = "Man."   : Abbrevs( 1, 17 ) = "M3"
+Abbrevs( 0, 18 ) = "Mass."  : Abbrevs( 1, 18 ) = "M4"
+Abbrevs( 0, 19 ) = "Md."    : Abbrevs( 1, 19 ) = "M3"
+Abbrevs( 0, 20 ) = "Me."    : Abbrevs( 1, 20 ) = "M2"
+Abbrevs( 0, 21 ) = "Mich."  : Abbrevs( 1, 21 ) = "M5"
+Abbrevs( 0, 22 ) = "Minn."  : Abbrevs( 1, 22 ) = "M6"
+Abbrevs( 0, 23 ) = "Miss."  : Abbrevs( 1, 23 ) = "M7"
+Abbrevs( 0, 24 ) = "Mo."    : Abbrevs( 1, 24 ) = "M8"
+Abbrevs( 0, 25 ) = "Mont."  : Abbrevs( 1, 25 ) = "M9"
+Abbrevs( 0, 26 ) = "N.B."   : Abbrevs( 1, 26 ) = "N5"
+Abbrevs( 0, 27 ) = "N.C."   : Abbrevs( 1, 27 ) = "N8"
+Abbrevs( 0, 28 ) = "N.D."   : Abbrevs( 1, 28 ) = "N9"
+Abbrevs( 0, 29 ) = "N.H."   : Abbrevs( 1, 29 ) = "N4"
+Abbrevs( 0, 30 ) = "N.J."   : Abbrevs( 1, 30 ) = "N5"
+Abbrevs( 0, 31 ) = "N.L."   : Abbrevs( 1, 31 ) = "N6"
+Abbrevs( 0, 32 ) = "N.M."   : Abbrevs( 1, 32 ) = "N6"
+Abbrevs( 0, 33 ) = "N.S."   : Abbrevs( 1, 33 ) = "N8"
+Abbrevs( 0, 34 ) = "N.W.T." : Abbrevs( 1, 34 ) = "N7"
+Abbrevs( 0, 35 ) = "N.Y."   : Abbrevs( 1, 35 ) = "N7"
+Abbrevs( 0, 36 ) = "Neb."   : Abbrevs( 1, 36 ) = "N2"
+Abbrevs( 0, 37 ) = "Nev."   : Abbrevs( 1, 37 ) = "N3"
+Abbrevs( 0, 38 ) = "Okla."  : Abbrevs( 1, 38 ) = "O5"
+Abbrevs( 0, 39 ) = "Ont."   : Abbrevs( 1, 39 ) = "O6"
+Abbrevs( 0, 40 ) = "Or."    : Abbrevs( 1, 40 ) = "O7"
+Abbrevs( 0, 41 ) = "P.E.I." : Abbrevs( 1, 41 ) = "P8"
+Abbrevs( 0, 42 ) = "Pa."    : Abbrevs( 1, 42 ) = "P4"
+Abbrevs( 0, 43 ) = "R.I."   : Abbrevs( 1, 43 ) = "R4"
+Abbrevs( 0, 44 ) = "S.C."   : Abbrevs( 1, 44 ) = "S6"
+Abbrevs( 0, 45 ) = "S.D."   : Abbrevs( 1, 45 ) = "S8"
+Abbrevs( 0, 46 ) = "Sask."  : Abbrevs( 1, 46 ) = "S2"
+Abbrevs( 0, 47 ) = "Tenn."  : Abbrevs( 1, 47 ) = "T2"
+Abbrevs( 0, 48 ) = "Tex."   : Abbrevs( 1, 48 ) = "T4"
+Abbrevs( 0, 49 ) = "Va."    : Abbrevs( 1, 49 ) = "V8"
+Abbrevs( 0, 50 ) = "Vt."    : Abbrevs( 1, 50 ) = "V5"
+Abbrevs( 0, 51 ) = "W.Va."  : Abbrevs( 1, 51 ) = "W4"
+Abbrevs( 0, 52 ) = "Wash."  : Abbrevs( 1, 52 ) = "W2"
+Abbrevs( 0, 53 ) = "Wis."   : Abbrevs( 1, 53 ) = "W6"
+Abbrevs( 0, 54 ) = "Wyo."   : Abbrevs( 1, 54 ) = "W8"
+Abbrevs( 0, 55 ) = "Yukon"  : Abbrevs( 1, 55 ) = "Y8"
+
+End Sub
+
+'****************************************************************************************
+
+Function CalculateBaseCutter( StringInput$, RangeSpan% ) As Integer
+
+' This function calculates a base Cutter for the input string by using a table of
+' relative frequencies of occurrence of the letters in the English alphabet. (Digits have
+' been arbitrarily squeezed in at the beginning of the table.) For example, the
+' relative frequency with which the letter "a" appears is 8.167%, that for the letter "b"
+' is 1.492%, and so on. The way this table is used by this macro is to consider that
+' titles beginning with the letter "a" will on average consist of the first 8,167 of a
+' collection of 100,000 titles arranged in alphabetical order (except for a small space
+' reserved for digits at the very beginning of the shelves), those beginning with "b"
+' will take up the next 1,492, or titles 8,168 to 9,659, and so on. (Letter frequencies
+' for beginnings of words differ from those for all occurrences, a distinction ignored in
+' this macro.) So a title beginning with the letter "n" will be shelved, so to speak,
+' after all the titles beginning with the letters "a" through "m"--a group that accounts
+' for 54.055% (or the first 54,055) of all the titles. If there were 5,000 books, this
+' title would be shelved in the 337 books whose titles also begin with "n" that are
+' shelved between numbers 2703 and 3040. In other words, if the range into which to
+' squeeze the Cutter is 5, then an appropriate Cutter for such a title would be between
+' 2.70275 and 3.04020. The numbers in the rest of the Cutter depend on what follows the
+' letter "n." For the title "new", the letter "e" would be between 16.694% and 29.396% of
+' 0.33745. This calculation runs until four digits have been generated. This table of
+' letter frequencies (there are others with different numbers) is from the Department of
+' Mathematics and Computer Science at Oxford College of Emory University
+' <https://mathcenter.oxford.emory.edu/site/math125/englishLetterFreqs/> and was viewed
+' on 31 March 2023.
+
+Const REDUCER As Long = 100000   'The value to reduce the calculated result to a number less than 10,000.
+
+Dim BaseNumber!
+Dim LowerEnd#
+Dim LowerEndPrev#
+Dim MaxNumber%
+Dim MultiplyA As Long
+Dim MultiplyB As Long
+Dim Range#
+Dim UpperEnd#
+Dim ZeroCount%
+
+Dim i As Integer
+
+If Len( StringInput$ ) < 4 Then
+    MaxNumber% = Len( StringInput$ )
+  Else
+    MaxNumber% = 4
+End If
+
+Range# = RangeSpan%
+
+For i = 1 To MaxNumber%
+
+  Select Case Mid$( StringInput$, i, 1 )
+
+    Case "0"
+      MultiplyA =     10
+      MultiplyB =     15
+    Case "1"
+      MultiplyA =     15
+      MultiplyB =     20
+    Case "2"
+      MultiplyA =     20
+      MultiplyB =     25
+    Case "3"
+      MultiplyA =     25
+      MultiplyB =     30
+    Case "4"
+      MultiplyA =     30
+      MultiplyB =     35
+    Case "5"
+      MultiplyA =     35
+      MultiplyB =     40
+    Case "6"
+      MultiplyA =     40
+      MultiplyB =     45
+    Case "7"
+      MultiplyA =     45
+      MultiplyB =     50
+    Case "8"
+      MultiplyA =     50
+      MultiplyB =     55
+    Case "9"
+      MultiplyA =     55
+      MultiplyB =     60
+    Case "A"              ' 8.167%
+      MultiplyA =     60
+      MultiplyB =   8167
+    Case "B"              ' 1.492%
+      MultiplyA =   8167
+      MultiplyB =   9659
+    Case "C"              ' 2.782%
+      MultiplyA =   9659
+      MultiplyB =  12441
+    Case "D"              ' 4.253%
+      MultiplyA =  12441
+      MultiplyB =  16694
+    Case "E"              '12.702%
+      MultiplyA =  16694
+      MultiplyB =  29396
+    Case "F"              ' 2.228%
+      MultiplyA =  29396
+      MultiplyB =  31624
+    Case "G"              ' 2.015%
+      MultiplyA =  31624
+      MultiplyB =  33639
+    Case "H"              ' 6.094%
+      MultiplyA =  33639
+      MultiplyB =  39733
+    Case "I"              ' 6.966%
+      MultiplyA =  39733
+      MultiplyB =  46699
+    Case "J"              ' 0.153%
+      MultiplyA =  46699
+      MultiplyB =  46852
+    Case "K"              ' 0.772%
+      MultiplyA =  46852
+      MultiplyB =  47624
+    Case "L"              ' 4.025%
+      MultiplyA =  47624
+      MultiplyB =  51649
+    Case "M"              ' 2.406%
+      MultiplyA =  51649
+      MultiplyB =  54055
+    Case "N"              ' 6.749%
+      MultiplyA =  54055
+      MultiplyB =  60804
+    Case "O"              ' 7.507%
+      MultiplyA =  60804
+      MultiplyB =  68311
+    Case "P"              ' 1.929%
+      MultiplyA =  68311
+      MultiplyB =  70240
+    Case "Q"              ' 0.095%
+      MultiplyA =  70240
+      MultiplyB =  70335
+    Case "R"              ' 5.987%
+      MultiplyA =  70335
+      MultiplyB =  76322
+    Case "S"              ' 6.327%
+      MultiplyA =  76322
+      MultiplyB =  82649
+    Case "T"              ' 9.056%
+      MultiplyA =  82649
+      MultiplyB =  91705
+    Case "U"              ' 2.758%
+      MultiplyA =  91705
+      MultiplyB =  94463
+    Case "V"              ' 0.978%
+      MultiplyA =  94463
+      MultiplyB =  95441
+    Case "W"              ' 2.360%
+      MultiplyA =  95441
+      MultiplyB =  97801
+    Case "X"              ' 0.150%
+      MultiplyA =  97801
+      MultiplyB =  97951
+    Case "Y"              ' 1.974%
+      MultiplyA =  97951
+      MultiplyB =  99925
+    Case "Z"              ' 0.074%
+      MultiplyA =  99925
+      MultiplyB = 100000
+
+  End Select
+
+' For whatever range is being considered, the table gives a lower and upper limit of the
+' space within the range taken up by the letter; the range will be further reduced by the
+' limits of the next letter.
+
+  LowerEnd# = Int( Range# * MultiplyA )
+  UpperEnd# = Int( Range# * MultiplyB )
+  If i > 1 Then
+      LowerEnd# = Int( LowerEnd# / REDUCER )
+      UpperEnd# = Int( UpperEnd# / REDUCER )
+  End If
+  If LowerEndPrev# = 0 Then
+      If LowerEnd# = 0 Then
+          ZeroCount% = ZeroCount% + 1
+        Else
+          LowerEndPrev# = 1
+      End If
+  End If
+  BaseNumber!   = BaseNumber! + LowerEnd#
+  Range#        = UpperEnd# - LowerEnd#
+  LowerEndPrev# = LowerEnd#
+
+Next i
+
+CalculateBaseCutter = BaseNumber! / REDUCER
+
+End Function
+
+'****************************************************************************************
+
+Function CalculateCutterWithRange( LowerEndOfRange%, UpperEndOfRange%, StringIn$, OutputLength% ) As String
+
+' This function sends the span into which the Cutter must fit, and the selected string,
+' to the function "CalculateBaseCutter" for calculating the basic Cutter. The number
+' string it returns is formatted for proper length--three digits when the first character
+' of the Cutter is to be a letter, four digits otherwise.
+
+Const PAD_BOTTOM As Integer = 20  'The value to calculate how much to pad the bottom of a range for expansion.
+Const PAD_TOP    As Integer = 50  'The value to calculate how much to pad the top of a range for expansion.
+
+Dim Ceiling%
+Dim Floor%
+Dim NumberResult%
+Dim RawCutter%
+Dim Span%
+Dim Temp$
+
+' The span is the interval between the upper and lower numbers.
+
+Span%         = UpperEndOfRange% - LowerEndOfRange%
+
+' The "floor" and "ceiling" nudge the ends of the range together a little to allow for
+' wiggle room, thus reducing the dimension of the span.
+
+Floor%        = Span% / PAD_BOTTOM
+Ceiling%      = Span% / PAD_TOP
+Span%         = Span% - Floor% - Ceiling%
+
+If StartsWithDigit And Left$( StringIn$, 1 ) Like "[A-Z]" Then
+    StringIn$ = Mid$( StringIn$, 2 )
+End If
+
+' Send the span and the cleaned selection to the function to calculate a number.
+
+RawCutter%    = CalculateBaseCutter( StringIn$, Span% )
+
+' Add the number to the lower end of the range, increased by the floor, to get the
+' Cutter.
+
+NumberResult% = LowerEndOfRange% + Floor% + RawCutter%
+
+Temp$         = Trim$( Str$( NumberResult% ) )
+
+' Round up the last number, if necessary.
+
+If OutputLength% = 3 Then
+    If Right$( Temp$, 1 ) Like "[5-9]" Then
+        Temp$ = Trim$( Str$( Val( Left$( Temp$, 3 ) ) + 1 ) )
+       Else
+        Temp$ = Left$( Temp$, 3 )
+    End If
+End If
+
+CalculateCutterWithRange = Temp$
+
+End Function
+
+'****************************************************************************************
+
+Function CheckTerminalZero( InString$ ) As String
+
+' A Cutter shouldn't end in zero. This function eliminates terminal zeros.
+
+Dim TempString$
+Dim TerminalZero
+
+TempString$ = InString$
+
+Do
+  If Right$( TempString$, 1 ) = "0" Then
+      TerminalZero = TRUE
+      TempString$  = Left$( TempString$, Len( TempString$ ) - 1 )
+    Else
+      TerminalZero = FALSE
+  End If
+Loop Until TerminalZero = FALSE
+
+CheckTerminalZero = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function CuttersForDigits( ASCIIValues% )
+
+' This function assigns Cutter numbers to strings of digits.
+
+Select Case ASCIIValues%
+  Case 48
+    CuttersForDigits = "2"
+  Case 49
+    CuttersForDigits = "3"
+  Case 50 To 51
+    CuttersForDigits = "4"
+  Case 52
+    CuttersForDigits = "5"
+  Case 53
+    CuttersForDigits = "6"
+  Case 54 To 55
+    CuttersForDigits = "7"
+  Case 56
+    CuttersForDigits = "8"
+  Case 57
+    CuttersForDigits = "9"
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function RankFields( InString$ )
+
+' This function assigns a rank to a call number field, in order to offer an appropriate
+' default selection in the list box. A complete LC call number--having both a
+' classification and an item part--is of lowest rank (RANK_3), and will not be the
+' default selection in the list box unless it is the only such field. Ranking higher
+' (RANK_2) is an empty call number field, one that contains only coding for subfield $b,
+' or a classification number with part of a Cutter. The best candidate for a default
+' selection (RANK_1) is a classification number (with or without a Cutter already
+' present) lacking an item number. The function returns its ranking of the field that has
+' been input, that is, how good a candidate the field is to be the default choice in the
+' dialog box.
+
+Dim CallNumberStructure$
+Dim Classification$
+Dim Item$
+Dim TempString$
+Dim TestChar$
+
+Dim PatternA0
+
+Dim i As Integer, p As Integer, x As Integer
+
+TempString$ = InString$
+
+p = InStr( TempString$, DELIMITER )
+If p > 0 Then
+    Classification$ = Trim$( Mid$( TempString$, 6, p - 6 ) )
+    Item$           = Trim$( Mid$( TempString$, p + 2 ) )
+    If Classification$ = "" And Item$ = "" Then
+        RankFields = RANK_3
+      ElseIf Classification$ <> "" And Item$ = "" Then
+        RankFields = RANK_1
+      ElseIf Classification$ = "" And Item$ <> "" Then
+        RankFields = RANK_3
+      Else
+        RankFields = RANK_2
+    End If
+  Else
+
+' If the field lacks coding for subfield $b, test if the classification number is proper
+' LC, that is, it alternates alphabetic characters and digits. If it does, it's a prime
+' candidate for a Cutter to be added. Otherwise, there may be something funny going on,
+' and the field shouldn't be offered as the default selection.
+
+    If TempString$ <> "" Then
+        Classification$ = Trim$( Mid$( TempString$, 6 ) )
+        For i = 1 To Len( Classification$ )
+          If Mid$( Classification$, i, 1 ) Like "[0-9]" Then
+              TestChar$ = "0"
+            ElseIf Mid$( Classification$, i, 1 ) Like "[A-Z]" Then
+              TestChar$ = "A"
+          End If
+          If CallNumberStructure$ = "" Then
+              CallNumberStructure$ = TestChar$
+            Else
+              If TestChar$ <> Right$( CallNumberStructure$, 1 ) Then
+                  CallNumberStructure$ = CallNumberStructure$ & TestChar$
+              End If
+          End If
+        Next i
+        For i = 1 To Len( CallNumberStructure$ ) Step 2
+          If Mid$( CallNumberStructure$, i, 2 ) = "A0" Then
+              PatternA0 = TRUE
+            Else
+              PatternA0 = FALSE
+              Exit For
+          End If
+        Next i
+        If PatternA0 Then
+            RankFields = RANK_1
+          Else
+            RankFields = RANK_2
+        End If
+    End If
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+' This function controls the second dialog box. It displays the Cutter, whether a simple
+' number already generated in the Main sub, or one calculated to fit into a range
+' depending on the input received by the dialog box.
+
+Const CONTROL_CHANGE       As Integer = 2
+Const DISABLED             As Integer = 0
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const DUMMY_BUTTON         As Integer = 0
+Const ENABLED              As Integer = 1
+Const FOCUS_CHANGE         As Integer = 4
+Const IDLE_STATE           As Integer = 5
+Const INITIALIZE           As Integer = 1
+Const INVISIBLE            As Integer = 0
+Const KEEP_DLG_OPEN        As Integer = -1
+Const VISIBLE              As Integer = 1
+
+Const ALPHANUMERIC         As Integer = 0
+Const NUMBERS_ONLY         As Integer = 1
+
+Const BACKWARDS_INPUT      As Integer = 4
+Const NON_DIGITS           As Integer = 2
+Const NO_INPUT             As Integer = -1
+Const NO_PROBLEM           As Integer = 0
+Const STARTS_WITH_ZERO     As Integer = 1
+Const TOO_LONG             As Integer = 3
+
+Dim CheckCurrentInput$
+Dim CheckOtherInput$
+Dim CutterInitialLetter$
+Dim LengthOfCurrentInput%
+Dim TempString$
+
+Dim i As Integer
+
+' Static variables need to retain their values through each call of the dialog box
+' control function.
+
+Static ControlWithFocus$
+Static CurrentInput$
+Static CurrentTextBox$
+Static CutterNumbersOnly$
+Static HelpText$
+Static InputWarningMessage$
+Static Lower%
+Static OtherInput$
+Static OtherTextBox$
+Static PreviousInput$
+Static PreviousInputWarningMessage$
+Static Upper%
+Static WhatIsTheProblem%
+
+Static FitIntoRange
+Static RangeCalc
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgValue   "OptionGroupCutterFormat",      ALPHANUMERIC
+    DlgVisible "OptionGroupRangesDummy",       INVISIBLE
+    DlgEnable  "ButtonGoRange",                DISABLED
+    DlgVisible "WarningArea",                  INVISIBLE
+    WhatIsTheProblem%            = NO_PROBLEM
+    FitIntoRange                 = FALSE
+    PreviousInputWarningMessage$ = ""
+    InputWarningMessage$         = ""
+    RangeCalc                    = FALSE
+    DlgText    "CutterDisplay",                FirstCutter$
+    DlgValue   "ListOfCallNumberFields",       DefaultSelection%
+    If CountOfTopRank% > 1 Then
+        DlgFocus   "ListOfCallNumberFields"
+    End If
+    If SelectionFound Or CutterSource$ = "Clipboard" Then
+        DlgVisible "CutterSourceText",             INVISIBLE
+        DlgVisible "GBCutterSource",               INVISIBLE
+        HelpText$ = HelpSelection$
+      Else
+        DlgText    "CutterSourceText",             CutterSource$
+        DlgVisible "GBFitIntoRange",               INVISIBLE
+        DlgVisible "GBUsePZTable",                 INVISIBLE
+        DlgVisible "InputBox1",                    INVISIBLE
+        DlgVisible "InputBox2",                    INVISIBLE
+        DlgVisible "OptionAlphanumeric",           INVISIBLE
+        DlgVisible "OptionPZBiogCriticism",        INVISIBLE
+        DlgVisible "OptionGroupRangesDummy",       INVISIBLE
+        DlgVisible "OptionNumbersOnly",            INVISIBLE
+        DlgVisible "OptionPZSeparateWorks",        INVISIBLE
+        DlgVisible "ButtonGoRange",                INVISIBLE
+        DlgVisible "To",                           INVISIBLE
+        HelpText$ = HelpHeading$
+    End If
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "OptionAlphanumeric"
+
+        If FitIntoRange Then
+            TempString$ = DlgText( "InputBox1" )
+            TempString$ = TempString$ & String$( 4 - Len( TempString$ ), "0" )
+            Lower%      = Val( TempString$ )
+            TempString$ = DlgText( "InputBox2" )
+            TempString$ = TempString$ & String$( 4 - Len( OtherInput$ ), "9" )
+            Upper%      = Val( TempString$ )
+            CutterInitialLetter$ = Left$( SelectionString$, 1 ) & _
+                                   CalculateCutterWithRange( Lower%, Upper%, Mid$( SelectionString$, 2 ), 3 )
+            DlgText    "CutterDisplay",                CutterInitialLetter$
+          Else
+            DlgText    "CutterDisplay",                FirstCutter$
+            DlgValue   "OptionGroupRanges",            DUMMY_BUTTON
+          End If
+
+      Case "OptionNumbersOnly"
+
+' A completely numeric Cutter is always fit into a range, even if not specified by
+' entries in the input boxes. In that case the range is implicit, and is actually 1000 to
+' 9999.
+
+        If FitIntoRange Then
+            If CutterNumbersOnly$ <> "" Then
+                Cutter$ = CutterNumbersOnly$
+              Else
+                Cutter$ = CalculateCutterWithRange( 1000, 9999, SelectionString$, 4 )
+            End If
+          Else
+            Cutter$ = CalculateCutterWithRange( 1000, 9999, SelectionString$, 4 )
+        End If
+        Cutter$ = CheckTerminalZero( Cutter$ )
+        DlgText    "CutterDisplay",                Cutter$
+
+      Case "OptionCustomRange"
+
+        DlgFocus   "InputBox1"
+        RangeCalc = TRUE
+        DlgValue   "OptionGroupCutterFormat",      NUMBERS_ONLY
+
+      Case "OptionPZSeparateWorks"
+
+' For literature using Table P-PZ40, a normal Cutter is used for all strings except those
+' beginning with "A" or "Z". In those cases, the Cutter must be squeezed into a range--
+' the upper end of the span for the letter "A", but the beginning part for the letter
+' "Z".
+
+        DlgValue   "OptionGroupCutterFormat",      DUMMY_BUTTON
+        Select Case Left$( SelectionString$, 1 )
+          Case "A"
+            Cutter$ = "A" & CalculateCutterWithRange( 6100, 9999, Mid$( SelectionString$, 2 ), 3 )
+          Case "Z"
+            Cutter$ = "Z" & CalculateCutterWithRange( 1000, 4589, Mid$( SelectionString$, 2 ), 3 )
+          Case Else
+            Cutter$ = FirstCutter$
+        End Select
+        Cutter$ = CheckTerminalZero( Cutter$ )
+        DlgText    "CutterDisplay",                Cutter$
+        DlgText    "InputBox1",                    ""
+        DlgText    "InputBox2",                    ""
+
+      Case "OptionPZBiogCriticism"
+
+' Also for Table P-PZ40, works of criticism, etc. are prefaced by the letter "Z" and fit
+' into the upper end of the span.
+
+        DlgValue   "OptionGroupCutterFormat",      DUMMY_BUTTON
+        Cutter$ = "Z" & Left$( CalculateCutterWithRange( 5000, 9999, SelectionString$, 3 ), 3 )
+        Cutter$ = CheckTerminalZero( Cutter$ )
+        DlgText    "CutterDisplay",                Cutter$
+        DlgText    "InputBox1",                    ""
+        DlgText    "InputBox2",                    ""
+
+      Case "ButtonGoRange"
+
+' This button calculates the Cutter when a valid span is entered into the input boxes.
+
+        CutterNumbersOnly$   = CalculateCutterWithRange( Lower%, Upper%, SelectionString$, 4 )
+        CutterInitialLetter$ = Left$( SelectionString$, 1 ) & _
+                                      CalculateCutterWithRange( Lower%, Upper%, Mid$( SelectionString$, 2 ), 3 )
+        If DlgValue( "OptionGroupCutterFormat" ) = NUMBERS_ONLY Then
+            Cutter$ = CutterNumbersOnly$
+          ElseIf DlgValue( "OptionGroupCutterFormat" ) = ALPHANUMERIC Then
+            Cutter$ = CutterInitialLetter$
+        End If
+        Cutter$              = CheckTerminalZero( Cutter$ )
+        DlgText    "CutterDisplay",                Cutter$
+        WhatIsTheProblem%    = NO_PROBLEM
+        InputWarningMessage$ = ""
+        DlgEnable  "ButtonGoRange",                DISABLED
+        RangeCalc            = FALSE
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "ButtonReset"
+
+' The "Reset" button clears everything and restores the appearance of the dialog box to
+' its state when first invoked.
+
+        DlgEnable  "ButtonGoRange",                DISABLED
+        DlgText    "CutterDisplay",                FirstCutter$
+        DlgText    "InputBox1",                    ""
+        DlgText    "InputBox2",                    ""
+        DlgValue   "OptionGroupCutterFormat",      ALPHANUMERIC
+        DlgValue   "OptionGroupRanges",            DUMMY_BUTTON
+        DlgVisible "WarningArea",                  INVISIBLE
+        DlgFocus   "ButtonAdd"
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "ButtonHelp"
+
+' The help dialog box is chiefly for guidance on input of a range.
+
+        Begin Dialog Dialog2Definition  256, 150, WaltsMacros$
+          CancelButton  194, 128,  52,  14
+          OkButton      194, 128,  52,  14
+          Text           10,   6, 236, 120, HelpText$
+        End Dialog
+
+        Dim Dialog2 As Dialog2Definition
+        On Error Resume Next
+        Dialog Dialog2
+        If Error = DLG_STATEMENT_CANCEL Then DlgEnd 0
+        DlgFocus   "Cancel"
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+
+  Case FOCUS_CHANGE
+
+' If the focus in the dialog box moves to the number input boxes, consider that a range
+' of numbers is to be the input value.
+
+    ControlWithFocus$ = Id$
+    If ControlWithFocus$ = "InputBox1" Or ControlWithFocus$ = "InputBox2" Then
+        RangeCalc = TRUE
+        DlgValue   "OptionGroupRanges",            1
+        DlgValue   "OptionGroupCutterFormat",      NUMBERS_ONLY
+    End If
+
+
+  Case IDLE_STATE
+
+' Monitor the input boxes as they are being filled for valid input: Numbers only,
+' excluding zeros, a length of at most four characters, and proper relationship (the left
+' input box being a number lower than the right input box, after temporary modification--
+' a range of "5" to "5" is valid because the macro will modify the input, effectively
+' changing the range to be "5000" to "5999").
+
+    If RangeCalc Then
+
+        CurrentTextBox$ = ControlWithFocus$
+        If ControlWithFocus$ = "InputBox1" Then
+            OtherTextBox$   = "InputBox2"
+          Else
+            CurrentTextBox$ = "InputBox2"
+            OtherTextBox$   = "InputBox1"
+        End If
+        CurrentInput$ = DlgText( CurrentTextBox$ )
+        OtherInput$   = DlgText( OtherTextBox$ )
+        If CurrentInput$ = "" Then'Or OtherInput$ = "" Then
+            WhatIsTheProblem% = NO_INPUT
+          Else
+            WhatIsTheProblem% = NO_PROBLEM
+        End If
+        LengthOfCurrentInput% = Len( CurrentInput$ )
+        If CurrentInput$ = "0" Then
+            WhatIsTheProblem% = STARTS_WITH_ZERO
+          ElseIf CurrentInput$ Like "[!0-9]" Then
+            WhatIsTheProblem% = NON_DIGITS
+          ElseIf Len( CurrentInput$ ) > 4 Then
+            WhatIsTheProblem% = TOO_LONG
+        End If
+        If WhatIsTheProblem% <> NO_PROBLEM Then
+
+            Select Case WhatIsTheProblem%
+
+              Case STARTS_WITH_ZERO, NON_DIGITS
+                If WhatIsTheProblem% = STARTS_WITH_ZERO Then
+                    InputWarningMessage$ = "    A range must not start or end with zero!"
+                  Else
+                    InputWarningMessage$ = "    Please enter only digits!"
+                End If
+                DlgText    CurrentTextBox,                 ""
+
+              Case TOO_LONG
+                InputWarningMessage$  = "    Please enter no more than 4 digits!"
+                If CurrentInput$ <> PreviousInput$ Then
+                    CurrentInput$ = PreviousInput$
+                    DlgText    CurrentTextBox,                 CurrentInput$
+                End If
+
+            End Select
+
+          Else
+
+            If CurrentInput$ <> "" And OtherInput$ <> "" Then
+                If ControlWithFocus$ = "InputBox1" Then
+                    CheckCurrentInput$   = CurrentInput$ & String$( 4 - Len( CurrentInput$ ), "0" )
+                    CheckOtherInput$     = OtherInput$ & String$( 4 - Len( OtherInput$ ), "9" )
+                    Lower%               = Val( CheckCurrentInput$ )
+                    Upper%               = Val( CheckOtherInput$ )
+                 Else
+                    CheckCurrentInput$   = CurrentInput$ & String$( 4 - Len( CurrentInput$ ), "9" )
+                    CheckOtherInput$     = OtherInput$ & String$( 4 - Len( OtherInput$ ), "0" )
+                    Lower%               = Val( CheckOtherInput$ )
+                    Upper%               = Val( CheckCurrentInput$ )
+                End If
+                If Lower% >= Upper% Then
+                    InputWarningMessage$ = "    Please input the lower end of a range in the left box!"
+                    WhatIsTheProblem%    = BACKWARDS_INPUT
+                End If
+              Else
+                If CurrentInput$ <> PreviousInput$ Then
+                    If WhatIsTheProblem% <> NO_PROBLEM Then
+                        InputWarningMessage$ = ""
+                        WhatIsTheProblem%    = NO_PROBLEM
+                    End If
+                End If
+            End If
+        End If
+        PreviousInput$ = CurrentInput$
+
+        If WhatIsTheProblem% = NO_PROBLEM Then
+            DlgEnable  "ButtonGoRange",                ENABLED
+            FitIntoRange = TRUE
+            If DlgVisible( "WarningArea" ) Then
+                DlgVisible "WarningArea",  INVISIBLE
+            End If
+            If DlgVisible( "OptionPZSeparateWorks" ) = INVISIBLE Then
+                DlgVisible "OptionPZSeparateWorks",        VISIBLE
+            End If
+            If DlgVisible( "OptionPZBiogCriticism" ) = INVISIBLE Then
+                DlgVisible "OptionPZBiogCriticism",        VISIBLE
+            End If
+          Else
+            DlgEnable  "ButtonGoRange",                DISABLED
+            FitIntoRange = FALSE
+        End If
+
+        If InputWarningMessage$ <> PreviousInputWarningMessage$ Then
+            If InputWarningMessage$ = "" Then
+                DlgVisible "WarningArea",                  INVISIBLE
+                DlgVisible "OptionPZSeparateWorks",        VISIBLE
+                DlgVisible "OptionPZBiogCriticism",        VISIBLE
+              Else
+                DlgVisible "WarningArea",                  VISIBLE
+                DlgText    "WarningArea",                  InputWarningMessage$
+                DlgVisible "OptionPZSeparateWorks",        INVISIBLE
+                DlgVisible "OptionPZBiogCriticism",        INVISIBLE
+            End If
+            PreviousInputWarningMessage$ = InputWarningMessage$
+        End If
+        WhatIsTheProblem% = NO_PROBLEM
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End If
+
+End Select
+
+End Function
+'2620107017
+'
+'Macro name: CutterMaker2
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 4/17/2023 9:50:50 AM using "MacroBookInspector" macro by Walter F. Nickeson.

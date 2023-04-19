@@ -1,0 +1,196 @@
+'MacroName:MergeFields.2023.07
+'MacroDescription:Merges selected, contiguous fields in a bibliographic record into one.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 17 February 2023.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'****************************************************************************************
+' How it works: This macro combines contiguous variable fields from a record in the
+' Client, such as when contents notes have been divided into several fields and you want
+' them to be in only one. Click anywhere in the first field to merge, and extend the
+' selection by dragging straight down across all the fields you wish to merge into the
+' first one, ending anywhere in the cell containing the last field to be included. (You
+' can also select by dragging backward, or up.) The macro merges all the fields in the
+' selection, whether they are wholly or partially highlighted. The combined fields take
+' the place of the first field in the selection, keeping its tag and indicators, and all
+' but the first field are deleted. Note that each original field's subfield coding is
+' preserved. The macro can't make any claims about the validity of the new field
+' resulting from the merge!
+'
+' If the merged fields include contents fields (tag 505), the content of those fields
+' will be separated by the ISBD dash of space-hyphen-hyphen space. Otherwise, the content
+' of the merged fields will be separated by a space.
+'
+' The macro can't merge fields containing non-Latin script. It also can't tell if the
+' characters in the field are properly encoded as MARC-8, so some characters will get
+' mangled in processing. Use Joel Hahn's macro "CvtDiacritics" to correct the encoding
+' in the fields to be merged so the results will be as expected. This and his other
+' macros are available at http://www.hahnlibrary.net/libraries/oml/index.html.
+'
+' The limit of the length of a variable field in MARC is 9,999 characters (strictly
+' speaking, octets). Before the macro begins merging fields it checks that the length of
+' all the fields is below that limit. If the new field would be larger, the macro shows a
+' warning and then quits.
+'
+' The end-of-field marker in Connexion is the ASCII character pair 13 + 10, or Carriage
+' return + Line feed. The macro looks at the text that has been selected for end-of-field
+' markers to figure out how many fields it spans. Text containing no end-of-field markers
+' may indicate a selection within a single field, or a selection of empty fields (e.g.,
+' if the text in those fields has been cut to paste in elsewhere). In the latter case,
+' the number of fields selected is calculated by counting the number of tags found. Then
+' the macro keeps reading the next field, adding its contents to the previous field's
+' contents and then deleting it, until the required number of fields have been processed.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim END_OF_FIELD As String*1 : END_OF_FIELD   = Chr$( 013 ) & Chr$( 010 )
+
+Dim CurrentRow%
+Dim CurrentTag$
+Dim Difference%
+Dim EndOfFieldCount%
+Dim EndOfFieldFound%
+Dim FieldData$
+Dim LenMergedFields%
+Dim MergedFields$
+Dim PreviousTag$
+Dim SelectedText$
+Dim Start%                   : Start%         = 1
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$   = "[Walt's macros] Extras2:MergeFields"
+
+Dim i As Integer
+
+Dim SelectedUp               : SelectedUp     = FALSE
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then, check that text has been selected, and that it includes multiple fields. Note
+' that non-Latin text can't be copied or merged.
+
+If CS.GetSelectedText( SelectedText$ ) = FALSE Then
+    MsgBox "Please select some fields to merge!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    If SelectedText$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro works only with fields in Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+CurrentRow% = CS.CursorRow
+
+' If the selection has been made by dragging upward, the last characters will be the end-
+' of-field marker (ASCII characters 013 + 010). In this case we must do some calculations
+' to figure out in which row is the end of the selection.
+
+If Right$( SelectedText$, 2 ) = END_OF_FIELD Then SelectedUp = TRUE
+
+' Then find the end-of-field markers within the selection to count how many fields have
+' been included. No end-of-field markers will be found if the selection is made within a
+' field, or if the selection consists of empty fields. In the former case, the macro will
+' delete the whole field. If the selected empty fields are contiguous, the only text in
+' the selection will be the tags and indicators, in groups of five characters composed of
+' digits and spaces. Thus the length of the selection can provide a clue as to how many
+' fields are selected.
+
+Do
+  EndOfFieldFound% = InStr( Start%, SelectedText$, END_OF_FIELD )
+  If EndOfFieldFound% > 0 Then
+      Start%           = EndOfFieldFound% + 1
+      EndOfFieldCount% = EndOfFieldCount% + 1
+    Else
+      If EndOfFieldCount% = 0 Then
+          MsgBox "Please select more than one field!", CRITICAL_MESSAGE, WaltsMacros$
+          Exit Sub
+      End If
+  End If
+Loop Until EndOfFieldFound% = 0
+
+' The Client can tell where the end of the selection is by the cursor position, so by
+' knowing how many end-of-field markers there are we can work backwards to find the row
+' where the selection begins.
+
+If SelectedUp = TRUE Then CurrentRow% = CurrentRow% + EndOfFieldCount%
+Difference% = CurrentRow% - EndOfFieldCount%
+CurrentRow% = Difference%
+
+' Merge the fields. Keep track of the size of the new field as it's being built; if it
+' exceeds 9,999 characters, display a warning and quit. Also preserve the ISBD
+' punctuation of a dash between titles when two contents notes are merged. Otherwise, a
+' simple space separates the content of two joined fields.
+
+For i = 0 To EndOfFieldCount%
+  If CS.GetFieldLine( CurrentRow% + i, FieldData$ ) Then
+      CurrentTag$ = Left$( FieldData$, 3 )
+      If i = 0 Then
+          MergedFields$ = FieldData$
+        Else
+          If CurrentTag$ = "505" and PreviousTag$ = "505" Then
+              If Right$( Trim$( MergedFields$ ), 3 ) <> " --" Then
+                  MergedFields$ = MergedFields$ & " --"
+              End If
+          End If
+          MergedFields$ = MergedFields$ & " " & Mid$( FieldData$, 6 )
+      End If
+      LenMergedFields% = LenMergedFields% + ( Len( FieldData$ ) - 5 )
+      If LenMergedFields% > 9999 Then
+          FieldData$    = ""
+          MergedFields$ = ""
+          SelectedText$ = ""
+          CS.HomeRecord
+          MsgBox "The size of the merged fields exceeds the MARC limit of 9,999 characters! Macro exiting.", CRITICAL_MESSAGE, WaltsMacros$
+          Exit Sub
+      End If
+  End If
+  PreviousTag$ = CurrentTag$
+Next i
+
+' Delete the merged fields.
+
+For i = EndOfFieldCount% To 1 Step - 1
+  If CS.DeleteFieldLine( CurrentRow% + i ) = FALSE Then
+      MsgBox "Sorry, something went wrong when trying to delete the merged fields.", CRITICAL_MESSAGE, WaltsMacros$
+  End If
+Next i
+
+' Replace the original first field with the new field containing all the merged fields.
+
+If CS.SetFieldLine( CurrentRow%, MergedFields$ ) = FALSE Then
+    MsgBox "Sorry, something went wrong when trying to set the new field.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'1938525
+'
+'Macro name: MergeFields
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:58:09 AM using "MacroBookInspector" macro by Walter F. Nickeson.

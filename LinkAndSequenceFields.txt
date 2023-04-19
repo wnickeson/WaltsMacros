@@ -1,0 +1,1353 @@
+'MacroName:LinkAndSequenceFields.2022.06
+'MacroDescription:Helps with working with links in subfield $8 in bibliographic records.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 29 June 2022.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro helps create and manage links between fields in a
+' bibliographic record using subfield $8. These kinds of links are different from the
+' links the Connexion client creates between two fields that have the same tag number and
+' content, but are in different scripts; they are also different from the links created
+' between different bibliographic records, which are contained in fields 76X-78X.
+' Subfield $8 is defined as a control subfield in all fields except 886, although it may
+' function as a control subfield there; this dual functionality is allowed also in fields
+' 901-907 and 945-949.
+'
+' To link fields within a bibliographic record, simply run the macro, without regard to
+' cursor position. The macro displays a dialog box that shows all the fields of the
+' record in the left pane, and an empty right pane into which to move fields to link.
+' Click on a field in the left pane to move it into the right pane. Click on a field in
+' the right pane to move it up or down (if sequence is important) or to remove it. After
+' all the fields to be included in a specific link have been moved, and arranged in the
+' desired sequence, if necessary, select the type of link which will connect them, and
+' click the "Link selected fields" button. The macro automatically adds a subfield $8 to
+' each field in the bibliographic record displayed in the right pane. The subfield $8
+' contains the code for the link type and the link number (and a sequence number, for
+' certain types of links). The macro then closes.
+'
+' If the bibliographic record already contains fields linked with subfield $8, the macro
+' can display the set of fields in each link. A click of a button can remove a selected
+' link from the record: The macro removes the subfield $8 containing the specified link
+' from each field in the bibliographic record in which it occurs. Or the set of fields in
+' a link can be rearranged, and fields added and subtracted, and made into a new link.
+'
+' The dialog box of this macro is largely based on my "CopyFields" macro, which was
+' itself inspired by the appearance of Joel Hahn's "CopyMultiple" macro. The fields of a
+' bibliographic record are presented in a list box (the left side array), and can be
+' moved to the other list box (the right side array) with a click of the mouse to form a
+' set of fields to link. Information about each field is stored in a record variable, and
+' the record variables are stored in the main array. The string fields of the record
+' variable store the original data of the field (accessed through the
+' "GetFieldLineUnicode" macro command) and a modified version of that field, manipulated
+' to improve display as much as possible under the constraints of the limited resources
+' of the OML dialog box. (Undisplayable characters in fields in non-Latin scripts are
+' represented by the use of a pair of brackets, [].) Another string field in the record
+' variable stores the contents of all occurrences of subfield $8 in that field as a
+' comma-separated string. Several integer fields store indexes of various arrays: One is
+' the line number of a field in the record, another is the index of a field in the left
+' side array, and the third is the index of a field in the right side array. As fields
+' are switched between the two arrays, and moved up and down in the right side array to
+' achieve a desired sequence, their index numbers are changed in the main array. With
+' every mouse click in the dialog box of a button, or on a list box, the index numbers of
+' the fields in the two arrays stored in the main array are updated, and the arrays re-
+' built and re-displayed, using the "DlgListBoxArray" statement. The left side array
+' always shows the fields of the record in their original order, which is generally in
+' tag order; fields in the right side array are added in the order in which they were
+' selected, and can be arranged in any order, although their original order in the
+' bibliographic record is not changed.
+'
+' When a set of fields is ready to be linked, and the type of link has been selected, the
+' macro adds a subfield $8 to each field with the appropriate structure and syntax, and
+' then replaces each field in the bibliographic record with the edited field. The field
+' is set with the "SetFieldLine" command, the counterpart of the "GetFieldLine..."
+' command with which the macro began. If sequence numbers are part of the link, as they
+' are for the action and general sequencing types of links, they are added in the order
+' in which the fields appear in the right side array when the command button is clicked.
+' When the fields in the record are replaced, the macro closes.
+'
+' If a record already contains linked fields, the macro displays a list of the links in a
+' drop-down list box. This list is in alphabetical (by code) and numerical (if there is
+' more than one link for any type of link) order. Selecting a link moves its fields into
+' the right pane for review or to use as a basis for a new link. Clicking the "Remove
+' link" button erases the subfield $8 that contains that link from the fields shown, and
+' the edited fields are written to the bibliographic record, after which the macro
+' closes. The fields of an existing link, displayed in the right pane, can be re-
+' arranged, and added to or subtracted from, to make a new link, as described above.
+'****************************************************************************************
+
+Option Explicit
+
+Type RecordField
+ tDisplayField   As String  'Manipulated field data for display in the dialog box.
+ tLeftSideIndex  As Integer 'Position in the left-side array of a non-selected field.
+ tLineNumber     As Integer 'Original line number of the field.
+ tOriginalField  As String  'Original data of the field.
+ tRightSideIndex As Integer 'Position in the right-side array of a selected field.
+ tSubfield8      As String  'Contents of every occurence of subfield $8 in a field.
+End Type
+
+Declare Sub ClearFields
+Declare Sub PopulateDisplays( DialogAction% )
+Declare Sub SetPushButtons( Selection% )
+
+Declare Function ConvertTo1252( InputString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global Const DISABLED             As Integer = 0
+Global Const ENABLED              As Integer = 1
+Global Const INVISIBLE            As Integer = 0
+Global Const VISIBLE              As Integer = 1
+
+Global Const ACTION               As Integer = 0
+Global Const CONSTITUENT          As Integer = 1
+Global Const GENERAL_LINK         As Integer = 4
+Global Const GENERAL_SEQUENCE     As Integer = 5
+Global Const METADATA_PROVENANCE  As Integer = 2
+Global Const REPRODUCTION         As Integer = 3
+
+Global Const ADD_FIELDS           As Integer = 0
+Global Const FIELD_MOVED          As Integer = -1
+Global Const MOVE_FIELDS          As Integer = 1
+Global Const RIGHT_SIDE_EMPTY     As Integer = -2
+Global Const RIGHT_SIDE_NOT_EMPTY As Integer = -1
+Global Const SHOW_LINKS           As Integer = 2
+
+Global LinkNumberToRemove$
+Global LinkTypeToRemove$
+Global RightHandCount%
+Global TotalCountOfLinks%
+Global UBRecordFields%
+
+Global UnicodeFound
+
+Global ExistingLinksDisplay() As String
+Global LeftSideFields()       As String
+Global RecordFields()         As RecordField
+Global RightSideFields()      As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim DELIMITERLAT As String*1  : DELIMITERLAT = Chr$( 223 )
+Dim DELIMITERUNI As String*8  : DELIMITERUNI = "&#x01C2;"
+Dim DOUBLE_QUOTE As String* 1 : DOUBLE_QUOTE = Chr$( 034 )
+
+Dim CountOfLinkedFields%
+Dim CountOfLinksOfOneType%
+Dim Delimiter$
+Dim FieldData$
+Dim FieldDataConverted$
+Dim HighestLinkNumber%
+Dim ArrayRowContents$
+Dim Ind1$
+Dim Ind2$
+Dim LinkIndex%
+Dim LinkInstructions$
+Dim LinkNumber$
+Dim LinksString$
+Dim LinkType$
+Dim MaxSequenceNumber%
+Dim NewLinkNumber$
+Dim SequenceNumber$
+Dim SetLine%
+Dim LinkToCompare$
+Dim LinkToCompareIndex%
+Dim Start%
+Dim Subfield8$
+Dim SubfieldCode$
+Dim Tag$
+Dim TempString$
+Dim TypeOfWindow%
+Dim WaltsMacros$              : WaltsMacros$ = "[Walt's macros] Extras2:LinkAndSequenceFields"
+
+Dim i As Integer, j As Integer, k As Integer, p As Integer, q As Integer, pp As Integer
+
+Dim LinksArray( 5 ) As String
+Dim TempArray  ()   As String
+
+LinkInstructions$   = "Select the type of link to add and click the " & DOUBLE_QUOTE & "Link selected fields" & DOUBLE_QUOTE _
+                      & " button:"
+LinkNumberToRemove$ = ""
+LinkTypeToRemove$   = ""
+RightHandCount%     = 0
+TotalCountOfLinks%  = 0
+UnicodeFound        = FALSE
+
+' Proceed only if a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in bibliographic records.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Fill the main array with the fields of the bibliographic record. Each record variable
+' in the array holds the original field data as found, a version of the field manipulated
+' for friendly display in the dialog box, the original line number of that field, and any
+' subfields $8 in the field. The two remaining fields in the record variable store the
+' index numbers of the field in the display arrays. In the beginning, the index number of
+' the field in the left array is the same as its position in the record (offset by 1,
+' because the array starts counting at 0), and the index number of the field in the right
+' array is undefined, as the macro opens with no fields in the right pane.
+
+i = 0
+Do While CS.GetFieldLineUnicode( i + 1, FieldData$ )
+  Start% = 1
+  Do
+    p = InStr( Start%, FieldData$, DELIMITERLAT & "8" )
+    If p = 0 Then
+        p = InStr( FieldData$, DELIMITERUNI & "8" )
+        If p = 0 Then
+            Exit Do
+          Else
+            q = InStr( p + 1, FieldData$, DELIMITERUNI )
+        End If
+      Else
+        q = InStr( p + 1, FieldData$, DELIMITERLAT )
+    End If
+
+' From every subfield $8 found in a field, separate the link and sequence numbers from
+' the code for the type of link, so a list can be constructed recording the link numbers
+' associated with each type of link.
+
+    If p > 0 Then
+        TempString$ = Trim$( Mid$( FieldData$, p + 3, ( q - p ) - 3 ) )
+        pp          = InStr( TempString$, "\" )
+        LinkType$   = Mid$( TempString$, pp + 1, 1 )
+        LinkNumber$ = Left$( TempString$, pp - 1 )
+        pp          = InStr( LinkNumber$, "." )
+        If pp > 0 Then
+            SequenceNumber$ = Mid$( LinkNumber$, pp + 1 )
+            LinkNumber$     = Left$( LinkNumber$, pp - 1 )
+        End If
+
+' Each row in the array that stores link information is defined as one of the six types
+' of link, and the contents of the row is a comma-separated list of link numbers.
+
+        Select Case LinkType$
+          Case "a"
+            LinkIndex% = ACTION
+          Case "c"
+            LinkIndex% = CONSTITUENT
+          Case "p"
+            LinkIndex% = METADATA_PROVENANCE
+          Case "r"
+            LinkIndex% = REPRODUCTION
+          Case "u"
+            LinkIndex% = GENERAL_LINK
+          Case "x"
+            LinkIndex% = GENERAL_SEQUENCE
+        End Select
+        If LinksArray( LinkIndex% ) = "" Then
+            LinksArray( LinkIndex% ) = LinkNumber$
+          Else
+            LinksString$ = LinksArray( LinkIndex% )
+            If InStr( LinksString$, LinkNumber$ ) = 0 Then
+                LinksArray( LinkIndex% ) = LinksArray( LinkIndex% ) & "," & LinkNumber$
+            End If
+        End If
+    End If
+    If Subfield8$ = "" Then
+        Subfield8$ = TempString$
+      Else
+        Subfield8$ = Subfield8$ & "," & TempString$
+    End If
+    CountOfLinkedFields% = CountOfLinkedFields% + 1
+    Start% = q
+  Loop Until p = 0
+
+' Dress up the bibliographic data for nice display. Begin by adding an extra space for
+' each blank indicator (purely for show, to help things line up).
+
+  Ind1$ = Mid$( FieldData$, 4, 1 )
+  If Ind1$ = " " Then Ind1$ = "  "
+  Ind2$ = Mid$( FieldData$, 5, 1 )
+  If Ind2$ = " " Then Ind2$ = "  "
+  FieldDataConverted$ = Mid$( FieldData$, 1, 3 ) & " " & Ind1$ & Ind2$ & " " & Mid$( FieldData$, 6 )
+
+' Unicode data won't display well in the dialog box. Indicate undisplayable characters
+' with a pair of brackets to more or less give the appearance of an empty box. However,
+' do convert the delimiter to the dollar sign.
+
+  If InStr( FieldDataConverted$, "&#x" ) Then
+      UnicodeFound = TRUE
+      Do
+        p = InStr( FieldDataConverted$, "&#x01C2;" )
+        If p <> 0 Then
+            FieldDataConverted$ = Left$( FieldDataConverted$, p - 1 ) & "$" & Mid$( FieldDataConverted$, p + 8 )
+        End If
+      Loop Until p = 0
+      Do
+        p = InStr( FieldDataConverted$, "&#x" )
+        If p <> 0 Then
+            FieldDataConverted$ = Left$( FieldDataConverted$, p - 1 ) & "[]" & Mid$( FieldDataConverted$, p + 8 )
+        End If
+      Loop Until p = 0
+    Else
+
+' It is possible to convert or provide substitutions for some MARC21 characters for
+' better display in the dialog box, although the characters available in OML are very
+' limited.
+
+      FieldDataConverted$ = ConvertTo1252( FieldDataConverted$ )
+  End If
+
+' Now the information can be assembled in the main array.
+
+  ReDim Preserve RecordFields( i )
+  With RecordFields( i )
+   .tDisplayField   = FieldDataConverted$
+   .tLeftSideIndex  = i
+   .tLineNumber     = i + 1
+   .tOriginalField  = FieldData$
+   .tRightSideIndex = FIELD_MOVED
+   .tSubfield8      = Subfield8$
+  End With
+  LinkNumber$     = ""
+  LinkType$       = ""
+  SequenceNumber$ = ""
+  Subfield8$      = ""
+  i = i + 1
+Loop
+
+UBRecordFields% = UBound( RecordFields )
+
+' The comma-separated list of link numbers in the temporary link storage array may not be
+' in order. Arrange the numbers in ascending order for each type of link, to make it
+' easier to select a link in the dialog box.
+
+If CountOfLinkedFields% > 0 Then
+    ReDim ExistingLinksDisplay( 1 )
+    ExistingLinksDisplay( 0 ) = "Select a link:"
+    For i = 0 To 5
+      LinksString$ = LinksArray( i )
+      If LinksString$ <> "" Then
+          ReDim TempArray( 0 )
+          MaxSequenceNumber%  = UBound( TempArray )
+          LinkToCompareIndex% = 1
+          Do
+            LinkToCompare$ = GetField( LinksString$, LinkToCompareIndex%, "," )
+            If LinkToCompare$ = "" Then
+                Exit Do
+              Else
+                If TempArray( 0 ) = "" Then
+                    TempArray( 0 )         = LinkToCompare$
+                    CountOfLinksOfOneType% = CountOfLinksOfOneType% + 1
+                  Else
+                    For j = 0 To MaxSequenceNumber%
+                      ArrayRowContents$ = TempArray( j )
+                      If ArrayRowContents$ = "" Then
+                          TempArray( j )         = LinkToCompare$
+                          CountOfLinksOfOneType% = CountOfLinksOfOneType% + 1
+                          Exit For
+                        Else
+                          If LinkToCompare$ = ArrayRowContents$ Then
+                              Exit For
+                            ElseIf LinkToCompare$ < ArrayRowContents$ Then
+                              ReDim Preserve TempArray( MaxSequenceNumber% + 1 )
+                              MaxSequenceNumber%     = MaxSequenceNumber% + 1
+                              For k = MaxSequenceNumber% To j + 1 Step -1
+                                TempArray( k ) = TempArray( k - 1 )
+                              Next k
+                              TempArray( j )         = LinkToCompare$
+                              CountOfLinksOfOneType% = CountOfLinksOfOneType% + 1
+                              Exit For
+                            Else
+                              MaxSequenceNumber%     = MaxSequenceNumber% + 1
+                              ReDim Preserve TempArray( MaxSequenceNumber% )
+                              TempArray( MaxSequenceNumber% ) = LinkToCompare$
+                              Exit For
+                          End If
+                      End If
+                    Next j
+                End If
+                LinkToCompareIndex% = LinkToCompareIndex% + 1
+            End If
+          Loop Until LinkToCompare$ = ""
+        Else
+          MaxSequenceNumber% = 0
+      End If
+
+' Empty the temporary link array into the display array, which shows all the links in the
+' record in a drop-down list. Assemble each link by combining the link type and its
+' number with the backward slash.
+
+      If CountOfLinksOfOneType% > 0 Then
+          For j = 0 To MaxSequenceNumber%
+            If ExistingLinksDisplay( 1 ) = "" Then
+                ExistingLinksDisplay( 1 ) = Trim$( Str$( i ) ) & "\" & TempArray( j )
+              Else
+                k = UBound( ExistingLinksDisplay ) + 1
+                ReDim Preserve ExistingLinksDisplay( k )
+                ExistingLinksDisplay( k ) = Trim$( Str$( i ) ) & "\" & TempArray( j )
+            End If
+          Next j
+
+' Re-use the temporary link array by recording the highest link number found for each
+' type of link, so if a new link is added, the macro knows what number to assign it.
+
+          LinksArray( i )        = TempArray( MaxSequenceNumber% )
+          TotalCountOfLinks%     = TotalCountOfLinks% + CountOfLinksOfOneType%
+          CountOfLinksOfOneType% = 0
+          ReDim TempArray( 0 )
+      End If
+    Next i
+End If
+
+' Add textual information to make the list of links more readily understandable.
+
+If CountOfLinkedFields% > 0 Then
+    For i = 1 To UBound( ExistingLinksDisplay )
+      TempString$ = ExistingLinksDisplay( i )
+      Select Case Left$( TempString$, 1 )
+        Case "0"
+          ExistingLinksDisplay( i ) = "Action, " & Mid$( TempString$, 3 ) & "\a"
+        Case "1"
+          ExistingLinksDisplay( i ) = "Constituent item, " & Mid$( TempString$, 3 ) & "\c"
+        Case "2"
+          ExistingLinksDisplay( i ) = "Metadata provenance, " & Mid$( TempString$, 3 ) & "\p"
+        Case "3"
+          ExistingLinksDisplay( i ) = "Reproduction, " & Mid$( TempString$, 3 ) & "\r"
+        Case "4"
+          ExistingLinksDisplay( i ) = "General linking, " & Mid$( TempString$, 3 ) & "\u"
+        Case "5"
+          ExistingLinksDisplay( i ) = "General sequencing, " & Mid$( TempString$, 3 ) & "\x"
+      End Select
+    Next i
+End If
+
+PopulateDisplays( ADD_FIELDS )
+
+' The dialog box is where fields are selected and arranged for linking and sequencing.
+
+Begin Dialog Dialog1Definition  536, 242, WaltsMacros$, .Dialog1ControlFunction
+  PushButton     372, 218,  88,  16, "",                          .GoButton
+  CancelButton   468, 218,  60,  16
+  ListBox          8,  16, 256, 220, LeftSideFields(),            .LeftSideArray
+  ListBox        272,  16, 256, 112, RightSideFields(),           .RightSideArray
+  PushButton     280, 126,  48,  12, "Move up",                   .MoveUpButton
+  PushButton     280, 142,  48,  12, "Move down",                 .MoveDownButton
+  PushButton     340, 126,  48,  12, "Clear list",                .ClearFieldsButton
+  PushButton     340, 142,  48,  12, "Remove field",              .RemoveFieldButton
+  Text             8,   6,  80,   8, "Select fields to link:"
+  Text           268, 226,  88,   8, "UNICODE DATA FOUND.",       .UnicodeFound
+  GroupBox       404, 126, 124,  85, "Type of link to add:",      .OptionGroupBox
+  OptionGroup                                                     .OptionGroupLinkType
+   OptionButton  282, 188,   1,   1, "",                          .OptionButtonDummy
+   OptionButton  414, 139,  86,  12, "Action",                    .OptionButtonAction
+   OptionButton  414, 150,  86,  12, "Constituent item",          .OptionButtonConstituent
+   OptionButton  414, 161,  86,  12, "Metadata provenance",       .OptionButtonProvenance
+   OptionButton  414, 172,  86,  12, "Reproduction",              .OptionButtonReproduction
+   OptionButton  414, 183,  86,  12, "General linking",           .OptionButtonGenLink
+   OptionButton  414, 194,  86,  12, "General sequencing",        .OptionButtonGenSequence
+  Text           272,   6, 256,   8, LinkInstructions$,           .LinkInstructions
+  DropListBox    280, 189, 108,  64, ExistingLinksDisplay(),      .ExistingLinksList
+  GroupBox       272, 176, 124,  35, "Existing links to remove:", .ExistingLinksBox
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+' The dialog box closes after fields have been selected for linking, or links selected
+' for deletion. Now edit the record. Begin by checking for removal of an existing link.
+' Removing a link means searching each subfield $8 in each field for the matching link
+' type and number. If the type and number of a link selected for removal match that in a
+' subfield $8, mark the field for editing by assigning the value FIELD_MOVED to the index
+' of the left side array--even though the dialog box has closed and the field is not
+' actually being moved; this is simply to match the variable used when subfield $8 is
+' being added to fields, which are also marked by FIELD_MOVED.
+
+If Dialog1.ExistingLinksList > 0 Then
+    For i = 0 To UBRecordFields%
+      If InStr( RecordFields( i ).tSubfield8, LinkTypeToRemove$ ) Then
+          TempString$ = RecordFields( i ).tSubfield8
+          j = 1
+          Do
+            Subfield8$ = GetField( TempString$, j, "," )
+            If Subfield8$ = "" Then
+                Exit Do
+              Else
+                LinkType$ = Right$( Subfield8$, 1 )
+                If LinkType$ = LinkTypeToRemove$ Then
+                    p = InStr( Subfield8$, "." )
+                    q = InStr( Subfield8$, "\" )
+                    If p = 0 Then
+                        LinkNumber$ = Left$( Subfield8$, q - 1 )
+                      Else
+                        LinkNumber$ = Left$( Subfield8$, p - 1 )
+                    End If
+                    If LinkNumber$ = LinkNumberToRemove$ Then
+                        RecordFields( i ).tLeftSideIndex = FIELD_MOVED
+                        If Subfield8$ = TempString$ Then
+                            RecordFields( i ).tSubfield8 = ""
+                            Exit Do
+                          Else
+                            p = InStr( TempString$, Subfield8$ )
+                            If p = 1 Then
+                                TempString$ = Mid$( TempString$, Len( Subfield8$ ) + 2 )
+                              Else
+                                TempString$ = Left$( TempString$, p - 2 ) & Mid$( TempString$, p + Len( Subfield8$ ) + 1 )
+                            End If
+                            RecordFields( i ).tSubfield8 = TempString$
+                            Exit Do
+                        End If
+                    End If
+                End If
+            End If
+            j = j + 1
+          Loop Until Subfield8$ = ""
+      End If
+    Next i
+
+' Edit the fields marked for modification by removing the identified subfield $8, and
+' then replace the field in the record with the edited version.
+
+    For i = 0 To UBRecordFields%
+      If RecordFields( i ).tLeftSideIndex = FIELD_MOVED Then
+          TempString$ = RecordFields( i ).tOriginalField
+          If UnicodeFound Then
+              Delimiter$ = DELIMITERUNI
+            Else
+              Delimiter$ = DELIMITERLAT
+          End If
+          Tag$   = Left$( TempString$, 5 )
+          Start% = 1
+          Do
+            p = InStr( Start%, TempString$, Delimiter$ )
+            If p > 0 Then
+                SubfieldCode$ = Mid$( TempString$, p + 1, 1 )
+                Start% = p + 1
+            End If
+          Loop Until SubfieldCode$ <> "8"
+          TempString$ = Mid$( TempString$, p )
+          If Left$( TempString$, 2 ) = DELIMITERLAT & "a" Then
+              TempString$ = Trim$( Mid$( TempString$, 3 ) )
+            ElseIf Left$( TempString$, 9 ) = DELIMITERUNI & "a" Then
+              TempString$ = Trim$( Mid$( TempString$, 10 ) )
+          End If
+          If RecordFields( i ).tSubfield8 = "" Then
+              RecordFields( i ).tOriginalField = Tag$ & TempString$
+            Else
+              If ( Left$( TempString$, 1 ) <> DELIMITERLAT ) And ( Left$( TempString$, 8 ) <> DELIMITERUNI ) Then
+                  TempString$ = Delimiter$ & "a " & TempString$
+              End If
+              RecordFields( i ).tOriginalField = Tag$ & Delimiter$ & "8 " & RecordFields( i ).tSubfield8 & " " & TempString$
+          End If
+          SetLine% = RecordFields( i ).tLineNumber
+          If CS.SetFieldLine( SetLine%, RecordFields( i ).tOriginalField ) Then
+          End If
+      End If
+    Next i
+    Exit Sub
+  Else
+    If Dialog1.OptionGroupLinkType = 0 Then
+        Exit Sub
+    End If
+End If
+
+' If, on the other hand, a link is to be added, begin by determining what link number to
+' use: It will be one more than the highest previous number for any type of link.
+
+Select Case Dialog1.OptionGroupLinkType
+  Case 1
+    LinkIndex% = ACTION
+  Case 2
+    LinkIndex% = CONSTITUENT
+  Case 3
+    LinkIndex% = METADATA_PROVENANCE
+  Case 4
+    LinkIndex% = REPRODUCTION
+  Case 5
+    LinkIndex% = GENERAL_LINK
+  Case 6
+    LinkIndex% = GENERAL_SEQUENCE
+End Select
+
+HighestLinkNumber% = Val( LinksArray( LinkIndex% ) )
+NewLinkNumber$     = Trim$( Str$( HighestLinkNumber% + 1 ) )
+
+' Go through the main array and add the appropriate information in subfield $8 to each
+' field which is to receive one; those fields are marked by their absence from the left
+' side array--they've been moved to the right side array.
+
+SequenceNumber$ = "1"
+For i = 0 To UBRecordFields%
+  If RecordFields( i ).tRightSideIndex <> FIELD_MOVED Then
+      TempString$ = RecordFields( i ).tOriginalField
+      Tag$        = Left$( TempString$, 5 )
+      TempString$ = Mid$( TempString$, 6 )
+      If UnicodeFound Then
+          Delimiter$ = DELIMITERUNI
+        Else
+          Delimiter$ = DELIMITERLAT
+      End If
+      If Left$( TempString$, 1 ) <> Delimiter$ Then
+          TempString$ = Delimiter$ & "a " & TempString$
+      End If
+      Select Case Dialog1.OptionGroupLinkType
+        Case 1
+          Subfield8$ = Delimiter$ & "8 " & NewLinkNumber$ & "." & Trim$( Str$( RecordFields( i ).tRightSideIndex + 1 ) ) & "\a "
+        Case 2
+          Subfield8$ = Delimiter$ & "8 " & NewLinkNumber$ & "\c "
+        Case 3
+          Subfield8$ = Delimiter$ & "8 " & NewLinkNumber$ & "\p "
+        Case 4
+          Subfield8$ = Delimiter$ & "8 " & NewLinkNumber$ & "\r "
+        Case 5
+          Subfield8$ = Delimiter$ & "8 " & NewLinkNumber$ & "\u "
+        Case 6
+          Subfield8$ = Delimiter$ & "8 " & NewLinkNumber$ & "." & Trim$( Str$( RecordFields( i ).tRightSideIndex + 1 ) ) & "\x "
+      End Select
+      RecordFields( i ).tOriginalField = Tag$ & Subfield8$ & TempString$
+      SequenceNumber$ = Trim$( Str$( Val( SequenceNumber$ ) + 1 ) )
+  End If
+Next i
+
+' Finally, put the edited fields back into the record.
+
+For i = 0 To UBRecordFields%
+  If RecordFields( i ).tRightSideIndex <> FIELD_MOVED Then
+      SetLine% = RecordFields( i ).tLineNumber
+      If CS.SetFieldLine( SetLine%, RecordFields( i ).tOriginalField ) Then
+      End If
+  End If
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub ClearFields
+
+' This sub essentially resets the macro, removing all fields from the right side array,
+' disabling all the buttons, and cancelling any selection in the drop list box or the
+' option button group.
+
+Dim i As Integer
+
+Erase RightSideFields
+ReDim LeftSideFields( UBRecordFields% )
+For i = 0 To UBRecordFields%
+  With RecordFields( i )
+   .tLeftSideIndex  = i
+   .tRightSideIndex = FIELD_MOVED
+  End With
+  LeftSideFields( i ) = RecordFields( i ).tDisplayField
+Next i
+DlgListBoxArray "RightSideArray",           RightSideFields()
+DlgListBoxArray "LeftSideArray",            LeftSideFields()
+DlgValue        "OptionGroupLinkType",      0
+
+End Sub
+
+'****************************************************************************************
+
+Sub PopulateDisplays( DialogAction% )
+
+' This routine constructs the two display arrays from the values of the indexes stored in
+' the main array.
+
+Dim LastFieldAdded%
+Dim LeftSideIndex%
+Dim RightSideIndex%
+Dim UBRightSide%
+
+Dim i As Integer, j As Integer, k As Integer
+
+ReDim LeftSideFields( 0 )
+ReDim RightSideFields( 0 )
+
+LastFieldAdded% = FIELD_MOVED
+
+' Go through the main array from beginning to end. Any field whose left index number is
+' the value FIELD_MOVED will be moved from the left to the right pane.
+
+For i = 0 To UBRecordFields%
+  LeftSideIndex%  = RecordFields( i ).tLeftSideIndex
+  RightSideIndex% = RecordFields( i ).tRightSideIndex
+  If LeftSideIndex% = FIELD_MOVED Then
+      If RightSideIndex% > FIELD_MOVED Then
+
+' If the right side index is the value FIELD_MOVED, it must be the most recently added
+' field to the right pane, because it doesn't have a real index number yet. It must
+' therefore show up as the last row in the array. But until all the previously added rows
+' are found, this new one can't be added. Expand the right side array until it is full
+' with the previously added rows. If this section of the macro starts with the right pane
+' empty, as when the macro begins, the right array is simply redimensioned one row larger
+' in each step. If the right pane is not empty, as when its fields are being rearranged,
+' the size of the array won't change; but since the right array indexes are encountered
+' in simple ascending order, the size is not known until all the rows of that array have
+' been examined. In that case, each time a new highest index of the array is found, the
+' right array must be redimensioned to that. If the next index number is lower, it is
+' simply inserted into the slot already prepared for it.
+
+          If RightSideIndex% > UBRightSide% Then
+              UBRightSide% = RightSideIndex%
+          End If
+          ReDim Preserve RightSideFields( UBRightSide% )
+          RightSideFields( RightSideIndex% ) = RecordFields( i ).tDisplayField
+          k = k + 1
+          UBRightSide% = UBound( RightSideFields )
+        Else
+          LastFieldAdded% = i
+      End If
+    Else
+      ReDim Preserve LeftSideFields( j )
+      LeftSideFields( j ) = RecordFields( i ).tDisplayField
+      RecordFields( i ).tLeftSideIndex = j
+      j = j + 1
+  End If
+Next i
+
+' After having gone through the whole array, all the previously selected fields for the
+' right pane remain in place, and the most recently added field is yet to be put in the
+' array. It will go in the last row of the array, whose index now becomes its index.
+
+If DialogAction% < SHOW_LINKS Then
+    If LastFieldAdded% > FIELD_MOVED Then
+        If k > 0 Then
+            UBRightSide% = UBRightSide% + 1
+        End If
+        ReDim Preserve RightSideFields( UBRightSide% )
+        RightSideFields( UBRightSide% ) = RecordFields( LastFieldAdded% ).tDisplayField
+        RecordFields( LastFieldAdded% ).tRightSideIndex = UBRightSide%
+        k = k + 1
+    End If
+End If
+
+RightHandCount% = k
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetPushButtons( Selection% )
+
+' Given an input--either the selected row in the right array, or some special values--and
+' the number of rows in the right array, which must number at least two for the macro to
+' add a link--the controls in the dialog box are either enabled or disabled, and the text
+' of the command button set.
+
+Dim ConditionCount%
+
+Select Case Selection%
+
+  Case RIGHT_SIDE_EMPTY
+    DlgEnable       "ClearFieldsButton",        DISABLED
+    DlgEnable       "MoveDownButton",           DISABLED
+    DlgEnable       "MoveUpButton",             DISABLED
+    DlgEnable       "RemoveFieldButton",        DISABLED
+
+  Case RIGHT_SIDE_NOT_EMPTY
+    DlgEnable       "ClearFieldsButton",        ENABLED
+    DlgEnable       "MoveDownButton",           DISABLED
+    DlgEnable       "MoveUpButton",             DISABLED
+    DlgEnable       "RemoveFieldButton",        DISABLED
+
+  Case 0
+    DlgEnable       "MoveUpButton",             DISABLED
+    DlgEnable       "RemoveFieldButton",        ENABLED
+    If RightHandCount% < 2 Then
+        DlgEnable       "MoveDownButton",           DISABLED
+        If RightHandCount% = 0 Then
+            DlgEnable       "RemoveFieldButton",        DISABLED
+        End If
+      Else
+        DlgEnable       "MoveDownButton",           ENABLED
+    End If
+
+  Case UBound( RightSideFields )
+    DlgEnable       "MoveDownButton",           DISABLED
+    DlgEnable       "MoveUpButton",             ENABLED
+    DlgEnable       "RemoveFieldButton",        ENABLED
+
+  Case Else
+    DlgEnable       "MoveDownButton",           ENABLED
+    DlgEnable       "MoveUpButton",             ENABLED
+    DlgEnable       "RemoveFieldButton",        ENABLED
+
+End Select
+
+If RightHandCount% > 1 Then
+    ConditionCount% = ConditionCount% + 1
+    DlgEnable       "OptionGroupBox",           ENABLED
+    DlgEnable       "OptionGroupLinkType",      ENABLED
+    DlgEnable       "OptionButtonDummy",        ENABLED
+    DlgEnable       "OptionButtonAction",       ENABLED
+    DlgEnable       "OptionButtonConstituent",  ENABLED
+    DlgEnable       "OptionButtonProvenance",   ENABLED
+    DlgEnable       "OptionButtonReproduction", ENABLED
+    DlgEnable       "OptionButtonGenLink",      ENABLED
+    DlgEnable       "OptionButtonGenSequence",  ENABLED
+    DlgVisible      "LinkInstructions",         VISIBLE
+  Else
+    ConditionCount% = ConditionCount% + 2
+    DlgEnable       "OptionGroupBox",           DISABLED
+    DlgEnable       "OptionGroupLinkType",      DISABLED
+    DlgEnable       "OptionButtonDummy",        DISABLED
+    DlgEnable       "OptionButtonAction",       DISABLED
+    DlgEnable       "OptionButtonConstituent",  DISABLED
+    DlgEnable       "OptionButtonProvenance",   DISABLED
+    DlgEnable       "OptionButtonReproduction", DISABLED
+    DlgEnable       "OptionButtonGenLink",      DISABLED
+    DlgEnable       "OptionButtonGenSequence",  DISABLED
+    DlgVisible      "LinkInstructions",         INVISIBLE
+End If
+
+If DlgValue( "OptionGroupLinkType" ) = 0 Then
+    ConditionCount% = ConditionCount% + 4
+  Else
+    ConditionCount% = ConditionCount% + 8
+End If
+
+If TotalCountOfLinks% = 0 Then
+    ConditionCount% = ConditionCount% + 16
+  Else
+    If DlgValue( "ExistingLinksList" ) = 0 Then
+        ConditionCount% = ConditionCount% + 32
+      Else
+        ConditionCount% = ConditionCount% + 64
+    End If
+End If
+
+Select Case ConditionCount%
+  Case 25, 41, 73
+    If DlgValue( "OptionGroupLinkType" ) = 6 Then
+        DlgText         "GoButton",                 "Sequence selected fields"
+      Else
+        DlgText         "GoButton",                 "Link selected fields"
+    End If
+  Case 70, 74
+    DlgText         "GoButton",                 "Delete link"
+  Case Else
+    DlgText         "GoButton",                 "Close"
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Function ConvertTo1252( InputString$ ) As String
+
+' This function converts the MARC21 string to the subset of Windows-1252 that can display
+' in the dialog box, just to make it easier to read.
+
+Dim Character$               : Character$ = " "
+Dim CharNext%
+Dim CharRead%
+Dim TempString$
+
+Dim i As Integer
+
+InputString$ = InputString$ & Character$
+For i = 1 To Len( InputString$ ) - 1
+  CharRead% = Asc( Mid$( InputString$, i, 1 ) )
+  CharNext% = Asc( Mid$( InputString$, i + 1, 1 ) )
+
+  Select Case CharRead%
+
+    Case 32 To 64
+      Character$ = Chr$( CharRead% )
+
+' OCLC-MARC modified characters are turned into precomposed characters, when possible.
+
+    Case 32 To 64, 66, 68, 70 To 72, 74 To 77, 80 To 82, 84, 86 To 88, 91 To 96
+      Character$ = Chr$( CharRead% )
+
+    Case 98, 100, 102 To 104, 106 To 109, 112 To 114, 116, 118 To 120, 123 To 128
+      Character$ = Chr$( CharRead% )
+
+    Case 65, 97   'A, a
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 127 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 128 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 129 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 130 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 234  'ring
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224, 229 To 231, 233, 235 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 67, 99   'C, c
+      Select Case CharNext%
+        Case 240  'cedilla
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224 To 239, 241 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 69, 101  'E, e
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 73, 105  'I, i
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 78, 110  'N, n
+      Select Case CharNext%
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 224 To 227, 229 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 79, 111  'O, o
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 229 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 83, 115  'S, s
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 85, 117  'U, u
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 89, 121  'Y, y
+      Select Case CharNext%
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 232  'diaeresis
+          If CharRead% = 121 Then
+              Character$ = Chr$( 255 )
+            Else
+              Character$ = Chr$( CharRead% )
+          End If
+          i = i + 1
+        Case 224 To 225, 227 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 90, 122  'Z, z
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 158   'Degree sign
+      Character$ = Chr$( 176 )
+    Case 160   'Euro
+      Character$ = Chr$( 128 )
+    Case 162   'Crossed O
+      Character$ = Chr$( 216 )
+    Case 163   'Eth
+      Character$ = Chr$( 208 )
+    Case 164   'Thorn
+      Character$ = Chr$( 222 )
+    Case 165   'AE Ligature
+      Character$ = Chr$( 198 )
+    Case 166   'OE Ligature
+      Character$ = "Oe"
+    Case 169   'Musical flat: does not copy
+      Character$ = Chr$( 129 )
+    Case 170   'registered
+      Character$ = Chr$( 174 )
+    Case 171   'Plus-minus
+      Character$ = Chr$( 177 )
+    Case 178   'crossed o
+      Character$ = Chr$( 248 )
+    Case 179   'eth
+      Character$ = Chr$( 240 )
+    Case 180   'thorn
+      Character$ = Chr$( 254 )
+    Case 181   'ae ligature
+      Character$ = Chr$( 230 )
+    Case 182   'oe ligature
+      Character$ = "oe"
+    Case 185   'Pound
+      Character$ = Chr$( 163 )
+    Case 202   'Copyright
+      Character$ = Chr$( 169 )
+    Case 203   'Sound recording copyright: does not copy
+      Character$ = "p"
+    Case 204   'Musical sharp: does not copy
+      Character$ = "#"
+    Case 223   'Delimiter
+      If Character$ = " " And Mid$( InputString$, i + 1, 2 ) Like "[a-z0-9] " Then
+          Character$ = "$"
+        Else
+          Character$ = Chr$( 223 )
+      End If
+    Case Else
+      Character$ = Chr$( CharRead% )
+
+  End Select
+
+  TempString$ = TempString$ & Character$
+
+Next i
+
+ConvertTo1252 = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' This function controls the dialog box.
+
+Const CONTROL_CHANGE     As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
+Const INITIALIZE         As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
+Const KEEP_DLG_OPEN      As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+
+Const DOWN               As Integer = 1   'The value to move an item in the list down.
+Const NO_OPTION_SELECTED As Integer = -1  'The value when no option buttons have been selected.
+Const UP                 As Integer = -1  'The value to move an item in the list up.
+
+Dim ChangeCount%
+Dim CurrentIndex%
+Dim Direction%
+Dim DisplacedFieldIndex%
+Dim LinkNumber$
+Dim LinkType$
+Dim MaxSequenceNumber%
+Dim RightSideIndex%
+Dim SequenceNumber%
+Dim Subfield8$
+Dim TempString$
+
+Static LeftSelection%
+Static RightSelection%
+
+Dim i As Integer, j As Integer, k As Integer, p As Integer, q As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If UnicodeFound Then
+        DlgVisible      "UnicodeFound",             VISIBLE
+      Else
+        DlgVisible      "UnicodeFound",             INVISIBLE
+    End If
+    DlgValue        "OptionGroupLinkType",      0
+    If TotalCountOfLinks% = 0 Then
+        DlgVisible      "ExistingLinksList",        INVISIBLE
+        DlgVisible      "ExistingLinksBox",         INVISIBLE
+      Else
+        DlgVisible      "ExistingLinksList",        VISIBLE
+        DlgVisible      "ExistingLinksBox",         VISIBLE
+    End If
+    SetPushButtons( RIGHT_SIDE_EMPTY )
+    DlgValue        "RightSideArray",           NO_OPTION_SELECTED
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+'##########
+
+      Case "GoButton"
+
+        DlgEnd 0
+
+' In cases of field movement--whether fields are being moved from the left to the right
+' array or vice versa, or up and down in the right array--this part of the macro changes
+' the index numbers of each field stored in the record variable. The arrays are then
+' reconstructed using those new index numbers, in the "PopulateDisplays" sub-routine, and
+' assigned to the list boxes in the dialog box for display.
+
+'##########
+
+      Case "MoveUpButton", "MoveDownButton"
+
+        If DlgVisible( "ExistingLinksList" ) Then
+            DlgValue        "ExistingLinksList",        0
+        End If
+        RightSelection% = DlgValue( "RightSideArray" )
+        If Id$ = "MoveUpButton" Then
+            Direction% = UP
+          Else
+            Direction% = DOWN
+        End If
+        DisplacedFieldIndex% = RightSelection% + Direction%
+        For i = 0 To UBRecordFields%
+          CurrentIndex% = RecordFields( i ).tRightSideIndex
+          If CurrentIndex% = RightSelection% Then
+              RecordFields( i ).tRightSideIndex = DisplacedFieldIndex%
+              ChangeCount% = ChangeCount% + 1
+            ElseIf CurrentIndex% = DisplacedFieldIndex% Then
+              RecordFields( i ).tRightSideIndex = RightSelection%
+              ChangeCount% = ChangeCount% + 1
+          End If
+          If ChangeCount% = 2 Then Exit For
+        Next i
+        PopulateDisplays( MOVE_FIELDS )
+        DlgListBoxArray "RightSideArray",           RightSideFields()
+        DlgFocus        "RightSideArray"
+        RightSelection% = RightSelection% + Direction%
+        DlgValue        "RightSideArray",           RightSelection%
+        SetPushButtons( RightSelection% )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+'##########
+
+      Case "LeftSideArray", "RemoveFieldButton"
+
+' For every click on a field in the left array, move that field to the other pane; for
+' every click on the "Remove field" button, remove a field from the right array back to
+' the original pane.
+
+        If Id$ = "LeftSideArray" Then
+            LeftSelection% = DlgValue( "LeftSideArray" )
+            For i = 0 To UBRecordFields%
+              If LeftSelection% = RecordFields( i ).tLeftSideIndex Then
+                  RecordFields( i ).tLeftSideIndex = FIELD_MOVED
+                  Exit For
+              End If
+            Next i
+          Else
+            RightSelection% = DlgValue( "RightSideArray" )
+            For i = 0 To UBRecordFields%
+              If RightSelection% = RecordFields( i ).tRightSideIndex Then
+                  RecordFields( i ).tRightSideIndex = FIELD_MOVED
+                  RecordFields( i ).tLeftSideIndex  = RecordFields( i ).tLineNumber
+                Else
+                  RightSideIndex% = RecordFields( i ).tRightSideIndex
+                  If RightSideIndex% > RightSelection% Then
+                      RecordFields( i ).tRightSideIndex = RightSideIndex% - 1
+                  End If
+              End If
+            Next i
+        End If
+        PopulateDisplays( ADD_FIELDS )
+        DlgListBoxArray "RightSideArray",           RightSideFields()
+        DlgListBoxArray "LeftSideArray",            LeftSideFields()
+
+' When a field is selected in the left pane, highlight (indicating the default selection)
+' the same row in the dialog box window as had just been clicked on by the mouse, to make
+' selection of a nearby field a little easier.
+
+        If Id$ = "LeftSideArray" Then
+            If LeftSelection% > UBound( LeftSideFields ) Then
+                LeftSelection% = UBound( LeftSideFields )
+            End If
+            DlgValue        Id$,                        LeftSelection%
+            If DlgVisible( "ExistingLinksList" ) Then
+                DlgValue        "ExistingLinksList",        0
+            End If
+            SetPushButtons( RIGHT_SIDE_NOT_EMPTY )
+          Else
+            If RightHandCount% = 0 Then
+                ClearFields
+                RightSelection% = 0
+                SetPushButtons( RIGHT_SIDE_EMPTY )
+              Else
+                DlgValue        "OptionGroupLinkType",      0
+                SetPushButtons( RightSelection% )
+            End If
+            DlgEnable       "RemoveFieldButton",        DISABLED
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+'##########
+
+      Case "RightSideArray"
+
+' A click in the right side array enables or disables some of the buttons.
+
+        RightSelection% = DlgValue( "RightSideArray" )
+        SetPushButtons( RightSelection% )
+
+'##########
+
+      Case "ClearFieldsButton"
+
+' Like a reset, this button removes all fields from the right side array, deselects the
+' option button group, and undoes any selection of an existing link.
+
+        ClearFields
+        RightSelection% = 0
+        SetPushButtons( RIGHT_SIDE_EMPTY )
+        If DlgVisible( "ExistingLinksList" ) Then
+            DlgValue        "ExistingLinksList",        0
+        End If
+        RightHandCount% = 0
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+'##########
+
+      Case "OptionButtonAction", "OptionButtonConstituent", "OptionButtonProvenance", _
+           "OptionButtonReproduction", "OptionButtonGenLink", "OptionButtonGenSequence"
+
+' Selecting an option button with at least two fields in the right side array enables
+' linking those fields. Selecting an option button cancels any selection of an existing
+' link, as adding and deleting links are mutually exclusive operations.
+
+        If DlgVisible( "ExistingLinksList" ) Then
+            DlgValue        "ExistingLinksList",        0
+        End If
+        If RightHandCount% = 0 Then
+            SetPushButtons( RIGHT_SIDE_EMPTY )
+          Else
+            SetPushButtons( RIGHT_SIDE_NOT_EMPTY )
+        End If
+
+'##########
+
+      Case "ExistingLinksList"
+
+' If an existing link is selected, all the fields so linked are moved to the right side
+' array. The likely action on the link is to remove it. Selecting an existing link
+' cancels any selection of an option button.
+
+        If DlgValue( "ExistingLinksList" ) > 0 Then
+            ClearFields
+            TempString$         = DlgText( "ExistingLinksList" )
+            LinkTypeToRemove$   = Right$( TempString$, 1 )
+            p                   = InStr( TempString$, "\" )
+            TempString$         = Left$( TempString$, p - 1 )
+            p                   = InStr( TempString$, "," )
+            LinkNumberToRemove$ = Trim$( Mid$( TempString$, p + 1 ) )
+            k = 0
+            For i = 0 To UBRecordFields%
+              If InStr( RecordFields( i ).tSubfield8, LinkTypeToRemove$ ) Then
+                  TempString$ = RecordFields( i ).tSubfield8
+                  j = 1
+                  Do
+                    Subfield8$ = GetField( TempString$, j, "," )
+                    If Subfield8$ = "" Then
+                        Exit Do
+                      Else
+                        LinkType$ = Right$( Subfield8$, 1 )
+                        p = InStr( Subfield8$, "." )
+                        q = InStr( Subfield8$, "\" )
+                        If p = 0 Then
+                            LinkNumber$ = Left$( Subfield8$, q - 1 )
+                          Else
+                            LinkNumber$ = Left$( Subfield8$, p - 1 )
+                        End If
+                        If LinkNumber$ = LinkNumberToRemove$ Then
+                            RecordFields( i ).tLeftSideIndex = FIELD_MOVED
+                            If LinkTypeToRemove$ Like "[ax]" Then
+                                SequenceNumber% = Val( Mid$( Subfield8$, p + 1, ( q - p ) - 1 ) )
+                                RecordFields( i ).tRightSideIndex = SequenceNumber% - 1
+                                If SequenceNumber% > MaxSequenceNumber% Then
+                                    MaxSequenceNumber% = SequenceNumber%
+                                End If
+                              Else
+                                RecordFields( i ).tRightSideIndex = k
+                                k = k + 1
+                            End If
+                            Exit Do
+                        End If
+                    End If
+                    j = j + 1
+                  Loop Until Subfield8$ = ""
+              End If
+            Next i
+            PopulateDisplays( SHOW_LINKS )
+            DlgListBoxArray "RightSideArray",           RightSideFields()
+            DlgListBoxArray "LeftSideArray",            LeftSideFields()
+            DlgEnable       "ClearFieldsButton",        ENABLED
+            DlgText         "GoButton",                 "Remove selected link"
+        End If
+
+    End Select
+
+End Select
+
+End Function
+'135054755
+'
+'Macro name: LinkAndSequenceFields
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 4/17/2023 9:57:58 AM using "MacroBookInspector" macro by Walter F. Nickeson.
