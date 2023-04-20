@@ -1,11 +1,12 @@
-'MacroName:SearchAuthority5XX.2023.03
-'MacroDescription:Helps search the related headings (5XX fields) in an authority record.
+'MacroName:SearchAuthority5XX.2023.05
+'MacroDescription:Retrieves the authority record for a related heading (a 5XX field)
+' listed in an authority record.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 19 April 2023.
+' Last updated: 20 April 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -17,23 +18,24 @@
 ' How it works: Run this macro while viewing an online authority record (cursor position
 ' is irrelevant). The macro displays the searchable 5XX fields in the record, grouped by
 ' type of relationship to the authorized heading; select a heading to retrieve its
-' authority record.
+' authority record. The display spells out in words the nature of the relationship
+' between the headings, which may be helpful if you can't remember the codes.
 '
 ' These are the searchable headings: personal names (500), corporate and meeting names
 ' (510 and 511), uniform titles (530), topical terms (550), geographic names (551),
 ' general subject subdivisions (580), and form subdivisions (585). Excluded are genre
-' headings (555) and the defined but not implemented fields for named events (547),
-' chronological terms (548), medium of performance terms (562), and chronological
-' subdivisions (582). Genre headings are not searchable because the macro language has no
-' provisions for that. In the dialog box, the headings are grouped by type, according to
-' the codes in subfield $w or terms in subfield $i. Up to three groups are displayed. The
-' most common relationships--earlier and later headings for names, broader headings for
-' subjects--are in the first group, if present. The second and third groups (if there are
-' that many types of relationships) contain the remaining headings, presented in the
-' order in which they appear in the record. Headings whose relationship to the 1XX field
-' is not specified appear in the last group. If the headings represent more than three
-' types of relationships, the last group consists of all the other relationships lumped
-' together as "other."
+' headings (555), named events (547), chronological terms (548), medium of performance
+' terms (562), and chronological subdivisions (582). These headings are not searchable
+' because the macro language has no provisions for them. In the dialog box, the
+' searchable headings are grouped by type, according to the codes in subfield $w or terms
+' in subfield $i. Up to three groups are displayed. The most common relationships--
+' earlier and later headings for names, broader headings for subjects--are in the first
+' group, if present. The second and third groups (if there are that many types of
+' relationships) contain the remaining headings, presented in the order in which they
+' appear in the record. Headings whose relationship to the 1XX field is not specified
+' appear in the last group. If the headings represent more than three types of
+' relationships, the last group consists of all the other relationships lumped together
+' as "other."
 '
 ' The search done by the macro is actually an expanded authority browse. This is because
 ' a search in the Authority File is actually a keyword search, and in the list of
@@ -42,8 +44,8 @@
 ' its result, with the searched heading at or near the top, and usually already selected
 ' for easy retrieval. Because the searched heading may not be the first item in the list,
 ' the macro searches the list for the matching heading. If the matching item is an
-' authority record the macro is finished. Because several windows may be opened during
-' the macro's execution, the screen will be very active.
+' authority record the macro is finished. Because several authority record windows may be
+' opened and closed during the macro's execution, the screen will appear very active.
 '
 ' For consistency's sake, all the browses are expanded, rather than simple, browses, even
 ' if there is no expanded term to use.
@@ -97,7 +99,7 @@ Global a5XXFields() As String
 Sub Main
 
 Const CRITICAL_MESSAGE          As Integer = 16
-Const DIALOG_BUTTON_CANCEL      As Integer = 102
+Const DLG_STATEMENT_CANCEL      As Integer = 102
 
 Const AUTHORITY_FILE_BRIEF_LIST As Integer = 10
 Const AUTHORITY_RECORD          As Integer = 3
@@ -173,9 +175,9 @@ If CS.GetField( "010", 1, FieldData$ ) Then
     End If
 End If
 
-' Go through the record, line by line, collecting the 5XX headings in the array. This
-' pass also picks up the 1XX heading and fixes it for proper display, by discarding or
-' finding substitutes for characters not displayable in dialog boxes.
+' Go through the record, line by line, collecting the 5XX headings in the main array.
+' This pass also picks up the 1XX heading and fixes it for proper display, by discarding
+' or finding substitutes for characters not displayable in dialog boxes.
 
 Count5XX% = -1
 i = 1
@@ -197,8 +199,8 @@ Do
           End If
       End If
 
-' For each 5XX heading, add a subfield $a at the beginning to ease processing later. Leave
-' 58X subdivisions with their initial subfield alone.
+' For each 5XX heading, add a subfield $a at the beginning to ease processing later.
+' However, leave 58X subdivisions with their initial subfield alone.
 
       If Left$( Tag$, 1 ) = "5" Then
 
@@ -241,7 +243,7 @@ Do
                   RelationshipInformation$ = "z"
               End If
 
-' Load the master array with the information collected.
+' Load the main array with the information collected.
 
               Count5XX%                                 = Count5XX% + 1
               ReDim Preserve a5XXFields( aHEADING_TAG, Count5XX% )
@@ -309,37 +311,41 @@ If Count5XX% < 0 Then
 End If
 
 ' With the unsearchable headings (if any) taken care of, move on to the ones to search.
-' Sort the terms in the master array so the common terms appear first. A simple bubble
-' sort suffices to order them by the single-letter code in the first element of each row,
-' which was assigned by the function "AssignLabels." Headings with the same code are not
-' further sorted, and because of the type of sort, remain in the order in which they
-' appear in the record.
+' If the main array contains more than one term, sort them so the common terms appear
+' first. A simple bubble sort suffices to order them by the single-letter code in the
+' first element of each row, which was assigned by the function "AssignLabels." Headings
+' with the same code are not further sorted, and because of the type of sort, remain in
+' the order in which they appear in the record. Even if the main array contains only one
+' term, continue with the macro, rather than searching it immediately, simply so it can
+' be displayed and its relationship put into words from a code.
 
-Do
-  Swapped = FALSE
-  For i = 0 To Count5XX% - 1
-    If a5XXFields( aRELATION_INFO, i ) > a5XXFields( aRELATION_INFO, i + 1 ) Then
-        Temp_RELATION_INFO$                   = a5XXFields( aRELATION_INFO, i )
-        Temp_RELATIONSHIP$                    = a5XXFields( aRELATIONSHIP, i )
-        Temp_RAW_HEADING$                     = a5XXFields( aRAW_HEADING, i )
-        Temp_DISPLAY_HEADING$                 = a5XXFields( aDISPLAY_HEADING, i )
-        Temp_HEADING_TAG$                     = a5XXFields( aHEADING_TAG, i )
-        a5XXFields( aRELATION_INFO, i )       = a5XXFields( aRELATION_INFO, i + 1 )
-        a5XXFields( aRELATIONSHIP, i)         = a5XXFields( aRELATIONSHIP, i + 1 )
-        a5XXFields( aRAW_HEADING, i )         = a5XXFields( aRAW_HEADING, i + 1 )
-        a5XXFields( aDISPLAY_HEADING, i)      = a5XXFields( aDISPLAY_HEADING, i + 1 )
-        a5XXFields( aHEADING_TAG, i )         = a5XXFields( aHEADING_TAG, i + 1 )
-        a5XXFields( aRELATION_INFO, i + 1 )   = Temp_RELATION_INFO$
-        a5XXFields( aRELATIONSHIP, i + 1 )    = Temp_RELATIONSHIP$
-        a5XXFields( aRAW_HEADING, i + 1 )     = Temp_RAW_HEADING$
-        a5XXFields( aDISPLAY_HEADING, i + 1 ) = Temp_DISPLAY_HEADING$
-        a5XXFields( aHEADING_TAG, i + 1 )     = Temp_HEADING_TAG$
-        Swapped = TRUE
-    End If
-  Next i
-Loop Until Swapped = FALSE
+If UBound( a5XXFields, 2 ) > 0 Then
+    Do
+      Swapped = FALSE
+      For i = 0 To Count5XX% - 1
+        If a5XXFields( aRELATION_INFO, i ) > a5XXFields( aRELATION_INFO, i + 1 ) Then
+            Temp_RELATION_INFO$                   = a5XXFields( aRELATION_INFO, i )
+            Temp_RELATIONSHIP$                    = a5XXFields( aRELATIONSHIP, i )
+            Temp_RAW_HEADING$                     = a5XXFields( aRAW_HEADING, i )
+            Temp_DISPLAY_HEADING$                 = a5XXFields( aDISPLAY_HEADING, i )
+            Temp_HEADING_TAG$                     = a5XXFields( aHEADING_TAG, i )
+            a5XXFields( aRELATION_INFO, i )       = a5XXFields( aRELATION_INFO, i + 1 )
+            a5XXFields( aRELATIONSHIP, i)         = a5XXFields( aRELATIONSHIP, i + 1 )
+            a5XXFields( aRAW_HEADING, i )         = a5XXFields( aRAW_HEADING, i + 1 )
+            a5XXFields( aDISPLAY_HEADING, i)      = a5XXFields( aDISPLAY_HEADING, i + 1 )
+            a5XXFields( aHEADING_TAG, i )         = a5XXFields( aHEADING_TAG, i + 1 )
+            a5XXFields( aRELATION_INFO, i + 1 )   = Temp_RELATION_INFO$
+            a5XXFields( aRELATIONSHIP, i + 1 )    = Temp_RELATIONSHIP$
+            a5XXFields( aRAW_HEADING, i + 1 )     = Temp_RAW_HEADING$
+            a5XXFields( aDISPLAY_HEADING, i + 1 ) = Temp_DISPLAY_HEADING$
+            a5XXFields( aHEADING_TAG, i + 1 )     = Temp_HEADING_TAG$
+            Swapped = TRUE
+        End If
+      Next i
+    Loop Until Swapped = FALSE
+End If
 
-' From the master array, fill the three arrays which populate the list boxes in the
+' From the main array, fill the three sub-arrays which populate the list boxes in the
 ' dialog box. Providing three arrays seems to work for most headings to display all the
 ' relationships: one array for earlier/later/broader/narrower, one for another kind of
 ' relationship, and the third for other or unspecified relationships. If there are more
@@ -365,9 +371,9 @@ For ArrayNumber% = 1 To 3
   End If
 Next ArrayNumber%
 
-' The count of headings in each of the arrays is necessary to identify the row in the
-' master array to search. For example, row 2 in the third array may be row 7 in the
-' master array. An unused array is not initialized and throws an error when its upper
+' The count of headings in each of the sub-arrays is necessary to identify the row in the
+' main array to search. For example, row 2 in the third sub-array may be row 7 in the
+' main array. An unused array is not initialized and throws an error when its upper
 ' bound is queried, so nothing is counted from that one. If arrays 2 or 3 are left empty,
 ' their corresponding list boxes in the dialog box are hidden.
 
@@ -400,9 +406,9 @@ End Dialog
 Dim Dialog1 As Dialog1Definition
 On Error Resume Next
 Dialog Dialog1
-If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
 
-' With the row of the master array returned by the dialog box, retrieve the raw heading
+' With the row of the main array returned by the dialog box, retrieve the raw heading
 ' and its tag. The tag of the 5XX heading to be searched is of course simply a number
 ' greater by 400 than the tag of the heading on its own record. This 1XX tag is necessary
 ' for searching the results list after the browse. It is placed within square brackets,
@@ -515,17 +521,19 @@ If CS.BrowseAuthorityExpanded( 0, SearchLabel$, SearchTerm$, ExpandedTerm$ ) The
         End If
         If OpenSelectedItem Then
 
-' Quite often a successful browse will result in a brief list that contains two matching
-' records, identical except that one of them is a children's heading. The trick is
-' getting the one that is not the children's heading. The way the macro goes about this
-' is by once again using the "SearchList" command. The search term is "children", and by
-' setting the "ExactMatch" parameter to "FALSE," the command can find the term within the
-' larger term "[CHILDREN'S]" that appears in the description column. It also selects the
-' rows that contain the matching search term. Use the "GetFirstSelectedItem" to open
-' the first selection. Because it's a children's heading, immediately close that record
-' and check for a preceding or following heading. In a list of two items, with one having
-' been selected, the other heading must be the LCSH sought. If none of the items in a
-' brief list is labeled as a children's heading, then just open the first one.
+' Quite often an LC subject heading browse will result in a brief list that contains two
+' matching records, identical except that one of them is an LC Children's Subject Heading
+' authority record. The trick is getting the one that is not the children's heading. The
+' way the macro goes about this is by once again using the "SearchList" command. The
+' search term is "children", and by setting the "ExactMatch" parameter to "FALSE," the
+' command can find the term within the larger term "[CHILDREN'S]" that appears in the
+' description column. The command also selects the rows that contain the matching search
+' term. Use the "GetFirstSelectedItem" to open the first selection. Because it's a
+' children's heading, immediately close that record and check for a preceding or
+' following heading. In a list of two items, with one having been selected, the other
+' heading must be the LCSH sought. If none of the items in a brief list is labeled as a
+' children's heading, as in a name search but also in some regular subject searches, then
+' just open the first one.
 
             If CS.ItemType% = AUTHORITY_FILE_BRIEF_LIST Then
                 Matches% = CS.SearchList( "children", "Description", FALSE )
@@ -601,8 +609,8 @@ End Sub
 Sub FillDialogBoxArrays( WhichArray%, InArray() As String, All5XXIndex%, ArrayLabel$ )
 
 ' Given the sub-array to fill (1, 2, or 3, corresponding to the three list boxes in the
-' dialog box), and the index of the master array, this routine fills the sub-arrays from
-' the master array and selects a relationship term or phrase for the caption of each list
+' dialog box), and the index of the main array, this routine fills the sub-arrays from
+' the main array and selects a relationship term or phrase for the caption of each list
 ' box.
 
 Dim InitialRelationshipCode$
@@ -614,10 +622,10 @@ Dim Mixed                    : Mixed = FALSE
 
 Dim i As Integer, j As Integer
 
-' Starting with the previous array's ending row (which will of course be 0 for the first
-' array), add terms to the array if they match what's already in the array (which will of
-' course be nothing if the array is just beginning to be filled). As soon as a new
-' relationship is found, it goes into the next array.
+' Starting with the previous sub-array's ending row (which will of course be 0 for the
+' first array), add terms to the array if they match what's already in the array (which
+' will be nothing if the array is just beginning to be filled). As soon as a new
+' relationship is found, it goes into the next sub-array.
 
 For i = All5XXIndex% To Count5XX%
   If j = 0 Then
@@ -627,11 +635,18 @@ For i = All5XXIndex% To Count5XX%
       SubsequentRelationshipCode$ = a5XXFields( aRELATION_INFO, i )
       SubsequentRelationshipTerm$ = a5XXFields( aRELATIONSHIP, i )
   End If
-  If ( j = 0 ) Or ( SubsequentRelationshipCode$ = InitialRelationshipCode$ Or WhichArray% = 3 ) Then 'If the relationship code matches, check the relationship term.
+
+' If the relationship code matches, check the relationship term.
+
+  If ( j = 0 ) Or ( SubsequentRelationshipCode$ = InitialRelationshipCode$ Or WhichArray% = 3 ) Then
       If InitialRelationshipTerm$ = "Unspecified relationship:" Then
           Mixed = TRUE
       End If
-      If ( j = 0 ) Or ( SubsequentRelationshipTerm$ = InitialRelationshipTerm$ Or WhichArray% = 3 ) Then 'If the term matches, add heading to the array. and set the label for that relationship.
+
+' If the term matches, add the heading to the array, and set the label for that
+' relationship.
+
+      If ( j = 0 ) Or ( SubsequentRelationshipTerm$ = InitialRelationshipTerm$ Or WhichArray% = 3 ) Then
           ReDim Preserve InArray( j )
           InArray( j ) = a5XXFields( aDISPLAY_HEADING, All5XXIndex% )
           j            = j + 1
@@ -1249,7 +1264,9 @@ Do While Index% <= TempStringLength%
       Index%            = Index% + 1
 
     Case Else
+
   End Select
+
   Index% = Index% + 1
 
 Loop
@@ -1292,12 +1309,14 @@ End Function
 
 Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Const CONTROL_CHANGE  As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
-Const INITIALIZE      As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
-Const INVISIBLE       As Integer = 0   'The value to make a dialog box control invisible.
-Const KEEP_DLG_OPEN   As Integer = -1  'The value of the dialog box function to keep a dialog box open.
-Const VISIBLE         As Integer = 1   'The value to make a dialog box control visible.
-Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+Const CONTROL_CHANGE  As Integer = 2
+Const INITIALIZE      As Integer = 1
+Const INVISIBLE       As Integer = 0
+Const KEEP_DLG_OPEN   As Integer = -1
+Const VISIBLE         As Integer = 1
+Const WARNING_MESSAGE As Integer = 48
+
+Const NO_SELECTION    As Integer = -1
 
 Select Case Action%
 
@@ -1306,19 +1325,19 @@ Select Case Action%
 ' List boxes whose arrays have not been used are made invisible.
 
     DlgValue   "ListBox1",      0
-    DlgValue   "ListBox2",      -1
-    DlgValue   "ListBox3",      -1
+    DlgValue   "ListBox2",      NO_SELECTION
+    DlgValue   "ListBox3",      NO_SELECTION
     DlgVisible "Unsearchable1", INVISIBLE
     DlgVisible "Unsearchable2", INVISIBLE
     DlgVisible "Unsearchable3", INVISIBLE
-    If Array2Count% = -1 Then
+    If Array2Count% = NO_SELECTION Then
         DlgVisible "ListBox2",      INVISIBLE
         DlgVisible "Legend2",       INVISIBLE
         DlgVisible "Unsearchable1", VISIBLE
       Else
         DlgVisible "Unsearchable1", INVISIBLE
     End If
-    If Array3Count% = -1 Then
+    If Array3Count% = NO_SELECTION Then
         DlgVisible "ListBox3",      INVISIBLE
         DlgVisible "Legend3",       INVISIBLE
         If DlgVisible( "Unsearchable1" ) Then
@@ -1332,6 +1351,7 @@ Select Case Action%
     End If
     DlgFocus   "ListBox1"
 
+
   Case CONTROL_CHANGE
 
     Select Case Id$
@@ -1341,32 +1361,32 @@ Select Case Action%
 ' time to be able to have a selection.
 
       Case "ListBox1"
-        DlgValue   "ListBox2",      -1
-        DlgValue   "ListBox3",      -1
+        DlgValue   "ListBox2",      NO_SELECTION
+        DlgValue   "ListBox3",      NO_SELECTION
 
       Case "ListBox2"
-        DlgValue   "ListBox1",      -1
-        DlgValue   "ListBox3",      -1
+        DlgValue   "ListBox1",      NO_SELECTION
+        DlgValue   "ListBox3",      NO_SELECTION
 
       Case "ListBox3"
-        DlgValue   "ListBox1",      -1
-        DlgValue   "ListBox2",      -1
+        DlgValue   "ListBox1",      NO_SELECTION
+        DlgValue   "ListBox2",      NO_SELECTION
 
       Case "OK"
 
 ' To search the results list, the raw heading must be used (as it preserves all
-' diacritical marks and special characters). The index of that heading in the master
+' diacritical marks and special characters). The index of that heading in the main
 ' array has to be calculated from which list box is chosen.
 
-        If DlgValue( "ListBox1" ) > -1 Then
+        If DlgValue( "ListBox1" ) > NO_SELECTION Then
             SearchTerm$  = DlgText( "ListBox1" )
             SearchCount% = DlgValue( "ListBox1" )
-          ElseIf DlgValue( "ListBox2" ) > -1 Then
+          ElseIf DlgValue( "ListBox2" ) > NO_SELECTION Then
             SearchTerm$  = DlgText( "ListBox2" )
             SearchCount% = DlgValue( "ListBox2" ) + Array1Count% + 1
-          ElseIf DlgValue( "ListBox3" ) > -1 Then
+          ElseIf DlgValue( "ListBox3" ) > NO_SELECTION Then
             SearchTerm$  = DlgText( "ListBox3" )
-            SearchCount% = DlgValue( "ListBox2" ) + Array2Count% + 1
+            SearchCount% = DlgValue( "ListBox3" ) + Array1Count% + Array2Count% + 2
         End If
         If SearchTerm$ = "" Then
             MsgBox "Please select a term to search!", WARNING_MESSAGE, WaltsMacros$
@@ -1378,8 +1398,8 @@ Select Case Action%
 End Select
 
 End Function
-'138252922
+'140053327
 '
 'Macro name: SearchAuthority5XX
-'Macro book: C:\Users\Walt\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 4/19/2023 8:51:19 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 4/20/2023 10:23:27 AM using "MacroBookInspector" macro by Walter F. Nickeson.
