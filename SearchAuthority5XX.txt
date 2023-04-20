@@ -1,11 +1,11 @@
-'MacroName:SearchAuthority5XX.2023.02
+'MacroName:SearchAuthority5XX.2023.03
 'MacroDescription:Helps search the related headings (5XX fields) in an authority record.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 19 March 2023.
+' Last updated: 19 April 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -524,12 +524,15 @@ If CS.BrowseAuthorityExpanded( 0, SearchLabel$, SearchTerm$, ExpandedTerm$ ) The
 ' rows that contain the matching search term. Use the "GetFirstSelectedItem" to open
 ' the first selection. Because it's a children's heading, immediately close that record
 ' and check for a preceding or following heading. In a list of two items, with one having
-' been selected, the other heading must be the LCSH sought.
+' been selected, the other heading must be the LCSH sought. If none of the items in a
+' brief list is labeled as a children's heading, then just open the first one.
 
             If CS.ItemType% = AUTHORITY_FILE_BRIEF_LIST Then
                 Matches% = CS.SearchList( "children", "Description", FALSE )
                 If Matches% = 0 Then
-                    Exit Sub
+                    If CS.GetFirstItem = FALSE Then
+                        GoTo Failure:
+                    End If
                   Else
                     If CS.GetFirstSelectedItem Then
                         CS.CloseRecord( FALSE )
@@ -1375,8 +1378,8 @@ Select Case Action%
 End Select
 
 End Function
-'137952726
+'138252922
 '
 'Macro name: SearchAuthority5XX
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 4/19/2023 3:35:11 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\Walt\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 4/19/2023 8:51:19 PM using "MacroBookInspector" macro by Walter F. Nickeson.
