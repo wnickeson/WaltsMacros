@@ -354,7 +354,7 @@ If CS.GetField( "1..", 1, FieldData$ ) Then
     AuthTag                     = Left$( FieldData$, 3 )
     AuthorityData.tHeadingType   = Mid$( FieldData$, 2, 2 )
     If AuthTag = "130" Then
-        AuthorityData.tIndicators = Mid$( FieldData$, 5, 1 ) & Mid$( FieldData$, 4, 1 )
+        AuthorityData.tIndicators = Mid$( FieldData$, 4, 1 ) & Mid$( FieldData$, 5, 1 )
       Else
         AuthorityData.tIndicators = Mid$( FieldData$, 4, 2 )
     End If
