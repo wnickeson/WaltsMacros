@@ -66,6 +66,9 @@
 '    M    e    â    s    z    o    è    l    y
 '   77  101  226  115  122  111  232  108  121
 '
+' The MARC-8 character set is at https://www.loc.gov/marc/specifications/specchartables.html,
+' and is dated "December 2007."
+'
 ' The macro window arranges the code points of the selection or field in pages containing
 ' up to 80 characters each. The default view is to show MARC-8 encoding; a push button
 ' switches to a view showing Unicode encoding. The macro also offers limited searching
@@ -101,8 +104,8 @@
 '
 ' Although the authority record format allows for either encoding to be used, LC's
 ' "Guidelines for MARC 21 authority records" call for exclusive use of MARC-8 (actually,
-' the guidelines simply instruct not to use code "a" in Leader/09, "Character Coding
-' scheme").
+' the guidelines simply instruct not to use code "a" for "Unicode" in Leader/09,
+' "Character Coding scheme").
 '
 ' The macro uses the command "GetFieldUnicode" to retrieve the code points of the field.
 ' Because there is no corresponding command for a selection within a field, such as
@@ -2187,8 +2190,8 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'2191163181
+'2194163326
 '
 'Macro name: ShowCharacterCodes
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:51 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 5/30/2023 11:49:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.
