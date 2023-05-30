@@ -1,12 +1,11 @@
-'MacroName:SearchAuthority5XX.2023.05
-'MacroDescription:Retrieves the authority record for a related heading (a 5XX field)
-' listed in an authority record.
+'MacroName:SearchAuthority5XX.2023.06
+'MacroDescription:Helps search the related headings (5XX fields) in an authority record.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 20 April 2023.
+' Last updated: 19 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -26,16 +25,15 @@
 ' general subject subdivisions (580), and form subdivisions (585). Excluded are genre
 ' headings (555), named events (547), chronological terms (548), medium of performance
 ' terms (562), and chronological subdivisions (582). These headings are not searchable
-' because the macro language has no provisions for them. In the dialog box, the
-' searchable headings are grouped by type, according to the codes in subfield $w or terms
-' in subfield $i. Up to three groups are displayed. The most common relationships--
-' earlier and later headings for names, broader headings for subjects--are in the first
-' group, if present. The second and third groups (if there are that many types of
-' relationships) contain the remaining headings, presented in the order in which they
-' appear in the record. Headings whose relationship to the 1XX field is not specified
-' appear in the last group. If the headings represent more than three types of
-' relationships, the last group consists of all the other relationships lumped together
-' as "other."
+' because the macro language has no provisions for them. In the dialog box, the headings
+' are grouped by type, according to the codes in subfield $w or terms in subfield $i. Up
+' to three groups are displayed. The most common relationships--earlier and later
+' headings for names, broader headings for subjects--are in the first group, if present.
+' The second and third groups (if there are that many types of relationships) contain the
+' remaining headings, presented in the order in which they appear in the record. Headings
+' whose relationship to the 1XX field is not specified appear in the last group. If the
+' headings represent more than three types of relationships, the last group consists of
+' all the other relationships lumped together as "other."
 '
 ' The search done by the macro is actually an expanded authority browse. This is because
 ' a search in the Authority File is actually a keyword search, and in the list of
@@ -62,7 +60,7 @@ Declare Sub FillDialogBoxArrays( WhichArray%, InArray() As String, Index%, Array
 Declare Function AssignLabels( InString$ )                              As String
 Declare Function GetHeading$( InString$, Tag$, Reason%, ExpandedTerm$ ) As String
 Declare Function GetSubfieldData( n%, FieldData$, SubfieldCode$ )       As String
-Declare Function MakeDisplayable( InputString$ )                        As String
+Declare Function ConvertTo8859( InputString$ )                        As String
 Declare Function Normalize( InString$, Tag$ )                           As String
 Declare Function Plural( Label$, n% )                                   As String
 
@@ -187,7 +185,7 @@ Do
       Tag$ = Left$( FieldData$, 3 )
       If Left$( Tag$, 1 ) Like "1" Then
           EstablishedHeading$ = Mid$( FieldData$, 6 )
-          EstablishedHeading$ = MakeDisplayable( EstablishedHeading$ )
+          EstablishedHeading$ = ConvertTo8859( EstablishedHeading$ )
           Start% = 1
           p = InStr( Start%, EstablishedHeading$, "&" )
           If p > 0 Then
@@ -252,7 +250,7 @@ Do
               a5XXFields( aRELATIONSHIP, Count5XX% )    = Mid$( TempString$, 2 )
               RelatedHeading$                           = GetHeading( FieldData$, Tag$, DISPLAY, ExpandedTerm$ )
               a5XXFields( aRAW_HEADING, Count5XX% )     = RelatedHeading$
-              a5XXFields( aDISPLAY_HEADING, Count5XX% ) = MakeDisplayable( RelatedHeading$ )
+              a5XXFields( aDISPLAY_HEADING, Count5XX% ) = ConvertTo8859( RelatedHeading$ )
               a5XXFields( aHEADING_TAG, Count5XX% )     = Tag$
           End Select
       End If
@@ -721,11 +719,11 @@ End Function
 
 '****************************************************************************************
 
-Function MakeDisplayable( InputString$ ) As String
+Function ConvertTo8859( InputString$ ) As String
 
-' This function converts the MARC21 string to the subset of Windows-1252 that can display
-' in the dialog box, just to make it easier to read. Real normalization of the search
-' strings for browsing takes place after the heading has been selected.
+' This function converts the MARC21 string to ISO/IEC 8859-1 encoding, to make it
+' possibly easier to read in the dialog box. Real normalization of the search strings for
+' browsing takes place after the heading has been selected.
 
 Dim Character$               : Character$ = " "
 Dim CharNext%
@@ -951,7 +949,7 @@ If Left$( TempString$, 2 ) = "$a" Then
     TempString$ = Trim$( Mid$( TempString$, 3 ) )
 End If
 
-MakeDisplayable = TempString$
+ConvertTo8859 = TempString$
 
 End Function
 
@@ -1398,8 +1396,8 @@ Select Case Action%
 End Select
 
 End Function
-'140053327
+'140053299
 '
 'Macro name: SearchAuthority5XX
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 4/20/2023 10:23:27 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 5/30/2023 10:57:09 AM using "MacroBookInspector" macro by Walter F. Nickeson.

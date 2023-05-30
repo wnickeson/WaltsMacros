@@ -2619,5 +2619,5 @@ End Function
 '2620107017
 '
 'Macro name: CutterMaker2
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 4/17/2023 9:50:50 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 5/30/2023 10:53:05 AM using "MacroBookInspector" macro by Walter F. Nickeson.

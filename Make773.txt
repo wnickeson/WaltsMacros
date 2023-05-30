@@ -382,5 +382,5 @@ End Sub
 '38312307
 '
 'Macro name: Make773
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 4/17/2023 9:58:02 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 5/30/2023 10:59:22 AM using "MacroBookInspector" macro by Walter F. Nickeson.

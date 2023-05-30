@@ -3131,5 +3131,5 @@ End Function
 '3132114298
 '
 'Macro name: RDAHelper(PrintedMaterial)
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 4/17/2023 9:52:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 5/30/2023 10:53:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.

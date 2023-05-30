@@ -1,4 +1,4 @@
-'MacroName:CopyFields.2022.04
+'MacroName:CopyFields.2023.01
 'MacroDescription:Copies multiple fields from one bibliographic record and returns to
 ' another to paste them in. The copied fields can be a block of contiguous fields or a
 ' collection of separate, non-contiguous fields.
@@ -11,7 +11,7 @@
 ' Library District, 2007, but all responsibility for the functionality of this macro is
 ' mine alone.
 '
-' Last updated: 26 June 2022.
+' Last updated: 19 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -79,7 +79,7 @@ Declare Sub MoveFields( Selection%, _
                         ToFieldsArray() As String, _
                         ToLinesArray() As Integer )
 
-Declare Function ConvertTo1252( InputString$ ) As String
+Declare Function ConvertTo8859( InputString$ ) As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
@@ -314,7 +314,7 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
 ' It is possible, however, to convert or provide substitutions for some MARC21 characters
 ' for proper display.
 
-          FieldDataConverted$ = ConvertTo1252( FieldDataConverted$ )
+          FieldDataConverted$ = ConvertTo8859( FieldDataConverted$ )
       End If
 
       ReDim Preserve FieldsAvailable( i )
@@ -678,10 +678,10 @@ End Sub
 
 '****************************************************************************************
 
-Function ConvertTo1252( InputString$ ) As String
+Function ConvertTo8859( InputString$ ) As String
 
-' This function converts the MARC21 string to the subset of Windows-1252 that can display
-' in the dialog box, just to make it easier to read.
+' This function converts the MARC21 string to ISO/IEC 8859-1 encoding, to make it
+' possibly easier to read in the dialog box.
 
 Dim Character$               : Character$ = " "
 Dim CharNext%
@@ -900,7 +900,7 @@ For i = 1 To Len( InputString$ ) - 1
 
 Next i
 
-ConvertTo1252 = TempString$
+ConvertTo8859 = TempString$
 
 End Function
 
@@ -1055,8 +1055,8 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'105940143
+'105940126
 '
 'Macro name: CopyFields
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 4/17/2023 9:50:40 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 5/30/2023 10:52:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.

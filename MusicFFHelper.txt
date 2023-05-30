@@ -1958,5 +1958,5 @@ End Function
 '195989050
 '
 'Macro name: MusicFFHelper
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 4/17/2023 9:53:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 5/30/2023 10:57:04 AM using "MacroBookInspector" macro by Walter F. Nickeson.

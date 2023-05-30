@@ -5,7 +5,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 19 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -77,15 +77,13 @@
 ' The macro can simply apply the BASIC commands UCase and LCase to characters whose code
 ' points are below decimal 128, which includes the 26-letter English alphabet. The macro
 ' expects that code points above 127 encode OCLC-MARC characters, and knows how to change
-' their case accordingly. However, those code points may also encode Windows-1252 (or
-' ISO-8859-1) characters, for which the default case conversion rules don't work. The
-' macro can't tell, as it runs, which encoding has been used for any particular
-' character. To force it to convert case with characters encoded with Windows-1252, mark
-' the checkbox in the dialog box. Unfortunately, the encoding used may not be known
-' beforehand, so to properly change the case of some characters it may be necessary to
-' run the macro a second time on the original text string, with the checkbox marked.
-'
-'
+' their case accordingly. However, those code points may also encode Windows-1252
+' characters, for which the default case conversion rules don't work. The macro can't
+' tell, as it runs, which encoding has been used for any particular character. To force
+' it to convert case with characters encoded with Windows-1252, mark the checkbox in the
+' dialog box. Unfortunately, the encoding used may not be known beforehand, so to
+' properly change the case of some characters it may be necessary to run the macro a
+' second time on the original text string, with the checkbox marked.
 '
 ' Unicode characters encoded as Numeric Character References (NCRs) are, for the most
 ' part, beyond the capability of this macro to change. These characters may be
@@ -1246,8 +1244,8 @@ Select Case Action%
 End Select
 
 End Function
-'125045902
+'124845878
 '
 'Macro name: ChangeCase
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 4/17/2023 9:59:41 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 5/30/2023 11:00:31 AM using "MacroBookInspector" macro by Walter F. Nickeson.

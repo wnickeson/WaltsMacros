@@ -3154,5 +3154,5 @@ End Function
 '3155130028
 '
 'Macro name: GetAuthority
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 4/17/2023 9:51:17 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 5/30/2023 10:53:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,0 +1,2194 @@
+'MacroName:ShowCharacterCodes.2023.72
+'MacroDescription:Shows the codes for the characters in a selection or a field, with the
+' ability to toggle between displaying (as best the dialog box is able) the corresponding
+' MARC-8 and Unicode characters. Offers searching for the names of MARC-8 and selected
+' Unicode Latin characters by code point.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Last updated: 30 May 2023.
+' Check for the latest versions of this and my other macros at
+' http://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 11 Enterprise &
+' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Select text in a record, or place the cursor in a variable data field,
+' and run the macro. It displays the code points of the characters in the selection, or
+' of all the characters in the whole field, if no text has been selected. The macro also
+' attempts to display the characters in the selection or the field, but because macro
+' dialog boxes use the limited ISO 8859-1 character set, some characters can't be shown.
+' Undisplayable characters are represented in the macro by an empty pair of square
+' brackets: "[]".
+'
+' A MARC 21 record must use one of two character encoding schemes: MARC-8, or the
+' Universal Character Set (UCS or ISO/IEC 10646), here called simply "Unicode." A
+' Connexion record being edited may actually employ both. It can be useful to know how
+' any character in that record has been encoded. For example, macros intended to
+' manipulate MARC-8 characters, but which encounter Unicode characters instead, will
+' probably produce unexpected results. This macro may be able to verify if character
+' encoding is the issue. It can also help distinguish between different characters of
+' similar appearance. For example, Latin capital K and Greek capital Kappa seem to be
+' identical glyphs, but they are actually different letters, or "compatibly equivalent."
+'
+' As an example, this macro shows the decimal code points of the name "Mészöly" and the
+' MARC-8 characters they encode like this:
+'
+'    M   []    s    z    _    l    y
+'   77  233  115  122  246  108  121
+'
+' But the macro can also show the same code points as encoding these Unicode characters:
+'
+'    M    é    s    z    ö    l    y
+'   77  233  115  122  246  108  121
+'
+' Comparing the two views establishes that this fragment of the record, at least, uses
+' Unicode characters, not MARC-8, as two of the MARC-8 characters are nonsense, and don't
+' match what is viewed on the screen. In this example, code point 233 is the MARC-8
+' character "Hacek/combining caron" (which can't display in the dialog box), but also the
+' Unicode character "Latin small letter e with acute." The macro makes it clear which
+' encoding has been used in this bit of the record. Another clue about the encoding
+' employed is that while a modified character, such as the accented "e", may be
+' represented in Unicode as a single, "precomposed" character (as it is here), MARC-8
+' encoding requires that two separate characters, the "e" and the acute accent, be
+' combined into what looks like a single character. In MARC-8 encoding the same name
+' string would therefore be two characters longer and look like this:
+'
+'    M   e     ´    s    z    o    ¨    l    y
+'   77  101  226  115  122  111  232  108  121
+'
+' And the same string as Unicode:
+'
+'    M    e    â    s    z    o    è    l    y
+'   77  101  226  115  122  111  232  108  121
+'
+' The macro window arranges the code points of the selection or field in pages containing
+' up to 80 characters each. The default view is to show MARC-8 encoding; a push button
+' switches to a view showing Unicode encoding. The macro also offers limited searching
+' for the names of some Latin script characters and diacritics. To identify a MARC-8
+' character, enter a number from 158 to 254 in the search box. This range includes many
+' diacritical marks that the dialog box can't display or may not be able to display
+' clearly. (Note that many code points in that range are not defined.) Identification of
+' Unicode characters is limited to a subset of those in Latin script. To identify a
+' Unicode character, enter a four-digit hexadecimal number from 0100 to 1EFF in the
+' search box. The number must start with "0" or "1e" (case doesn't matter) and consist of
+' four hexadecimal digits. The searchable Unicode characters are in the blocks Latin
+' Extended A and B (U+0100-U+024F), Latin Extended Additional (U+1E00-U+1EFF), Spacing
+' Modifier Letters (U+02B0-U+02FF), and Combining Diacritical Marks (U+0300-U+036F). As
+' soon as a valid three-digit decimal number, or four-digit hexadecimal number, is
+' entered into the search box, the name of the character pops up.
+'
+' Code points below decimal 158 are, except for subscript and superscript characters,
+' mostly the standard Latin alphanumeric characters and punctuation of ASCII (Unicode
+' blocks Basic Latin and Latin-1 Supplement (U+0000-U+00FF)), which includes the
+' character set used by the macro language. Because they display more or less clearly,
+' they are not included in the search feature. Otherwise, in addition to the use of the
+' empty box "[]" to represent undisplayable characters, the macro uses vertical bars to
+' identify the delimiter and subscript and superscript characters. The former appears as
+' "|$|", and the latter as, for example, "|2|". Code points not defined in MARC-8 are
+' represented by "[×]".
+'
+' Although this documentation uses the term "MARC-8," the Connexion client actually uses
+' what used to be called OCLC-MARC, a character set which is mostly MARC-8 but which
+' encodes a small number of characters differently. For example, the copyright symbol is
+' encoded as decimal 202 in a record in the Client, but as 195 in MARC-8; the complete
+' set of superscript and subscript numbers and punctuation is part of OCLC-MARC, not
+' MARC-8.
+'
+' Although the authority record format allows for either encoding to be used, LC's
+' "Guidelines for MARC 21 authority records" call for exclusive use of MARC-8 (actually,
+' the guidelines simply instruct not to use code "a" in Leader/09, "Character Coding
+' scheme").
+'
+' The macro uses the command "GetFieldUnicode" to retrieve the code points of the field.
+' Because there is no corresponding command for a selection within a field, such as
+' "GetSelectedTextUnicode" (a command that does not exist), if the selection contains
+' Unicode characters the macro offers to get information about the whole field instead.
+'
+' When pasting content on the Clipboard into a Connexion record, my macro
+' "PasteUnformattedPlus" converts characters in the Unicode block Latin-1 Supplement to
+' their MARC-8 equivalents, in addition to removing some text formatting information.
+'
+' To convert all the characters in a field to MARC-8, use Joel Hahn's macro
+' "CvtDiacritics," available at http://www.hahnlibrary.net/libraries/oml/macros/CvtDiacritics.txt.
+' Joel's macro solves the problem of encoding ambiguity by asking the user which
+' character is intended in cases where either encoding may be formally valid.
+'****************************************************************************************
+
+Option Explicit
+Option Base 1
+
+Declare Sub FillArrays
+Declare Sub FillUnicodeArray1
+Declare Sub FillUnicodeArray2
+Declare Sub FillDisplay( Page%, State% )
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
+
+Global Const DISABLED           As Integer = 0
+Global Const ENABLED            As Integer = 1
+Global Const INITIALIZE         As Integer = 1
+Global Const INVISIBLE          As Integer = 0
+Global Const VISIBLE            As Integer = 1
+
+Global Const aMARC8             As Integer = 1
+Global Const ANSEL_COUNT        As Integer = 67
+Global Const aUNICODE           As Integer = 2
+Global Const CHAR_NAME          As Integer = 2
+Global Const CODEPOINT          As Integer = 1
+Global Const INITIAL            As Integer = 0
+Global Const MAX_CHARS_PER_PAGE As Integer = 80
+Global Const SWITCHED           As Integer = 1
+Global Const UNICODE_COUNT      As Integer = 704
+
+Global CharCount%
+Global CurrentPage%
+Global Remainder%
+Global TotalPages%
+Global WaltsMacros$
+
+Global ShowSearch
+Global ShowUnicode
+
+Global ANSEL()                  As String
+Global CodePoints()             As String
+Global DisplayChars()           As String
+Global HighASCII()              As String
+Global Pages()                  As String
+Global StoreChars()             As String
+Global Unicode()                As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Dim CharA%
+Dim CharByteCount$
+Dim CharT$
+Dim Col%
+Dim FieldData$
+Dim FirstVal%
+Dim LastVal%
+Dim NCRTest$
+Dim Row%
+Dim SearchLegend$
+Dim Source$
+Dim Start%
+Dim StringLength%
+Dim Tag$
+Dim TypeOfWindow%
+
+Dim Selection
+
+Dim i As Integer, p As Integer
+
+SearchLegend$ = "Enter a 3-digit or 4-character code to identify or verify MARC-8 or selected Unicode Latin characters:"
+ShowSearch    = FALSE
+ShowUnicode   = FALSE
+WaltsMacros$  = "[Walt's macros] MacroTools:ShowCharacterCodes"
+
+' First, make sure a record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only when a record is displayed!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Test for whether a selection has been made, and if it has, whether it contains Unicode
+' data. Also test to see if the selection spans fields; if it has, indicated by the
+' presence of a carriage return, the macro can't continue. But if the selection contains
+' Unicode characters the macro can't tell if a carriage return is present.
+
+If CS.GetSelectedText( FieldData$ ) Then
+    Selection = TRUE
+    If FieldData$ = "Data contains non-latin script" Then
+        If MsgBox( "Sorry, this macro can't show character codes when non-Latin script has been selected. Do you want to view the character codes in the whole field instead?", 33, WaltsMacros$ ) = 2 Then
+            Exit Sub
+        End If
+      Else
+        If InStr( FieldData$, Chr$( 013 ) ) > 0 Then
+            MsgBox "Please limit a selection to within a single field.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+          Else
+            GoTo ProcessFieldData:
+        End If
+    End If
+  Else
+    Selection = FALSE
+End If
+
+' The macro always asks for Unicode data from the selection or field, even if the data is
+' simple ASCII. However, the macro language's "GetFieldUnicodeLine" command "has a bug,"
+' according to Joel Hahn. It does not always correctly capture a Unicode code point as a
+' Numeric Character Reference (NCR). An NCR looks like this: "&#x05D1;", and is a way of
+' referring to characters not able to be represented; in this context, it allows the 256-
+' character ASCII set to represent the whole Unicode repertoire. This macro gets around
+' the apparent bug by using the "GetFieldUnicode" command. To do this, it must first get
+' the tag and occurrence of the current or selected field.
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+If CS.GetFieldUnicode( "...", Row%, FieldData$ ) = FALSE Then
+    MsgBox "Sorry, this macro couldn't get the data in the field to analyze.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    If Col% = 0 Then
+        MsgBox "Sorry, this macro works only in the variable fields!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        FieldData$ = Mid( FieldData$, 6 )
+    End If
+End If
+
+ProcessFieldData:
+
+StringLength% = Len( FieldData$ )
+
+p = 1
+i = 1
+
+ReDim CodePoints( 1 )
+FillArrays
+FillUnicodeArray1
+FillUnicodeArray2
+
+' Go through the string of data from the field, testing each 8-byte chunk to see if it's
+' an NCR. If it is, strip the wrapping characters from beginning and end, keeping only
+' the four-byte code. Assign it the ASCII value of zero to make it display as "[]". If
+' the 8 bytes don't indicate an NCR, take just the first byte and treat it as ASCII.
+
+Start% = p
+Do
+  NCRTest$ = Mid$( FieldData$, p, 8 )
+  ReDim Preserve CodePoints( i )
+  ReDim Preserve DisplayChars( i )
+  ReDim Preserve StoreChars( 2, i )
+  If Left$( NCRTest$, 3 ) = "&#x" and Right$( NCRTest$, 1 ) = ";" Then
+      NCRTest$ = Mid$( NCRTest$, 4, 4 )
+      CodePoints( i ) = NCRTest$
+      If NCRTest$ = "01C2" Then  'The delimiter is special: this will display, after a fashion.
+          CharA% = 223
+        Else
+          CharA% = 0
+      End If
+      p = p + 8
+    Else
+      CharT$          = Mid$( FieldData$, p, 1 )
+      CharA%          = Asc( CharT$ )
+      CodePoints( i ) = Trim$( Str$( CharA% ) )
+      p               = p + 1
+  End If
+
+' A Connexion macro dialog box can display most characters in the major Western languages
+' in Latin script, as it uses the ISO/IEC 8859-1 character set, a subset of Windows-1252.
+' If a character is able to be displayed, or an equivalent is available to be displayed,
+' show it; if not, and if a character is a Unicode character encoded as an NCR, display
+' it as "[]". The ampersand has to be doubled, otherwise Windows treats it as the
+' shortcut key marker, which appears as an underscore of the character that follows. The
+' delimiter symbol, "Modifier letter Alveolar click," is encoded in Unicode as U+107B8,
+' and in MARC-8 as decimal 223. Unicode understands that character as the eszett, U+00DF.
+' If it is used as a delimiter, it will display in the macro window as "[$|". Code points
+' below 32 should never appear naturally. Probably as a result of a bug, they may appear
+' when the "GetFieldUnicodeLine" command is used. Put each display character into the
+' two arrays, the MARC8 array being filled first.
+
+  Select Case CharA%
+    Case 0 To 31
+      StoreChars( aMARC8, i )   = "[]"
+      StoreChars( aUNICODE, i ) = "[]"
+      ShowUnicode = TRUE
+      ShowSearch  = TRUE
+    Case 32 To 37, 39 To 126
+      StoreChars( aMARC8, i )   = CharT$
+      StoreChars( aUNICODE, i ) = CharT$
+    Case 38
+      StoreChars( aMARC8, i )   = "&&"
+      StoreChars( aUNICODE, i ) = "&&"
+    Case 223
+      StoreChars( aMARC8, i ) = "|$|"
+      If StoreChars( aMARC8, i ) = "|$|" Then
+          StoreChars( aUNICODE, i ) = "|$|"
+        Else
+          StoreChars( aUNICODE, i ) = HighASCII( aUNICODE, CharA% - 127 )
+      End If
+    Case Else
+      StoreChars( aMARC8, i )   = HighASCII( aMARC8, CharA% - 127 )
+      StoreChars( aUNICODE, i ) = HighASCII( aUNICODE, CharA% - 127 )
+      ShowUnicode = TRUE
+      ShowSearch  = TRUE
+  End Select
+  i = i + 1
+Loop Until p > StringLength%
+
+CharCount% = i - 1
+
+' Figure out the total number of pages required to display the field.
+
+TotalPages% = Int( CharCount% / ( MAX_CHARS_PER_PAGE ) ) + 1
+Remainder%  = CharCount% Mod MAX_CHARS_PER_PAGE
+
+' Pad the arrays with empty strings up to the character limit per page range, as each
+' page display requires all characters in that range of the array to be "displayed," even
+' though there is nothing really to show.
+
+If Remainder% > 0 Then
+    Start% = ( ( TotalPages% - 1 ) * MAX_CHARS_PER_PAGE ) + 1 + Remainder%
+    For i = Start% To TotalPages% * MAX_CHARS_PER_PAGE
+      ReDim Preserve CodePoints( i )
+      CodePoints( i )   = ""
+      ReDim Preserve DisplayChars( i )
+      DisplayChars( i ) = ""
+    Next i
+End If
+
+' Figure out the ranges to put in the drop-down list box.
+
+ReDim Pages( TotalPages% )
+For i = 1 To TotalPages%
+  FirstVal% = ( ( i - 1 ) * MAX_CHARS_PER_PAGE ) + 1
+  If i < TotalPages% Then
+      LastVal% = i * MAX_CHARS_PER_PAGE
+    Else
+      LastVal% = ( ( i - 1 ) * MAX_CHARS_PER_PAGE ) + Remainder%
+  End If
+  Pages( i ) = Trim$( Str$( FirstVal% ) ) & "-" & Trim$( Str$( LastVal% ) )
+Next i
+
+' Give the number of characters in the selection or field, followed by the number of
+' bytes, if different.
+
+If Selection Then
+    Source$ = "selection"
+  Else
+    Source$ = "field " & Tag$
+End If
+
+If CharCount% = StringLength% Then
+    CharByteCount$ = Trim$( Str$( CharCount% ) ) & " total characters in " & Source$ & "."
+  Else
+    CharByteCount$ = Trim$( Str$( CharCount% ) ) & " total characters in " & Source$ & ", encoded in " & Trim$( Str$( StringLength% ) ) & " bytes."
+End If
+
+CurrentPage% = 1
+
+Begin Dialog Dialog1Definition  264, 362, WaltsMacros$, .Dialog1ControlFunction
+  OKButton      202, 338,  52,  14
+  CancelButton    1,  41,   1,   1
+  PushButton    120, 305,  52,  14, "&Previous page",         .Prev
+  PushButton    180, 305,  52,  14, "&Next page",             .Next
+  PushButton    150,   7,  52,  14, "&Switch",                .Switch
+  PushButton    224,  34,  16,  12, "&?",                     .SearchHelp
+  DropListBox    58, 306,  56,  64, Pages(),                  .Pages
+  TextBox        88,   8,  56,  12,                           .CharSet
+  TextBox       192,  34,  24,  12,                           .SearchBox
+  Text           10,  10,  76,   8, "Showing character set:"
+  Text           28, 308,  24,   8, "&Range:",                .Range
+  Text           16,  32, 168,  16, SearchLegend$,            .Instructions
+  GroupBox       10,  24, 244,  31, ""
+  GroupBox       10, 292, 244,  38, CharByteCount$
+  GroupBox       10,  60, 244,  17, "",                       .Row1
+  Text           16,  66,  16,   8, "",                       .Char1
+  Text           14,  78,  20,   8, "",                       .Code1
+  Text           39,  66,  16,   8, "",                       .Char2
+  Text           38,  78,  20,   8, "",                       .Code2
+  Text           63,  66,  16,   8, "",                       .Char3
+  Text           62,  78,  20,   8, "",                       .Code3
+  Text           87,  66,  16,   8, "",                       .Char4
+  Text           86,  78,  20,   8, "",                       .Code4
+  Text          111,  66,  16,   8, "",                       .Char5
+  Text          110,  78,  20,   8, "",                       .Code5
+  Text          135,  66,  16,   8, "",                       .Char6
+  Text          134,  78,  20,   8, "",                       .Code6
+  Text          159,  66,  16,   8, "",                       .Char7
+  Text          158,  78,  20,   8, "",                       .Code7
+  Text          183,  66,  16,   8, "",                       .Char8
+  Text          182,  78,  20,   8, "",                       .Code8
+  Text          207,  66,  16,   8, "",                       .Char9
+  Text          206,  78,  20,   8, "",                       .Code9
+  Text          231,  66,  16,   8, "",                       .Char10
+  Text          230,  78,  20,   8, "",                       .Code10
+  GroupBox       10,  88, 244,  17, "",                       .Row2
+  Text           16,  94,  16,   8, "",                       .Char11
+  Text           14, 106,  20,   8, "",                       .Code11
+  Text           39,  94,  16,   8, "",                       .Char12
+  Text           38, 106,  20,   8, "",                       .Code12
+  Text           63,  94,  16,   8, "",                       .Char13
+  Text           62, 106,  20,   8, "",                       .Code13
+  Text           87,  94,  16,   8, "",                       .Char14
+  Text           86, 106,  20,   8, "",                       .Code14
+  Text          111,  94,  16,   8, "",                       .Char15
+  Text          110, 106,  20,   8, "",                       .Code15
+  Text          135,  94,  16,   8, "",                       .Char16
+  Text          134, 106,  20,   8, "",                       .Code16
+  Text          159,  94,  16,   8, "",                       .Char17
+  Text          158, 106,  20,   8, "",                       .Code17
+  Text          183,  94,  16,   8, "",                       .Char18
+  Text          182, 106,  20,   8, "",                       .Code18
+  Text          207,  94,  16,   8, "",                       .Char19
+  Text          206, 106,  20,   8, "",                       .Code19
+  Text          231,  94,  16,   8, "",                       .Char20
+  Text          230, 106,  20,   8, "",                       .Code20
+  GroupBox       10, 116, 244,  17, "",                       .Row3
+  Text           16, 122,  16,   8, "",                       .Char21
+  Text           14, 134,  20,   8, "",                       .Code21
+  Text           39, 122,  16,   8, "",                       .Char22
+  Text           38, 134,  20,   8, "",                       .Code22
+  Text           63, 122,  16,   8, "",                       .Char23
+  Text           62, 134,  20,   8, "",                       .Code23
+  Text           87, 122,  16,   8, "",                       .Char24
+  Text           86, 134,  20,   8, "",                       .Code24
+  Text          111, 122,  16,   8, "",                       .Char25
+  Text          110, 134,  20,   8, "",                       .Code25
+  Text          135, 122,  16,   8, "",                       .Char26
+  Text          134, 134,  20,   8, "",                       .Code26
+  Text          159, 122,  16,   8, "",                       .Char27
+  Text          158, 134,  20,   8, "",                       .Code27
+  Text          183, 122,  16,   8, "",                       .Char28
+  Text          182, 134,  20,   8, "",                       .Code28
+  Text          207, 122,  16,   8, "",                       .Char29
+  Text          206, 134,  20,   8, "",                       .Code29
+  Text          231, 122,  16,   8, "",                       .Char30
+  Text          230, 134,  20,   8, "",                       .Code30
+  GroupBox       10, 144, 244,  17, "",                       .Row4
+  Text           16, 150,  16,   8, "",                       .Char31
+  Text           14, 162,  20,   8, "",                       .Code31
+  Text           39, 150,  16,   8, "",                       .Char32
+  Text           38, 162,  20,   8, "",                       .Code32
+  Text           63, 150,  16,   8, "",                       .Char33
+  Text           62, 162,  20,   8, "",                       .Code33
+  Text           87, 150,  16,   8, "",                       .Char34
+  Text           86, 162,  20,   8, "",                       .Code34
+  Text          111, 150,  16,   8, "",                       .Char35
+  Text          110, 162,  20,   8, "",                       .Code35
+  Text          135, 150,  16,   8, "",                       .Char36
+  Text          134, 162,  20,   8, "",                       .Code36
+  Text          159, 150,  16,   8, "",                       .Char37
+  Text          158, 162,  20,   8, "",                       .Code37
+  Text          183, 150,  16,   8, "",                       .Char38
+  Text          182, 162,  20,   8, "",                       .Code38
+  Text          207, 150,  16,   8, "",                       .Char39
+  Text          206, 162,  20,   8, "",                       .Code39
+  Text          231, 150,  16,   8, "",                       .Char40
+  Text          230, 162,  20,   8, "",                       .Code40
+  GroupBox       10, 172, 244,  17, "",                       .Row5
+  Text           16, 178,  16,   8, "",                       .Char41
+  Text           14, 190,  20,   8, "",                       .Code41
+  Text           39, 178,  16,   8, "",                       .Char42
+  Text           38, 190,  20,   8, "",                       .Code42
+  Text           63, 178,  16,   8, "",                       .Char43
+  Text           62, 190,  20,   8, "",                       .Code43
+  Text           87, 178,  16,   8, "",                       .Char44
+  Text           86, 190,  20,   8, "",                       .Code44
+  Text          111, 178,  16,   8, "",                       .Char45
+  Text          110, 190,  20,   8, "",                       .Code45
+  Text          135, 178,  16,   8, "",                       .Char46
+  Text          134, 190,  20,   8, "",                       .Code46
+  Text          159, 178,  16,   8, "",                       .Char47
+  Text          158, 190,  20,   8, "",                       .Code47
+  Text          183, 178,  16,   8, "",                       .Char48
+  Text          182, 190,  20,   8, "",                       .Code48
+  Text          207, 178,  16,   8, "",                       .Char49
+  Text          206, 190,  20,   8, "",                       .Code49
+  Text          231, 178,  16,   8, "",                       .Char50
+  Text          230, 190,  20,   8, "",                       .Code50
+  GroupBox       10, 200, 244,  17, "",                       .Row6
+  Text           16, 206,  16,   8, "",                       .Char51
+  Text           14, 218,  20,   8, "",                       .Code51
+  Text           39, 206,  16,   8, "",                       .Char52
+  Text           38, 218,  20,   8, "",                       .Code52
+  Text           63, 206,  16,   8, "",                       .Char53
+  Text           62, 218,  20,   8, "",                       .Code53
+  Text           87, 206,  16,   8, "",                       .Char54
+  Text           86, 218,  20,   8, "",                       .Code54
+  Text          111, 206,  16,   8, "",                       .Char55
+  Text          110, 218,  20,   8, "",                       .Code55
+  Text          135, 206,  16,   8, "",                       .Char56
+  Text          134, 218,  20,   8, "",                       .Code56
+  Text          159, 206,  16,   8, "",                       .Char57
+  Text          158, 218,  20,   8, "",                       .Code57
+  Text          183, 206,  16,   8, "",                       .Char58
+  Text          182, 218,  20,   8, "",                       .Code58
+  Text          207, 206,  16,   8, "",                       .Char59
+  Text          206, 218,  20,   8, "",                       .Code59
+  Text          231, 206,  16,   8, "",                       .Char60
+  Text          230, 218,  20,   8, "",                       .Code60
+  GroupBox       10, 228, 244,  17, "",                       .Row7
+  Text           16, 234,  16,   8, "",                       .Char61
+  Text           14, 246,  20,   8, "",                       .Code61
+  Text           39, 234,  16,   8, "",                       .Char62
+  Text           38, 246,  20,   8, "",                       .Code62
+  Text           63, 234,  16,   8, "",                       .Char63
+  Text           62, 246,  20,   8, "",                       .Code63
+  Text           87, 234,  16,   8, "",                       .Char64
+  Text           86, 246,  20,   8, "",                       .Code64
+  Text          111, 234,  16,   8, "",                       .Char65
+  Text          110, 246,  20,   8, "",                       .Code65
+  Text          135, 234,  16,   8, "",                       .Char66
+  Text          134, 246,  20,   8, "",                       .Code66
+  Text          159, 234,  16,   8, "",                       .Char67
+  Text          158, 246,  20,   8, "",                       .Code67
+  Text          183, 234,  16,   8, "",                       .Char68
+  Text          182, 246,  20,   8, "",                       .Code68
+  Text          207, 234,  16,   8, "",                       .Char69
+  Text          206, 246,  20,   8, "",                       .Code69
+  Text          231, 234,  16,   8, "",                       .Char70
+  Text          230, 246,  20,   8, "",                       .Code70
+  GroupBox       10, 256, 244,  17, "",                       .Row8
+  Text           16, 262,  16,   8, "",                       .Char71
+  Text           14, 274,  20,   8, "",                       .Code71
+  Text           39, 262,  16,   8, "",                       .Char72
+  Text           38, 274,  20,   8, "",                       .Code72
+  Text           63, 262,  16,   8, "",                       .Char73
+  Text           62, 274,  20,   8, "",                       .Code73
+  Text           87, 262,  16,   8, "",                       .Char74
+  Text           86, 274,  20,   8, "",                       .Code74
+  Text          111, 262,  16,   8, "",                       .Char75
+  Text          110, 274,  20,   8, "",                       .Code75
+  Text          135, 262,  16,   8, "",                       .Char76
+  Text          135, 274,  20,   8, "",                       .Code76
+  Text          159, 262,  16,   8, "",                       .Char77
+  Text          158, 274,  20,   8, "",                       .Code77
+  Text          183, 262,  16,   8, "",                       .Char78
+  Text          182, 274,  20,   8, "",                       .Code78
+  Text          207, 262,  16,   8, "",                       .Char79
+  Text          206, 274,  20,   8, "",                       .Code79
+  Text          231, 262,  16,   8, "",                       .Char80
+  Text          230, 274,  20,   8, "",                       .Code80
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = 102 Then Exit Sub
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrays
+
+' Add 127 to the array index to get the code point of the character at that index value.
+' Code points not defined in either encoding are represented by "[×]".
+
+ReDim HighASCII( 2, 128 )
+
+HighASCII( aMARC8, 1   ) = "|0|"        : HighASCII( aUNICODE, 1   ) = Chr$( 128 )
+HighASCII( aMARC8, 2   ) = "|1|"        : HighASCII( aUNICODE, 2   ) = "[×]"
+HighASCII( aMARC8, 3   ) = "|2|"        : HighASCII( aUNICODE, 3   ) = "[]"
+HighASCII( aMARC8, 4   ) = "|3|"        : HighASCII( aUNICODE, 4   ) = "[]"
+HighASCII( aMARC8, 5   ) = "|4|"        : HighASCII( aUNICODE, 5   ) = "[]"
+HighASCII( aMARC8, 6   ) = "|5|"        : HighASCII( aUNICODE, 6   ) = "[]"
+HighASCII( aMARC8, 7   ) = "|6|"        : HighASCII( aUNICODE, 7   ) = "[]"
+HighASCII( aMARC8, 8   ) = "|7|"        : HighASCII( aUNICODE, 8   ) = "[]"
+HighASCII( aMARC8, 9   ) = "|8|"        : HighASCII( aUNICODE, 9   ) = "[]"
+HighASCII( aMARC8, 10  ) = "|9|"        : HighASCII( aUNICODE, 10  ) = "[]"
+HighASCII( aMARC8, 11  ) = "|(|"        : HighASCII( aUNICODE, 11  ) = "[]"
+HighASCII( aMARC8, 12  ) = "|)|"        : HighASCII( aUNICODE, 12  ) = "[]"
+HighASCII( aMARC8, 13  ) = "|+|"        : HighASCII( aUNICODE, 13  ) = "[]"
+HighASCII( aMARC8, 14  ) = "|-|"        : HighASCII( aUNICODE, 14  ) = "[×]"
+HighASCII( aMARC8, 15  ) = "[×]"        : HighASCII( aUNICODE, 15  ) = "[]"
+HighASCII( aMARC8, 16  ) = "[×]"        : HighASCII( aUNICODE, 16  ) = "[×]"
+HighASCII( aMARC8, 17  ) = "|0|"        : HighASCII( aUNICODE, 17  ) = "[×]"
+HighASCII( aMARC8, 18  ) = "|1|"        : HighASCII( aUNICODE, 18  ) = "[]"
+HighASCII( aMARC8, 19  ) = "|2|"        : HighASCII( aUNICODE, 19  ) = "[]"
+HighASCII( aMARC8, 20  ) = "|3|"        : HighASCII( aUNICODE, 20  ) = "[]"
+HighASCII( aMARC8, 21  ) = "|4|"        : HighASCII( aUNICODE, 21  ) = "[]"
+HighASCII( aMARC8, 22  ) = "|5|"        : HighASCII( aUNICODE, 22  ) = "[]"
+HighASCII( aMARC8, 23  ) = "|6|"        : HighASCII( aUNICODE, 23  ) = "[]"
+HighASCII( aMARC8, 24  ) = "|7|"        : HighASCII( aUNICODE, 24  ) = "[]"
+HighASCII( aMARC8, 25  ) = "|8|"        : HighASCII( aUNICODE, 25  ) = "[]"
+HighASCII( aMARC8, 26  ) = "|9|"        : HighASCII( aUNICODE, 26  ) = "[]"
+HighASCII( aMARC8, 27  ) = "|(|"        : HighASCII( aUNICODE, 27  ) = "[]"
+HighASCII( aMARC8, 28  ) = "|)|"        : HighASCII( aUNICODE, 28  ) = "[]"
+HighASCII( aMARC8, 29  ) = "|+|"        : HighASCII( aUNICODE, 29  ) = "[]"
+HighASCII( aMARC8, 30  ) = "|-|"        : HighASCII( aUNICODE, 30  ) = "[×]"
+HighASCII( aMARC8, 31  ) = "°"          : HighASCII( aUNICODE, 31  ) = "[]"
+HighASCII( aMARC8, 32  ) = "ß"          : HighASCII( aUNICODE, 32  ) = "[]"
+HighASCII( aMARC8, 33  ) = Chr$( 128 )  : HighASCII( aUNICODE, 33  ) = "  "
+HighASCII( aMARC8, 34  ) = "[]"         : HighASCII( aUNICODE, 34  ) = "¡"
+HighASCII( aMARC8, 35  ) = "Ø"          : HighASCII( aUNICODE, 35  ) = "¢"
+HighASCII( aMARC8, 36  ) = "Ð"          : HighASCII( aUNICODE, 36  ) = "£"
+HighASCII( aMARC8, 37  ) = "Þ"          : HighASCII( aUNICODE, 37  ) = "¤"
+HighASCII( aMARC8, 38  ) = "Æ"          : HighASCII( aUNICODE, 38  ) = "¥"
+HighASCII( aMARC8, 39  ) = "[]"         : HighASCII( aUNICODE, 39  ) = "¦"
+HighASCII( aMARC8, 40  ) = "[]"         : HighASCII( aUNICODE, 40  ) = "§"
+HighASCII( aMARC8, 41  ) = "·"          : HighASCII( aUNICODE, 41  ) = "¨"
+HighASCII( aMARC8, 42  ) = "[]"         : HighASCII( aUNICODE, 42  ) = "©"
+HighASCII( aMARC8, 43  ) = "®"          : HighASCII( aUNICODE, 43  ) = "ª"
+HighASCII( aMARC8, 44  ) = "±"          : HighASCII( aUNICODE, 44  ) = "«"
+HighASCII( aMARC8, 45  ) = "[]"         : HighASCII( aUNICODE, 45  ) = "¬"
+HighASCII( aMARC8, 46  ) = "[]"         : HighASCII( aUNICODE, 46  ) = "­"
+HighASCII( aMARC8, 47  ) = "[]"         : HighASCII( aUNICODE, 47  ) = "®"
+HighASCII( aMARC8, 48  ) = "[×]"        : HighASCII( aUNICODE, 48  ) = "¯"
+HighASCII( aMARC8, 49  ) = "[]"         : HighASCII( aUNICODE, 49  ) = "°"
+HighASCII( aMARC8, 50  ) = "[]"         : HighASCII( aUNICODE, 50  ) = "±"
+HighASCII( aMARC8, 51  ) = "ø"          : HighASCII( aUNICODE, 51  ) = "²"
+HighASCII( aMARC8, 52  ) = "[]"         : HighASCII( aUNICODE, 52  ) = "³"
+HighASCII( aMARC8, 53  ) = "þ"          : HighASCII( aUNICODE, 53  ) = "´"
+HighASCII( aMARC8, 54  ) = "æ"          : HighASCII( aUNICODE, 54  ) = "µ"
+HighASCII( aMARC8, 55  ) = "[]"         : HighASCII( aUNICODE, 55  ) = "¶"
+HighASCII( aMARC8, 56  ) = "[]"         : HighASCII( aUNICODE, 56  ) = "·"
+HighASCII( aMARC8, 57  ) = "[]"         : HighASCII( aUNICODE, 57  ) = "¸"
+HighASCII( aMARC8, 58  ) = "£"          : HighASCII( aUNICODE, 58  ) = "¹"
+HighASCII( aMARC8, 59  ) = "[]"         : HighASCII( aUNICODE, 59  ) = "º"
+HighASCII( aMARC8, 60  ) = "[×]"        : HighASCII( aUNICODE, 60  ) = "»"
+HighASCII( aMARC8, 61  ) = "[]"         : HighASCII( aUNICODE, 61  ) = "¼"
+HighASCII( aMARC8, 62  ) = "[]"         : HighASCII( aUNICODE, 62  ) = "½"
+HighASCII( aMARC8, 63  ) = "[]"         : HighASCII( aUNICODE, 63  ) = "¾"
+HighASCII( aMARC8, 64  ) = "[×]"        : HighASCII( aUNICODE, 64  ) = "¿"
+HighASCII( aMARC8, 65  ) = "[×]"        : HighASCII( aUNICODE, 65  ) = "À"
+HighASCII( aMARC8, 66  ) = "[×]"        : HighASCII( aUNICODE, 66  ) = "Á"
+HighASCII( aMARC8, 67  ) = "[×]"        : HighASCII( aUNICODE, 67  ) = "Â"
+HighASCII( aMARC8, 68  ) = "[×]"        : HighASCII( aUNICODE, 68  ) = "Ã"
+HighASCII( aMARC8, 69  ) = "[×]"        : HighASCII( aUNICODE, 69  ) = "Ä"
+HighASCII( aMARC8, 70  ) = "[×]"        : HighASCII( aUNICODE, 70  ) = "Å"
+HighASCII( aMARC8, 71  ) = "[×]"        : HighASCII( aUNICODE, 71  ) = "Æ"
+HighASCII( aMARC8, 72  ) = "[×]"        : HighASCII( aUNICODE, 72  ) = "Ç"
+HighASCII( aMARC8, 73  ) = "¿"          : HighASCII( aUNICODE, 73  ) = "È"
+HighASCII( aMARC8, 74  ) = "¡"          : HighASCII( aUNICODE, 74  ) = "É"
+HighASCII( aMARC8, 75  ) = "©"          : HighASCII( aUNICODE, 75  ) = "Ê"
+HighASCII( aMARC8, 76  ) = "[]"         : HighASCII( aUNICODE, 76  ) = "Ë"
+HighASCII( aMARC8, 77  ) = "[]"         : HighASCII( aUNICODE, 77  ) = "Ì"
+HighASCII( aMARC8, 78  ) = "[×]"        : HighASCII( aUNICODE, 78  ) = "Í"
+HighASCII( aMARC8, 79  ) = "[×]"        : HighASCII( aUNICODE, 79  ) = "Î"
+HighASCII( aMARC8, 80  ) = "[×]"        : HighASCII( aUNICODE, 80  ) = "Ï"
+HighASCII( aMARC8, 81  ) = "[×]"        : HighASCII( aUNICODE, 81  ) = "Ð"
+HighASCII( aMARC8, 82  ) = "[×]"        : HighASCII( aUNICODE, 82  ) = "Ñ"
+HighASCII( aMARC8, 83  ) = "[×]"        : HighASCII( aUNICODE, 83  ) = "Ò"
+HighASCII( aMARC8, 84  ) = "[×]"        : HighASCII( aUNICODE, 84  ) = "Ó"
+HighASCII( aMARC8, 85  ) = "[×]"        : HighASCII( aUNICODE, 85  ) = "Ô"
+HighASCII( aMARC8, 86  ) = "[×]"        : HighASCII( aUNICODE, 86  ) = "Õ"
+HighASCII( aMARC8, 87  ) = "[×]"        : HighASCII( aUNICODE, 87  ) = "Ö"
+HighASCII( aMARC8, 88  ) = "[×]"        : HighASCII( aUNICODE, 88  ) = "×"
+HighASCII( aMARC8, 89  ) = "[×]"        : HighASCII( aUNICODE, 89  ) = "Ø"
+HighASCII( aMARC8, 90  ) = "[×]"        : HighASCII( aUNICODE, 90  ) = "Ù"
+HighASCII( aMARC8, 91  ) = "[×]"        : HighASCII( aUNICODE, 91  ) = "Ú"
+HighASCII( aMARC8, 92  ) = "[×]"        : HighASCII( aUNICODE, 92  ) = "Û"
+HighASCII( aMARC8, 93  ) = "[×]"        : HighASCII( aUNICODE, 93  ) = "Ü"
+HighASCII( aMARC8, 94  ) = "[×]"        : HighASCII( aUNICODE, 94  ) = "Ý"
+HighASCII( aMARC8, 95  ) = "[×]"        : HighASCII( aUNICODE, 95  ) = "Þ"
+HighASCII( aMARC8, 96  ) = "|$|"        : HighASCII( aUNICODE, 96  ) = "ß"
+HighASCII( aMARC8, 97  ) = "[]"         : HighASCII( aUNICODE, 97  ) = "à"
+HighASCII( aMARC8, 98  ) = "`"          : HighASCII( aUNICODE, 98  ) = "á"
+HighASCII( aMARC8, 99  ) = "´"          : HighASCII( aUNICODE, 99  ) = "â"
+HighASCII( aMARC8, 100 ) = "^"          : HighASCII( aUNICODE, 100 ) = "ã"
+HighASCII( aMARC8, 101 ) = "~"          : HighASCII( aUNICODE, 101 ) = "ä"
+HighASCII( aMARC8, 102 ) = "¯"          : HighASCII( aUNICODE, 102 ) = "å"
+HighASCII( aMARC8, 103 ) = "[]"         : HighASCII( aUNICODE, 103 ) = "æ"
+HighASCII( aMARC8, 104 ) = "[]"         : HighASCII( aUNICODE, 104 ) = "ç"
+HighASCII( aMARC8, 105 ) = "¨"          : HighASCII( aUNICODE, 105 ) = "è"
+HighASCII( aMARC8, 106 ) = "[]"         : HighASCII( aUNICODE, 106 ) = "é"
+HighASCII( aMARC8, 107 ) = "°"          : HighASCII( aUNICODE, 107 ) = "ê"
+HighASCII( aMARC8, 108 ) = "[]"         : HighASCII( aUNICODE, 108 ) = "ë"
+HighASCII( aMARC8, 109 ) = "[]"         : HighASCII( aUNICODE, 109 ) = "ì"
+HighASCII( aMARC8, 110 ) = "[]"         : HighASCII( aUNICODE, 110 ) = "í"
+HighASCII( aMARC8, 111 ) = "[]"         : HighASCII( aUNICODE, 111 ) = "î"
+HighASCII( aMARC8, 112 ) = "[]"         : HighASCII( aUNICODE, 112 ) = "ï"
+HighASCII( aMARC8, 113 ) = "¸"          : HighASCII( aUNICODE, 113 ) = "ð"
+HighASCII( aMARC8, 114 ) = "[]"         : HighASCII( aUNICODE, 114 ) = "ñ"
+HighASCII( aMARC8, 115 ) = "[]"         : HighASCII( aUNICODE, 115 ) = "ò"
+HighASCII( aMARC8, 116 ) = "[]"         : HighASCII( aUNICODE, 116 ) = "ó"
+HighASCII( aMARC8, 117 ) = "[]"         : HighASCII( aUNICODE, 117 ) = "ô"
+HighASCII( aMARC8, 118 ) = "[]"         : HighASCII( aUNICODE, 118 ) = "õ"
+HighASCII( aMARC8, 119 ) = "_"          : HighASCII( aUNICODE, 119 ) = "ö"
+HighASCII( aMARC8, 120 ) = "[]"         : HighASCII( aUNICODE, 120 ) = "÷"
+HighASCII( aMARC8, 121 ) = "[]"         : HighASCII( aUNICODE, 121 ) = "ø"
+HighASCII( aMARC8, 122 ) = "[]"         : HighASCII( aUNICODE, 122 ) = "ù"
+HighASCII( aMARC8, 123 ) = "[]"         : HighASCII( aUNICODE, 123 ) = "ú"
+HighASCII( aMARC8, 124 ) = "[]"         : HighASCII( aUNICODE, 124 ) = "û"
+HighASCII( aMARC8, 125 ) = Chr$( 127 )  : HighASCII( aUNICODE, 125 ) = "ü"
+HighASCII( aMARC8, 126 ) = "[×]"        : HighASCII( aUNICODE, 126 ) = "ý"
+HighASCII( aMARC8, 127 ) = "[]"         : HighASCII( aUNICODE, 127 ) = "þ"
+HighASCII( aMARC8, 128 ) = "[×]"        : HighASCII( aUNICODE, 128 ) = "ÿ"
+
+' The character names for the extended Latin range are taken from
+' https://www.loc.gov/marc/specifications/codetables/ExtendedLatin.html. The MARC-8
+' character name is followed by the Unicode name; if the MARC-8 name is the same as or
+' very similar to the UCS name, only the UCS name is given. In a few cases, where the
+' OCLC-MARC name is quite different, it is given first.
+
+ReDim ANSEL( 2, ANSEL_COUNT )
+
+ANSEL( CODEPOINT, 1  ) = "158" : ANSEL( CHAR_NAME, 1  ) = "Degree sign [OCLC-MARC]"
+ANSEL( CODEPOINT, 2  ) = "159" : ANSEL( CHAR_NAME, 2  ) = "Eszett symbol [OCLC-MARC]"
+ANSEL( CODEPOINT, 3  ) = "160" : ANSEL( CHAR_NAME, 3  ) = "Euro sign [OCLC-MARC]"
+ANSEL( CODEPOINT, 4  ) = "161" : ANSEL( CHAR_NAME, 4  ) = "Uppercase Polish L / Latin capital letter L with stroke"
+ANSEL( CODEPOINT, 5  ) = "162" : ANSEL( CHAR_NAME, 5  ) = "Uppercase Scandinavian O / Latin capital letter O with stroke"
+ANSEL( CODEPOINT, 6  ) = "163" : ANSEL( CHAR_NAME, 6  ) = "Uppercase D with crossbar / Latin capital letter D with stroke"
+ANSEL( CODEPOINT, 7  ) = "164" : ANSEL( CHAR_NAME, 7  ) = "Uppercase Icelandic Thorn / Latin capital letter Thorn"
+ANSEL( CODEPOINT, 8  ) = "165" : ANSEL( CHAR_NAME, 8  ) = "Uppercase digraph AE / Latin capital ligature AE"
+ANSEL( CODEPOINT, 9  ) = "166" : ANSEL( CHAR_NAME, 9  ) = "Uppercase digraph OE / Latin capital ligature OE"
+ANSEL( CODEPOINT, 10 ) = "167" : ANSEL( CHAR_NAME, 10 ) = "Miagkii znak / Soft sign, prime / modifier letter prime"
+ANSEL( CODEPOINT, 11 ) = "168" : ANSEL( CHAR_NAME, 11 ) = "Middle dot"
+ANSEL( CODEPOINT, 12 ) = "169" : ANSEL( CHAR_NAME, 12 ) = "Music flat sign"
+ANSEL( CODEPOINT, 13 ) = "170" : ANSEL( CHAR_NAME, 13 ) = "Patent mark / registered sign"
+ANSEL( CODEPOINT, 14 ) = "171" : ANSEL( CHAR_NAME, 14 ) = "Plus or minus / plus-minus sign"
+ANSEL( CODEPOINT, 15 ) = "172" : ANSEL( CHAR_NAME, 15 ) = "Uppercase O-hook / Latin capital letter O with horn"
+ANSEL( CODEPOINT, 16 ) = "173" : ANSEL( CHAR_NAME, 16 ) = "Uppercase U-hook / Latin capital letter U with horn"
+ANSEL( CODEPOINT, 17 ) = "174" : ANSEL( CHAR_NAME, 17 ) = "Alif / modifier letter apostrophe"
+ANSEL( CODEPOINT, 18 ) = "176" : ANSEL( CHAR_NAME, 18 ) = "Ayn / modifier letter turned comma"
+ANSEL( CODEPOINT, 19 ) = "177" : ANSEL( CHAR_NAME, 19 ) = "Lowercase Polish l / Latin small letter l with stroke"
+ANSEL( CODEPOINT, 20 ) = "178" : ANSEL( CHAR_NAME, 20 ) = "Lowercase Scandinavian o / Latin small letter o with stroke"
+ANSEL( CODEPOINT, 21 ) = "179" : ANSEL( CHAR_NAME, 21 ) = "Lowercase d with crossbar / Latin small letter d with stroke"
+ANSEL( CODEPOINT, 22 ) = "180" : ANSEL( CHAR_NAME, 22 ) = "Lowercase Icelandic thorn / Latin small letter thorn"
+ANSEL( CODEPOINT, 23 ) = "181" : ANSEL( CHAR_NAME, 23 ) = "Lowercase digraph ae / Latin small ligature ae"
+ANSEL( CODEPOINT, 24 ) = "182" : ANSEL( CHAR_NAME, 24 ) = "Lowercase digraph oe / Latin small ligature oe"
+ANSEL( CODEPOINT, 25 ) = "183" : ANSEL( CHAR_NAME, 25 ) = "Tverdyi znak / Hard sign, double prime / modifier letter double prime"
+ANSEL( CODEPOINT, 26 ) = "184" : ANSEL( CHAR_NAME, 26 ) = "Lowercase Turkish i / Latin small letter dotless i"
+ANSEL( CODEPOINT, 27 ) = "185" : ANSEL( CHAR_NAME, 27 ) = "British pound / pound sign"
+ANSEL( CODEPOINT, 28 ) = "186" : ANSEL( CHAR_NAME, 28 ) = "Lowercase eth / Latin small letter eth"
+ANSEL( CODEPOINT, 29 ) = "188" : ANSEL( CHAR_NAME, 29 ) = "Lowercase o-hook / Latin small letter o with horn"
+ANSEL( CODEPOINT, 30 ) = "189" : ANSEL( CHAR_NAME, 30 ) = "Lowercase u-hook / Latin small letter u with horn"
+ANSEL( CODEPOINT, 31 ) = "190" : ANSEL( CHAR_NAME, 31 ) = "Script small l"
+ANSEL( CODEPOINT, 32 ) = "200" : ANSEL( CHAR_NAME, 32 ) = "Inverted question mark [OCLC-MARC]"
+ANSEL( CODEPOINT, 33 ) = "201" : ANSEL( CHAR_NAME, 33 ) = "Inverted exclamation mark [OCLC-MARC]"
+ANSEL( CODEPOINT, 34 ) = "202" : ANSEL( CHAR_NAME, 34 ) = "Copyright sign [OCLC-MARC]"
+ANSEL( CODEPOINT, 35 ) = "203" : ANSEL( CHAR_NAME, 35 ) = "Sound recording copyright [OCLC-MARC]"
+ANSEL( CODEPOINT, 36 ) = "204" : ANSEL( CHAR_NAME, 36 ) = "Music sharp sign [OCLC-MARC]"
+ANSEL( CODEPOINT, 37 ) = "223" : ANSEL( CHAR_NAME, 37 ) = "Delimiter"
+ANSEL( CODEPOINT, 38 ) = "224" : ANSEL( CHAR_NAME, 38 ) = "Pseudo question mark / combining hook above"
+ANSEL( CODEPOINT, 39 ) = "225" : ANSEL( CHAR_NAME, 39 ) = "Grave / combining grave accent"
+ANSEL( CODEPOINT, 40 ) = "226" : ANSEL( CHAR_NAME, 40 ) = "Acute / combining acute accent"
+ANSEL( CODEPOINT, 41 ) = "227" : ANSEL( CHAR_NAME, 41 ) = "Circumflex / combining circumflex accent"
+ANSEL( CODEPOINT, 42 ) = "228" : ANSEL( CHAR_NAME, 42 ) = "Tilde / combining tilde"
+ANSEL( CODEPOINT, 43 ) = "229" : ANSEL( CHAR_NAME, 43 ) = "Macron / combining macron"
+ANSEL( CODEPOINT, 44 ) = "230" : ANSEL( CHAR_NAME, 44 ) = "Breve / combining breve"
+ANSEL( CODEPOINT, 45 ) = "231" : ANSEL( CHAR_NAME, 45 ) = "Superior dot / combining dot above"
+ANSEL( CODEPOINT, 46 ) = "232" : ANSEL( CHAR_NAME, 46 ) = "Umlaut, diaeresis / combining diaeresis"
+ANSEL( CODEPOINT, 47 ) = "233" : ANSEL( CHAR_NAME, 47 ) = "Hacek / combining caron"
+ANSEL( CODEPOINT, 48 ) = "234" : ANSEL( CHAR_NAME, 48 ) = "Circle above, angstrom / combining ring above"
+ANSEL( CODEPOINT, 49 ) = "235" : ANSEL( CHAR_NAME, 49 ) = "Ligature, first half / combining double inverted breve"
+ANSEL( CODEPOINT, 50 ) = "236" : ANSEL( CHAR_NAME, 50 ) = "Ligature, second half / combining ligature right half"
+ANSEL( CODEPOINT, 51 ) = "237" : ANSEL( CHAR_NAME, 51 ) = "High comma, off center / combining comma above right"
+ANSEL( CODEPOINT, 52 ) = "238" : ANSEL( CHAR_NAME, 52 ) = "Double acute / combining double acute accent"
+ANSEL( CODEPOINT, 53 ) = "239" : ANSEL( CHAR_NAME, 53 ) = "Candrabindu / combining candrabindu"
+ANSEL( CODEPOINT, 54 ) = "240" : ANSEL( CHAR_NAME, 54 ) = "Cedilla / combining cedilla"
+ANSEL( CODEPOINT, 55 ) = "241" : ANSEL( CHAR_NAME, 55 ) = "Right hook, ogonek / combining ogonek"
+ANSEL( CODEPOINT, 56 ) = "242" : ANSEL( CHAR_NAME, 56 ) = "Dot below / combining dot below"
+ANSEL( CODEPOINT, 57 ) = "243" : ANSEL( CHAR_NAME, 57 ) = "Double dot below / combining diaeresis below"
+ANSEL( CODEPOINT, 58 ) = "244" : ANSEL( CHAR_NAME, 58 ) = "Circle below / combining ring below"
+ANSEL( CODEPOINT, 59 ) = "245" : ANSEL( CHAR_NAME, 59 ) = "Double underscore / combining double low line"
+ANSEL( CODEPOINT, 60 ) = "246" : ANSEL( CHAR_NAME, 60 ) = "Underscore / combining low line"
+ANSEL( CODEPOINT, 61 ) = "247" : ANSEL( CHAR_NAME, 61 ) = "Left hook (comma below) / combining comma below"
+ANSEL( CODEPOINT, 62 ) = "248" : ANSEL( CHAR_NAME, 62 ) = "Right cedilla / combining left half ring below"
+ANSEL( CODEPOINT, 63 ) = "249" : ANSEL( CHAR_NAME, 63 ) = "Upadhmaniya / combining breve below"
+ANSEL( CODEPOINT, 64 ) = "250" : ANSEL( CHAR_NAME, 64 ) = "Double tilde, first half / combining double tilde"
+ANSEL( CODEPOINT, 65 ) = "251" : ANSEL( CHAR_NAME, 65 ) = "Double tilde, second half / combining double tilde right half"
+ANSEL( CODEPOINT, 66 ) = "252" : ANSEL( CHAR_NAME, 66 ) = "Fill character [OCLC-MARC]"
+ANSEL( CODEPOINT, 67 ) = "254" : ANSEL( CHAR_NAME, 67 ) = "High comma, centered / combining comma above"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillUnicodeArray1
+
+' Filling the Unicode array has to be done in two steps because there seems to be a
+' limit to the size of a subroutine in this version of BASIC of about 56,000 bytes, and
+' code for filling the whole array in one go is rather larger than that.
+
+' The Unicode characters selected for display are all those in the blocks Latin Extended
+' A and Latin Extended B (together, U+0100 to U+024F), Combining Diacritical Marks
+' (U+0300-U+036F), and Latin Extended Additional (U+1E00-U+1EFF). Characters in the Basic
+' Latin and Latin-1 Supplement blocks (U+0000-U+00FF) I judged to be not necessary to
+' include, as they are the same as the ASCII characters available to the dialog box.
+' Including characters in the remaining Latin Unicode blocks (Latin Extended-C (U+2C60-
+' U+2C7F), Latin Extended-D (U+A720-U+A7FF), Latin Extended-E (U+AB30-U+AB6F), Latin
+' Extended-F (U+10780-U+107BF), and Latin Extended-G (U+1DF00-U+1DFFF)) would have made
+' the macro much larger, and I judged those characters to be less likely to be
+' encountered by most users. For the same reasons I did not include characters in the
+' blocks Combining Diacritical Marks Extended (U+1AB0-U+1AFF), Combining Diacritical
+' Marks Supplement (U+1DC0-U+1DFF), Combining Diacritical Marks for Symbols (U+20D0-
+' U+20FF), or Combining Half Marks (U+FE20-U+FE2F). Accounting for non-Latin scripts also
+' is way beyond the scope of this macro.
+
+ReDim Unicode( 2, 784 )
+
+Unicode( CODEPOINT, 1   ) = "0100" : Unicode( CHAR_NAME, 1   ) = "Latin capital letter A with macron"
+Unicode( CODEPOINT, 2   ) = "0101" : Unicode( CHAR_NAME, 2   ) = "Latin small letter a with macron"
+Unicode( CODEPOINT, 3   ) = "0102" : Unicode( CHAR_NAME, 3   ) = "Latin capital letter A with breve"
+Unicode( CODEPOINT, 4   ) = "0103" : Unicode( CHAR_NAME, 4   ) = "Latin small letter a with breve"
+Unicode( CODEPOINT, 5   ) = "0104" : Unicode( CHAR_NAME, 5   ) = "Latin capital letter A with ogonek"
+Unicode( CODEPOINT, 6   ) = "0105" : Unicode( CHAR_NAME, 6   ) = "Latin small letter a with ogonek"
+Unicode( CODEPOINT, 7   ) = "0106" : Unicode( CHAR_NAME, 7   ) = "Latin capital letter C with acute"
+Unicode( CODEPOINT, 8   ) = "0107" : Unicode( CHAR_NAME, 8   ) = "Latin small letter c with acute"
+Unicode( CODEPOINT, 9   ) = "0108" : Unicode( CHAR_NAME, 9   ) = "Latin capital letter C with circumflex"
+Unicode( CODEPOINT, 10  ) = "0109" : Unicode( CHAR_NAME, 10  ) = "Latin small letter c with circumflex"
+Unicode( CODEPOINT, 11  ) = "010A" : Unicode( CHAR_NAME, 11  ) = "Latin capital letter C with dot above"
+Unicode( CODEPOINT, 12  ) = "010B" : Unicode( CHAR_NAME, 12  ) = "Latin small letter c with dot above"
+Unicode( CODEPOINT, 13  ) = "010C" : Unicode( CHAR_NAME, 13  ) = "Latin capital letter C with caron"
+Unicode( CODEPOINT, 14  ) = "010D" : Unicode( CHAR_NAME, 14  ) = "Latin small letter c with caron"
+Unicode( CODEPOINT, 15  ) = "010E" : Unicode( CHAR_NAME, 15  ) = "Latin capital letter D with caron"
+Unicode( CODEPOINT, 16  ) = "010F" : Unicode( CHAR_NAME, 16  ) = "Latin small letter d with caron"
+Unicode( CODEPOINT, 17  ) = "0110" : Unicode( CHAR_NAME, 17  ) = "Latin capital letter D with stroke"
+Unicode( CODEPOINT, 18  ) = "0111" : Unicode( CHAR_NAME, 18  ) = "Latin small letter d with stroke"
+Unicode( CODEPOINT, 19  ) = "0112" : Unicode( CHAR_NAME, 19  ) = "Latin capital letter E with macron"
+Unicode( CODEPOINT, 20  ) = "0113" : Unicode( CHAR_NAME, 20  ) = "Latin small letter e with macron"
+Unicode( CODEPOINT, 21  ) = "0114" : Unicode( CHAR_NAME, 21  ) = "Latin capital letter E with breve"
+Unicode( CODEPOINT, 22  ) = "0115" : Unicode( CHAR_NAME, 22  ) = "Latin small letter e with breve"
+Unicode( CODEPOINT, 23  ) = "0116" : Unicode( CHAR_NAME, 23  ) = "Latin capital letter E with dot above"
+Unicode( CODEPOINT, 24  ) = "0117" : Unicode( CHAR_NAME, 24  ) = "Latin small letter e with dot above"
+Unicode( CODEPOINT, 25  ) = "0118" : Unicode( CHAR_NAME, 25  ) = "Latin capital letter E with ogonek"
+Unicode( CODEPOINT, 26  ) = "0119" : Unicode( CHAR_NAME, 26  ) = "Latin small letter e with ogonek"
+Unicode( CODEPOINT, 27  ) = "011A" : Unicode( CHAR_NAME, 27  ) = "Latin capital letter E with caron"
+Unicode( CODEPOINT, 28  ) = "011B" : Unicode( CHAR_NAME, 28  ) = "Latin small letter e with caron"
+Unicode( CODEPOINT, 29  ) = "011C" : Unicode( CHAR_NAME, 29  ) = "Latin capital letter G with circumflex"
+Unicode( CODEPOINT, 30  ) = "011D" : Unicode( CHAR_NAME, 30  ) = "Latin small letter g with circumflex"
+Unicode( CODEPOINT, 31  ) = "011E" : Unicode( CHAR_NAME, 31  ) = "Latin capital letter G with breve"
+Unicode( CODEPOINT, 32  ) = "011F" : Unicode( CHAR_NAME, 32  ) = "Latin small letter g with breve"
+Unicode( CODEPOINT, 33  ) = "0120" : Unicode( CHAR_NAME, 33  ) = "Latin capital letter G with dot above"
+Unicode( CODEPOINT, 34  ) = "0121" : Unicode( CHAR_NAME, 34  ) = "Latin small letter g with dot above"
+Unicode( CODEPOINT, 35  ) = "0122" : Unicode( CHAR_NAME, 35  ) = "Latin capital letter G with cedilla"
+Unicode( CODEPOINT, 36  ) = "0123" : Unicode( CHAR_NAME, 36  ) = "Latin small letter g with cedilla"
+Unicode( CODEPOINT, 37  ) = "0124" : Unicode( CHAR_NAME, 37  ) = "Latin capital letter H with circumflex"
+Unicode( CODEPOINT, 38  ) = "0125" : Unicode( CHAR_NAME, 38  ) = "Latin small letter h with circumflex"
+Unicode( CODEPOINT, 39  ) = "0126" : Unicode( CHAR_NAME, 39  ) = "Latin capital letter H with stroke"
+Unicode( CODEPOINT, 40  ) = "0127" : Unicode( CHAR_NAME, 40  ) = "Latin small letter h with stroke"
+Unicode( CODEPOINT, 41  ) = "0128" : Unicode( CHAR_NAME, 41  ) = "Latin capital letter I with tilde"
+Unicode( CODEPOINT, 42  ) = "0129" : Unicode( CHAR_NAME, 42  ) = "Latin small letter i with tilde"
+Unicode( CODEPOINT, 43  ) = "012A" : Unicode( CHAR_NAME, 43  ) = "Latin capital letter I with macron"
+Unicode( CODEPOINT, 44  ) = "012B" : Unicode( CHAR_NAME, 44  ) = "Latin small letter i with macron"
+Unicode( CODEPOINT, 45  ) = "012C" : Unicode( CHAR_NAME, 45  ) = "Latin capital letter I with breve"
+Unicode( CODEPOINT, 46  ) = "012D" : Unicode( CHAR_NAME, 46  ) = "Latin small letter i with breve"
+Unicode( CODEPOINT, 47  ) = "012E" : Unicode( CHAR_NAME, 47  ) = "Latin capital letter I with ogonek"
+Unicode( CODEPOINT, 48  ) = "012F" : Unicode( CHAR_NAME, 48  ) = "Latin small letter i with ogonek"
+Unicode( CODEPOINT, 49  ) = "0130" : Unicode( CHAR_NAME, 49  ) = "Latin capital letter I with dot above"
+Unicode( CODEPOINT, 50  ) = "0131" : Unicode( CHAR_NAME, 50  ) = "Latin small letter dotless i"
+Unicode( CODEPOINT, 51  ) = "0132" : Unicode( CHAR_NAME, 51  ) = "Latin capital ligature IJ"
+Unicode( CODEPOINT, 52  ) = "0133" : Unicode( CHAR_NAME, 52  ) = "Latin small ligature ij"
+Unicode( CODEPOINT, 53  ) = "0134" : Unicode( CHAR_NAME, 53  ) = "Latin capital letter J with circumflex"
+Unicode( CODEPOINT, 54  ) = "0135" : Unicode( CHAR_NAME, 54  ) = "Latin small letter j with circumflex"
+Unicode( CODEPOINT, 55  ) = "0136" : Unicode( CHAR_NAME, 55  ) = "Latin capital letter K with cedilla"
+Unicode( CODEPOINT, 56  ) = "0137" : Unicode( CHAR_NAME, 56  ) = "Latin small letter k with cedilla"
+Unicode( CODEPOINT, 57  ) = "0138" : Unicode( CHAR_NAME, 57  ) = "Latin small letter kra"
+Unicode( CODEPOINT, 58  ) = "0139" : Unicode( CHAR_NAME, 58  ) = "Latin capital letter L with acute"
+Unicode( CODEPOINT, 59  ) = "013A" : Unicode( CHAR_NAME, 59  ) = "Latin small letter l with acute"
+Unicode( CODEPOINT, 60  ) = "013B" : Unicode( CHAR_NAME, 60  ) = "Latin capital letter L with cedilla"
+Unicode( CODEPOINT, 61  ) = "013C" : Unicode( CHAR_NAME, 61  ) = "Latin small letter l with cedilla"
+Unicode( CODEPOINT, 62  ) = "013D" : Unicode( CHAR_NAME, 62  ) = "Latin capital letter L with caron"
+Unicode( CODEPOINT, 63  ) = "013E" : Unicode( CHAR_NAME, 63  ) = "Latin small letter l with caron"
+Unicode( CODEPOINT, 64  ) = "013F" : Unicode( CHAR_NAME, 64  ) = "Latin capital letter L with middle dot"
+Unicode( CODEPOINT, 65  ) = "0140" : Unicode( CHAR_NAME, 65  ) = "Latin small letter l with middle dot"
+Unicode( CODEPOINT, 66  ) = "0141" : Unicode( CHAR_NAME, 66  ) = "Latin capital letter L with stroke"
+Unicode( CODEPOINT, 67  ) = "0142" : Unicode( CHAR_NAME, 67  ) = "Latin small letter l with stroke"
+Unicode( CODEPOINT, 68  ) = "0143" : Unicode( CHAR_NAME, 68  ) = "Latin capital letter N with acute"
+Unicode( CODEPOINT, 69  ) = "0144" : Unicode( CHAR_NAME, 69  ) = "Latin small letter n with acute"
+Unicode( CODEPOINT, 70  ) = "0145" : Unicode( CHAR_NAME, 70  ) = "Latin capital letter N with cedilla"
+Unicode( CODEPOINT, 71  ) = "0146" : Unicode( CHAR_NAME, 71  ) = "Latin small letter n with cedilla"
+Unicode( CODEPOINT, 72  ) = "0147" : Unicode( CHAR_NAME, 72  ) = "Latin capital letter N with caron"
+Unicode( CODEPOINT, 73  ) = "0148" : Unicode( CHAR_NAME, 73  ) = "Latin small letter n with caron"
+Unicode( CODEPOINT, 74  ) = "0149" : Unicode( CHAR_NAME, 74  ) = "Latin small letter n preceded by apostrophe"
+Unicode( CODEPOINT, 75  ) = "014A" : Unicode( CHAR_NAME, 75  ) = "Latin capital letter Eng"
+Unicode( CODEPOINT, 76  ) = "014B" : Unicode( CHAR_NAME, 76  ) = "Latin small letter eng"
+Unicode( CODEPOINT, 77  ) = "014C" : Unicode( CHAR_NAME, 77  ) = "Latin capital letter O with macron"
+Unicode( CODEPOINT, 78  ) = "014D" : Unicode( CHAR_NAME, 78  ) = "Latin small letter o with macron"
+Unicode( CODEPOINT, 79  ) = "014E" : Unicode( CHAR_NAME, 79  ) = "Latin capital letter O with breve"
+Unicode( CODEPOINT, 80  ) = "014F" : Unicode( CHAR_NAME, 80  ) = "Latin small letter o with breve"
+Unicode( CODEPOINT, 81  ) = "0150" : Unicode( CHAR_NAME, 81  ) = "Latin capital letter O with double acute"
+Unicode( CODEPOINT, 82  ) = "0151" : Unicode( CHAR_NAME, 82  ) = "Latin small letter o with double acute"
+Unicode( CODEPOINT, 83  ) = "0152" : Unicode( CHAR_NAME, 83  ) = "Latin capital ligature OE"
+Unicode( CODEPOINT, 84  ) = "0153" : Unicode( CHAR_NAME, 84  ) = "Latin small ligature oe"
+Unicode( CODEPOINT, 85  ) = "0154" : Unicode( CHAR_NAME, 85  ) = "Latin capital letter R with acute"
+Unicode( CODEPOINT, 86  ) = "0155" : Unicode( CHAR_NAME, 86  ) = "Latin small letter r with acute"
+Unicode( CODEPOINT, 87  ) = "0156" : Unicode( CHAR_NAME, 87  ) = "Latin capital letter R with cedilla"
+Unicode( CODEPOINT, 88  ) = "0157" : Unicode( CHAR_NAME, 88  ) = "Latin small letter r with cedilla"
+Unicode( CODEPOINT, 89  ) = "0158" : Unicode( CHAR_NAME, 89  ) = "Latin capital letter R with caron"
+Unicode( CODEPOINT, 90  ) = "0159" : Unicode( CHAR_NAME, 90  ) = "Latin small letter r with caron"
+Unicode( CODEPOINT, 91  ) = "015A" : Unicode( CHAR_NAME, 91  ) = "Latin capital letter S with acute"
+Unicode( CODEPOINT, 92  ) = "015B" : Unicode( CHAR_NAME, 92  ) = "Latin small letter s with acute"
+Unicode( CODEPOINT, 93  ) = "015C" : Unicode( CHAR_NAME, 93  ) = "Latin capital letter S with circumflex"
+Unicode( CODEPOINT, 94  ) = "015D" : Unicode( CHAR_NAME, 94  ) = "Latin small letter s with circumflex"
+Unicode( CODEPOINT, 95  ) = "015E" : Unicode( CHAR_NAME, 95  ) = "Latin capital letter S with cedilla"
+Unicode( CODEPOINT, 96  ) = "015F" : Unicode( CHAR_NAME, 96  ) = "Latin small letter s with cedilla"
+Unicode( CODEPOINT, 97  ) = "0160" : Unicode( CHAR_NAME, 97  ) = "Latin capital letter S with caron"
+Unicode( CODEPOINT, 98  ) = "0161" : Unicode( CHAR_NAME, 98  ) = "Latin small letter s with caron"
+Unicode( CODEPOINT, 99  ) = "0162" : Unicode( CHAR_NAME, 99  ) = "Latin capital letter T with cedilla"
+Unicode( CODEPOINT, 100 ) = "0163" : Unicode( CHAR_NAME, 100 ) = "Latin small letter t with cedilla"
+Unicode( CODEPOINT, 101 ) = "0164" : Unicode( CHAR_NAME, 101 ) = "Latin capital letter T with caron"
+Unicode( CODEPOINT, 102 ) = "0165" : Unicode( CHAR_NAME, 102 ) = "Latin small letter t with caron"
+Unicode( CODEPOINT, 103 ) = "0166" : Unicode( CHAR_NAME, 103 ) = "Latin capital letter T with stroke"
+Unicode( CODEPOINT, 104 ) = "0167" : Unicode( CHAR_NAME, 104 ) = "Latin small letter t with stroke"
+Unicode( CODEPOINT, 105 ) = "0168" : Unicode( CHAR_NAME, 105 ) = "Latin capital letter U with tilde"
+Unicode( CODEPOINT, 106 ) = "0169" : Unicode( CHAR_NAME, 106 ) = "Latin small letter u with tilde"
+Unicode( CODEPOINT, 107 ) = "016A" : Unicode( CHAR_NAME, 107 ) = "Latin capital letter U with macron"
+Unicode( CODEPOINT, 108 ) = "016B" : Unicode( CHAR_NAME, 108 ) = "Latin small letter u with macron"
+Unicode( CODEPOINT, 109 ) = "016C" : Unicode( CHAR_NAME, 109 ) = "Latin capital letter U with breve"
+Unicode( CODEPOINT, 110 ) = "016D" : Unicode( CHAR_NAME, 110 ) = "Latin small letter u with breve"
+Unicode( CODEPOINT, 111 ) = "016E" : Unicode( CHAR_NAME, 111 ) = "Latin capital letter U with ring above"
+Unicode( CODEPOINT, 112 ) = "016F" : Unicode( CHAR_NAME, 112 ) = "Latin small letter u with ring above"
+Unicode( CODEPOINT, 113 ) = "0170" : Unicode( CHAR_NAME, 113 ) = "Latin capital letter U with double acute"
+Unicode( CODEPOINT, 114 ) = "0171" : Unicode( CHAR_NAME, 114 ) = "Latin small letter u with double acute"
+Unicode( CODEPOINT, 115 ) = "0172" : Unicode( CHAR_NAME, 115 ) = "Latin capital letter U with ogonek"
+Unicode( CODEPOINT, 116 ) = "0173" : Unicode( CHAR_NAME, 116 ) = "Latin small letter u with ogonek"
+Unicode( CODEPOINT, 117 ) = "0174" : Unicode( CHAR_NAME, 117 ) = "Latin capital letter W with circumflex"
+Unicode( CODEPOINT, 118 ) = "0175" : Unicode( CHAR_NAME, 118 ) = "Latin small letter w with circumflex"
+Unicode( CODEPOINT, 119 ) = "0176" : Unicode( CHAR_NAME, 119 ) = "Latin capital letter Y with circumflex"
+Unicode( CODEPOINT, 120 ) = "0177" : Unicode( CHAR_NAME, 120 ) = "Latin small letter y with circumflex"
+Unicode( CODEPOINT, 121 ) = "0178" : Unicode( CHAR_NAME, 121 ) = "Latin capital letter Y with diaeresis"
+Unicode( CODEPOINT, 122 ) = "0179" : Unicode( CHAR_NAME, 122 ) = "Latin capital letter Z with acute"
+Unicode( CODEPOINT, 123 ) = "017A" : Unicode( CHAR_NAME, 123 ) = "Latin small letter z with acute"
+Unicode( CODEPOINT, 124 ) = "017B" : Unicode( CHAR_NAME, 124 ) = "Latin capital letter Z with dot above"
+Unicode( CODEPOINT, 125 ) = "017C" : Unicode( CHAR_NAME, 125 ) = "Latin small letter z with dot above"
+Unicode( CODEPOINT, 126 ) = "017D" : Unicode( CHAR_NAME, 126 ) = "Latin capital letter Z with caron"
+Unicode( CODEPOINT, 127 ) = "017E" : Unicode( CHAR_NAME, 127 ) = "Latin small letter z with caron"
+Unicode( CODEPOINT, 128 ) = "017F" : Unicode( CHAR_NAME, 128 ) = "Latin small letter long s"
+Unicode( CODEPOINT, 129 ) = "0180" : Unicode( CHAR_NAME, 129 ) = "Latin small letter b with stroke"
+Unicode( CODEPOINT, 130 ) = "0181" : Unicode( CHAR_NAME, 130 ) = "Latin capital letter B with hook"
+Unicode( CODEPOINT, 131 ) = "0182" : Unicode( CHAR_NAME, 131 ) = "Latin capital letter B with topbar"
+Unicode( CODEPOINT, 132 ) = "0183" : Unicode( CHAR_NAME, 132 ) = "Latin small letter b with topbar"
+Unicode( CODEPOINT, 133 ) = "0184" : Unicode( CHAR_NAME, 133 ) = "Latin capital letter tone six"
+Unicode( CODEPOINT, 134 ) = "0185" : Unicode( CHAR_NAME, 134 ) = "Latin small letter tone six"
+Unicode( CODEPOINT, 135 ) = "0186" : Unicode( CHAR_NAME, 135 ) = "Latin capital letter open O"
+Unicode( CODEPOINT, 136 ) = "0187" : Unicode( CHAR_NAME, 136 ) = "Latin capital letter C with hook"
+Unicode( CODEPOINT, 137 ) = "0188" : Unicode( CHAR_NAME, 137 ) = "Latin small letter c with hook"
+Unicode( CODEPOINT, 138 ) = "0189" : Unicode( CHAR_NAME, 138 ) = "Latin capital letter African D"
+Unicode( CODEPOINT, 139 ) = "018A" : Unicode( CHAR_NAME, 139 ) = "Latin capital letter D with hook"
+Unicode( CODEPOINT, 140 ) = "018B" : Unicode( CHAR_NAME, 140 ) = "Latin capital letter D with topbar"
+Unicode( CODEPOINT, 141 ) = "018C" : Unicode( CHAR_NAME, 141 ) = "Latin small letter d with topbar"
+Unicode( CODEPOINT, 142 ) = "018D" : Unicode( CHAR_NAME, 142 ) = "Latin small letter turned delta"
+Unicode( CODEPOINT, 143 ) = "018E" : Unicode( CHAR_NAME, 143 ) = "Latin capital letter reversed E"
+Unicode( CODEPOINT, 144 ) = "018F" : Unicode( CHAR_NAME, 144 ) = "Latin capital letter Schwa"
+Unicode( CODEPOINT, 145 ) = "0190" : Unicode( CHAR_NAME, 145 ) = "Latin capital letter open E"
+Unicode( CODEPOINT, 146 ) = "0191" : Unicode( CHAR_NAME, 146 ) = "Latin capital letter F with hook"
+Unicode( CODEPOINT, 147 ) = "0192" : Unicode( CHAR_NAME, 147 ) = "Latin small letter f with hook"
+Unicode( CODEPOINT, 148 ) = "0193" : Unicode( CHAR_NAME, 148 ) = "Latin capital letter G with hook"
+Unicode( CODEPOINT, 149 ) = "0194" : Unicode( CHAR_NAME, 149 ) = "Latin capital letter Gamma"
+Unicode( CODEPOINT, 150 ) = "0195" : Unicode( CHAR_NAME, 150 ) = "Latin small letter hv"
+Unicode( CODEPOINT, 151 ) = "0196" : Unicode( CHAR_NAME, 151 ) = "Latin capital letter Iota"
+Unicode( CODEPOINT, 152 ) = "0197" : Unicode( CHAR_NAME, 152 ) = "Latin capital letter I with stroke"
+Unicode( CODEPOINT, 153 ) = "0198" : Unicode( CHAR_NAME, 153 ) = "Latin capital letter K with hook"
+Unicode( CODEPOINT, 154 ) = "0199" : Unicode( CHAR_NAME, 154 ) = "Latin small letter k with hook"
+Unicode( CODEPOINT, 155 ) = "019A" : Unicode( CHAR_NAME, 155 ) = "Latin small letter l with bar"
+Unicode( CODEPOINT, 156 ) = "019B" : Unicode( CHAR_NAME, 156 ) = "Latin small letter lambda with stroke"
+Unicode( CODEPOINT, 157 ) = "019C" : Unicode( CHAR_NAME, 157 ) = "Latin capital letter turned M"
+Unicode( CODEPOINT, 158 ) = "019D" : Unicode( CHAR_NAME, 158 ) = "Latin capital letter N with left hook"
+Unicode( CODEPOINT, 159 ) = "019E" : Unicode( CHAR_NAME, 159 ) = "Latin small letter n with long right leg"
+Unicode( CODEPOINT, 160 ) = "019F" : Unicode( CHAR_NAME, 160 ) = "Latin capital letter O with middle tilde"
+Unicode( CODEPOINT, 161 ) = "01A0" : Unicode( CHAR_NAME, 161 ) = "Latin capital letter O with horn"
+Unicode( CODEPOINT, 162 ) = "01A1" : Unicode( CHAR_NAME, 162 ) = "Latin small letter o with horn"
+Unicode( CODEPOINT, 163 ) = "01A2" : Unicode( CHAR_NAME, 163 ) = "Latin capital letter OI"
+Unicode( CODEPOINT, 164 ) = "01A3" : Unicode( CHAR_NAME, 164 ) = "Latin small letter oi"
+Unicode( CODEPOINT, 165 ) = "01A4" : Unicode( CHAR_NAME, 165 ) = "Latin capital letter P with hook"
+Unicode( CODEPOINT, 166 ) = "01A5" : Unicode( CHAR_NAME, 166 ) = "Latin small letter p with hook"
+Unicode( CODEPOINT, 167 ) = "01A6" : Unicode( CHAR_NAME, 167 ) = "Latin letter yr"
+Unicode( CODEPOINT, 168 ) = "01A7" : Unicode( CHAR_NAME, 168 ) = "Latin capital letter tone two"
+Unicode( CODEPOINT, 169 ) = "01A8" : Unicode( CHAR_NAME, 169 ) = "Latin small letter tone two"
+Unicode( CODEPOINT, 170 ) = "01A9" : Unicode( CHAR_NAME, 170 ) = "Latin capital letter Esh"
+Unicode( CODEPOINT, 171 ) = "01AA" : Unicode( CHAR_NAME, 171 ) = "Latin letter reversed esh loop"
+Unicode( CODEPOINT, 172 ) = "01AB" : Unicode( CHAR_NAME, 172 ) = "Latin small letter t with palatal hook"
+Unicode( CODEPOINT, 173 ) = "01AC" : Unicode( CHAR_NAME, 173 ) = "Latin capital letter T with hook"
+Unicode( CODEPOINT, 174 ) = "01AD" : Unicode( CHAR_NAME, 174 ) = "Latin small letter t with hook"
+Unicode( CODEPOINT, 175 ) = "01AE" : Unicode( CHAR_NAME, 175 ) = "Latin capital letter T with retroflex hook"
+Unicode( CODEPOINT, 176 ) = "01AF" : Unicode( CHAR_NAME, 176 ) = "Latin capital letter U with horn"
+Unicode( CODEPOINT, 177 ) = "01B0" : Unicode( CHAR_NAME, 177 ) = "Latin small letter u with horn"
+Unicode( CODEPOINT, 178 ) = "01B1" : Unicode( CHAR_NAME, 178 ) = "Latin capital letter Upsilon"
+Unicode( CODEPOINT, 179 ) = "01B2" : Unicode( CHAR_NAME, 179 ) = "Latin capital letter V with hook"
+Unicode( CODEPOINT, 180 ) = "01B3" : Unicode( CHAR_NAME, 180 ) = "Latin capital letter Y with hook"
+Unicode( CODEPOINT, 181 ) = "01B4" : Unicode( CHAR_NAME, 181 ) = "Latin small letter y with hook"
+Unicode( CODEPOINT, 182 ) = "01B5" : Unicode( CHAR_NAME, 182 ) = "Latin capital letter Z with stroke"
+Unicode( CODEPOINT, 183 ) = "01B6" : Unicode( CHAR_NAME, 183 ) = "Latin small letter z with stroke"
+Unicode( CODEPOINT, 184 ) = "01B7" : Unicode( CHAR_NAME, 184 ) = "Latin capital letter Ezh"
+Unicode( CODEPOINT, 185 ) = "01B8" : Unicode( CHAR_NAME, 185 ) = "Latin capital letter Ezh reversed"
+Unicode( CODEPOINT, 186 ) = "01B9" : Unicode( CHAR_NAME, 186 ) = "Latin small letter ezh reversed"
+Unicode( CODEPOINT, 187 ) = "01BA" : Unicode( CHAR_NAME, 187 ) = "Latin small letter ezh with tail"
+Unicode( CODEPOINT, 188 ) = "01BB" : Unicode( CHAR_NAME, 188 ) = "Latin letter two with stroke"
+Unicode( CODEPOINT, 189 ) = "01BC" : Unicode( CHAR_NAME, 189 ) = "Latin capital letter tone five"
+Unicode( CODEPOINT, 190 ) = "01BD" : Unicode( CHAR_NAME, 190 ) = "Latin small letter tone five"
+Unicode( CODEPOINT, 191 ) = "01BE" : Unicode( CHAR_NAME, 191 ) = "Latin letter inverted glottal stop with stroke"
+Unicode( CODEPOINT, 192 ) = "01BF" : Unicode( CHAR_NAME, 192 ) = "Latin letter wynn"
+Unicode( CODEPOINT, 193 ) = "01C0" : Unicode( CHAR_NAME, 193 ) = "Latin letter dental click"
+Unicode( CODEPOINT, 194 ) = "01C1" : Unicode( CHAR_NAME, 194 ) = "Latin letter lateral click"
+Unicode( CODEPOINT, 195 ) = "01C2" : Unicode( CHAR_NAME, 195 ) = "Latin letter alveolar click"
+Unicode( CODEPOINT, 196 ) = "01C3" : Unicode( CHAR_NAME, 196 ) = "Latin letter retroflex click"
+Unicode( CODEPOINT, 197 ) = "01C4" : Unicode( CHAR_NAME, 197 ) = "Latin capital letter DZ with caron"
+Unicode( CODEPOINT, 198 ) = "01C5" : Unicode( CHAR_NAME, 198 ) = "Latin capital letter D with small letter z with caron"
+Unicode( CODEPOINT, 199 ) = "01C6" : Unicode( CHAR_NAME, 199 ) = "Latin small letter dz with caron"
+Unicode( CODEPOINT, 200 ) = "01C7" : Unicode( CHAR_NAME, 200 ) = "Latin capital letter LJ"
+Unicode( CODEPOINT, 201 ) = "01C8" : Unicode( CHAR_NAME, 201 ) = "Latin capital letter L with small letter j"
+Unicode( CODEPOINT, 202 ) = "01C9" : Unicode( CHAR_NAME, 202 ) = "Latin small letter lj"
+Unicode( CODEPOINT, 203 ) = "01CA" : Unicode( CHAR_NAME, 203 ) = "Latin capital letter NJ"
+Unicode( CODEPOINT, 204 ) = "01CB" : Unicode( CHAR_NAME, 204 ) = "Latin capital letter N with small letter j"
+Unicode( CODEPOINT, 205 ) = "01CC" : Unicode( CHAR_NAME, 205 ) = "Latin small letter nj"
+Unicode( CODEPOINT, 206 ) = "01CD" : Unicode( CHAR_NAME, 206 ) = "Latin capital letter A with caron"
+Unicode( CODEPOINT, 207 ) = "01CE" : Unicode( CHAR_NAME, 207 ) = "Latin small letter a with caron"
+Unicode( CODEPOINT, 208 ) = "01CF" : Unicode( CHAR_NAME, 208 ) = "Latin capital letter I with caron"
+Unicode( CODEPOINT, 209 ) = "01D0" : Unicode( CHAR_NAME, 209 ) = "Latin small letter i with caron"
+Unicode( CODEPOINT, 210 ) = "01D1" : Unicode( CHAR_NAME, 210 ) = "Latin capital letter O with caron"
+Unicode( CODEPOINT, 211 ) = "01D2" : Unicode( CHAR_NAME, 211 ) = "Latin small letter o with caron"
+Unicode( CODEPOINT, 212 ) = "01D3" : Unicode( CHAR_NAME, 212 ) = "Latin capital letter U with caron"
+Unicode( CODEPOINT, 213 ) = "01D4" : Unicode( CHAR_NAME, 213 ) = "Latin small letter u with caron"
+Unicode( CODEPOINT, 214 ) = "01D5" : Unicode( CHAR_NAME, 214 ) = "Latin capital letter U with diaeresis and macron"
+Unicode( CODEPOINT, 215 ) = "01D6" : Unicode( CHAR_NAME, 215 ) = "Latin small letter u with diaeresis and macron"
+Unicode( CODEPOINT, 216 ) = "01D7" : Unicode( CHAR_NAME, 216 ) = "Latin capital letter U with diaeresis and acute"
+Unicode( CODEPOINT, 217 ) = "01D8" : Unicode( CHAR_NAME, 217 ) = "Latin small letter u with diaeresis and acute"
+Unicode( CODEPOINT, 218 ) = "01D9" : Unicode( CHAR_NAME, 218 ) = "Latin capital letter U with diaeresis and caron"
+Unicode( CODEPOINT, 219 ) = "01DA" : Unicode( CHAR_NAME, 219 ) = "Latin small letter u with diaeresis and caron"
+Unicode( CODEPOINT, 220 ) = "01DB" : Unicode( CHAR_NAME, 220 ) = "Latin capital letter U with diaeresis and grave"
+Unicode( CODEPOINT, 221 ) = "01DC" : Unicode( CHAR_NAME, 221 ) = "Latin small letter u with diaeresis and grave"
+Unicode( CODEPOINT, 222 ) = "01DD" : Unicode( CHAR_NAME, 222 ) = "Latin small letter turned e"
+Unicode( CODEPOINT, 223 ) = "01DE" : Unicode( CHAR_NAME, 223 ) = "Latin capital letter A with diaeresis and macron"
+Unicode( CODEPOINT, 224 ) = "01DF" : Unicode( CHAR_NAME, 224 ) = "Latin small letter a with diaeresis and macron"
+Unicode( CODEPOINT, 225 ) = "01E0" : Unicode( CHAR_NAME, 225 ) = "Latin capital letter A with dot above and macron"
+Unicode( CODEPOINT, 226 ) = "01E1" : Unicode( CHAR_NAME, 226 ) = "Latin small letter a with dot above and macron"
+Unicode( CODEPOINT, 227 ) = "01E2" : Unicode( CHAR_NAME, 227 ) = "Latin capital letter AE with macron"
+Unicode( CODEPOINT, 228 ) = "01E3" : Unicode( CHAR_NAME, 228 ) = "Latin small letter ae with macron"
+Unicode( CODEPOINT, 229 ) = "01E4" : Unicode( CHAR_NAME, 229 ) = "Latin capital letter G with stroke"
+Unicode( CODEPOINT, 230 ) = "01E5" : Unicode( CHAR_NAME, 230 ) = "Latin small letter g with stroke"
+Unicode( CODEPOINT, 231 ) = "01E6" : Unicode( CHAR_NAME, 231 ) = "Latin capital letter G with caron"
+Unicode( CODEPOINT, 232 ) = "01E7" : Unicode( CHAR_NAME, 232 ) = "Latin small letter g with caron"
+Unicode( CODEPOINT, 233 ) = "01E8" : Unicode( CHAR_NAME, 233 ) = "Latin capital letter K with caron"
+Unicode( CODEPOINT, 234 ) = "01E9" : Unicode( CHAR_NAME, 234 ) = "Latin small letter k with caron"
+Unicode( CODEPOINT, 235 ) = "01EA" : Unicode( CHAR_NAME, 235 ) = "Latin capital letter O with ogonek"
+Unicode( CODEPOINT, 236 ) = "01EB" : Unicode( CHAR_NAME, 236 ) = "Latin small letter o with ogonek"
+Unicode( CODEPOINT, 237 ) = "01EC" : Unicode( CHAR_NAME, 237 ) = "Latin capital letter O with ogonek and macron"
+Unicode( CODEPOINT, 238 ) = "01ED" : Unicode( CHAR_NAME, 238 ) = "Latin small letter o with ogonek and macron"
+Unicode( CODEPOINT, 239 ) = "01EE" : Unicode( CHAR_NAME, 239 ) = "Latin capital letter Ezh with caron"
+Unicode( CODEPOINT, 240 ) = "01EF" : Unicode( CHAR_NAME, 240 ) = "Latin small letter ezh with caron"
+Unicode( CODEPOINT, 241 ) = "01F0" : Unicode( CHAR_NAME, 241 ) = "Latin small letter j with caron"
+Unicode( CODEPOINT, 242 ) = "01F1" : Unicode( CHAR_NAME, 242 ) = "Latin capital letter DZ"
+Unicode( CODEPOINT, 243 ) = "01F2" : Unicode( CHAR_NAME, 243 ) = "Latin capital letter D with small letter z"
+Unicode( CODEPOINT, 244 ) = "01F3" : Unicode( CHAR_NAME, 244 ) = "Latin small letter dz"
+Unicode( CODEPOINT, 245 ) = "01F4" : Unicode( CHAR_NAME, 245 ) = "Latin capital letter G with acute"
+Unicode( CODEPOINT, 246 ) = "01F5" : Unicode( CHAR_NAME, 246 ) = "Latin small letter g with acute"
+Unicode( CODEPOINT, 247 ) = "01F6" : Unicode( CHAR_NAME, 247 ) = "Latin capital letter Hwair"
+Unicode( CODEPOINT, 248 ) = "01F7" : Unicode( CHAR_NAME, 248 ) = "Latin capital letter Wynn"
+Unicode( CODEPOINT, 249 ) = "01F8" : Unicode( CHAR_NAME, 249 ) = "Latin capital letter N with grave"
+Unicode( CODEPOINT, 250 ) = "01F9" : Unicode( CHAR_NAME, 250 ) = "Latin small letter n with grave"
+Unicode( CODEPOINT, 251 ) = "01FA" : Unicode( CHAR_NAME, 251 ) = "Latin capital letter A with ring above and acute"
+Unicode( CODEPOINT, 252 ) = "01FB" : Unicode( CHAR_NAME, 252 ) = "Latin small letter a with ring above and acute"
+Unicode( CODEPOINT, 253 ) = "01FC" : Unicode( CHAR_NAME, 253 ) = "Latin capital letter AE with acute"
+Unicode( CODEPOINT, 254 ) = "01FD" : Unicode( CHAR_NAME, 254 ) = "Latin small letter ae with acute"
+Unicode( CODEPOINT, 255 ) = "01FE" : Unicode( CHAR_NAME, 255 ) = "Latin capital letter O with stroke and acute"
+Unicode( CODEPOINT, 256 ) = "01FF" : Unicode( CHAR_NAME, 256 ) = "Latin small letter o with stroke and acute"
+Unicode( CODEPOINT, 257 ) = "0200" : Unicode( CHAR_NAME, 257 ) = "Latin capital letter A with double grave"
+Unicode( CODEPOINT, 258 ) = "0201" : Unicode( CHAR_NAME, 258 ) = "Latin small letter a with double grave"
+Unicode( CODEPOINT, 259 ) = "0202" : Unicode( CHAR_NAME, 259 ) = "Latin capital letter A with inverted breve"
+Unicode( CODEPOINT, 260 ) = "0203" : Unicode( CHAR_NAME, 260 ) = "Latin small letter a with inverted breve"
+Unicode( CODEPOINT, 261 ) = "0204" : Unicode( CHAR_NAME, 261 ) = "Latin capital letter E with double grave"
+Unicode( CODEPOINT, 262 ) = "0205" : Unicode( CHAR_NAME, 262 ) = "Latin small letter e with double grave"
+Unicode( CODEPOINT, 263 ) = "0206" : Unicode( CHAR_NAME, 263 ) = "Latin capital letter E with inverted breve"
+Unicode( CODEPOINT, 264 ) = "0207" : Unicode( CHAR_NAME, 264 ) = "Latin small letter e with inverted breve"
+Unicode( CODEPOINT, 265 ) = "0208" : Unicode( CHAR_NAME, 265 ) = "Latin capital letter I with double grave"
+Unicode( CODEPOINT, 266 ) = "0209" : Unicode( CHAR_NAME, 266 ) = "Latin small letter i with double grave"
+Unicode( CODEPOINT, 267 ) = "020A" : Unicode( CHAR_NAME, 267 ) = "Latin capital letter I with inverted breve"
+Unicode( CODEPOINT, 268 ) = "020B" : Unicode( CHAR_NAME, 268 ) = "Latin small letter i with inverted breve"
+Unicode( CODEPOINT, 269 ) = "020C" : Unicode( CHAR_NAME, 269 ) = "Latin capital letter O with double grave"
+Unicode( CODEPOINT, 270 ) = "020D" : Unicode( CHAR_NAME, 270 ) = "Latin small letter o with double grave"
+Unicode( CODEPOINT, 271 ) = "020E" : Unicode( CHAR_NAME, 271 ) = "Latin capital letter O with inverted breve"
+Unicode( CODEPOINT, 272 ) = "020F" : Unicode( CHAR_NAME, 272 ) = "Latin small letter o with inverted breve"
+Unicode( CODEPOINT, 273 ) = "0210" : Unicode( CHAR_NAME, 273 ) = "Latin capital letter R with double grave"
+Unicode( CODEPOINT, 274 ) = "0211" : Unicode( CHAR_NAME, 274 ) = "Latin small letter r with double grave"
+Unicode( CODEPOINT, 275 ) = "0212" : Unicode( CHAR_NAME, 275 ) = "Latin capital letter R with inverted breve"
+Unicode( CODEPOINT, 276 ) = "0213" : Unicode( CHAR_NAME, 276 ) = "Latin small letter r with inverted breve"
+Unicode( CODEPOINT, 277 ) = "0214" : Unicode( CHAR_NAME, 277 ) = "Latin capital letter U with double grave"
+Unicode( CODEPOINT, 278 ) = "0215" : Unicode( CHAR_NAME, 278 ) = "Latin small letter u with double grave"
+Unicode( CODEPOINT, 279 ) = "0216" : Unicode( CHAR_NAME, 279 ) = "Latin capital letter U with inverted breve"
+Unicode( CODEPOINT, 280 ) = "0217" : Unicode( CHAR_NAME, 280 ) = "Latin small letter u with inverted breve"
+Unicode( CODEPOINT, 281 ) = "0218" : Unicode( CHAR_NAME, 281 ) = "Latin capital letter S with comma below"
+Unicode( CODEPOINT, 282 ) = "0219" : Unicode( CHAR_NAME, 282 ) = "Latin small letter s with comma below"
+Unicode( CODEPOINT, 283 ) = "021A" : Unicode( CHAR_NAME, 283 ) = "Latin capital letter T with comma below"
+Unicode( CODEPOINT, 284 ) = "021B" : Unicode( CHAR_NAME, 284 ) = "Latin small letter t with comma below"
+Unicode( CODEPOINT, 285 ) = "021C" : Unicode( CHAR_NAME, 285 ) = "Latin capital letter Yogh"
+Unicode( CODEPOINT, 286 ) = "021D" : Unicode( CHAR_NAME, 286 ) = "Latin small letter yogh"
+Unicode( CODEPOINT, 287 ) = "021E" : Unicode( CHAR_NAME, 287 ) = "Latin capital letter H with caron"
+Unicode( CODEPOINT, 288 ) = "021F" : Unicode( CHAR_NAME, 288 ) = "Latin small letter h with caron"
+Unicode( CODEPOINT, 289 ) = "0220" : Unicode( CHAR_NAME, 289 ) = "Latin capital letter N with long right leg"
+Unicode( CODEPOINT, 290 ) = "0221" : Unicode( CHAR_NAME, 290 ) = "Latin small letter d with curl"
+Unicode( CODEPOINT, 291 ) = "0222" : Unicode( CHAR_NAME, 291 ) = "Latin capital letter OU"
+Unicode( CODEPOINT, 292 ) = "0223" : Unicode( CHAR_NAME, 292 ) = "Latin small letter ou"
+Unicode( CODEPOINT, 293 ) = "0224" : Unicode( CHAR_NAME, 293 ) = "Latin capital letter Z with hook"
+Unicode( CODEPOINT, 294 ) = "0225" : Unicode( CHAR_NAME, 294 ) = "Latin small letter z with hook"
+Unicode( CODEPOINT, 295 ) = "0226" : Unicode( CHAR_NAME, 295 ) = "Latin capital letter A with dot above"
+Unicode( CODEPOINT, 296 ) = "0227" : Unicode( CHAR_NAME, 296 ) = "Latin small letter a with dot above"
+Unicode( CODEPOINT, 297 ) = "0228" : Unicode( CHAR_NAME, 297 ) = "Latin capital letter E with cedilla"
+Unicode( CODEPOINT, 298 ) = "0229" : Unicode( CHAR_NAME, 298 ) = "Latin small letter e with cedilla"
+Unicode( CODEPOINT, 299 ) = "022A" : Unicode( CHAR_NAME, 299 ) = "Latin capital letter O with diaeresis and macron"
+Unicode( CODEPOINT, 300 ) = "022B" : Unicode( CHAR_NAME, 300 ) = "Latin small letter o with diaeresis and macron"
+Unicode( CODEPOINT, 301 ) = "022C" : Unicode( CHAR_NAME, 301 ) = "Latin capital letter O with tilde and macron"
+Unicode( CODEPOINT, 302 ) = "022D" : Unicode( CHAR_NAME, 302 ) = "Latin small letter o with tilde and macron"
+Unicode( CODEPOINT, 303 ) = "022E" : Unicode( CHAR_NAME, 303 ) = "Latin capital letter O with dot above"
+Unicode( CODEPOINT, 304 ) = "022F" : Unicode( CHAR_NAME, 304 ) = "Latin small letter o with dot above"
+Unicode( CODEPOINT, 305 ) = "0230" : Unicode( CHAR_NAME, 305 ) = "Latin capital letter O with dot above and macron"
+Unicode( CODEPOINT, 306 ) = "0231" : Unicode( CHAR_NAME, 306 ) = "Latin small letter o with dot above and macron"
+Unicode( CODEPOINT, 307 ) = "0232" : Unicode( CHAR_NAME, 307 ) = "Latin capital letter Y with macron"
+Unicode( CODEPOINT, 308 ) = "0233" : Unicode( CHAR_NAME, 308 ) = "Latin small letter y with macron"
+Unicode( CODEPOINT, 309 ) = "0234" : Unicode( CHAR_NAME, 309 ) = "Latin small letter l with curl"
+Unicode( CODEPOINT, 310 ) = "0235" : Unicode( CHAR_NAME, 310 ) = "Latin small letter n with curl"
+Unicode( CODEPOINT, 311 ) = "0236" : Unicode( CHAR_NAME, 311 ) = "Latin small letter t with curl"
+Unicode( CODEPOINT, 312 ) = "0237" : Unicode( CHAR_NAME, 312 ) = "Latin small letter dotless j"
+Unicode( CODEPOINT, 313 ) = "0238" : Unicode( CHAR_NAME, 313 ) = "Latin small letter db digraph"
+Unicode( CODEPOINT, 314 ) = "0239" : Unicode( CHAR_NAME, 314 ) = "Latin small letter qp digraph"
+Unicode( CODEPOINT, 315 ) = "023A" : Unicode( CHAR_NAME, 315 ) = "Latin capital letter A with stroke"
+Unicode( CODEPOINT, 316 ) = "023B" : Unicode( CHAR_NAME, 316 ) = "Latin capital letter C with stroke"
+Unicode( CODEPOINT, 317 ) = "023C" : Unicode( CHAR_NAME, 317 ) = "Latin small letter c with stroke"
+Unicode( CODEPOINT, 318 ) = "023D" : Unicode( CHAR_NAME, 318 ) = "Latin capital letter L with bar"
+Unicode( CODEPOINT, 319 ) = "023E" : Unicode( CHAR_NAME, 319 ) = "Latin capital letter T with diagonal stroke"
+Unicode( CODEPOINT, 320 ) = "023F" : Unicode( CHAR_NAME, 320 ) = "Latin small letter s with swash tail"
+Unicode( CODEPOINT, 321 ) = "0240" : Unicode( CHAR_NAME, 321 ) = "Latin small letter z with swash tail"
+Unicode( CODEPOINT, 322 ) = "0241" : Unicode( CHAR_NAME, 322 ) = "Latin capital letter glottal stop"
+Unicode( CODEPOINT, 323 ) = "0242" : Unicode( CHAR_NAME, 323 ) = "Latin small letter glottal stop"
+Unicode( CODEPOINT, 324 ) = "0243" : Unicode( CHAR_NAME, 324 ) = "Latin capital letter B with stroke"
+Unicode( CODEPOINT, 325 ) = "0244" : Unicode( CHAR_NAME, 325 ) = "Latin capital letter U bar"
+Unicode( CODEPOINT, 326 ) = "0245" : Unicode( CHAR_NAME, 326 ) = "Latin capital letter turned V"
+Unicode( CODEPOINT, 327 ) = "0246" : Unicode( CHAR_NAME, 327 ) = "Latin capital letter E with stroke"
+Unicode( CODEPOINT, 328 ) = "0247" : Unicode( CHAR_NAME, 328 ) = "Latin small letter e with stroke"
+Unicode( CODEPOINT, 329 ) = "0248" : Unicode( CHAR_NAME, 329 ) = "Latin capital letter J with stroke"
+Unicode( CODEPOINT, 330 ) = "0249" : Unicode( CHAR_NAME, 330 ) = "Latin small letter j with stroke"
+Unicode( CODEPOINT, 331 ) = "024A" : Unicode( CHAR_NAME, 331 ) = "Latin capital letter Small q with hook tail"
+Unicode( CODEPOINT, 332 ) = "024B" : Unicode( CHAR_NAME, 332 ) = "Latin small letter q with hook tail"
+Unicode( CODEPOINT, 333 ) = "024C" : Unicode( CHAR_NAME, 333 ) = "Latin capital letter R with stroke"
+Unicode( CODEPOINT, 334 ) = "024D" : Unicode( CHAR_NAME, 334 ) = "Latin small letter r with stroke"
+Unicode( CODEPOINT, 335 ) = "024E" : Unicode( CHAR_NAME, 335 ) = "Latin capital letter Y with stroke"
+Unicode( CODEPOINT, 336 ) = "024F" : Unicode( CHAR_NAME, 336 ) = "Latin small letter y with stroke"
+Unicode( CODEPOINT, 337 ) = "02B0" : Unicode( CHAR_NAME, 337 ) = "Modifier letter small h"
+Unicode( CODEPOINT, 338 ) = "02B1" : Unicode( CHAR_NAME, 338 ) = "Modifier letter small h with hook"
+Unicode( CODEPOINT, 339 ) = "02B2" : Unicode( CHAR_NAME, 339 ) = "Modifier letter small j"
+Unicode( CODEPOINT, 340 ) = "02B3" : Unicode( CHAR_NAME, 340 ) = "Modifier letter small r"
+Unicode( CODEPOINT, 341 ) = "02B4" : Unicode( CHAR_NAME, 341 ) = "Modifier letter small turned r"
+Unicode( CODEPOINT, 342 ) = "02B5" : Unicode( CHAR_NAME, 342 ) = "Modifier letter small turned r with hook"
+Unicode( CODEPOINT, 343 ) = "02B6" : Unicode( CHAR_NAME, 343 ) = "Modifier letter small capital inverted r"
+Unicode( CODEPOINT, 344 ) = "02B7" : Unicode( CHAR_NAME, 344 ) = "Modifier letter small w"
+Unicode( CODEPOINT, 345 ) = "02B8" : Unicode( CHAR_NAME, 345 ) = "Modifier letter small y"
+Unicode( CODEPOINT, 346 ) = "02B9" : Unicode( CHAR_NAME, 346 ) = "Modifier letter prime"
+Unicode( CODEPOINT, 347 ) = "02BA" : Unicode( CHAR_NAME, 347 ) = "Modifier letter double prime"
+Unicode( CODEPOINT, 348 ) = "02BB" : Unicode( CHAR_NAME, 348 ) = "Modifier letter turned comma"
+Unicode( CODEPOINT, 349 ) = "02BC" : Unicode( CHAR_NAME, 349 ) = "Modifier letter apostrophe"
+Unicode( CODEPOINT, 350 ) = "02BD" : Unicode( CHAR_NAME, 350 ) = "Modifier letter reversed comma"
+Unicode( CODEPOINT, 351 ) = "02BE" : Unicode( CHAR_NAME, 351 ) = "Modifier letter right half ring"
+Unicode( CODEPOINT, 352 ) = "02BF" : Unicode( CHAR_NAME, 352 ) = "Modifier letter left half ring"
+Unicode( CODEPOINT, 353 ) = "02C0" : Unicode( CHAR_NAME, 353 ) = "Modifier letter glottal stop"
+Unicode( CODEPOINT, 354 ) = "02C1" : Unicode( CHAR_NAME, 354 ) = "Modifier letter reversed glottal stop"
+Unicode( CODEPOINT, 355 ) = "02C2" : Unicode( CHAR_NAME, 355 ) = "Modifier letter left arrowhead"
+Unicode( CODEPOINT, 356 ) = "02C3" : Unicode( CHAR_NAME, 356 ) = "Modifier letter right arrowhead"
+Unicode( CODEPOINT, 357 ) = "02C4" : Unicode( CHAR_NAME, 357 ) = "Modifier letter up arrowhead"
+Unicode( CODEPOINT, 358 ) = "02C5" : Unicode( CHAR_NAME, 358 ) = "Modifier letter down arrowhead"
+Unicode( CODEPOINT, 359 ) = "02C6" : Unicode( CHAR_NAME, 359 ) = "Modifier letter circumflex accent"
+Unicode( CODEPOINT, 360 ) = "02C7" : Unicode( CHAR_NAME, 360 ) = "Caron"
+Unicode( CODEPOINT, 361 ) = "02C8" : Unicode( CHAR_NAME, 361 ) = "Modifier letter vertical line"
+Unicode( CODEPOINT, 362 ) = "02C9" : Unicode( CHAR_NAME, 362 ) = "Modifier letter macron"
+Unicode( CODEPOINT, 363 ) = "02CA" : Unicode( CHAR_NAME, 363 ) = "Modifier letter acute accent"
+Unicode( CODEPOINT, 364 ) = "02CB" : Unicode( CHAR_NAME, 364 ) = "Modifier letter grave accent"
+Unicode( CODEPOINT, 365 ) = "02CC" : Unicode( CHAR_NAME, 365 ) = "Modifier letter low vertical line"
+Unicode( CODEPOINT, 366 ) = "02CD" : Unicode( CHAR_NAME, 366 ) = "Modifier letter low macron"
+Unicode( CODEPOINT, 367 ) = "02CE" : Unicode( CHAR_NAME, 367 ) = "Modifier letter low grave accent"
+Unicode( CODEPOINT, 368 ) = "02CF" : Unicode( CHAR_NAME, 368 ) = "Modifier letter low acute accent"
+Unicode( CODEPOINT, 369 ) = "02D0" : Unicode( CHAR_NAME, 369 ) = "Modifier letter triangular colon"
+Unicode( CODEPOINT, 370 ) = "02D1" : Unicode( CHAR_NAME, 370 ) = "Modifier letter half triangular colon"
+Unicode( CODEPOINT, 371 ) = "02D2" : Unicode( CHAR_NAME, 371 ) = "Modifier letter centred right half ring"
+Unicode( CODEPOINT, 372 ) = "02D3" : Unicode( CHAR_NAME, 372 ) = "Modifier letter centred left half ring"
+Unicode( CODEPOINT, 373 ) = "02D4" : Unicode( CHAR_NAME, 373 ) = "Modifier letter up tack"
+Unicode( CODEPOINT, 374 ) = "02D5" : Unicode( CHAR_NAME, 374 ) = "Modifier letter down tack"
+Unicode( CODEPOINT, 375 ) = "02D6" : Unicode( CHAR_NAME, 375 ) = "Modifier letter plus sign"
+Unicode( CODEPOINT, 376 ) = "02D7" : Unicode( CHAR_NAME, 376 ) = "Modifier letter minus sign"
+Unicode( CODEPOINT, 377 ) = "02D8" : Unicode( CHAR_NAME, 377 ) = "Breve"
+Unicode( CODEPOINT, 378 ) = "02D9" : Unicode( CHAR_NAME, 378 ) = "Dot above"
+Unicode( CODEPOINT, 379 ) = "02DA" : Unicode( CHAR_NAME, 379 ) = "Ring above"
+Unicode( CODEPOINT, 380 ) = "02DB" : Unicode( CHAR_NAME, 380 ) = "Ogonek"
+Unicode( CODEPOINT, 381 ) = "02DC" : Unicode( CHAR_NAME, 381 ) = "Small tilde"
+Unicode( CODEPOINT, 382 ) = "02DD" : Unicode( CHAR_NAME, 382 ) = "Double acute accent"
+Unicode( CODEPOINT, 383 ) = "02DE" : Unicode( CHAR_NAME, 383 ) = "Modifier letter rhotic hook"
+Unicode( CODEPOINT, 384 ) = "02DF" : Unicode( CHAR_NAME, 384 ) = "Modifier letter cross accent"
+Unicode( CODEPOINT, 385 ) = "02E0" : Unicode( CHAR_NAME, 385 ) = "Modifier letter small gamma"
+Unicode( CODEPOINT, 386 ) = "02E1" : Unicode( CHAR_NAME, 386 ) = "Modifier letter small l"
+Unicode( CODEPOINT, 387 ) = "02E2" : Unicode( CHAR_NAME, 387 ) = "Modifier letter small s"
+Unicode( CODEPOINT, 388 ) = "02E3" : Unicode( CHAR_NAME, 388 ) = "Modifier letter small x"
+Unicode( CODEPOINT, 389 ) = "02E4" : Unicode( CHAR_NAME, 389 ) = "Modifier letter small reversed glottal stop"
+Unicode( CODEPOINT, 390 ) = "02E5" : Unicode( CHAR_NAME, 390 ) = "Modifier letter extra-high tone bar"
+Unicode( CODEPOINT, 391 ) = "02E6" : Unicode( CHAR_NAME, 391 ) = "Modifier letter high tone bar"
+Unicode( CODEPOINT, 392 ) = "02E7" : Unicode( CHAR_NAME, 392 ) = "Modifier letter mid tone bar"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillUnicodeArray2
+
+Unicode( CODEPOINT, 393 ) = "02E8" : Unicode( CHAR_NAME, 393 ) = "Modifier letter low tone bar"
+Unicode( CODEPOINT, 394 ) = "02E9" : Unicode( CHAR_NAME, 394 ) = "Modifier letter extra-low tone bar"
+Unicode( CODEPOINT, 395 ) = "02EA" : Unicode( CHAR_NAME, 395 ) = "Modifier letter yin departing tone mark"
+Unicode( CODEPOINT, 396 ) = "02EB" : Unicode( CHAR_NAME, 396 ) = "Modifier letter yang departing tone mark"
+Unicode( CODEPOINT, 397 ) = "02EC" : Unicode( CHAR_NAME, 397 ) = "Modifier letter voicing"
+Unicode( CODEPOINT, 398 ) = "02ED" : Unicode( CHAR_NAME, 398 ) = "Modifier letter unaspirated"
+Unicode( CODEPOINT, 399 ) = "02EE" : Unicode( CHAR_NAME, 399 ) = "Modifier letter double apostrophe"
+Unicode( CODEPOINT, 400 ) = "02EF" : Unicode( CHAR_NAME, 400 ) = "Modifier letter low down arrowhead"
+Unicode( CODEPOINT, 401 ) = "02F0" : Unicode( CHAR_NAME, 401 ) = "Modifier letter low up arrowhead"
+Unicode( CODEPOINT, 402 ) = "02F1" : Unicode( CHAR_NAME, 402 ) = "Modifier letter low left arrowhead"
+Unicode( CODEPOINT, 403 ) = "02F2" : Unicode( CHAR_NAME, 403 ) = "Modifier letter low right arrowhead"
+Unicode( CODEPOINT, 404 ) = "02F3" : Unicode( CHAR_NAME, 404 ) = "Modifier letter low ring"
+Unicode( CODEPOINT, 405 ) = "02F4" : Unicode( CHAR_NAME, 405 ) = "Modifier letter middle grave accent"
+Unicode( CODEPOINT, 406 ) = "02F5" : Unicode( CHAR_NAME, 406 ) = "Modifier letter middle double grave accent"
+Unicode( CODEPOINT, 407 ) = "02F6" : Unicode( CHAR_NAME, 407 ) = "Modifier letter middle double acute accent"
+Unicode( CODEPOINT, 408 ) = "02F7" : Unicode( CHAR_NAME, 408 ) = "Modifier letter low tilde"
+Unicode( CODEPOINT, 409 ) = "02F8" : Unicode( CHAR_NAME, 409 ) = "Modifier letter raised colon"
+Unicode( CODEPOINT, 410 ) = "02F9" : Unicode( CHAR_NAME, 410 ) = "Modifier letter begin high tone"
+Unicode( CODEPOINT, 411 ) = "02FA" : Unicode( CHAR_NAME, 411 ) = "Modifier letter end high tone"
+Unicode( CODEPOINT, 412 ) = "02FB" : Unicode( CHAR_NAME, 412 ) = "Modifier letter begin low tone"
+Unicode( CODEPOINT, 413 ) = "02FC" : Unicode( CHAR_NAME, 413 ) = "Modifier letter end low tone"
+Unicode( CODEPOINT, 414 ) = "02FD" : Unicode( CHAR_NAME, 414 ) = "Modifier letter shelf"
+Unicode( CODEPOINT, 415 ) = "02FE" : Unicode( CHAR_NAME, 415 ) = "Modifier letter open shelf"
+Unicode( CODEPOINT, 416 ) = "02FF" : Unicode( CHAR_NAME, 416 ) = "Modifier letter low left arrow"
+Unicode( CODEPOINT, 417 ) = "0300" : Unicode( CHAR_NAME, 417 ) = "Combining grave accent"
+Unicode( CODEPOINT, 418 ) = "0301" : Unicode( CHAR_NAME, 418 ) = "Combining acute accent"
+Unicode( CODEPOINT, 419 ) = "0302" : Unicode( CHAR_NAME, 419 ) = "Combining circumflex accent"
+Unicode( CODEPOINT, 420 ) = "0303" : Unicode( CHAR_NAME, 420 ) = "Combining tilde"
+Unicode( CODEPOINT, 421 ) = "0304" : Unicode( CHAR_NAME, 421 ) = "Combining macron"
+Unicode( CODEPOINT, 422 ) = "0305" : Unicode( CHAR_NAME, 422 ) = "Combining overline"
+Unicode( CODEPOINT, 423 ) = "0306" : Unicode( CHAR_NAME, 423 ) = "Combining breve"
+Unicode( CODEPOINT, 424 ) = "0307" : Unicode( CHAR_NAME, 424 ) = "Combining dot above"
+Unicode( CODEPOINT, 425 ) = "0308" : Unicode( CHAR_NAME, 425 ) = "Combining diaeresis"
+Unicode( CODEPOINT, 426 ) = "0309" : Unicode( CHAR_NAME, 426 ) = "Combining hook above"
+Unicode( CODEPOINT, 427 ) = "030A" : Unicode( CHAR_NAME, 427 ) = "Combining ring above"
+Unicode( CODEPOINT, 428 ) = "030B" : Unicode( CHAR_NAME, 428 ) = "Combining double acute accent"
+Unicode( CODEPOINT, 429 ) = "030C" : Unicode( CHAR_NAME, 429 ) = "Combining caron"
+Unicode( CODEPOINT, 430 ) = "030D" : Unicode( CHAR_NAME, 430 ) = "Combining vertical line above"
+Unicode( CODEPOINT, 431 ) = "030E" : Unicode( CHAR_NAME, 431 ) = "Combining double vertical line above"
+Unicode( CODEPOINT, 432 ) = "030F" : Unicode( CHAR_NAME, 432 ) = "Combining double grave accent"
+Unicode( CODEPOINT, 433 ) = "0310" : Unicode( CHAR_NAME, 433 ) = "Combining candrabindu"
+Unicode( CODEPOINT, 434 ) = "0311" : Unicode( CHAR_NAME, 434 ) = "Combining inverted breve"
+Unicode( CODEPOINT, 435 ) = "0312" : Unicode( CHAR_NAME, 435 ) = "Combining turned comma above"
+Unicode( CODEPOINT, 436 ) = "0313" : Unicode( CHAR_NAME, 436 ) = "Combining comma above"
+Unicode( CODEPOINT, 437 ) = "0314" : Unicode( CHAR_NAME, 437 ) = "Combining reversed comma above"
+Unicode( CODEPOINT, 438 ) = "0315" : Unicode( CHAR_NAME, 438 ) = "Combining comma above right"
+Unicode( CODEPOINT, 439 ) = "0316" : Unicode( CHAR_NAME, 439 ) = "Combining grave accent below"
+Unicode( CODEPOINT, 440 ) = "0317" : Unicode( CHAR_NAME, 440 ) = "Combining acute accent below"
+Unicode( CODEPOINT, 441 ) = "0318" : Unicode( CHAR_NAME, 441 ) = "Combining left tack below"
+Unicode( CODEPOINT, 442 ) = "0319" : Unicode( CHAR_NAME, 442 ) = "Combining right tack below"
+Unicode( CODEPOINT, 443 ) = "031A" : Unicode( CHAR_NAME, 443 ) = "Combining left angle above"
+Unicode( CODEPOINT, 444 ) = "031B" : Unicode( CHAR_NAME, 444 ) = "Combining horn"
+Unicode( CODEPOINT, 445 ) = "031C" : Unicode( CHAR_NAME, 445 ) = "Combining left half ring below"
+Unicode( CODEPOINT, 446 ) = "031D" : Unicode( CHAR_NAME, 446 ) = "Combining up tack below"
+Unicode( CODEPOINT, 447 ) = "031E" : Unicode( CHAR_NAME, 447 ) = "Combining down tack below"
+Unicode( CODEPOINT, 448 ) = "031F" : Unicode( CHAR_NAME, 448 ) = "Combining plus sign below"
+Unicode( CODEPOINT, 449 ) = "0320" : Unicode( CHAR_NAME, 449 ) = "Combining minus sign below"
+Unicode( CODEPOINT, 450 ) = "0321" : Unicode( CHAR_NAME, 450 ) = "Combining palatalized hook below"
+Unicode( CODEPOINT, 451 ) = "0322" : Unicode( CHAR_NAME, 451 ) = "Combining retroflex hook below"
+Unicode( CODEPOINT, 452 ) = "0323" : Unicode( CHAR_NAME, 452 ) = "Combining dot below"
+Unicode( CODEPOINT, 453 ) = "0324" : Unicode( CHAR_NAME, 453 ) = "Combining diaeresis below"
+Unicode( CODEPOINT, 454 ) = "0325" : Unicode( CHAR_NAME, 454 ) = "Combining ring below"
+Unicode( CODEPOINT, 455 ) = "0326" : Unicode( CHAR_NAME, 455 ) = "Combining comma below"
+Unicode( CODEPOINT, 456 ) = "0327" : Unicode( CHAR_NAME, 456 ) = "Combining cedilla"
+Unicode( CODEPOINT, 457 ) = "0328" : Unicode( CHAR_NAME, 457 ) = "Combining ogonek"
+Unicode( CODEPOINT, 458 ) = "0329" : Unicode( CHAR_NAME, 458 ) = "Combining vertical line below"
+Unicode( CODEPOINT, 459 ) = "032A" : Unicode( CHAR_NAME, 459 ) = "Combining bridge below"
+Unicode( CODEPOINT, 460 ) = "032B" : Unicode( CHAR_NAME, 460 ) = "Combining inverted double arch below"
+Unicode( CODEPOINT, 461 ) = "032C" : Unicode( CHAR_NAME, 461 ) = "Combining caron below"
+Unicode( CODEPOINT, 462 ) = "032D" : Unicode( CHAR_NAME, 462 ) = "Combining circumflex accent below"
+Unicode( CODEPOINT, 463 ) = "032E" : Unicode( CHAR_NAME, 463 ) = "Combining breve below"
+Unicode( CODEPOINT, 464 ) = "032F" : Unicode( CHAR_NAME, 464 ) = "Combining inverted breve below"
+Unicode( CODEPOINT, 465 ) = "0330" : Unicode( CHAR_NAME, 465 ) = "Combining tilde below"
+Unicode( CODEPOINT, 466 ) = "0331" : Unicode( CHAR_NAME, 466 ) = "Combining macron below"
+Unicode( CODEPOINT, 467 ) = "0332" : Unicode( CHAR_NAME, 467 ) = "Combining low line"
+Unicode( CODEPOINT, 468 ) = "0333" : Unicode( CHAR_NAME, 468 ) = "Combining double low line"
+Unicode( CODEPOINT, 469 ) = "0334" : Unicode( CHAR_NAME, 469 ) = "Combining tilde overlay"
+Unicode( CODEPOINT, 470 ) = "0335" : Unicode( CHAR_NAME, 470 ) = "Combining short stroke overlay"
+Unicode( CODEPOINT, 471 ) = "0336" : Unicode( CHAR_NAME, 471 ) = "Combining long stroke overlay"
+Unicode( CODEPOINT, 472 ) = "0337" : Unicode( CHAR_NAME, 472 ) = "Combining short solidus overlay"
+Unicode( CODEPOINT, 473 ) = "0338" : Unicode( CHAR_NAME, 473 ) = "Combining long solidus overlay"
+Unicode( CODEPOINT, 474 ) = "0339" : Unicode( CHAR_NAME, 474 ) = "Combining right half ring below"
+Unicode( CODEPOINT, 475 ) = "033A" : Unicode( CHAR_NAME, 475 ) = "Combining inverted bridge below"
+Unicode( CODEPOINT, 476 ) = "033B" : Unicode( CHAR_NAME, 476 ) = "Combining square below"
+Unicode( CODEPOINT, 477 ) = "033C" : Unicode( CHAR_NAME, 477 ) = "Combining seagull below"
+Unicode( CODEPOINT, 478 ) = "033D" : Unicode( CHAR_NAME, 478 ) = "Combining x above"
+Unicode( CODEPOINT, 479 ) = "033E" : Unicode( CHAR_NAME, 479 ) = "Combining vertical tilde"
+Unicode( CODEPOINT, 480 ) = "033F" : Unicode( CHAR_NAME, 480 ) = "Combining double overline"
+Unicode( CODEPOINT, 481 ) = "0340" : Unicode( CHAR_NAME, 481 ) = "Combining grave tone mark"
+Unicode( CODEPOINT, 482 ) = "0341" : Unicode( CHAR_NAME, 482 ) = "Combining acute tone mark"
+Unicode( CODEPOINT, 483 ) = "0342" : Unicode( CHAR_NAME, 483 ) = "Combining Greek perispomeni"
+Unicode( CODEPOINT, 484 ) = "0343" : Unicode( CHAR_NAME, 484 ) = "Combining Greek koronis"
+Unicode( CODEPOINT, 485 ) = "0344" : Unicode( CHAR_NAME, 485 ) = "Combining Greek dialytika tonos"
+Unicode( CODEPOINT, 486 ) = "0345" : Unicode( CHAR_NAME, 486 ) = "Combining Greek ypogegrammeni"
+Unicode( CODEPOINT, 487 ) = "0346" : Unicode( CHAR_NAME, 487 ) = "Combining bridge above"
+Unicode( CODEPOINT, 488 ) = "0347" : Unicode( CHAR_NAME, 488 ) = "Combining equals sign below"
+Unicode( CODEPOINT, 489 ) = "0348" : Unicode( CHAR_NAME, 489 ) = "Combining double vertical line below"
+Unicode( CODEPOINT, 490 ) = "0349" : Unicode( CHAR_NAME, 490 ) = "Combining left angle below"
+Unicode( CODEPOINT, 491 ) = "034A" : Unicode( CHAR_NAME, 491 ) = "Combining not tilde above"
+Unicode( CODEPOINT, 492 ) = "034B" : Unicode( CHAR_NAME, 492 ) = "Combining homothetic above"
+Unicode( CODEPOINT, 493 ) = "034C" : Unicode( CHAR_NAME, 493 ) = "Combining almost equal to above"
+Unicode( CODEPOINT, 494 ) = "034D" : Unicode( CHAR_NAME, 494 ) = "Combining left right arrow below"
+Unicode( CODEPOINT, 495 ) = "034E" : Unicode( CHAR_NAME, 495 ) = "Combining upwards arrow below"
+Unicode( CODEPOINT, 496 ) = "034F" : Unicode( CHAR_NAME, 496 ) = "Combining grapheme joiner"
+Unicode( CODEPOINT, 497 ) = "0350" : Unicode( CHAR_NAME, 497 ) = "Combining right arrowhead above"
+Unicode( CODEPOINT, 498 ) = "0351" : Unicode( CHAR_NAME, 498 ) = "Combining left half ring above"
+Unicode( CODEPOINT, 499 ) = "0352" : Unicode( CHAR_NAME, 499 ) = "Combining fermata"
+Unicode( CODEPOINT, 500 ) = "0353" : Unicode( CHAR_NAME, 500 ) = "Combining x below"
+Unicode( CODEPOINT, 501 ) = "0354" : Unicode( CHAR_NAME, 501 ) = "Combining left arrowhead below"
+Unicode( CODEPOINT, 502 ) = "0355" : Unicode( CHAR_NAME, 502 ) = "Combining right arrowhead below"
+Unicode( CODEPOINT, 503 ) = "0356" : Unicode( CHAR_NAME, 503 ) = "Combining right arrowhead and up arrowhead below"
+Unicode( CODEPOINT, 504 ) = "0357" : Unicode( CHAR_NAME, 504 ) = "Combining right half ring above"
+Unicode( CODEPOINT, 505 ) = "0358" : Unicode( CHAR_NAME, 505 ) = "Combining dot above right"
+Unicode( CODEPOINT, 506 ) = "0359" : Unicode( CHAR_NAME, 506 ) = "Combining asterisk below"
+Unicode( CODEPOINT, 507 ) = "035A" : Unicode( CHAR_NAME, 507 ) = "Combining double ring below"
+Unicode( CODEPOINT, 508 ) = "035B" : Unicode( CHAR_NAME, 508 ) = "Combining zigzag above"
+Unicode( CODEPOINT, 509 ) = "035C" : Unicode( CHAR_NAME, 509 ) = "Combining double breve below"
+Unicode( CODEPOINT, 510 ) = "035D" : Unicode( CHAR_NAME, 510 ) = "Combining double breve"
+Unicode( CODEPOINT, 511 ) = "035E" : Unicode( CHAR_NAME, 511 ) = "Combining double macron"
+Unicode( CODEPOINT, 512 ) = "035F" : Unicode( CHAR_NAME, 512 ) = "Combining double macron below"
+Unicode( CODEPOINT, 513 ) = "0360" : Unicode( CHAR_NAME, 513 ) = "Combining double tilde"
+Unicode( CODEPOINT, 514 ) = "0361" : Unicode( CHAR_NAME, 514 ) = "Combining double inverted breve"
+Unicode( CODEPOINT, 515 ) = "0362" : Unicode( CHAR_NAME, 515 ) = "Combining double rightwards arrow below"
+Unicode( CODEPOINT, 516 ) = "0363" : Unicode( CHAR_NAME, 516 ) = "Combining Latin small letter a"
+Unicode( CODEPOINT, 517 ) = "0364" : Unicode( CHAR_NAME, 517 ) = "Combining Latin small letter e"
+Unicode( CODEPOINT, 518 ) = "0365" : Unicode( CHAR_NAME, 518 ) = "Combining Latin small letter i"
+Unicode( CODEPOINT, 519 ) = "0366" : Unicode( CHAR_NAME, 519 ) = "Combining Latin small letter o"
+Unicode( CODEPOINT, 520 ) = "0367" : Unicode( CHAR_NAME, 520 ) = "Combining Latin small letter u"
+Unicode( CODEPOINT, 521 ) = "0368" : Unicode( CHAR_NAME, 521 ) = "Combining Latin small letter c"
+Unicode( CODEPOINT, 522 ) = "0369" : Unicode( CHAR_NAME, 522 ) = "Combining Latin small letter d"
+Unicode( CODEPOINT, 523 ) = "036A" : Unicode( CHAR_NAME, 523 ) = "Combining Latin small letter h"
+Unicode( CODEPOINT, 524 ) = "036B" : Unicode( CHAR_NAME, 524 ) = "Combining Latin small letter m"
+Unicode( CODEPOINT, 525 ) = "036C" : Unicode( CHAR_NAME, 525 ) = "Combining Latin small letter r"
+Unicode( CODEPOINT, 526 ) = "036D" : Unicode( CHAR_NAME, 526 ) = "Combining Latin small letter t"
+Unicode( CODEPOINT, 527 ) = "036E" : Unicode( CHAR_NAME, 527 ) = "Combining Latin small letter v"
+Unicode( CODEPOINT, 528 ) = "036F" : Unicode( CHAR_NAME, 528 ) = "Combining Latin small letter x"
+Unicode( CODEPOINT, 529 ) = "1E00" : Unicode( CHAR_NAME, 529 ) = "Latin capital letter A with ring below"
+Unicode( CODEPOINT, 530 ) = "1E01" : Unicode( CHAR_NAME, 530 ) = "Latin small letter a with ring below"
+Unicode( CODEPOINT, 531 ) = "1E02" : Unicode( CHAR_NAME, 531 ) = "Latin capital letter B with dot above"
+Unicode( CODEPOINT, 532 ) = "1E03" : Unicode( CHAR_NAME, 532 ) = "Latin small letter b with dot above"
+Unicode( CODEPOINT, 533 ) = "1E04" : Unicode( CHAR_NAME, 533 ) = "Latin capital letter B with dot below"
+Unicode( CODEPOINT, 534 ) = "1E05" : Unicode( CHAR_NAME, 534 ) = "Latin small letter b with dot below"
+Unicode( CODEPOINT, 535 ) = "1E06" : Unicode( CHAR_NAME, 535 ) = "Latin capital letter B with line below"
+Unicode( CODEPOINT, 536 ) = "1E07" : Unicode( CHAR_NAME, 536 ) = "Latin small letter b with line below"
+Unicode( CODEPOINT, 537 ) = "1E08" : Unicode( CHAR_NAME, 537 ) = "Latin capital letter C with cedilla and acute"
+Unicode( CODEPOINT, 538 ) = "1E09" : Unicode( CHAR_NAME, 538 ) = "Latin small letter c with cedilla and acute"
+Unicode( CODEPOINT, 539 ) = "1E0A" : Unicode( CHAR_NAME, 539 ) = "Latin capital letter D with dot above"
+Unicode( CODEPOINT, 540 ) = "1E0B" : Unicode( CHAR_NAME, 540 ) = "Latin small letter d with dot above"
+Unicode( CODEPOINT, 541 ) = "1E0C" : Unicode( CHAR_NAME, 541 ) = "Latin capital letter D with dot below"
+Unicode( CODEPOINT, 542 ) = "1E0D" : Unicode( CHAR_NAME, 542 ) = "Latin small letter d with dot below"
+Unicode( CODEPOINT, 543 ) = "1E0E" : Unicode( CHAR_NAME, 543 ) = "Latin capital letter D with line below"
+Unicode( CODEPOINT, 544 ) = "1E0F" : Unicode( CHAR_NAME, 544 ) = "Latin small letter d with line below"
+Unicode( CODEPOINT, 545 ) = "1E10" : Unicode( CHAR_NAME, 545 ) = "Latin capital letter D with cedilla"
+Unicode( CODEPOINT, 546 ) = "1E11" : Unicode( CHAR_NAME, 546 ) = "Latin small letter d with cedilla"
+Unicode( CODEPOINT, 547 ) = "1E12" : Unicode( CHAR_NAME, 547 ) = "Latin capital letter D with circumflex below"
+Unicode( CODEPOINT, 548 ) = "1E13" : Unicode( CHAR_NAME, 548 ) = "Latin small letter d with circumflex below"
+Unicode( CODEPOINT, 549 ) = "1E14" : Unicode( CHAR_NAME, 549 ) = "Latin capital letter E with macron and grave"
+Unicode( CODEPOINT, 550 ) = "1E15" : Unicode( CHAR_NAME, 550 ) = "Latin small letter e with macron and grave"
+Unicode( CODEPOINT, 551 ) = "1E16" : Unicode( CHAR_NAME, 551 ) = "Latin capital letter E with macron and acute"
+Unicode( CODEPOINT, 552 ) = "1E17" : Unicode( CHAR_NAME, 552 ) = "Latin small letter e with macron and acute"
+Unicode( CODEPOINT, 553 ) = "1E18" : Unicode( CHAR_NAME, 553 ) = "Latin capital letter E with circumflex below"
+Unicode( CODEPOINT, 554 ) = "1E19" : Unicode( CHAR_NAME, 554 ) = "Latin small letter e with circumflex below"
+Unicode( CODEPOINT, 555 ) = "1E1A" : Unicode( CHAR_NAME, 555 ) = "Latin capital letter E with tilde below"
+Unicode( CODEPOINT, 556 ) = "1E1B" : Unicode( CHAR_NAME, 556 ) = "Latin small letter e with tilde below"
+Unicode( CODEPOINT, 557 ) = "1E1C" : Unicode( CHAR_NAME, 557 ) = "Latin capital letter E with cedilla and breve"
+Unicode( CODEPOINT, 558 ) = "1E1D" : Unicode( CHAR_NAME, 558 ) = "Latin small letter e with cedilla and breve"
+Unicode( CODEPOINT, 559 ) = "1E1E" : Unicode( CHAR_NAME, 559 ) = "Latin capital letter F with dot above"
+Unicode( CODEPOINT, 560 ) = "1E1F" : Unicode( CHAR_NAME, 560 ) = "Latin small letter f with dot above"
+Unicode( CODEPOINT, 561 ) = "1E20" : Unicode( CHAR_NAME, 561 ) = "Latin capital letter G with macron"
+Unicode( CODEPOINT, 562 ) = "1E21" : Unicode( CHAR_NAME, 562 ) = "Latin small letter g with macron"
+Unicode( CODEPOINT, 563 ) = "1E22" : Unicode( CHAR_NAME, 563 ) = "Latin capital letter H with dot above"
+Unicode( CODEPOINT, 564 ) = "1E23" : Unicode( CHAR_NAME, 564 ) = "Latin small letter h with dot above"
+Unicode( CODEPOINT, 565 ) = "1E24" : Unicode( CHAR_NAME, 565 ) = "Latin capital letter H with dot below"
+Unicode( CODEPOINT, 566 ) = "1E25" : Unicode( CHAR_NAME, 566 ) = "Latin small letter h with dot below"
+Unicode( CODEPOINT, 567 ) = "1E26" : Unicode( CHAR_NAME, 567 ) = "Latin capital letter H with diaeresis"
+Unicode( CODEPOINT, 568 ) = "1E27" : Unicode( CHAR_NAME, 568 ) = "Latin small letter h with diaeresis"
+Unicode( CODEPOINT, 569 ) = "1E28" : Unicode( CHAR_NAME, 569 ) = "Latin capital letter H with cedilla"
+Unicode( CODEPOINT, 570 ) = "1E29" : Unicode( CHAR_NAME, 570 ) = "Latin small letter h with cedilla"
+Unicode( CODEPOINT, 571 ) = "1E2A" : Unicode( CHAR_NAME, 571 ) = "Latin capital letter H with breve below"
+Unicode( CODEPOINT, 572 ) = "1E2B" : Unicode( CHAR_NAME, 572 ) = "Latin small letter h with breve below"
+Unicode( CODEPOINT, 573 ) = "1E2C" : Unicode( CHAR_NAME, 573 ) = "Latin capital letter I with tilde below"
+Unicode( CODEPOINT, 574 ) = "1E2D" : Unicode( CHAR_NAME, 574 ) = "Latin small letter i with tilde below"
+Unicode( CODEPOINT, 575 ) = "1E2E" : Unicode( CHAR_NAME, 575 ) = "Latin capital letter I with diaeresis and acute"
+Unicode( CODEPOINT, 576 ) = "1E2F" : Unicode( CHAR_NAME, 576 ) = "Latin small letter i with diaeresis and acute"
+Unicode( CODEPOINT, 577 ) = "1E30" : Unicode( CHAR_NAME, 577 ) = "Latin capital letter K with acute"
+Unicode( CODEPOINT, 578 ) = "1E31" : Unicode( CHAR_NAME, 578 ) = "Latin small letter k with acute"
+Unicode( CODEPOINT, 579 ) = "1E32" : Unicode( CHAR_NAME, 579 ) = "Latin capital letter K with dot below"
+Unicode( CODEPOINT, 580 ) = "1E33" : Unicode( CHAR_NAME, 580 ) = "Latin small letter k with dot below"
+Unicode( CODEPOINT, 581 ) = "1E34" : Unicode( CHAR_NAME, 581 ) = "Latin capital letter K with line below"
+Unicode( CODEPOINT, 582 ) = "1E35" : Unicode( CHAR_NAME, 582 ) = "Latin small letter k with line below"
+Unicode( CODEPOINT, 583 ) = "1E36" : Unicode( CHAR_NAME, 583 ) = "Latin capital letter L with dot below"
+Unicode( CODEPOINT, 584 ) = "1E37" : Unicode( CHAR_NAME, 584 ) = "Latin small letter l with dot below"
+Unicode( CODEPOINT, 585 ) = "1E38" : Unicode( CHAR_NAME, 585 ) = "Latin capital letter L with dot below and macron"
+Unicode( CODEPOINT, 586 ) = "1E39" : Unicode( CHAR_NAME, 586 ) = "Latin small letter l with dot below and macron"
+Unicode( CODEPOINT, 587 ) = "1E3A" : Unicode( CHAR_NAME, 587 ) = "Latin capital letter L with line below"
+Unicode( CODEPOINT, 588 ) = "1E3B" : Unicode( CHAR_NAME, 588 ) = "Latin small letter l with line below"
+Unicode( CODEPOINT, 589 ) = "1E3C" : Unicode( CHAR_NAME, 589 ) = "Latin capital letter L with circumflex below"
+Unicode( CODEPOINT, 590 ) = "1E3D" : Unicode( CHAR_NAME, 590 ) = "Latin small letter l with circumflex below"
+Unicode( CODEPOINT, 591 ) = "1E3E" : Unicode( CHAR_NAME, 591 ) = "Latin capital letter M with acute"
+Unicode( CODEPOINT, 592 ) = "1E3F" : Unicode( CHAR_NAME, 592 ) = "Latin small letter m with acute"
+Unicode( CODEPOINT, 593 ) = "1E40" : Unicode( CHAR_NAME, 593 ) = "Latin capital letter M with dot above"
+Unicode( CODEPOINT, 594 ) = "1E41" : Unicode( CHAR_NAME, 594 ) = "Latin small letter m with dot above"
+Unicode( CODEPOINT, 595 ) = "1E42" : Unicode( CHAR_NAME, 595 ) = "Latin capital letter M with dot below"
+Unicode( CODEPOINT, 596 ) = "1E43" : Unicode( CHAR_NAME, 596 ) = "Latin small letter m with dot below"
+Unicode( CODEPOINT, 597 ) = "1E44" : Unicode( CHAR_NAME, 597 ) = "Latin capital letter N with dot above"
+Unicode( CODEPOINT, 598 ) = "1E45" : Unicode( CHAR_NAME, 598 ) = "Latin small letter n with dot above"
+Unicode( CODEPOINT, 599 ) = "1E46" : Unicode( CHAR_NAME, 599 ) = "Latin capital letter N with dot below"
+Unicode( CODEPOINT, 600 ) = "1E47" : Unicode( CHAR_NAME, 600 ) = "Latin small letter n with dot below"
+Unicode( CODEPOINT, 601 ) = "1E48" : Unicode( CHAR_NAME, 601 ) = "Latin capital letter N with line below"
+Unicode( CODEPOINT, 602 ) = "1E49" : Unicode( CHAR_NAME, 602 ) = "Latin small letter n with line below"
+Unicode( CODEPOINT, 603 ) = "1E4A" : Unicode( CHAR_NAME, 603 ) = "Latin capital letter N with circumflex below"
+Unicode( CODEPOINT, 604 ) = "1E4B" : Unicode( CHAR_NAME, 604 ) = "Latin small letter n with circumflex below"
+Unicode( CODEPOINT, 605 ) = "1E4C" : Unicode( CHAR_NAME, 605 ) = "Latin capital letter O with tilde and acute"
+Unicode( CODEPOINT, 606 ) = "1E4D" : Unicode( CHAR_NAME, 606 ) = "Latin small letter o with tilde and acute"
+Unicode( CODEPOINT, 607 ) = "1E4E" : Unicode( CHAR_NAME, 607 ) = "Latin capital letter O with tilde and diaeresis"
+Unicode( CODEPOINT, 608 ) = "1E4F" : Unicode( CHAR_NAME, 608 ) = "Latin small letter o with tilde and diaeresis"
+Unicode( CODEPOINT, 609 ) = "1E50" : Unicode( CHAR_NAME, 609 ) = "Latin capital letter O with macron and grave"
+Unicode( CODEPOINT, 610 ) = "1E51" : Unicode( CHAR_NAME, 610 ) = "Latin small letter o with macron and grave"
+Unicode( CODEPOINT, 611 ) = "1E52" : Unicode( CHAR_NAME, 611 ) = "Latin capital letter O with macron and acute"
+Unicode( CODEPOINT, 612 ) = "1E53" : Unicode( CHAR_NAME, 612 ) = "Latin small letter o with macron and acute"
+Unicode( CODEPOINT, 613 ) = "1E54" : Unicode( CHAR_NAME, 613 ) = "Latin capital letter P with acute"
+Unicode( CODEPOINT, 614 ) = "1E55" : Unicode( CHAR_NAME, 614 ) = "Latin small letter p with acute"
+Unicode( CODEPOINT, 615 ) = "1E56" : Unicode( CHAR_NAME, 615 ) = "Latin capital letter P with dot above"
+Unicode( CODEPOINT, 616 ) = "1E57" : Unicode( CHAR_NAME, 616 ) = "Latin small letter p with dot above"
+Unicode( CODEPOINT, 617 ) = "1E58" : Unicode( CHAR_NAME, 617 ) = "Latin capital letter R with dot above"
+Unicode( CODEPOINT, 618 ) = "1E59" : Unicode( CHAR_NAME, 618 ) = "Latin small letter r with dot above"
+Unicode( CODEPOINT, 619 ) = "1E5A" : Unicode( CHAR_NAME, 619 ) = "Latin capital letter R with dot below"
+Unicode( CODEPOINT, 620 ) = "1E5B" : Unicode( CHAR_NAME, 620 ) = "Latin small letter r with dot below"
+Unicode( CODEPOINT, 621 ) = "1E5C" : Unicode( CHAR_NAME, 621 ) = "Latin capital letter R with dot below and macron"
+Unicode( CODEPOINT, 622 ) = "1E5D" : Unicode( CHAR_NAME, 622 ) = "Latin small letter r with dot below and macron"
+Unicode( CODEPOINT, 623 ) = "1E5E" : Unicode( CHAR_NAME, 623 ) = "Latin capital letter R with line below"
+Unicode( CODEPOINT, 624 ) = "1E5F" : Unicode( CHAR_NAME, 624 ) = "Latin small letter r with line below"
+Unicode( CODEPOINT, 625 ) = "1E60" : Unicode( CHAR_NAME, 625 ) = "Latin capital letter S with dot above"
+Unicode( CODEPOINT, 626 ) = "1E61" : Unicode( CHAR_NAME, 626 ) = "Latin small letter s with dot above"
+Unicode( CODEPOINT, 627 ) = "1E62" : Unicode( CHAR_NAME, 627 ) = "Latin capital letter S with dot below"
+Unicode( CODEPOINT, 628 ) = "1E63" : Unicode( CHAR_NAME, 628 ) = "Latin small letter s with dot below"
+Unicode( CODEPOINT, 629 ) = "1E64" : Unicode( CHAR_NAME, 629 ) = "Latin capital letter S with acute and dot above"
+Unicode( CODEPOINT, 630 ) = "1E65" : Unicode( CHAR_NAME, 630 ) = "Latin small letter s with acute and dot above"
+Unicode( CODEPOINT, 631 ) = "1E66" : Unicode( CHAR_NAME, 631 ) = "Latin capital letter S with caron and dot above"
+Unicode( CODEPOINT, 632 ) = "1E67" : Unicode( CHAR_NAME, 632 ) = "Latin small letter s with caron and dot above"
+Unicode( CODEPOINT, 633 ) = "1E68" : Unicode( CHAR_NAME, 633 ) = "Latin capital letter S with dot below and dot above"
+Unicode( CODEPOINT, 634 ) = "1E69" : Unicode( CHAR_NAME, 634 ) = "Latin small letter s with dot below and dot above"
+Unicode( CODEPOINT, 635 ) = "1E6A" : Unicode( CHAR_NAME, 635 ) = "Latin capital letter T with dot above"
+Unicode( CODEPOINT, 636 ) = "1E6B" : Unicode( CHAR_NAME, 636 ) = "Latin small letter t with dot above"
+Unicode( CODEPOINT, 637 ) = "1E6C" : Unicode( CHAR_NAME, 637 ) = "Latin capital letter T with dot below"
+Unicode( CODEPOINT, 638 ) = "1E6D" : Unicode( CHAR_NAME, 638 ) = "Latin small letter t with dot below"
+Unicode( CODEPOINT, 639 ) = "1E6E" : Unicode( CHAR_NAME, 639 ) = "Latin capital letter T with line below"
+Unicode( CODEPOINT, 640 ) = "1E6F" : Unicode( CHAR_NAME, 640 ) = "Latin small letter t with line below"
+Unicode( CODEPOINT, 641 ) = "1E70" : Unicode( CHAR_NAME, 641 ) = "Latin capital letter T with circumflex below"
+Unicode( CODEPOINT, 642 ) = "1E71" : Unicode( CHAR_NAME, 642 ) = "Latin small letter t with circumflex below"
+Unicode( CODEPOINT, 643 ) = "1E72" : Unicode( CHAR_NAME, 643 ) = "Latin capital letter U with diaeresis below"
+Unicode( CODEPOINT, 644 ) = "1E73" : Unicode( CHAR_NAME, 644 ) = "Latin small letter u with diaeresis below"
+Unicode( CODEPOINT, 645 ) = "1E74" : Unicode( CHAR_NAME, 645 ) = "Latin capital letter U with tilde below"
+Unicode( CODEPOINT, 646 ) = "1E75" : Unicode( CHAR_NAME, 646 ) = "Latin small letter u with tilde below"
+Unicode( CODEPOINT, 647 ) = "1E76" : Unicode( CHAR_NAME, 647 ) = "Latin capital letter U with circumflex below"
+Unicode( CODEPOINT, 648 ) = "1E77" : Unicode( CHAR_NAME, 648 ) = "Latin small letter u with circumflex below"
+Unicode( CODEPOINT, 649 ) = "1E78" : Unicode( CHAR_NAME, 649 ) = "Latin capital letter U with tilde and acute"
+Unicode( CODEPOINT, 650 ) = "1E79" : Unicode( CHAR_NAME, 650 ) = "Latin small letter u with tilde and acute"
+Unicode( CODEPOINT, 651 ) = "1E7A" : Unicode( CHAR_NAME, 651 ) = "Latin capital letter U with macron and diaeresis"
+Unicode( CODEPOINT, 652 ) = "1E7B" : Unicode( CHAR_NAME, 652 ) = "Latin small letter u with macron and diaeresis"
+Unicode( CODEPOINT, 653 ) = "1E7C" : Unicode( CHAR_NAME, 653 ) = "Latin capital letter V with tilde"
+Unicode( CODEPOINT, 654 ) = "1E7D" : Unicode( CHAR_NAME, 654 ) = "Latin small letter v with tilde"
+Unicode( CODEPOINT, 655 ) = "1E7E" : Unicode( CHAR_NAME, 655 ) = "Latin capital letter V with dot below"
+Unicode( CODEPOINT, 656 ) = "1E7F" : Unicode( CHAR_NAME, 656 ) = "Latin small letter v with dot below"
+Unicode( CODEPOINT, 657 ) = "1E80" : Unicode( CHAR_NAME, 657 ) = "Latin capital letter W with grave"
+Unicode( CODEPOINT, 658 ) = "1E81" : Unicode( CHAR_NAME, 658 ) = "Latin small letter w with grave"
+Unicode( CODEPOINT, 659 ) = "1E82" : Unicode( CHAR_NAME, 659 ) = "Latin capital letter W with acute"
+Unicode( CODEPOINT, 660 ) = "1E83" : Unicode( CHAR_NAME, 660 ) = "Latin small letter w with acute"
+Unicode( CODEPOINT, 661 ) = "1E84" : Unicode( CHAR_NAME, 661 ) = "Latin capital letter W with diaeresis"
+Unicode( CODEPOINT, 662 ) = "1E85" : Unicode( CHAR_NAME, 662 ) = "Latin small letter w with diaeresis"
+Unicode( CODEPOINT, 663 ) = "1E86" : Unicode( CHAR_NAME, 663 ) = "Latin capital letter W with dot above"
+Unicode( CODEPOINT, 664 ) = "1E87" : Unicode( CHAR_NAME, 664 ) = "Latin small letter w with dot above"
+Unicode( CODEPOINT, 665 ) = "1E88" : Unicode( CHAR_NAME, 665 ) = "Latin capital letter W with dot below"
+Unicode( CODEPOINT, 666 ) = "1E89" : Unicode( CHAR_NAME, 666 ) = "Latin small letter w with dot below"
+Unicode( CODEPOINT, 667 ) = "1E8A" : Unicode( CHAR_NAME, 667 ) = "Latin capital letter X with dot above"
+Unicode( CODEPOINT, 668 ) = "1E8B" : Unicode( CHAR_NAME, 668 ) = "Latin small letter x with dot above"
+Unicode( CODEPOINT, 669 ) = "1E8C" : Unicode( CHAR_NAME, 669 ) = "Latin capital letter X with diaeresis"
+Unicode( CODEPOINT, 670 ) = "1E8D" : Unicode( CHAR_NAME, 670 ) = "Latin small letter x with diaeresis"
+Unicode( CODEPOINT, 671 ) = "1E8E" : Unicode( CHAR_NAME, 671 ) = "Latin capital letter Y with dot above"
+Unicode( CODEPOINT, 672 ) = "1E8F" : Unicode( CHAR_NAME, 672 ) = "Latin small letter y with dot above"
+Unicode( CODEPOINT, 673 ) = "1E90" : Unicode( CHAR_NAME, 673 ) = "Latin capital letter Z with circumflex"
+Unicode( CODEPOINT, 674 ) = "1E91" : Unicode( CHAR_NAME, 674 ) = "Latin small letter z with circumflex"
+Unicode( CODEPOINT, 675 ) = "1E92" : Unicode( CHAR_NAME, 675 ) = "Latin capital letter Z with dot below"
+Unicode( CODEPOINT, 676 ) = "1E93" : Unicode( CHAR_NAME, 676 ) = "Latin small letter z with dot below"
+Unicode( CODEPOINT, 677 ) = "1E94" : Unicode( CHAR_NAME, 677 ) = "Latin capital letter Z with line below"
+Unicode( CODEPOINT, 678 ) = "1E95" : Unicode( CHAR_NAME, 678 ) = "Latin small letter z with line below"
+Unicode( CODEPOINT, 679 ) = "1E96" : Unicode( CHAR_NAME, 679 ) = "Latin small letter h with line below"
+Unicode( CODEPOINT, 680 ) = "1E97" : Unicode( CHAR_NAME, 680 ) = "Latin small letter t with diaeresis"
+Unicode( CODEPOINT, 681 ) = "1E98" : Unicode( CHAR_NAME, 681 ) = "Latin small letter w with ring above"
+Unicode( CODEPOINT, 682 ) = "1E99" : Unicode( CHAR_NAME, 682 ) = "Latin small letter y with ring above"
+Unicode( CODEPOINT, 683 ) = "1E9A" : Unicode( CHAR_NAME, 683 ) = "Latin small letter a with right half ring"
+Unicode( CODEPOINT, 684 ) = "1E9B" : Unicode( CHAR_NAME, 684 ) = "Latin small letter long s with dot above"
+Unicode( CODEPOINT, 685 ) = "1E9C" : Unicode( CHAR_NAME, 685 ) = "Latin small letter long s with diagonal stroke"
+Unicode( CODEPOINT, 686 ) = "1E9D" : Unicode( CHAR_NAME, 686 ) = "Latin small letter long s with high stroke"
+Unicode( CODEPOINT, 687 ) = "1E9E" : Unicode( CHAR_NAME, 687 ) = "Latin capital letter sharp S"
+Unicode( CODEPOINT, 688 ) = "1E9F" : Unicode( CHAR_NAME, 688 ) = "Latin small letter delta"
+Unicode( CODEPOINT, 689 ) = "1EA0" : Unicode( CHAR_NAME, 689 ) = "Latin capital letter A with dot below"
+Unicode( CODEPOINT, 690 ) = "1EA1" : Unicode( CHAR_NAME, 690 ) = "Latin small letter a with dot below"
+Unicode( CODEPOINT, 691 ) = "1EA2" : Unicode( CHAR_NAME, 691 ) = "Latin capital letter A with hook above"
+Unicode( CODEPOINT, 692 ) = "1EA3" : Unicode( CHAR_NAME, 692 ) = "Latin small letter a with hook above"
+Unicode( CODEPOINT, 693 ) = "1EA4" : Unicode( CHAR_NAME, 693 ) = "Latin capital letter A with circumflex and acute"
+Unicode( CODEPOINT, 694 ) = "1EA5" : Unicode( CHAR_NAME, 694 ) = "Latin small letter a with circumflex and acute"
+Unicode( CODEPOINT, 695 ) = "1EA6" : Unicode( CHAR_NAME, 695 ) = "Latin capital letter A with circumflex and grave"
+Unicode( CODEPOINT, 696 ) = "1EA7" : Unicode( CHAR_NAME, 696 ) = "Latin small letter a with circumflex and grave"
+Unicode( CODEPOINT, 697 ) = "1EA8" : Unicode( CHAR_NAME, 697 ) = "Latin capital letter A with circumflex and hook above"
+Unicode( CODEPOINT, 698 ) = "1EA9" : Unicode( CHAR_NAME, 698 ) = "Latin small letter a with circumflex and hook above"
+Unicode( CODEPOINT, 699 ) = "1EAA" : Unicode( CHAR_NAME, 699 ) = "Latin capital letter A with circumflex and tilde"
+Unicode( CODEPOINT, 700 ) = "1EAB" : Unicode( CHAR_NAME, 700 ) = "Latin small letter a with circumflex and tilde"
+Unicode( CODEPOINT, 701 ) = "1EAC" : Unicode( CHAR_NAME, 701 ) = "Latin capital letter A with circumflex and dot below"
+Unicode( CODEPOINT, 702 ) = "1EAD" : Unicode( CHAR_NAME, 702 ) = "Latin small letter a with circumflex and dot below"
+Unicode( CODEPOINT, 703 ) = "1EAE" : Unicode( CHAR_NAME, 703 ) = "Latin capital letter A with breve and acute"
+Unicode( CODEPOINT, 704 ) = "1EAF" : Unicode( CHAR_NAME, 704 ) = "Latin small letter a with breve and acute"
+Unicode( CODEPOINT, 705 ) = "1EB0" : Unicode( CHAR_NAME, 705 ) = "Latin capital letter A with breve and grave"
+Unicode( CODEPOINT, 706 ) = "1EB1" : Unicode( CHAR_NAME, 706 ) = "Latin small letter a with breve and grave"
+Unicode( CODEPOINT, 707 ) = "1EB2" : Unicode( CHAR_NAME, 707 ) = "Latin capital letter A with breve and hook above"
+Unicode( CODEPOINT, 708 ) = "1EB3" : Unicode( CHAR_NAME, 708 ) = "Latin small letter a with breve and hook above"
+Unicode( CODEPOINT, 709 ) = "1EB4" : Unicode( CHAR_NAME, 709 ) = "Latin capital letter A with breve and tilde"
+Unicode( CODEPOINT, 710 ) = "1EB5" : Unicode( CHAR_NAME, 710 ) = "Latin small letter a with breve and tilde"
+Unicode( CODEPOINT, 711 ) = "1EB6" : Unicode( CHAR_NAME, 711 ) = "Latin capital letter A with breve and dot below"
+Unicode( CODEPOINT, 712 ) = "1EB7" : Unicode( CHAR_NAME, 712 ) = "Latin small letter a with breve and dot below"
+Unicode( CODEPOINT, 713 ) = "1EB8" : Unicode( CHAR_NAME, 713 ) = "Latin capital letter E with dot below"
+Unicode( CODEPOINT, 714 ) = "1EB9" : Unicode( CHAR_NAME, 714 ) = "Latin small letter e with dot below"
+Unicode( CODEPOINT, 715 ) = "1EBA" : Unicode( CHAR_NAME, 715 ) = "Latin capital letter E with hook above"
+Unicode( CODEPOINT, 716 ) = "1EBB" : Unicode( CHAR_NAME, 716 ) = "Latin small letter e with hook above"
+Unicode( CODEPOINT, 717 ) = "1EBC" : Unicode( CHAR_NAME, 717 ) = "Latin capital letter E with tilde"
+Unicode( CODEPOINT, 718 ) = "1EBD" : Unicode( CHAR_NAME, 718 ) = "Latin small letter e with tilde"
+Unicode( CODEPOINT, 719 ) = "1EBE" : Unicode( CHAR_NAME, 719 ) = "Latin capital letter E with circumflex and acute"
+Unicode( CODEPOINT, 720 ) = "1EBF" : Unicode( CHAR_NAME, 720 ) = "Latin small letter e with circumflex and acute"
+Unicode( CODEPOINT, 721 ) = "1EC0" : Unicode( CHAR_NAME, 721 ) = "Latin capital letter E with circumflex and grave"
+Unicode( CODEPOINT, 722 ) = "1EC1" : Unicode( CHAR_NAME, 722 ) = "Latin small letter e with circumflex and grave"
+Unicode( CODEPOINT, 723 ) = "1EC2" : Unicode( CHAR_NAME, 723 ) = "Latin capital letter E with circumflex and hook above"
+Unicode( CODEPOINT, 724 ) = "1EC3" : Unicode( CHAR_NAME, 724 ) = "Latin small letter e with circumflex and hook above"
+Unicode( CODEPOINT, 725 ) = "1EC4" : Unicode( CHAR_NAME, 725 ) = "Latin capital letter E with circumflex and tilde"
+Unicode( CODEPOINT, 726 ) = "1EC5" : Unicode( CHAR_NAME, 726 ) = "Latin small letter e with circumflex and tilde"
+Unicode( CODEPOINT, 727 ) = "1EC6" : Unicode( CHAR_NAME, 727 ) = "Latin capital letter E with circumflex and dot below"
+Unicode( CODEPOINT, 728 ) = "1EC7" : Unicode( CHAR_NAME, 728 ) = "Latin small letter e with circumflex and dot below"
+Unicode( CODEPOINT, 729 ) = "1EC8" : Unicode( CHAR_NAME, 729 ) = "Latin capital letter I with hook above"
+Unicode( CODEPOINT, 730 ) = "1EC9" : Unicode( CHAR_NAME, 730 ) = "Latin small letter i with hook above"
+Unicode( CODEPOINT, 731 ) = "1ECA" : Unicode( CHAR_NAME, 731 ) = "Latin capital letter I with dot below"
+Unicode( CODEPOINT, 732 ) = "1ECB" : Unicode( CHAR_NAME, 732 ) = "Latin small letter i with dot below"
+Unicode( CODEPOINT, 733 ) = "1ECC" : Unicode( CHAR_NAME, 733 ) = "Latin capital letter O with dot below"
+Unicode( CODEPOINT, 734 ) = "1ECD" : Unicode( CHAR_NAME, 734 ) = "Latin small letter o with dot below"
+Unicode( CODEPOINT, 735 ) = "1ECE" : Unicode( CHAR_NAME, 735 ) = "Latin capital letter O with hook above"
+Unicode( CODEPOINT, 736 ) = "1ECF" : Unicode( CHAR_NAME, 736 ) = "Latin small letter o with hook above"
+Unicode( CODEPOINT, 737 ) = "1ED0" : Unicode( CHAR_NAME, 737 ) = "Latin capital letter O with circumflex and acute"
+Unicode( CODEPOINT, 738 ) = "1ED1" : Unicode( CHAR_NAME, 738 ) = "Latin small letter o with circumflex and acute"
+Unicode( CODEPOINT, 739 ) = "1ED2" : Unicode( CHAR_NAME, 739 ) = "Latin capital letter O with circumflex and grave"
+Unicode( CODEPOINT, 740 ) = "1ED3" : Unicode( CHAR_NAME, 740 ) = "Latin small letter o with circumflex and grave"
+Unicode( CODEPOINT, 741 ) = "1ED4" : Unicode( CHAR_NAME, 741 ) = "Latin capital letter O with circumflex and hook above"
+Unicode( CODEPOINT, 742 ) = "1ED5" : Unicode( CHAR_NAME, 742 ) = "Latin small letter o with circumflex and hook above"
+Unicode( CODEPOINT, 743 ) = "1ED6" : Unicode( CHAR_NAME, 743 ) = "Latin capital letter O with circumflex and tilde"
+Unicode( CODEPOINT, 744 ) = "1ED7" : Unicode( CHAR_NAME, 744 ) = "Latin small letter o with circumflex and tilde"
+Unicode( CODEPOINT, 745 ) = "1ED8" : Unicode( CHAR_NAME, 745 ) = "Latin capital letter O with circumflex and dot below"
+Unicode( CODEPOINT, 746 ) = "1ED9" : Unicode( CHAR_NAME, 746 ) = "Latin small letter o with circumflex and dot below"
+Unicode( CODEPOINT, 747 ) = "1EDA" : Unicode( CHAR_NAME, 747 ) = "Latin capital letter O with horn and acute"
+Unicode( CODEPOINT, 748 ) = "1EDB" : Unicode( CHAR_NAME, 748 ) = "Latin small letter o with horn and acute"
+Unicode( CODEPOINT, 749 ) = "1EDC" : Unicode( CHAR_NAME, 749 ) = "Latin capital letter O with horn and grave"
+Unicode( CODEPOINT, 750 ) = "1EDD" : Unicode( CHAR_NAME, 750 ) = "Latin small letter o with horn and grave"
+Unicode( CODEPOINT, 751 ) = "1EDE" : Unicode( CHAR_NAME, 751 ) = "Latin capital letter O with horn and hook above"
+Unicode( CODEPOINT, 752 ) = "1EDF" : Unicode( CHAR_NAME, 752 ) = "Latin small letter o with horn and hook above"
+Unicode( CODEPOINT, 753 ) = "1EE0" : Unicode( CHAR_NAME, 753 ) = "Latin capital letter O with horn and tilde"
+Unicode( CODEPOINT, 754 ) = "1EE1" : Unicode( CHAR_NAME, 754 ) = "Latin small letter o with horn and tilde"
+Unicode( CODEPOINT, 755 ) = "1EE2" : Unicode( CHAR_NAME, 755 ) = "Latin capital letter O with horn and dot below"
+Unicode( CODEPOINT, 756 ) = "1EE3" : Unicode( CHAR_NAME, 756 ) = "Latin small letter o with horn and dot below"
+Unicode( CODEPOINT, 757 ) = "1EE4" : Unicode( CHAR_NAME, 757 ) = "Latin capital letter U with dot below"
+Unicode( CODEPOINT, 758 ) = "1EE5" : Unicode( CHAR_NAME, 758 ) = "Latin small letter u with dot below"
+Unicode( CODEPOINT, 759 ) = "1EE6" : Unicode( CHAR_NAME, 759 ) = "Latin capital letter U with hook above"
+Unicode( CODEPOINT, 760 ) = "1EE7" : Unicode( CHAR_NAME, 760 ) = "Latin small letter u with hook above"
+Unicode( CODEPOINT, 761 ) = "1EE8" : Unicode( CHAR_NAME, 761 ) = "Latin capital letter U with horn and acute"
+Unicode( CODEPOINT, 762 ) = "1EE9" : Unicode( CHAR_NAME, 762 ) = "Latin small letter u with horn and acute"
+Unicode( CODEPOINT, 763 ) = "1EEA" : Unicode( CHAR_NAME, 763 ) = "Latin capital letter U with horn and grave"
+Unicode( CODEPOINT, 764 ) = "1EEB" : Unicode( CHAR_NAME, 764 ) = "Latin small letter u with horn and grave"
+Unicode( CODEPOINT, 765 ) = "1EEC" : Unicode( CHAR_NAME, 765 ) = "Latin capital letter U with horn and hook above"
+Unicode( CODEPOINT, 766 ) = "1EED" : Unicode( CHAR_NAME, 766 ) = "Latin small letter u with horn and hook above"
+Unicode( CODEPOINT, 767 ) = "1EEE" : Unicode( CHAR_NAME, 767 ) = "Latin capital letter U with horn and tilde"
+Unicode( CODEPOINT, 768 ) = "1EEF" : Unicode( CHAR_NAME, 768 ) = "Latin small letter u with horn and tilde"
+Unicode( CODEPOINT, 769 ) = "1EF0" : Unicode( CHAR_NAME, 769 ) = "Latin capital letter U with horn and dot below"
+Unicode( CODEPOINT, 770 ) = "1EF1" : Unicode( CHAR_NAME, 770 ) = "Latin small letter u with horn and dot below"
+Unicode( CODEPOINT, 771 ) = "1EF2" : Unicode( CHAR_NAME, 771 ) = "Latin capital letter Y with grave"
+Unicode( CODEPOINT, 772 ) = "1EF3" : Unicode( CHAR_NAME, 772 ) = "Latin small letter y with grave"
+Unicode( CODEPOINT, 773 ) = "1EF4" : Unicode( CHAR_NAME, 773 ) = "Latin capital letter Y with dot below"
+Unicode( CODEPOINT, 774 ) = "1EF5" : Unicode( CHAR_NAME, 774 ) = "Latin small letter y with dot below"
+Unicode( CODEPOINT, 775 ) = "1EF6" : Unicode( CHAR_NAME, 775 ) = "Latin capital letter Y with hook above"
+Unicode( CODEPOINT, 776 ) = "1EF7" : Unicode( CHAR_NAME, 776 ) = "Latin small letter y with hook above"
+Unicode( CODEPOINT, 777 ) = "1EF8" : Unicode( CHAR_NAME, 777 ) = "Latin capital letter Y with tilde"
+Unicode( CODEPOINT, 778 ) = "1EF9" : Unicode( CHAR_NAME, 778 ) = "Latin small letter y with tilde"
+Unicode( CODEPOINT, 779 ) = "1EFA" : Unicode( CHAR_NAME, 779 ) = "Latin capital letter Middle-Welsh LL"
+Unicode( CODEPOINT, 780 ) = "1EFB" : Unicode( CHAR_NAME, 780 ) = "Latin small letter Middle-Welsh ll"
+Unicode( CODEPOINT, 781 ) = "1EFC" : Unicode( CHAR_NAME, 781 ) = "Latin capital letter Middle-Welsh V"
+Unicode( CODEPOINT, 782 ) = "1EFD" : Unicode( CHAR_NAME, 782 ) = "Latin small letter Middle-Welsh v"
+Unicode( CODEPOINT, 783 ) = "1EFE" : Unicode( CHAR_NAME, 783 ) = "Latin capital letter Y with loop"
+Unicode( CODEPOINT, 784 ) = "1EFF" : Unicode( CHAR_NAME, 784 ) = "Latin small letter y with loop"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillDisplay( CurrentPage%, State% )
+
+' Set up everything on the macro's invocation and if the page changes (the state of the
+' dialog box is considered INITIAL). If the encoding form is switched (the state of the
+' dialog box is considered SWITCHED), only the characters change; everything else on the
+' page remains the same, and need not be re-drawn.
+
+If State% = INITIAL Then
+
+    If CurrentPage% = 1 Then
+        DlgEnable  "Prev",         DISABLED
+        If TotalPages% = 1 Then
+            DlgEnable  "Next",         DISABLED
+            DlgEnable  "Pages",        DISABLED
+            DlgEnable  "Range",        DISABLED
+          Else
+            DlgEnable  "Next",         ENABLED
+            DlgEnable  "Pages",        ENABLED
+            DlgEnable  "Range",        ENABLED
+        End If
+      Else
+        If CurrentPage% = TotalPages% Then
+            DlgEnable  "Prev",         ENABLED
+            DlgEnable  "Next",         DISABLED
+          Else
+            DlgEnable  "Prev",         ENABLED
+            DlgEnable  "Next",         ENABLED
+        End If
+    End If
+
+    DlgValue   "Pages",        CurrentPage% - 1
+
+    If CurrentPage% = TotalPages% Then
+        If Remainder% < 11 Then
+            DlgVisible "Row2",         INVISIBLE
+            DlgVisible "Row3",         INVISIBLE
+            DlgVisible "Row4",         INVISIBLE
+            DlgVisible "Row5",         INVISIBLE
+            DlgVisible "Row6",         INVISIBLE
+            DlgVisible "Row7",         INVISIBLE
+            DlgVisible "Row8",         INVISIBLE
+          ElseIf Remainder% < 21 Then
+            DlgVisible "Row3",         INVISIBLE
+            DlgVisible "Row4",         INVISIBLE
+            DlgVisible "Row5",         INVISIBLE
+            DlgVisible "Row6",         INVISIBLE
+            DlgVisible "Row7",         INVISIBLE
+            DlgVisible "Row8",         INVISIBLE
+          ElseIf Remainder% < 31 Then
+            DlgVisible "Row4",         INVISIBLE
+            DlgVisible "Row5",         INVISIBLE
+            DlgVisible "Row6",         INVISIBLE
+            DlgVisible "Row7",         INVISIBLE
+            DlgVisible "Row8",         INVISIBLE
+          ElseIf Remainder% < 41 Then
+            DlgVisible "Row5",         INVISIBLE
+            DlgVisible "Row6",         INVISIBLE
+            DlgVisible "Row7",         INVISIBLE
+            DlgVisible "Row8",         INVISIBLE
+          ElseIf Remainder% < 51 Then
+            DlgVisible "Row6",         INVISIBLE
+            DlgVisible "Row7",         INVISIBLE
+            DlgVisible "Row8",         INVISIBLE
+          ElseIf Remainder% < 61 Then
+            DlgVisible "Row7",         INVISIBLE
+            DlgVisible "Row8",         INVISIBLE
+          ElseIf Remainder% < 71 Then
+            DlgVisible "Row8",         INVISIBLE
+        End If
+      Else
+        DlgVisible "Row1",         VISIBLE
+        DlgVisible "Row2",         VISIBLE
+        DlgVisible "Row3",         VISIBLE
+        DlgVisible "Row4",         VISIBLE
+        DlgVisible "Row5",         VISIBLE
+        DlgVisible "Row6",         VISIBLE
+        DlgVisible "Row7",         VISIBLE
+        DlgVisible "Row8",         VISIBLE
+    End If
+
+    DlgText    "Code1",        CodePoints(  1 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code2",        CodePoints(  2 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code3",        CodePoints(  3 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code4",        CodePoints(  4 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code5",        CodePoints(  5 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code6",        CodePoints(  6 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code7",        CodePoints(  7 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code8",        CodePoints(  8 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code9",        CodePoints(  9 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code10",       CodePoints( 10 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code11",       CodePoints( 11 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code12",       CodePoints( 12 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code13",       CodePoints( 13 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code14",       CodePoints( 14 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code15",       CodePoints( 15 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code16",       CodePoints( 16 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code17",       CodePoints( 17 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code18",       CodePoints( 18 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code19",       CodePoints( 19 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code20",       CodePoints( 20 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code21",       CodePoints( 21 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code22",       CodePoints( 22 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code23",       CodePoints( 23 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code24",       CodePoints( 24 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code25",       CodePoints( 25 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code26",       CodePoints( 26 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code27",       CodePoints( 27 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code28",       CodePoints( 28 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code29",       CodePoints( 29 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code30",       CodePoints( 30 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code31",       CodePoints( 31 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code32",       CodePoints( 32 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code33",       CodePoints( 33 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code34",       CodePoints( 34 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code35",       CodePoints( 35 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code36",       CodePoints( 36 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code37",       CodePoints( 37 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code38",       CodePoints( 38 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code39",       CodePoints( 39 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code40",       CodePoints( 40 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code41",       CodePoints( 41 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code42",       CodePoints( 42 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code43",       CodePoints( 43 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code44",       CodePoints( 44 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code45",       CodePoints( 45 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code46",       CodePoints( 46 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code47",       CodePoints( 47 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code48",       CodePoints( 48 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code49",       CodePoints( 49 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code50",       CodePoints( 50 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code51",       CodePoints( 51 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code52",       CodePoints( 52 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code53",       CodePoints( 53 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code54",       CodePoints( 54 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code55",       CodePoints( 55 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code56",       CodePoints( 56 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code57",       CodePoints( 57 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code58",       CodePoints( 58 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code59",       CodePoints( 59 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code60",       CodePoints( 60 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code61",       CodePoints( 61 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code62",       CodePoints( 62 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code63",       CodePoints( 63 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code64",       CodePoints( 64 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code65",       CodePoints( 65 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code66",       CodePoints( 66 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code67",       CodePoints( 67 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code68",       CodePoints( 68 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code69",       CodePoints( 69 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code70",       CodePoints( 70 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code71",       CodePoints( 71 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code72",       CodePoints( 72 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code73",       CodePoints( 73 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code74",       CodePoints( 74 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code75",       CodePoints( 75 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code76",       CodePoints( 76 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code77",       CodePoints( 77 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code78",       CodePoints( 78 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code79",       CodePoints( 79 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+    DlgText    "Code80",       CodePoints( 80 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+
+End If
+
+DlgText    "Char1",        DisplayChars(  1 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char2",        DisplayChars(  2 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char3",        DisplayChars(  3 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char4",        DisplayChars(  4 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char5",        DisplayChars(  5 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char6",        DisplayChars(  6 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char7",        DisplayChars(  7 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char8",        DisplayChars(  8 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char9",        DisplayChars(  9 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char10",       DisplayChars( 10 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char11",       DisplayChars( 11 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char12",       DisplayChars( 12 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char13",       DisplayChars( 13 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char14",       DisplayChars( 14 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char15",       DisplayChars( 15 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char16",       DisplayChars( 16 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char17",       DisplayChars( 17 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char18",       DisplayChars( 18 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char19",       DisplayChars( 19 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char20",       DisplayChars( 20 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char21",       DisplayChars( 21 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char22",       DisplayChars( 22 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char23",       DisplayChars( 23 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char24",       DisplayChars( 24 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char25",       DisplayChars( 25 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char26",       DisplayChars( 26 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char27",       DisplayChars( 27 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char28",       DisplayChars( 28 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char29",       DisplayChars( 29 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char30",       DisplayChars( 30 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char31",       DisplayChars( 31 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char32",       DisplayChars( 32 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char33",       DisplayChars( 33 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char34",       DisplayChars( 34 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char35",       DisplayChars( 35 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char36",       DisplayChars( 36 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char37",       DisplayChars( 37 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char38",       DisplayChars( 38 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char39",       DisplayChars( 39 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char40",       DisplayChars( 40 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char41",       DisplayChars( 41 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char42",       DisplayChars( 42 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char43",       DisplayChars( 43 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char44",       DisplayChars( 44 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char45",       DisplayChars( 45 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char46",       DisplayChars( 46 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char47",       DisplayChars( 47 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char48",       DisplayChars( 48 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char49",       DisplayChars( 49 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char50",       DisplayChars( 50 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char51",       DisplayChars( 51 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char52",       DisplayChars( 52 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char53",       DisplayChars( 53 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char54",       DisplayChars( 54 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char55",       DisplayChars( 55 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char56",       DisplayChars( 56 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char57",       DisplayChars( 57 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char58",       DisplayChars( 58 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char59",       DisplayChars( 59 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char60",       DisplayChars( 60 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char61",       DisplayChars( 61 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char62",       DisplayChars( 62 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char63",       DisplayChars( 63 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char64",       DisplayChars( 64 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char65",       DisplayChars( 65 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char66",       DisplayChars( 66 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char67",       DisplayChars( 67 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char68",       DisplayChars( 68 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char69",       DisplayChars( 69 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char70",       DisplayChars( 70 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char71",       DisplayChars( 71 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char72",       DisplayChars( 72 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char73",       DisplayChars( 73 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char74",       DisplayChars( 74 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char75",       DisplayChars( 75 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char76",       DisplayChars( 76 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char77",       DisplayChars( 77 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char78",       DisplayChars( 78 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char79",       DisplayChars( 79 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+DlgText    "Char80",       DisplayChars( 80 + ( MAX_CHARS_PER_PAGE * ( CurrentPage% - 1 ) ) )
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' The initial character display of the macro when it is invoked is MARC-8. If all the
+' characters (except the delimiter) are encoded as low ASCII, with values below 128, the
+' switch to view Unicode characters and the search box are both disabled. If character
+' encodings are found above 157 then the two controls are enabled.
+
+Const CONTROL_CHANGE      As Integer = 2
+Const FOCUS_CHANGE        As Integer = 4
+Const IDLE_STATE          As Integer = 5
+Const INFORMATION_MESSAGE As Integer = 64
+Const KEEP_DLG_OPEN       As Integer = -1
+Const WARNING_MESSAGE     As Integer = 48
+
+Const DIGITS_BAD          As Integer = 1
+Const DIGITS_OK           As Integer = 0
+Const VALUE_BAD           As Integer = 4
+Const VALUE_OK            As Integer = 2
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
+Dim CR As String*1           : CR           = Chr$( 013 )
+
+Static CaseInstruct$
+Static InputWarning$
+Static MARC8Instruct$
+Static UnicodeInstruct$
+
+Dim Byte1$
+Dim Byte2$
+Dim CharacterName$
+Dim CharacterSet$
+Dim Compare%
+Dim DecVal%
+Dim HexVal%
+Dim High%
+Dim InputCheck%
+Dim Low%
+Dim Middle%
+Dim Result%
+Dim SearchString$
+
+Dim i As Integer
+
+InputWarning$    = "Please enter a decimal number between 158 and 254 to see the name of a MARC-8 character." & CR & CR & "To"
+InputWarning$    = InputWarning$ & " see the name of a Unicode character, enter a hexadecimal number between 0100 and 1EFF."
+InputWarning$    = InputWarning$ & " Note that only characters in Latin script, and combining characters, are searchable here,"
+InputWarning$    = InputWarning$ & " so most of the code points in that range are for characters not included in this index."
+InputWarning$    = InputWarning$ & " The searchable ranges in this index are actually 0100-024F, 02B0-036F, and 1E00-1EFF. The"
+InputWarning$    = InputWarning$ & " first digit for a hexadecimal search must therefore be either 0 or 1; if the first digit"
+InputWarning$    = InputWarning$ & " is 1, the second character must be E. Case is irrelevant."
+
+MARC8Instruct$   = "Enter a 3-digit number between 161 and 254 to view the name of the MARC-8 character at that code point."
+MARC8Instruct$   = MARC8Instruct$ & " Characters in that range include diacritics and other characters that can't display in"
+MARC8Instruct$   = MARC8Instruct$ & " the dialog box. Characters below that code point should be able to be viewed without"
+MARC8Instruct$   = MARC8Instruct$ & " problem."
+
+UnicodeInstruct$ = "Enter a 4-character hexadecimal number (the digits 0-9 and letters A-F; case is irrelevant) between 0100"
+UnicodeInstruct$ = UnicodeInstruct$ & " and 1EFF to view the name of the Unicode character at that code point. The first digit"
+UnicodeInstruct$ = UnicodeInstruct$ & " must be either 0 or 1; if the first digit is 1, the second character must be E. Names"
+UnicodeInstruct$ = UnicodeInstruct$ & " are not available for any characters in this range in non-Latin scripts, or for any"
+UnicodeInstruct$ = UnicodeInstruct$ & " other marks or symbols apart from the most common diacritical marks. Within this"
+UnicodeInstruct$ = UnicodeInstruct$ & " range, this index includes the Unicode blocks Latin Extended A and B (U+0100-U+024F),"
+UnicodeInstruct$ = UnicodeInstruct$ & " Latin Extended Additional (U+1E00-U+1EFF), Spacing Modifier Letters (U+02B0-U+02FF),"
+UnicodeInstruct$ = UnicodeInstruct$ & " and Combining Diacritical Marks (U+0300-U+036F). Few of these characters will display"
+UnicodeInstruct$ = UnicodeInstruct$ & " in the dialog box at all. Characters in Unicode blocks Basic Latin and Latin-1"
+UnicodeInstruct$ = UnicodeInstruct$ & " Supplement (U+0000-U+00FF) should be able to be viewed without problem, and so are not"
+UnicodeInstruct$ = UnicodeInstruct$ & " included in this index. Don't enter " & DOUBLE_QUOTE & "U+" & DOUBLE_QUOTE & " in the"
+UnicodeInstruct$ = UnicodeInstruct$ & " search box--that just identifies code points as Unicode."
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible "Cancel",       INVISIBLE
+    DlgText    "CharSet",      "MARC-8"
+    If ShowUnicode = False Then
+        DlgEnable  "Switch",       DISABLED
+    End If
+    For i = 1 To CharCount%
+      DisplayChars( i ) = StoreChars( aMARC8, i )
+    Next i
+    If ShowSearch = FALSE Then
+        DlgEnable  "SearchBox",    DISABLED
+        DlgEnable  "Instructions", DISABLED
+    End If
+
+    Call FillDisplay( CurrentPage%, INITIAL )
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+' When the "Forward" and "Previous" buttons are clicked, they change the current page,
+' and they also may need to be disabled at the ends of the ranges. The dialog box stays
+' open.
+
+      Case "Prev"
+
+        CurrentPage% = CurrentPage% - 1
+        DlgEnable  "Next",         ENABLED
+        If CurrentPage% = 1 Then
+            DlgEnable  "Prev",         DISABLED
+          Else
+            DlgEnable  "Prev",         ENABLED
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+        Call FillDisplay( CurrentPage%, INITIAL )
+
+      Case "Next"
+
+        CurrentPage% = CurrentPage% + 1
+        DlgEnable  "Prev",         ENABLED
+        If CurrentPage% = TotalPages% Then
+            DlgEnable  "Next",         DISABLED
+          Else
+            DlgEnable  "Next",         ENABLED
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+        Call FillDisplay( CurrentPage%, INITIAL )
+
+' Selecting a range of characters from the drop-down box changes the current page.
+
+      Case "Pages"
+
+        CurrentPage% = DlgValue( "Pages" ) + 1
+        Call FillDisplay( CurrentPage%, INITIAL )
+
+      Case "Switch"
+
+' The "Switch" button simply toggles between the two different encodings. When Unicode
+' encoding is being displayed, disable the character identification input box, as it can
+' be used only for MARC-8 characters.
+
+        If DlgText( "CharSet" ) = "MARC-8" Then
+            DlgText    "CharSet",      "Unicode"
+            For i = 1 To CharCount%
+              DisplayChars( i ) = StoreChars( aUNICODE, i )
+            Next i
+          Else
+            DlgText    "CharSet",      "MARC-8"
+            For i = 1 To CharCount%
+              DisplayChars( i ) = StoreChars( aMARC8, i )
+            Next i
+        End If
+        Call FillDisplay( CurrentPage%, SWITCHED )
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "SearchHelp"
+
+        Begin Dialog Dialog2Definition  256, 194, WaltsMacros$, .Dialog2ControlFunction
+          OkButton      194, 170,  52,  14
+          CancelButton    1,   1,   1,   1
+          Text           10,   6, 236,  40, MARC8Instruct$
+          Text           10,  50, 236, 112, UnicodeInstruct$
+        End Dialog
+
+        Dim Dialog2 As Dialog2Definition
+        On Error Resume Next
+        Dialog Dialog2
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+
+  Case FOCUS_CHANGE
+
+' The macro shows the encoding being viewed in a text box, because that control makes its
+' contents stand out more prominently than a text area in the dialog box. However, it's
+' not made for input, so if it gets the focus, shunt the focus to another control.
+
+    If DlgText( "CharSet" ) = "MARC-8" Then
+        If Id$ = "CharSet" Then
+            If ShowUnicode Then
+                DlgFocus   "Switch"
+              Else
+                DlgFocus   "OK"
+            End If
+        End If
+    End If
+
+
+  Case IDLE_STATE
+
+' Monitor the input to the code point search box for validity. The first validity check
+' is the length and makeup of the input string. For viewing MARC-8 characters, the string
+' must be three decimal digits; for viewing Unicode characters, it must be four
+' hexadecimal digits. A single input box can suffice for both encodings because of the
+' limitations of searchable entities. The string to view a MARC-8 character must start
+' with either 1 or 2. The string to view a Unicode character must start with either 0 or
+' 1. If the first character is 0, the second must be only 1, 2, or 3; if the first
+' character is 1, the second must be only 3. In either case, the last two characters can
+' be any of the hexadecimal digits 0-F. The second validity check is the numeric value of
+' the input string. For viewing MARC-8 characters, the string must have a value between
+' 158 and 254 (inclusive). For viewing Unicode characters, the value of the input string
+' must be between 0100 and 1EFF (decimal 256 and 7935), inclusive, although there are two
+' big gaps in the range: The array contains no entries between 024F and 0300, or between
+' 036F and 1E00.
+'
+' As soon as an input string passes both validity checks, for length and for value,
+' display a message box showing the code point searched and its character name. When the
+' message box is dismissed, clear the input box, but keep the cursor there for entry of
+' another code point search. The search for MARC-8 characters is a simple linear search
+' because the array is not too large, but the search in the much larger array of Unicode
+' characters is binary.
+
+    SearchString$ = DlgText( "SearchBox" )
+    If SearchString$ <> "" Then
+        If Len( SearchString$ ) = 3 Then
+            If Mid$( SearchString$, 1, 1 ) Like "[12]" And _
+               Mid$( SearchString$, 2, 1 ) Like "[0-9]" And _
+               Mid$( SearchString$, 3, 1 ) Like "[0-9]" Then
+                InputCheck% = InputCheck% + DIGITS_OK
+                DecVal%     = Val( SearchString$ )
+                If DecVal% > 157 And DecVal% < 255 Then
+                    InputCheck% = InputCheck% + VALUE_OK
+                    For i = 1 To ANSEL_COUNT
+                      If SearchString$ = ANSEL( CODEPOINT, i ) Then
+                          CharacterName$ = ANSEL( CHAR_NAME, i )
+                          Exit For
+                      End If
+                    Next i
+                  Else
+                    InputCheck% = InputCheck% + VALUE_BAD
+                End If
+              Else
+                If SearchString$ Like "[1-9][0-9][0-9]" Then
+                    InputCheck% = InputCheck% + DIGITS_OK
+                    InputCheck% = InputCheck% + VALUE_BAD
+                End If
+            End If
+          ElseIf Len( SearchString$ ) = 4 Then
+            SearchString$ = UCase$( SearchString$ )
+            Byte1$ = Left$( SearchString$, 2 )
+            Byte2$ = Right$( SearchString$, 2 )
+            If Byte1$ Like "0[123]" Or Byte1$ = "1E" And _
+               Byte2$ Like "[0-9A-F][0-9A-F]" Then
+                InputCheck% = InputCheck% + DIGITS_OK
+                HexVal%     = Val( "&H" & SearchString$ )
+                If HexVal% > 255 And HexVal% < 7936 Then
+                    High%   = UNICODE_COUNT
+                    Low%    = 1
+                    Do While Low% <= High%
+                      Middle%  = Int( ( High% + Low% ) / 2 )
+                      Compare% = StrComp( Unicode( CODEPOINT, Middle% ), SearchString$ )
+                      Select Case Compare%
+                        Case -1
+                          Low%    = Middle% + 1
+                        Case 0
+                          Result% = Middle%
+                          Exit Do
+                        Case 1
+                          High%   = Middle% - 1
+                      End Select
+                    Loop
+                    If Result% = 0 Then
+                        CharacterName$ = "Sorry, the character at this code point is not included in this index."
+                      Else
+                        CharacterName$ = Unicode( CHAR_NAME, Result% )
+                    End If
+                    InputCheck% = InputCheck% + VALUE_OK
+                  Else
+                    InputCheck% = InputCheck% + VALUE_BAD
+                End If
+              Else
+                If Byte1$ Like "[0-9A-F][0-9A-F]" And Byte2$ Like "[0-9A-F][0-9A-F]" Then
+                    InputCheck% = InputCheck% + DIGITS_OK
+                    HexVal%    = Val( "&H" & SearchString$ )
+                    If HexVal% > 255 And HexVal% < 7936 Then
+                        CharacterName$ = "Sorry, the character at this code point is not included in this index."
+                        InputCheck% = InputCheck% + VALUE_OK
+                      Else
+                        InputCheck%    = InputCheck% + VALUE_BAD
+                    End If
+                  Else
+                    InputCheck% = InputCheck% + DIGITS_BAD
+                    InputCheck% = InputCheck% + VALUE_BAD
+                End If
+            End If
+          Else
+            InputCheck% = InputCheck% + DIGITS_BAD
+        End If
+        Select Case InputCheck%
+          Case DIGITS_OK + VALUE_OK '2
+            If CharacterName$ = "" Then
+                CharacterName$ = "This code point is undefined."
+            End If
+            If DecVal% > 0 Then
+                If Right$( CharacterName$, 11 ) = "[OCLC-MARC]" Then
+                    CharacterName$ = Trim$( Left$( CharacterName$, Len( CharacterName$ ) - 11 ) )
+                    CharacterSet$  = "OCLC-MARC"
+                  Else
+                    CharacterSet$  = "MARC-8"
+                End If
+                MsgBox CharacterSet$ & " character at code point " & SearchString$ & " = " & CharacterName$, INFORMATION_MESSAGE, WaltsMacros$
+              Else
+                MsgBox "Unicode character at code point " & SearchString$ & " = " & CharacterName$, INFORMATION_MESSAGE, WaltsMacros$
+            End If
+            DlgText    "SearchBox",    ""
+          Case DIGITS_OK + VALUE_BAD  '4
+            MsgBox InputWarning$, WARNING_MESSAGE, WaltsMacros$
+            DlgText    "SearchBox",    ""
+          Case 3
+            MsgBox "Case 3"
+          Case 4
+            MsgBox "Case 4"
+        End Select
+    End If
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$, Action%, SVal& )
+
+If Action% = INITIALIZE Then
+    DlgVisible "Cancel", INVISIBLE
+End If
+
+End Function
+'2191163181
+'
+'Macro name: ShowCharacterCodes
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
+'Saved: 5/30/2023 11:02:51 AM using "MacroBookInspector" macro by Walter F. Nickeson.

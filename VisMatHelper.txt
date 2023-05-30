@@ -2526,5 +2526,5 @@ End Function
 '252799378
 '
 'Macro name: VisMatHelper
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 4/17/2023 9:55:31 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 5/30/2023 10:57:42 AM using "MacroBookInspector" macro by Walter F. Nickeson.

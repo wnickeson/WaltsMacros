@@ -1,4 +1,4 @@
-'MacroName:PasteUnformattedPlus.2022.08
+'MacroName:PasteUnformattedPlus.2023.02
 'MacroDescription:Removes formatting from text placed on the Windows Clipboard for
 ' pasting into a bibliographic record. Clears typographical formatting and converts many
 ' Windows-1252 characters to OCLC-MARC. Allows adding a multi-line selection to the
@@ -8,7 +8,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 25 October 2022.
+' Last updated: 29 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -992,7 +992,17 @@ Dim Character$
 Dim CharT$
 Dim FixString$
 
-Dim FILL_CHAR As String*1    : FILL_CHAR = Chr$( 252 )
+Dim ACUTE        As String*1 : ACUTE        = Chr$( 226 )
+Dim BREVE        As String*1 : BREVE        = Chr$( 230 )
+Dim CEDILLA      As String*1 : CEDILLA      = Chr$( 240 )
+Dim CIRCLE_ABOVE As String*1 : CIRCLE_ABOVE = Chr$( 234 )
+Dim CIRCUMFLEX   As String*1 : CIRCUMFLEX   = Chr$( 227 )
+Dim FILL_CHAR    As String*1 : FILL_CHAR    = Chr$( 252 )
+Dim GRAVE        As String*1 : GRAVE        = Chr$( 225 )
+Dim HACEK        As String*1 : HACEK        = Chr$( 233 )
+Dim MACRON       As String*1 : MACRON       = Chr$( 229 )
+Dim TILDE        As String*1 : TILDE        = Chr$( 228 )
+Dim UMLAUT       As String*1 : UMLAUT       = Chr$( 232 )
 
 Dim i As Integer
 
@@ -1008,32 +1018,40 @@ For i = 1 To Len( InputString$ )
       Character$ = CharT$
     Case 128
       Character$ = Chr$( 160 )
-    Case 130
+    Case 130, 139, 145, 146
       Character$ = SINGLE_QUOTE
     Case 131
       Character$ = "f"
-    Case 132
+    Case 132, 147, 148, 171, 187
       Character$ = DOUBLE_QUOTE
     Case 133
       Character$ = "..."
     Case 138
-      Character$ = "S" & Chr$( 233 )
+      Character$ = "S" & HACEK
     Case 140
       Character$ = Chr$( 166 )
     Case 142
-      Character$ = "Z" & Chr$( 233 )
+      Character$ = "Z" & HACEK
+    Case 150
+      Character$ = "-"
+    Case 151
+      Character$ = "--"
     Case 154
-      Character$ = "s" & Chr$( 233 )
+      Character$ = "s" & HACEK
     Case 156
       Character$ = FIELD_TERMINATOR
     Case 158
-      Character$ = "z" & Chr$( 233 )
+      Character$ = "z" & HACEK
     Case 159
-      Character$ = "Y" & Chr$( 232 )
+      Character$ = "Y" & UMLAUT
+    Case 161
+      Character$ = Chr$( 201 )
     Case 163
       Character$ = Chr$( 185 )
     Case 169
       Character$ = Chr$( 202 )
+    Case 170
+      Character$ = "a."
     Case 174
       Character$ = Chr$( 170 )
     Case 176
@@ -1047,137 +1065,143 @@ For i = 1 To Len( InputString$ )
     Case 185
       Character$ = Chr$( 129 )
     Case 186
-      Character$ = Chr$( 158 )
+      Character$ = "o."
+    Case 188
+      Character$ = "1/4"
+    Case 189
+      Character$ = "1/2"
+    Case 190
+      Character$ = "3/4"
     Case 191
-      Character$ = CharT$
+      Character$ = Chr$( 200 )
     Case 192
-      Character$ = "A" & Chr$( 225 )
+      Character$ = "A" & GRAVE
     Case 193
-      Character$ = "A" & Chr$( 226 )
+      Character$ = "A" & ACUTE
     Case 194
-      Character$ = "A" & Chr$( 227 )
+      Character$ = "A" & CIRCUMFLEX
     Case 195
-      Character$ = "A" & Chr$( 227 )
+      Character$ = "A" & TILDE
     Case 196
-      Character$ = "A" & Chr$( 227 )
+      Character$ = "A" & UMLAUT
     Case 197
-      Character$ = "A" & Chr$( 234 )
+      Character$ = "A" & CIRCLE_ABOVE
     Case 198
       Character$ = Chr$( 165 )
     Case 199
-      Character$ = "C" & Chr$( 227 )
+      Character$ = "C" & CEDILLA
     Case 200
-      Character$ = "E" & Chr$( 225 )
+      Character$ = "E" & GRAVE
     Case 201
-      Character$ = "E" & Chr$( 226 )
+      Character$ = "E" & ACUTE
     Case 202
-      Character$ = "E" & Chr$( 227 )
+      Character$ = "E" & CIRCUMFLEX
     Case 203
-      Character$ = "E" & Chr$( 227 )
+      Character$ = "E" & UMLAUT
     Case 204
-      Character$ = "I" & Chr$( 225 )
+      Character$ = "I" & GRAVE
     Case 205
-      Character$ = "I" & Chr$( 226 )
+      Character$ = "I" & ACUTE
     Case 206
-      Character$ = "I" & Chr$( 227 )
+      Character$ = "I" & CIRCUMFLEX
     Case 207
-      Character$ = "I" & Chr$( 227 )
+      Character$ = "I" & UMLAUT
     Case 208
       Character$ = Chr$( 163 )
     Case 209
-      Character$ = "N" & Chr$( 227 )
+      Character$ = "N" & TILDE
     Case 210
-      Character$ = "O" & Chr$( 225 )
+      Character$ = "O" & GRAVE
     Case 211
-      Character$ = "O" & Chr$( 226 )
+      Character$ = "O" & ACUTE
     Case 212
-      Character$ = "O" & Chr$( 227 )
+      Character$ = "O" & CIRCUMFLEX
     Case 213
-      Character$ = "O" & Chr$( 227 )
+      Character$ = "O" & TILDE
     Case 214
-      Character$ = "O" & Chr$( 227 )
+      Character$ = "O" & UMLAUT
     Case 215
-      Character$ = FILL_CHAR
+      Character$ = "x"
     Case 216
-      Character$ = "O"  & Chr$( 162 )
+      Character$ = Chr$( 162 )
     Case 217
-      Character$ = "U" & Chr$( 225 )
+      Character$ = "U" & GRAVE
     Case 218
-      Character$ = "U" & Chr$( 226 )
+      Character$ = "U" & ACUTE
     Case 219
-      Character$ = "U" & Chr$( 227 )
+      Character$ = "U" & CIRCUMFLEX
     Case 220
-      Character$ = "U" & Chr$( 227 )
+      Character$ = "U" & UMLAUT
     Case 221
-      Character$ = "Y" & Chr$( 226 )
+      Character$ = "Y" & ACUTE
     Case 222
       Character$ = Chr$( 164 )
     Case 223
       Character$ = CharT$
     Case 224
-      Character$ = "a" & Chr$( 225 )
+      Character$ = "a" & GRAVE
     Case 225
-      Character$ = "a" & Chr$( 226 )
+      Character$ = "a" & ACUTE
     Case 226
-      Character$ = "a" & Chr$( 227 )
+      Character$ = "a" & CIRCUMFLEX
     Case 227
-      Character$ = "a" & Chr$( 227 )
+      Character$ = "a" & TILDE
     Case 228
-      Character$ = "a" & Chr$( 227 )
+      Character$ = "a" & UMLAUT
     Case 229
-      Character$ = "a" & Chr$( 234 )
+      Character$ = "a" & CIRCLE_ABOVE
     Case 230
       Character$ = Chr$( 181 )
     Case 231
-      Character$ = "c" & Chr$( 240 )
+      Character$ = "c" & CEDILLA
     Case 232
-      Character$ = "e" & Chr$( 225 )
+      Character$ = "e" & GRAVE
     Case 233
-      Character$ = "e" & Chr$( 226 )
+      Character$ = "e" & ACUTE
     Case 234
-      Character$ = "e" & Chr$( 227 )
+      Character$ = "e" & CIRCUMFLEX
     Case 235
-      Character$ = "e" & Chr$( 227 )
+      Character$ = "e" & UMLAUT
     Case 236
-      Character$ = "i" & Chr$( 225 )
+      Character$ = "i" & GRAVE
     Case 237
-      Character$ = "i" & Chr$( 226 )
+      Character$ = "i" & ACUTE
     Case 238
-      Character$ = "i" & Chr$( 227 )
+      Character$ = "i" & CIRCUMFLEX
     Case 239
-      Character$ = "i" & Chr$( 227 )
+      Character$ = "i" & UMLAUT
     Case 240
       Character$ = Chr$( 186 )
     Case 241
-      Character$ = "n" & Chr$( 227 )
+      Character$ = "n" & TILDE
     Case 242
-      Character$ = "o" & Chr$( 225 )
+      Character$ = "o" & GRAVE
     Case 243
-      Character$ = "o" & Chr$( 226 )
+      Character$ = "o" & ACUTE
     Case 244
-      Character$ = "o" & Chr$( 227 )
+      Character$ = "o" & CIRCUMFLEX
     Case 245
-      Character$ = "o" & Chr$( 227 )
+      Character$ = "o" & TILDE
     Case 246
-      Character$ = "o" & Chr$( 227 )
+      Character$ = "o" & UMLAUT
     Case 247
       Character$ = FILL_CHAR
     Case 248
-      Character$ = "o" & Chr$( 178 )
+      Character$ = Chr$( 178 )
     Case 249
-      Character$ = "u" & Chr$( 225 )
+      Character$ = "u" & GRAVE
     Case 250
-      Character$ = "u" & Chr$( 226 )
+      Character$ = "u" & ACUTE
     Case 251
-      Character$ = "u" & Chr$( 227 )
+      Character$ = "u" & CIRCUMFLEX
     Case 252
-      Character$ = "u" & Chr$( 227 )
+      Character$ = "u" & UMLAUT
     Case 253
-      Character$ = "y" & Chr$( 226 )
+      Character$ = "y" & ACUTE
     Case 254
       Character$ = Chr$( 181 )
     Case 255
-      Character$ = "y" & Chr$( 227 )
+      Character$ = "y" & UMLAUT
     Case Else
       Character$ = ""
 
@@ -1579,8 +1603,8 @@ Select Case Action%
 End Select
 
 End Function
-'158359566
+'160760183
 '
 'Macro name: PasteUnformattedPlus
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 4/17/2023 9:52:14 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
+'Saved: 5/30/2023 10:53:41 AM using "MacroBookInspector" macro by Walter F. Nickeson.

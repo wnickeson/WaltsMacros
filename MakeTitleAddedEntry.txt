@@ -1,4 +1,4 @@
-'MacroName:MakeTitleAddedEntry.2023.44
+'MacroName:MakeTitleAddedEntry.2023.52
 'MacroDescription:Helps to quickly add selected text to a bibliographic record as a title
 ' added entry or uniform title heading, and also checks indicators in those title fields.
 '
@@ -6,12 +6,12 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 18 March 2023.
+' Last updated: 26 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
+' This macro works for me with Connexion client 3.1 and 64-bit Windows 11 Enterprise &
 ' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
@@ -21,8 +21,8 @@
 ' appropriate tag and indicator values, and the macro adds the field.
 '
 ' Or, run the macro with the cursor anywhere in the record to check the indicator values
-' for all those title fields, if present, and quickly change them, if necessary. The
-' macro displays the fields found in a list; select one to see the valid indicator
+' for whichever of those title fields are present, and quickly change them, if necessary.
+' The macro displays the fields found in a list; select one to see the valid indicator
 ' values, and the definition of each value, for that field. Select a different indicator
 ' value from the drop-down list to make a change. This feature of the macro is probably
 ' most useful for checking the 246 field, which has a lot of different indicator values
@@ -30,9 +30,9 @@
 ' macro can be used like an in-record help system for the five title fields it is
 ' designed for.
 '
-' Because of the limits of the macro language, fields with Unicode characters won't
-' display properly. The macro therefore replaces an undisplayable Unicode character with
-' a pair of brackets to simulate an empty box [].
+' Because of the limits of the macro language, Unicode characters won't display properly.
+' The macro therefore replaces any undisplayable character with a pair of brackets to
+' simulate an empty box: "[]".
 '
 ' The macro will always add 246, 730, and 740 fields from selected text, but it won't
 ' create additional 130 or 240 fields, as those fields are nonrepeatable. A 130 field
@@ -62,7 +62,7 @@ Option Explicit
 
 Declare Sub FillArrays
 
-Declare Function ConvertTo1252       ( InputString$ )      As String
+Declare Function ConvertTo8859       ( InputString$ )      As String
 Declare Function ConvertUnicode      ( InputString$ )      As String
 Declare Function MakeInitialCapital  ( SelectedText$ )     As String
 Declare Function RemoveInitialArticle( SelectedText$ )     As String
@@ -74,10 +74,10 @@ Global Const ABSENT        As Integer = 0  'Subfield $i in 246 is not present.
 Global Const IND_2_INVALID As Integer = 2  'Subfield $i in 246 is present but 2nd indicator value is not blank, as it should be.
 Global Const IND_2_VALID   As Integer = 1  'Subfield $i in 246 is present and 2nd indicator value is (correctly) blank.
 
-Global NAME_1XX         As String*1
-Global NO_1XX           As String*1
-Global SUBFIELD_I_STATE As Integer
-Global TITLE_1XX        As String*1
+Global NAME_1XX            As String*1
+Global NO_1XX              As String*1
+Global SUBFIELD_I_STATE    As Integer
+Global TITLE_1XX           As String*1
 
 Global Field1XX$
 Global Indicator1$
@@ -85,6 +85,7 @@ Global Indicator2$
 Global ListBox1Selection%
 Global ListBox2Selection%
 Global SelectedText$
+Global TitleArraySelection%
 
 Global English
 Global Field240
@@ -128,6 +129,9 @@ Const ADD_246              As Integer = 1
 Const ADD_730              As Integer = 2
 Const ADD_740              As Integer = 3
 
+Dim FAKE_FILL_CHAR  As String*1  : FAKE_FILL_CHAR = Chr$( 127 )
+Dim REAL_FILL_CHAR  As String*1  : REAL_FILL_CHAR  = Chr$( 252 )
+
 Dim Col%
 Dim CurrentRow%
 Dim CursorFieldTag$
@@ -158,12 +162,12 @@ Dim FoundField
 
 Dim i As Integer, p As Integer
 
-Field1XX$    = NO_1XX
-Field240     = FALSE
-NAME_1XX     = "N"
-NO_1XX       = " "
-TITLE_1XX    = "T"
-UnicodeFound = FALSE
+Field1XX$      = NO_1XX
+Field240       = FALSE
+NAME_1XX       = "N"
+NO_1XX         = " "
+TITLE_1XX      = "T"
+UnicodeFound   = FALSE
 
 ' First, make sure that a bibliographic record is displayed.
 
@@ -174,7 +178,9 @@ Select Case TypeOfWindow%
     Exit Sub
 End Select
 
-' Then get the cursor position. If it's in a variable field, get the tag.
+' Then get the cursor position. If it's in a variable field, get the tag, by using the
+' "GetFieldLineUnicode" command. The content of the field doesn't matter at this point,
+' but if non-Latin scripts are found, this command at least is able to retrieve the tag.
 
 Col% = CS.CursorColumn
 If Col% = FIXED_FIELD Then
@@ -403,17 +409,20 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
 ' the dialog box may not be able to display the full set of characters in the record, the
 ' raw data from the field is manipulated for display. MARC characters may need to be
 ' converted into Windows equivalents, if possible, and Unicode characters are turned into
-' apparent empty boxes, formed by adjacent brackets []. The row number of each field is
-' also stored in case the field is to be replaced because the indicators have been
-' changed.
+' apparent empty boxes, formed by adjacent brackets []. The fill character is represented
+' by a filled box. The row number of each field is also stored in case the field is to be
+' replaced because the indicators have been changed.
 
     SelectedText$ = ""
     LineNumber%   = 1
       Do
-        FoundField = CS.GetFieldLineUnicode( LineNumber%, FieldData$ )
+        FoundField = CS.GetFieldUnicode( "...", LineNumber%, FieldData$ )
         If FoundField Then
             Tag$ = Left$( FieldData$, 3 )
             If Tag$ Like "[127][34][06]" Then
+                If Mid$( FieldData$, 5, 1 ) = REAL_FILL_CHAR Then
+                    Mid$( FieldData$, 5, 1 ) = FAKE_FILL_CHAR
+                End If
                 ReDim Preserve TitleFields( TitleFieldCount% )
                 TitleFields( TitleFieldCount% ).tRawData    = FieldData$
                 TitleFields( TitleFieldCount% ).tLineNumber = LineNumber%
@@ -421,9 +430,12 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
                     TitleFields( TitleFieldCount% ).tDisplayData = ConvertUnicode( FieldData$ )
                     UnicodeFound = TRUE
                   Else
-                    TitleFields( TitleFieldCount% ).tDisplayData = ConvertTo1252( FieldData$ )
+                    TitleFields( TitleFieldCount% ).tDisplayData = ConvertTo8859( FieldData$ )
                 End If
                 TitleFieldCount% = TitleFieldCount% + 1
+                If LineNumber% = CurrentRow% Then
+                    TitleArraySelection% = TitleFieldCount%
+                End If
             End If
         End If
         LineNumber% = LineNumber% + 1
@@ -515,25 +527,25 @@ Sub FillArrays
 [730/740_Ind2]( 0 ) = "[blank] - No type specified"
 [730/740_Ind2]( 1 ) = "2 - Analytical entry"
 
-NonFiling( 0 )   = "0"
-NonFiling( 1 )   = "1"
-NonFiling( 2 )   = "2"
-NonFiling( 3 )   = "3"
-NonFiling( 4 )   = "4"
-NonFiling( 5 )   = "5"
-NonFiling( 6 )   = "6"
-NonFiling( 7 )   = "7"
-NonFiling( 8 )   = "8"
-NonFiling( 9 )   = "9"
+NonFiling( 0 )      = "0"
+NonFiling( 1 )      = "1"
+NonFiling( 2 )      = "2"
+NonFiling( 3 )      = "3"
+NonFiling( 4 )      = "4"
+NonFiling( 5 )      = "5"
+NonFiling( 6 )      = "6"
+NonFiling( 7 )      = "7"
+NonFiling( 8 )      = "8"
+NonFiling( 9 )      = "9"
 
 End Sub
 
 '****************************************************************************************
 
-Function ConvertTo1252( InputString$ ) As String
+Function ConvertTo8859( InputString$ ) As String
 
-' This function converts the MARC21 string to the subset of Windows-1252 that can display
-' in the dialog box, just to make it easier to read.
+' This function converts the MARC21 string to ISO/IEC 8859-1 encoding, to make it
+' possibly easier to read in the dialog box.
 
 Dim Character$               : Character$ = " "
 Dim CharNext%
@@ -753,7 +765,7 @@ For i = 1 To Len( InputString$ ) - 1
 
 Next i
 
-ConvertTo1252 = TempString$
+ConvertTo8859 = TempString$
 
 End Function
 
@@ -948,19 +960,25 @@ Select Case Tag$
       Indicator1Array( i + x ) = [246_Ind1]( i )
     Next i
 
-    If ( Indicator2$ Like "[0-8]" And DisplayTextPresent = FALSE ) Or _
-       ( Indicator2$ = " " And DisplayTextPresent ) Then
+    If ( Indicator2$ Like "[ 0-8]" And DisplayTextPresent = FALSE ) Then
         x = 0
+        SUBFIELD_I_STATE = ABSENT
+      ElseIf Indicator2$ = " " And DisplayTextPresent Then
+        x = 0
+        SUBFIELD_I_STATE = IND_2_VALID
+      Else
+        x = 1
+    End If
+    If x = 0 Then
         If Indicator2$ = " " Then
             ListBox2Selection% = 0
-            SUBFIELD_I_STATE = IND_2_VALID
           Else
             ListBox2Selection% = Val( Indicator2$ ) + 1
         End If
       Else
         x = 1
         ListBox2Selection% = 0
-        If Indicator2$ Like "[!0-9]" Then
+        If Indicator2$ Like "[! 0-8]" Then
             Indicator2$ = QUOTE & Indicator2$ & QUOTE
         End If
     End If
@@ -1118,7 +1136,11 @@ Select Case Action%
         If Tag$ <> "130" Then
             DlgValue        "ListBoxInd2",       ListBox2Selection%
         End If
-        DlgValue        "FieldList",         0
+        If TitleArraySelection% = 0 Then
+            DlgValue        "FieldList",         TitleArraySelection%
+          Else
+            DlgValue        "FieldList",         TitleArraySelection% - 1
+        End If
         If UnicodeFound Then
             DlgVisible      "Unicode",           VISIBLE
           Else
@@ -1130,6 +1152,7 @@ Select Case Action%
         WarningCounter = FALSE
 
     End If
+
 
   Case CONTROL_CHANGE
 
@@ -1226,7 +1249,7 @@ Select Case Action%
 ' coded "blank." In this case, if the user tries to select another value, snap the
 ' selection back to "blank" and display the warning message for 4 seconds.
 
-                If IndicatorSelection% > 0 And SUBFIELD_I_STATE = IND_2_VALID Then
+                If SUBFIELD_I_STATE = IND_2_INVALID And IndicatorSelection% <> 1 Then
                     DlgValue        "ListBoxInd2",       0
                     DlgVisible      "DisplayTextNote",   VISIBLE
                     WarningCounter = TRUE
@@ -1253,6 +1276,9 @@ Select Case Action%
 
   Case IDLE_STATE
 
+' This part dismisses the warning about an indicator value being valid after displaying
+' for 4 seconds.
+
     If WarningCounter Then
         ElapsedSeconds%   = Timer - StartTimer&
         SecondsRemaining% = COUNTDOWN - ElapsedSeconds%
@@ -1266,13 +1292,23 @@ Select Case Action%
         End If
     End If
     PreviousSecondsRemaining% = SecondsRemaining%
+
+' If an indicator value is invalid, the OK button doesn't work--or it would add an
+' invalid value to the record.
+
+    If ( InStr( DlgText( "ListBoxInd1" ), "INVALID" ) > 0 ) Or ( InStr( DlgText( "ListBoxInd2" ), "INVALID" ) > 0 ) Then
+        DlgEnable       "OK",                DISABLED
+      Else
+        DlgEnable       "OK",                ENABLED
+    End If
+
     Dialog1ControlFunction    = KEEP_DLG_OPEN
 
 End Select
 
 End Function
-'127547008
+'131148506
 '
 'Macro name: MakeTitleAddedEntry
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 4/17/2023 9:53:40 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
+'Saved: 5/30/2023 10:56:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.

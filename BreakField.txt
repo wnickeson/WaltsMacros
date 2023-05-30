@@ -1,4 +1,4 @@
-'MacroName:BreakField.2023.03
+'MacroName:BreakField.2023.06
 'MacroDescription:Breaks a field at the cursor position, moving all subsequent text in
 ' that field to a new field, with a blank tag, immediately following.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 25 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -19,12 +19,11 @@
 ' it and run the macro. The macro cuts the field at the cursor position, adding the cut
 ' portion as the next field but with a blank tag.
 '
-' The macro uses the "GetFieldLineUnicode" command to retrieve the field in which the
-' cursor is placed. The data preceding the cursor position becomes a replacement field,
-' and is put in place with the "SetField" command. The rest of the data becomes a new
-' field, and is added with the "AddFieldLine" command at the next line. The new field has
-' a blank tag so the appropriate tag can be simply typed in. Fields with non-Latin
-' scripts require some calculation to deal with multibyte character encoding.
+' The macro uses the "GetFieldUnicode" command to retrieve the field in which the cursor
+' is placed. The data preceding the cursor position becomes a replacement field, and is
+' put in place with the "SetField" command. The rest of the data becomes a new field, and
+' is added with the "AddFieldLine" command at the next line. The new field has a blank
+' tag so the appropriate tag can be simply typed in.
 '****************************************************************************************
 
 Option Explicit
@@ -41,18 +40,18 @@ If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
 Const CRITICAL_MESSAGE As Integer = 16
 
-Dim Char$
+Dim BreakColumn%
 Dim ChoppedField$
 Dim CurrentColumn%
-Dim CurrentField$
 Dim CurrentRow%
+Dim FieldData$
 Dim NewField$
-Dim Split%
+Dim Start%
 Dim Tag$
 Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:BreakField"
 
-Dim i As Integer
+Dim i As Integer, p As Integer, q As Integer
 
 ' Before going any further, make sure the current window is not a list: The macro works
 ' only in bibliographic or authority records.
@@ -71,46 +70,51 @@ CurrentColumn% = CS.CursorColumn
 ' not in a variable field; it's either in the fixed field or it's in the tag + indicator
 ' cells. Either way, there is no string to divide.
 
-If CurrentColumn% < 6 Then Exit Sub
+If CurrentColumn% < 6 Then
+    MsgBox "Please place the cursor in a variable data field cell to split the field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
 
-If CS.GetFieldLineUnicode( CurrentRow%, CurrentField$ ) Then
+' If the cursor position is OK, retrieve the data for the row the cursor is in and begin
+' processing.
 
-' Second check for cursor position: If the cursor is at the beginning or end of the
-' field, there will be no string to divide, so simply stop.
-
-    If CurrentColumn% >= Len( CurrentField$ ) Or CurrentColumn% = 6 Then Exit Sub
-
-    Tag$ = Left$( CurrentField$, 3 )
+If CS.GetFieldUnicode( "...", CurrentRow%, FieldData$ ) = FALSE Then
+    MsgBox "Sorry, this macro couldn't get the data in the field to analyze.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    If CurrentColumn% >= Len( FieldData$ ) Or CurrentColumn% = 6 Then
+        MsgBox "Please place the cursor within the field to split it.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
 
 ' If the field does not contain Unicode characters, then the position in the string at
-' which to make the split will be the same as the cursor column position. Otherwise, the
-' string's split position will be greater than the cursor column position, as each
-' Unicode character is encoded as eight ASCII characters. So every Unicode character
-' counts as one toward the cursor column position, but is measured as eight characters in
-' the string.
+' which to break the field will be the same as the cursor column position. Otherwise, the
+' string's split position will be greater than that position, as each Unicode character
+' is encoded as seven or more ASCII characters. So every Unicode character counts as one
+' toward the cursor column position, but is measured as seven or more characters in the
+' string.
 
-    If InStr( CurrentField$, "&#x" ) Then
-        i      = 1
-        Split% = 1
-        Do
-          Char$ = Mid$( CurrentField$, i, 3 )
-          If Char$ = "&#x" Then
-              i = i + 7
+    BreakColumn% = CurrentColumn%
+    Start%       = 6
+    Do
+      p = InStr( Start%, FieldData$, "&#x" )
+      If p > 0 Then
+          If p < BreakColumn% Then
+              q            = InStr( p, FieldData$, ";" )
+              BreakColumn% = BreakColumn% + (q - p )
+              Start%       = q + 1
+            Else
+              Exit Do
           End If
-          i      = i + 1
-          Split% = Split% + 1
-        Loop Until Split% = CurrentColumn%
-        Split% = i
-      Else
-        Split% = CurrentColumn%
-    End If
+      End If
+    Loop Until p = 0 Or p > BreakColumn%
 
 ' To add the new field (the second or latter part of the field the cursor is in), the
 ' macro command requires a tag. But because that tag will disappear to leave a blank
 ' space ready for typing in the new tag, whatever we label the field is irrelevant.
 
-    NewField$     = "000  " & Trim$( Mid$( CurrentField$, Split% ) )
-    ChoppedField$ = Trim$( Left$( CurrentField$, Split% - 1 ) )
+    NewField$     = "000  " & Trim$( Mid$( FieldData$, BreakColumn% ) )
+    ChoppedField$ = Trim$( Left$( FieldData$, BreakColumn% - 1 ) )
 
 ' The "SetFieldLine" command replaces the existing field with a new one.
 
@@ -128,8 +132,8 @@ If CS.GetFieldLineUnicode( CurrentRow%, CurrentField$ ) Then
 End If
 
 End Sub
-'1325096
+'1365379
 '
 'Macro name: BreakField
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 4/17/2023 9:59:36 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 5/30/2023 11:00:27 AM using "MacroBookInspector" macro by Walter F. Nickeson.

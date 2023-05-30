@@ -134,5 +134,5 @@ End Sub
 '1354872
 '
 'Macro name: GetWindowData
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 4/17/2023 10:01:37 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
+'Saved: 5/30/2023 11:02:19 AM using "MacroBookInspector" macro by Walter F. Nickeson.

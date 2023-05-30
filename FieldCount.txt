@@ -1,4 +1,4 @@
-'MacroName:FieldCount.2022.03
+'MacroName:FieldCount.2023.01
 'MacroDescription:Shows all fields in a bibliographic or authority record with their
 ' individual and total count, as well as the subject thesauri used in 6XX fields. Allows
 ' for filtering fields display by tag groups.
@@ -7,7 +7,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 30 June 2022.
+' Last updated: 26 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -131,7 +131,10 @@ End Select
 DeleteFieldsOnExport
 
 ' Go through the record, making an array of all the fields encountered (sorting the
-' fields along the way) and the total number of instances of each field.
+' fields along the way) and the total number of instances of each field. Although the
+' content of each field is irrelevant, the "GetFieldLineUnicode" command is necessary
+' because the plain "GetFieldLine" command fails when non-Latin scripts are encountered,
+' not retrieving even the tag.
 
 RecordLine% = 1
 Do
@@ -139,7 +142,7 @@ Do
   If FoundField Then
       FieldData$ = Trim$( FieldData$ )
       If Len( FieldData$ ) <> 7 Or Mid$( FieldData$, 6, 1 ) <> DELIMITER Then
-          Tag$       = Left$( FieldData$, 3 )
+          Tag$ = Left$( FieldData$, 3 )
           If Left$( Tag$, 1 ) = "6" Then
               Build6XXArray( FieldData$ )
           End If
@@ -772,8 +775,8 @@ KeepOpen:
 End Select
 
 End Function
-'77625367
+'77925582
 '
 'Macro name: FieldCount
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 4/17/2023 10:01:27 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
+'Saved: 5/30/2023 11:02:10 AM using "MacroBookInspector" macro by Walter F. Nickeson.

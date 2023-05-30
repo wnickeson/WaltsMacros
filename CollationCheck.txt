@@ -1726,5 +1726,5 @@ End Function
 '172764110
 '
 'Macro name: CollationCheck
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 4/17/2023 9:57:18 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 5/30/2023 10:58:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.

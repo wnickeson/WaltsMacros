@@ -1,11 +1,11 @@
-'MacroName:DashIt.2023.51
+'MacroName:DashIt.2023.53
 'MacroDescription:Helps replace hyphens with dashes in a field in a bibliographic record.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 February 2023.
+' Last updated: 19 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -16,13 +16,14 @@
 '****************************************************************************************
 ' How it works: Place the cursor in a field in a bibliographic record and run the macro
 ' to change hyphens in the field to dashes. (The cursor position is irrelevant, as the
-' macro always works on the whole field.) The macro follows the Chicago Manual of Style
-' in considering a dash to be two hyphens without any spaces before, between, or
-' after--like this. Hyphens incorrectly used as dashes, whether they look like this - or
-' this- or this -can be changed. Dashes with spaces around them -- like these -- may also
-' be cleaned up. (However, since that is correct formatting in a contents note, the macro
-' won't run at all in a 505 field.) All hyphens are displayed for review because a mass
-' change is likely to result in some edits having been made incorrectly.
+' macro always works on the whole field.) The macro follows OCLC policy and the Chicago
+' Manual of Style in considering a dash to be two hyphens without any spaces before,
+' between, or after--like this. Hyphens incorrectly used as dashes, whether they look
+' like this - or this- or this -can be changed. Dashes with spaces around them -- like
+' these -- may also be cleaned up. (However, since that is correct formatting in a
+' contents note, the macro won't run at all in a 505 field.) All hyphens are displayed
+' for review because a mass change is likely to result in some edits having been made
+' incorrectly.
 '
 ' Starting at the beginning of the field in which the cursor is placed, the macro looks
 ' for the first hyphen, asks what to do with it, and finds the next hyphen. Hyphens that
@@ -38,13 +39,9 @@
 ' When it's finished, the dialog box that reports the actions taken by the macro closes
 ' itself in five seconds.
 '
-' The macro could use the true em dash, Unicode U+2014, rather than two hyphens, as the
-' entire Unicode character set is supposed to be available in MARC records. However, my
-' experimentation has shown that that character is not preserved when a record containing
-' it is saved in the online save file. It is preserved when saved locally, and it seems
-' to export correctly. However, when this character is saved online it is stored, and
-' displayed when retrieved, as a standard two-hyphen dash. To avoid complications it
-' seems best to continue to use the standard dash rather than any Unicode dash character.
+' Although all Unicode characters are available in OCLC records, which might suggest that
+' use of the true em dash character (U+2014) is appropriate, section 2.7 of Bibliographic
+' Formats and Standards, "Character set," explicitly instructs using two hyphens instead.
 '
 ' This macro works best, of course, in an English-language record with English-language
 ' text, and will probably be most useful in a lengthy summary note that contains many
@@ -54,7 +51,7 @@
 
 Option Explicit
 
-Declare Function ConvertTo1252( InputString$ ) As String
+Declare Function ConvertTo8859( InputString$ ) As String
 Declare Function EvaluateHyphen()              As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
@@ -78,10 +75,6 @@ Global PreDialogHyphenTest
 '****************************************************************************************
 
 Sub Main
-
-ChangeCount% = 0
-HyphenPos% = 0
-ActionQuestion$ = ""
 
 Const CRITICAL_MESSAGE     As Integer = 16
 Const DIALOG_BUTTON_CANCEL As Integer = 0
@@ -274,10 +267,10 @@ End Sub
 
 '****************************************************************************************
 
-Function ConvertTo1252( InputString$ ) As String
+Function ConvertTo8859( InputString$ ) As String
 
-' This function converts the MARC21 string to the subset of Windows-1252 that can display
-' in the dialog box, just to make it easier to read.
+' This function converts the MARC21 string to ISO/IEC 8859-1 encoding, to make it
+' possibly easier to read in the dialog box.
 
 Dim Character$               : Character$ = " "
 Dim CharNext%
@@ -496,7 +489,7 @@ For i = 1 To Len( InputString$ ) - 1
 
 Next i
 
-ConvertTo1252 = TempString$
+ConvertTo8859 = TempString$
 
 End Function
 
@@ -592,7 +585,7 @@ Do
 
 ' Convert characters to make a nice display in the dialog box.
 
-  EvaluateHyphen = ConvertTo1252( Snippet$ )
+  EvaluateHyphen = ConvertTo8859( Snippet$ )
 
 ' Starting with the character immediately before the hyphen, or to its left, examine the
 ' next few characters, checking for spaces, word characters, or other hyphens. If that
@@ -800,8 +793,8 @@ Select Case Action%
 End Select
 
 End Function
-'80428819
+'79728410
 '
 'Macro name: DashIt
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 4/17/2023 10:00:12 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 5/30/2023 11:00:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.

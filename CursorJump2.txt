@@ -1,4 +1,4 @@
-'MacroName:CursorJump2.2023.01
+'MacroName:CursorJump2.2023.02
 'MacroDescription:Jumps the cursor to a specified position in a bibliographic or authority
 ' record.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 26 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -144,7 +144,7 @@ If InitialCol% = 0 Then
 End If
 RecordLine% = 1
 Do
-  FoundField = CS.GetFieldLineUnicode( RecordLine%, FieldData$ )
+  FoundField = CS.GetFieldUnicode( "...", RecordLine%, FieldData$ )
   If FoundField Then
       FieldData$ = Trim$( FieldData$ )
       Tag$       = Left$( FieldData$, 3 )
@@ -564,8 +564,8 @@ Select Case Action%
 End Select
 
 End Function
-'56819974
+'56819975
 '
 'Macro name: CursorJump2
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 4/17/2023 10:00:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 5/30/2023 11:00:52 AM using "MacroBookInspector" macro by Walter F. Nickeson.

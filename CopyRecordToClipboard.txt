@@ -1,6 +1,7 @@
-'MacroName:CopyRecordToClipboard.2023.03
+'MacroName:CopyRecordToClipboard.2023.05
 'MacroDescription:Copies the displayed record, or a selection of fields in that record,
-' to the Windows Clipboard in the classic layout, using only characters in ISO-8859-1.
+' to the Windows Clipboard in the classic layout, using only characters in ISO/IEC
+' 8859-1:1998.
 '
 ' This macro was originally written by OCLC for its Passport for Windows software with
 ' the name "SaveScreen." It was converted for the Connexion client by Joel Hahn, Niles
@@ -12,7 +13,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 26 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -23,11 +24,11 @@
 '****************************************************************************************
 ' How it works: Run the macro with a bibliographic or authority record displayed. The
 ' macro puts the record on the Windows Clipboard, for pasting into a word processing
-' program, for example, or into an e-mail. The copied text contains only characters in
-' the ISO-8859-1 character set, which most applications and fonts should be able to cope
-' with. However, because of the limitations of that character set, the copied record may
-' be only an approximation of the original. The intent of this macro is to produce a
-' useful, rather than an exact, copy.
+' program, for example, or into an e-mail. The copied text contains only characters
+' encoded in ISO/IEC 8859-1:1998, which most applications and fonts should be able to
+' cope with. However, because of the limitations of that character set, the copied
+' record may be only an approximation of the original. The intent of this macro is to
+' produce a useful, rather than an exact, copy.
 '
 ' If nothing in the record is selected, the whole record is copied. If two or more
 ' contiguous fields have been selected, even if not completely, only those fields are
@@ -43,8 +44,8 @@
 ' fixed field shows at the top, the copied record is laid out in the classic OCLC record
 ' display, and if a monospaced font is used, the layout is properly spaced and aligned.
 '
-' Characters in the record not in the ISO-8859-1 character set--anything encoded with a
-' hex value greater than 100, or UTF-8 C480--are converted to equivalent characters, if
+' Characters in the record not encoded in ISO/IEC 8859-1:1998--anything encoded with a
+' hex value greater than 0100, or UTF-8 C480--are converted to equivalent characters, if
 ' possible. These conversions are generally made on the basis of visual similarity,
 ' rather than of logical appropriateness. The vertical bar "|" is used to represent
 ' characters for which no appropriate substitute is available. Conversions or
@@ -78,39 +79,32 @@
 ' limit somewhat less than that.
 '
 ' Characters with code points 32 to 127 are common to all versions of ASCII, as well as
-' ISO-8559-1 and OCLC-MARC; this macro will copy them exactly. Characters with code
-' points 128 to 255 are encoded in OCLC-MARC, which is quite different from the encoding
-' of ISO-8559-1. Some characters will copy exactly but most will be approximations.
-' Diacritics in OCLC-MARC only appear if their combination with a base character matches
-' a precomposed character in ISO-8559-1; if not, only the base character is kept. Code
-' points below 32 should not appear in MARC records, but due to a bug in OML described
-' below, they may occasionally be found. This macro substitutes the character "¤" for
-' them. Code points above 255 are Unicode characters. These should be encoded in a MARC
-' record as Numeric Character References (NCR). An NCR has the form "&#x????;", where the
-' four characters "????" make up the character's Unicode code point. Almost none of these
-' characters (which number more than a million) will have a direct ISO-8859-1 equivalent.
-' A few can be approximated, but most will simply not be able to display, and so are
+' ISO/IEC 8859-1:1998 and OCLC-MARC; this macro will copy them exactly. Characters with
+' code points 128 to 255 are encoded in OCLC-MARC, which is quite different from the
+' encoding of ISO/IEC 8859-1:1998. Some characters will copy exactly but most will be
+' approximations. Diacritics in OCLC-MARC only appear if their combination with a base
+' character matches a precomposed character in ISO/IEC 8859-1:1998; if not, only the
+' base character is kept. Code points above 255 should be encoded in a MARC record as
+' Numeric Character References (NCR). An NCR has the form "&#x?;", where the question
+' mark stands for one or more hexadecimal digits. Almost none of these characters (which
+' number more than a million) will have a direct ISO/IEC 8859-1:1998 equivalent. A few
+' can be approximated, but most will simply not be able to display, and so are
 ' represented by this macro by a vertical bar "|".
 '
-' The macro gets the record's data with the "GetFieldLineUnicode" command. This command
-' retrieves Unicode characters encoded as NCRs. Joel Hahn has uncovered a bug in the
-' command: It appears that it is not entirely reliable in retrieving NCRs, and sometimes
-' returns a code point below 32. This macro considers such characters to be incorrectly
-' encoded--even though they may display correctly on screen--and displays them in the
-' copied text with the currency sign "¤". Unfortunately, the bug may affect display of
-' the surrounding characters in the copied text; those neighboring characters may simply
-' disappear from the copied text. Valid NCRS are converted to ISO-8859-1 by means of a
-' table that matches those Unicode characters to ISO-8859-1 characters. This table
-' contains 898 Unicode characters that may be represented, more or less closely, by
-' ISO-8859-1 characters, drawn from these Unicode charts: Basic Latin, Latin-1
-' Supplement, Latin Extended-A, Latin Extended-B, Latin Extended-C, Latin Extended-D,
-' Latin Extended-E, Latin Extended Additional, and General Punctuation.
+' The macro gets the record's data with the "GetFieldUnicode" command, which retrieves
+' Unicode characters encoded as NCRs. Valid NCRS are converted to ISO/IEC 8859-1:1998 by
+' means of a table that matches those Unicode characters to ISO/IEC 8859-1:1998
+' characters. This table contains 898 Unicode characters that may be represented, more or
+' less closely, by ISO/IEC 8859-1:1998 characters, drawn from these Unicode blocks: Basic
+' Latin, Latin-1 Supplement, Latin Extended-A, Latin Extended-B, Latin Extended-C, Latin
+' Extended-D, Latin Extended-E, Latin Extended Additional, and General Punctuation.
 '
 ' The macro makes note of the three cases in which the correspondence between the
-' record's characters and the ISO-8859-1 set is not exact, although it does not identify
-' any specific occurrence of a case. These situations are when a diacritic is unable to
-' be represented in combination with a base character, when a character has only an
-' approximate equivalent, and when a character has no appropriate representation at all.
+' record's characters and the ISO/IEC 8859-1:1998 set is not exact, although it does not
+' identify any specific occurrence of a case. These situations are when a diacritic is
+' unable to be represented in combination with a base character, when a character has
+' only an approximate equivalent, and when a character has no appropriate representation
+' at all.
 '
 ' If a selection includes non-Latin characters, the OML command "CS.GetSelectedText"
 ' returns the value "Data contains non-latin script", no matter how many fields have been
@@ -498,16 +492,15 @@ If Selection = FALSE Then
     End If
 End If
 
-' Get variable field data with the "GetFieldLineUnicode" command, even though this has a
-' bug, as described above. If no text has been selected, the first row to start copying
-' is number 1, and the last row is number 99999, which seems like a safe maximum number.
-' Otherwise, the function to convert the data is given the line numbers of the beginning
-' and end of the selection.
+' Get the content of variable field data with the "GetFieldUnicode" command. If no text
+' has been selected, the first row to start copying is number 1, and the last row is
+' number 99999, which seems like a safe maximum number. Otherwise, the function to
+' convert the data is given the line numbers of the beginning and end of the selection.
 
 LineNumber% = BeginningRow%
 
 Do Until FieldFound = FALSE
-  FieldFound = CS.GetFieldLineUnicode( LineNumber%, FieldData$ )
+  FieldFound = CS.GetFieldUnicode( "...", LineNumber%, FieldData$ )
   If FieldFound Then
       FieldLength%  = Len( FieldData$ )
       StringLength% = StringLength% + FieldLength% + 2
@@ -601,11 +594,11 @@ End Sub
 
 Sub FillUnicodeArray
 
-' These are all the Unicode characters that exactly match the ISO-8859-1 set or visually
-' approximate those characters, and so may serve as appropriate substitutes for them. The
-' first part of the string is the four-character Unicode code point; this is followed by
-' one to three sets of decimal codes for the ASCII equivalent (encoding a string of one
-' to three characters).
+' These are all the Unicode characters that exactly match the ISO/IEC 8859-1:1998 set or
+' visually approximate those characters, and so may serve as appropriate substitutes for
+' them. The first part of the string is the four-character Unicode code point; this is
+' followed by one to three sets of decimal codes for the ASCII equivalent (encoding a
+' string of one to three characters).
 
 UnicodeChar( 0   ) = "0020 032" '
 UnicodeChar( 1   ) = "0021 033" '!
@@ -1545,14 +1538,14 @@ End Function
 
 Function ConvertToISO88591( InputString$ ) As String
 
-' This function converts the MARC21 string to characters in ISO-8859-1, making
+' This function converts the MARC21 string to characters in ISO/IEC 8859-1:1998, making
 ' appropriate conversions where possible (and noting that that was done), and
 ' substituting the vertical bar "|" where an appropriate conversion is not possible. It
 ' works on a line of the record at a time. Unicode strings are sent to the function for
 ' conversion.
 
 Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The differences between OCLC-MARC encodings of subscript and
-Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  ' superscript numbers and ISO-8859-1 encodings of those numbers.
+Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  ' superscript numbers and ISO/IEC 8859-1:1998 encodings of those numbers.
 
 Dim Advance%
 Dim Character$                : Character$     = " "
@@ -1630,9 +1623,7 @@ For i = 1 To Len( InputString$ ) - 1
           Character$ = Chr$( CharRead% )
       End If
 
-    Case 0 To 31   'Probably the result of a bug reported by Joel Hahn, in which the "GetFieldLineUnicode" command does not
-                   ' always retrieve an NCR (it may be successfully retrieved with the "GetFieldUnicode" command). The bug may
-                   ' also affect proper display of surrounding characters.
+    Case 0 To 31   'These characters should never appear, but ...
       Character$ = CURRENCY_SIGN
 
     Case 32 To 37, 39 To 64   'Numbers and symbols
@@ -1940,8 +1931,8 @@ End Function
 
 Function FindUnicodeEquivalent( InputString$ ) As String
 
-' This function searches for an ISO-8859-1 character (or character string) that matches
-' or corresponds to a Unicode code point.
+' This function searches for an ISO/IEC 8859-1:1998 character (or character string) that
+' matches or corresponds to a Unicode code point.
 
 Dim CandidateString$
 Dim Char1$
@@ -2006,8 +1997,8 @@ End If
 FindUnicodeEquivalent = Char1$ & Char2$ & Char3$
 
 End Function
-'201085445
+'200184508
 '
 'Macro name: CopyRecordToClipboard
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 4/17/2023 9:59:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 5/30/2023 11:00:44 AM using "MacroBookInspector" macro by Walter F. Nickeson.

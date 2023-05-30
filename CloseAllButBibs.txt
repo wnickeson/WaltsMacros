@@ -67,5 +67,5 @@ End Sub
 '682116
 '
 'Macro name: CloseAllButBibs
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 4/17/2023 9:59:47 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 5/30/2023 11:00:36 AM using "MacroBookInspector" macro by Walter F. Nickeson.

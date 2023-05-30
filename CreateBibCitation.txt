@@ -1,4 +1,4 @@
-'MacroName:CreateBibCitation.2023.02
+'MacroName:CreateBibCitation.2023.03
 'MacroDescription:Gets the 1XX, 245-26X, and 8XX fields from a bibliographic record (with
 ' the ability to exclude any of those fields) and arranges the data into a bibliographic
 ' citation-like form on the Windows Clipboard for copying or printing.
@@ -7,7 +7,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 29 March 2023.
+' Last updated: 19 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -41,13 +41,13 @@
 ' clicking its checkbox. The resulting string is displayed in the dialog box for
 ' confirmation before putting it on the Clipboard. In this string, MARC coding between
 ' fields is removed, and other prescribed punctuation is usually simplified to commas and
-' periods. The data is modified to contain only characters in the ISO-8859-1 character
-' set. However, because of the limitations of that character set, some characters will be
-' represented by an equivalent or substitute, and some special characters and diacritics
-' simply won't appear. If one of the fields is in a non-Latin script, and is linked to a
-' field with Latin characters, that Latin script field is selected as the one to copy.
-' Otherwise, a field containing non-Latin characters won't be copied, and if such a field
-' is the title, the macro will quit.
+' periods. The data is modified to contain only characters encoded in ISO/IEC
+' 8859-1:1998. However, because of the limitations of that character set, some characters
+' will be represented by an equivalent or substitute, and some special characters and
+' diacritics simply won't appear. If one of the fields is in a non-Latin script, and is
+' linked to a field with Latin characters, that Latin script field is selected as the one
+' to copy. Otherwise, a field containing non-Latin characters won't be copied, and if
+' such a field is the title, the macro will quit.
 '
 ' If a field or a subfield in a field is repeated, only the first occurrence is captured.
 ' A 490 field is not copied if it has a corresponding 8XX field.
@@ -703,8 +703,8 @@ End Function
 
 Function ConvertToISO88591( InputString$ ) As String
 
-' This function converts the MARC21 string to characters in ISO-8859-1, making
-' appropriate conversions where possible (and noting that that was done), and
+' This function converts the MARC21 string to characters encoded in ISO/IEC 8859-1:1998,
+' making appropriate conversions where possible (and noting that that was done), and
 ' substituting the vertical bar "|" where an appropriate conversion is not possible. It
 ' works on a line of the record at a time. Unicode strings are sent to the function for
 ' conversion.
@@ -1223,5 +1223,5 @@ End Function
 '122442974
 '
 'Macro name: CreateBibCitation
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 4/17/2023 10:00:01 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
+'Saved: 5/30/2023 11:00:48 AM using "MacroBookInspector" macro by Walter F. Nickeson.

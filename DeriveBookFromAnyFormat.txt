@@ -1,4 +1,4 @@
-'MacroName:DeriveBookFromAnyFormat.2022.04
+'MacroName:DeriveBookFromAnyFormat.2023.01
 'MacroDescription:Derives a new record in books format from a bibliographic record of any
 ' format, or changes the format of a bibliographic record to "books." Fields not
 ' appropriate in books format are deleted, and default books format workform values are
@@ -11,7 +11,7 @@
 ' Thanks to Christine Riggle and her colleagues at Harvard Business School for helpful
 ' suggestions and comments.
 '
-' Last updated: 29 June 2022.
+' Last updated: 26 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -344,7 +344,7 @@ CopiedFieldCount% = 0
 
 Do
 
-  FoundField = CS.GetFieldLineUnicode( LineNumber%, FieldData$ )
+  FoundField = CS.GetFieldUnicode( "...", LineNumber%, FieldData$ )
   If FoundField Then
       Tag% = Val( Left$( FieldData$, 3 ) )
       If InStr( FieldData$, DELIMITER & "5" ) Then
@@ -1209,8 +1209,8 @@ RelatorTerms( 61 ) = "videographer"
 RelatorTerms( 62 ) = "voice actor"
 
 End Sub
-'121347317
+'121347319
 '
 'Macro name: DeriveBookFromAnyFormat
-'Macro book: C:\Users\wnickeson\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 4/17/2023 9:57:32 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
+'Saved: 5/30/2023 10:58:57 AM using "MacroBookInspector" macro by Walter F. Nickeson.
