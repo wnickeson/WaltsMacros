@@ -1,4 +1,4 @@
-'MacroName:MakeTitleAddedEntry.2023.52
+'MacroName:MakeTitleAddedEntry.2023.53
 'MacroDescription:Helps to quickly add selected text to a bibliographic record as a title
 ' added entry or uniform title heading, and also checks indicators in those title fields.
 '
@@ -6,7 +6,7 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 26 May 2023.
+' Last updated: 31 May 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -381,6 +381,9 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
             Indicator2$ = " "
           Else
             Indicator2$ = Left$( [730/740_Ind2]( ListBox2Selection% ), 1 )
+            If Indicator2$ = "[" Then
+                Indicator2$ = " "
+            End If
         End If
         Title1$ = RemoveInitialArticle( SelectedText$ )
         Select Case OptionButtonSelection%
@@ -1307,8 +1310,8 @@ Select Case Action%
 End Select
 
 End Function
-'131148506
+'131448600
 '
 'Macro name: MakeTitleAddedEntry
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:56:56 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 5/31/2023 12:44:35 PM using "MacroBookInspector" macro by Walter F. Nickeson.
