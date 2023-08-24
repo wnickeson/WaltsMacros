@@ -1,4 +1,4 @@
-'MacroName:FieldCount.2023.01
+'MacroName:FieldCount.2023.03
 'MacroDescription:Shows all fields in a bibliographic or authority record with their
 ' individual and total count, as well as the subject thesauri used in 6XX fields. Allows
 ' for filtering fields display by tag groups.
@@ -7,13 +7,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 26 May 2023.
+' Last updated: 29 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro to list all the fields in a record (in strict numerical
@@ -138,7 +138,7 @@ DeleteFieldsOnExport
 
 RecordLine% = 1
 Do
-  FoundField = CS.GetFieldLineUnicode( RecordLine%, FieldData$ )
+  FoundField = CS.GetFieldUnicode( "...", RecordLine%, FieldData$ )
   If FoundField Then
       FieldData$ = Trim$( FieldData$ )
       If Len( FieldData$ ) <> 7 Or Mid$( FieldData$, 6, 1 ) <> DELIMITER Then
@@ -775,8 +775,7 @@ KeepOpen:
 End Select
 
 End Function
-'77925582
-'
+'7792557'
 'Macro name: FieldCount
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:10 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.

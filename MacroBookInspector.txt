@@ -1,4 +1,4 @@
-'MacroName:MacroBookInspector.2023.03
+'MacroName:MacroBookInspector.2023.05
 'MacroDescription:Lists the macros in a macro book, along with their descriptions and
 ' other information, and allows saving the list, or the text of an individual macro, to a
 ' text file.
@@ -18,25 +18,25 @@
 ' was retrieved from <https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/53989ce4-7b05-4f8d-829b-d08d6148375b>
 ' on the date below.
 '
-' Last updated: 13 February 2023.
+' Last updated: 30 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '***************************************************************************************#
 ' How it works: Run the macro to view the macro books in the Connexion "Macros"
 ' directory. Select a macro book to see a list of the macros in it, its size (in bytes),
-' and date of last revision. Select a macro to see some information about it: its size in
-' terms of lines (source code) and bytes (for both source and object code), and if
-' available, its description, a possible date of revision, and the keystroke shortcut or
-' user tool number assigned to it. Its first 25 lines or 1K of source code can be
-' displayed separately. The list of macro books and the list of macros in the selected
-' macro book can be saved as tab-delimited text files. The text of the selected macro may
-' also be saved as a text file. The default save location can be set below on line 310.
-' The simple list of macros is placed on the Windows clipboard.
+' and, for my macros, date of last revision. Select a macro to see some information about
+' it: its size in terms of lines (source code) and bytes (for both source and object
+' code), and if available, its description, a possible date of revision, and the
+' keystroke shortcut or user tool number assigned to it. Its first 25 lines or 1K of
+' source code can be displayed separately. The list of macro books and the list of macros
+' in the selected macro book can be saved as tab-delimited text files. The text of the
+' selected macro may also be saved as a text file. The default save location can be set
+' below on line 310. The simple list of macros is placed on the Windows clipboard.
 '
 ' Some simple error checking is done as this macro gathers information: If the length of
 ' a macro book file is not a multiple of 512, a warning pops up; if the selected macro is
@@ -50,11 +50,14 @@
 ' The ability to save the text of a macro directly is useful because the maximum number
 ' of bytes the Windows clipboard can copy from the macro editor is 65,498. Using this
 ' macro bypasses that limitation. The reason to save macros as separate text files is, of
-' course, the susceptibility of macro books to corruption, in which parts of macros--
-' usually at the end--seem to disappear. The best way to backup a macro is by using a
-' text file, because restoring a corrupt macro is then a simple matter of pasting the
-' text into the macro editor. (Note that it is still possible that the text file saved by
-' "MacroBookInspector" may be that of a corrupt macro.) And the simple need to be able to
+' course, as backup, because of the susceptibility of macro books to corruption. The most
+' common sign of corruption seems to be in which parts of macros--usually at the end--
+' seem to disappear, but macros can also somehow acquire extra text at the end, usually
+' of garbled lines of code. The best way to backup a macro is by using a text file,
+' because restoring a corrupt macro is then a simple matter of pasting the text into the
+' macro editor. (The corruption seems to occur at the moment a macro is closed in the
+' macro editor, so it is possible that the macro may actually be corrupt when
+' "MacroBookInspector" saves it as a text file.) And the simple need to be able to
 ' produce a list of macros is what drove the development of this macro in the first
 ' place.
 '
@@ -140,7 +143,7 @@ Type MacroRecord
  tPreviewLineCount         As Integer 'Number of lines of preview shown
  tRevisionDate             As String  'Date of revision as given in macro
  tSector1BinaryStream      As Long    'First sector of compiled (file) stream
- tSector1DescriptionStream As Long    'first sector of description stream
+ tSector1DescriptionStream As Long    'First sector of description stream
  tSector1SourceStream      As Long    'First sector of source (data) stream
  tShortcutKey              As String  'Shortcut key assignment
  tFileInfoDate             As String  'Datestamp of file revision
@@ -179,9 +182,7 @@ Declare Function Dialog1ControlFunction( Id$, Action%, SuppVal& )
 Declare Function Dialog3ControlFunction( Id$, Action%, SuppVal& )
 
 Global Const DATA_SUBSTRING_64    As Integer = 64     'The number of characters in some of the substrings of the main macro
-                                                      ' information string.
-Global Const DATA_SUBSTRING_8     As Integer = 8      'The number of characters in some of the substrings of the main macro
-                                                      ' information string.
+Global Const DATA_SUBSTRING_8     As Integer = 8      ' information string.
 Global Const DIR_ENTRY_LENGTH     As Integer = 128    'The length in bytes of a directory entry.
 Global Const DWORD                As Integer = 4      'The length in bytes of sector numbers and some other values.
 Global Const END_OF_CHAIN         As Integer = -2     'Hex FFFFFFFE, marks the end of a chain of sectors in the FAT.
@@ -210,16 +211,15 @@ Global Const STRING1_LESS_THAN    As Integer = -1     'The value of the "StrComp
 Global Const STRING_OFFSET        As Integer = 1      'A number to make up the difference between 0-based (file offset) and 1-
                                                       'based (character positions in strings) counting.
 
-Global Const CONTROL_CHANGE       As Integer = 2      'The value of the dialog box function parameter "Action%" when a control
-                                                      ' changes.
-Global Const DISABLED             As Integer = 0      'The value to make a dialog box control disabled.
-Global Const ENABLED              As Integer = 1      'The value to make a dialog box control enabled.
-Global Const INITIALIZE           As Integer = 1      'The value of the dialog box function parameter "Action%" when the dialog
-                                                      ' box opens.
-Global Const INVISIBLE            As Integer = 0      'The value to make a dialog box control invisible.
-Global Const KEEP_DLG_OPEN        As Integer = -1     'The value of the dialog box function to keep a dialog box open.
-Global Const VISIBLE              As Integer = 1      'The value to make a dialog box control visible.
-Global Const WARNING_MESSAGE      As Integer = 48     'The value to display the "Warning message" icon in a message box.
+Global Const CONTROL_CHANGE       As Integer = 2
+
+Global Const DISABLED             As Integer = 0
+Global Const ENABLED              As Integer = 1
+Global Const INITIALIZE           As Integer = 1
+Global Const INVISIBLE            As Integer = 0
+Global Const KEEP_DLG_OPEN        As Integer = -1
+Global Const VISIBLE              As Integer = 1
+Global Const WARNING_MESSAGE      As Integer = 48
 
 Global CRLF         As String*2
 Global DOUBLE_QUOTE As String*1
@@ -2636,8 +2636,8 @@ Select Case Action%
 End Select
 
 End Function
-'2640110327
+'2640109732
 '
 'Macro name: MacroBookInspector
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:24 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:54 AM using "MacroBookInspector" macro by Walter F. Nickeson.

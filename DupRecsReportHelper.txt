@@ -1,4 +1,4 @@
-'MacroName:DupRecsReportHelper.2023.01
+'MacroName:DupRecsReportHelper.2023.02
 'MacroDescription:Gets the OCLC control numbers of all opened bibliographic records and
 ' writes them to a text file to help in reporting duplicate records to OCLC.
 '
@@ -6,14 +6,14 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 23 July 2023.
 '
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '***************************************************************************************#
 ' How it works: This macro creates a text file consisting of the OCLC control numbers of
@@ -288,8 +288,8 @@ If OCLCNumbers( 0 ) = "" Then
 End If
 
 End Sub
-'29211172
+'29211164
 '
 'Macro name: DupRecsReportHelper
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 5/30/2023 11:01:05 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:03:18 AM using "MacroBookInspector" macro by Walter F. Nickeson.

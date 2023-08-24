@@ -6,19 +6,19 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 26 May 2023.
+' Last updated: 23 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic or authority record to move the cursor
 ' to a specific position in the record.
 '
-' when it opens, the macro displays a list of all the fields in a record, in numeric
+' When it opens, the macro displays a list of all the fields in a record, in numeric
 ' order (which will probably not be the displayed order). Select a field to have the
 ' macro display all the subfields in that field. Enter a position to jump the cursor to
 ' within that subfield. If no position is given, the cursor jumps to the beginning of
@@ -564,8 +564,8 @@ Select Case Action%
 End Select
 
 End Function
-'56819975
+'56819969
 '
 'Macro name: CursorJump2
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 5/30/2023 11:00:52 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:03:06 AM using "MacroBookInspector" macro by Walter F. Nickeson.

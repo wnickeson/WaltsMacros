@@ -1,4 +1,4 @@
-'MacroName:DialogBoxCodeStraightener.2022.03
+'MacroName:DialogBoxCodeStraightener.2023.07
 'MacroDescription:Aligns control coordinates in dialog box definitions and makes bulk
 ' changes in the coordinates of those controls.
 '
@@ -6,101 +6,116 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 27 September 2022.
+' Last updated: 29 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: This macro adds whitespace to lines of code copied from a dialog box
 ' definition to align the coordinates of dialog box controls and other information. Code
 ' in neat columns is easier to read, and makes relationships between the controls in the
-' dialog box much clearer. OML's dialog box editor produces a dense jumble of code when
-' used to create a dialog box. This macro helps make sense of that mess. It can also help
-' somewhat to align the controls in the displayed box.
+' dialog box much clearer. The OCLC macro language dialog box editor produces a dense
+' jumble of code when used to create a dialog box. This macro helps make sense of that
+' mess. It can also help somewhat to align the controls in the displayed box.
 '
 ' To use the macro: You do not need to be logged on to Connexion to run the macro, nor do
 ' you need to be working in the Macro Editor--except that otherwise you can't run the
-' macro to check its results! Copy entire lines of code (no partial lines) from a dialog
-' box definition. Use the mouse to select lines (anything between, and optionally
-' including, "Begin Dialog" and "End Dialog") by clicking and dragging. Or, while viewing
-' the dialog box in the OML Dialog Editor, you can quickly copy all the lines of code
-' using the menu commands "Edit > Copy Entire Dialog to Clipboard". However, the macro
-' does not require that the whole dialog be copied; it will work with any number of whole
-' lines selected from it.
+' macro to check its results! Copy entire, contiguous lines of code (no partial lines)
+' from a dialog box definition to the Windows Clipboard. Select the lines to be
+' straightened by clicking and dragging with the mouse or using the [SHIFT] and down
+' arrow keys. You don't have to include the "Begin Dialog" and "End Dialog" lines, but
+' all the lines selected must form a single block. Copy the selection with the [CTRL-C]
+' keys or use the buttons on the toolbar; using the right mouse button to copy the
+' selection doesn't work. It's better not to cut the text, because if you run the macro
+' and then decide the change isn't right, the copied text will be gone from the Clipboard
+' and can't be retrieved.
 '
 ' When the lines of code have been copied, run the macro. It displays the beginning of
 ' the copied text for confirmation that what is on the Clipboard is really from a dialog
-' box definition--and if it isn't, you can tell what was actually copied. It reads the
-' text from the Clipboard and, by working from the commas in each line, adds whitespace
-' to align the coordinates of the dialog box controls, as well as labels, IDs, and
-' comments. All controls are indented two spaces from the beginning indention. Option
-' buttons are indented a further space below the OptionGroup statement. If a ButtonGroup
-' is defined, pushbuttons beneath it are also indented. The macro will also change the
-' horizontal and vertical coordinates of the controls, if numbers are entered in the text
-' boxes; the maximum change allowed is 999. To change the positions of only some of the
-' controls, select only the affected lines from the dialog box code. For example, to move
-' the bottom half of a dialog box down to make room for a new control in the top half,
-' simply select those controls that need to move. (Because the selected lines must be
-' contiguous, some controls may find themselves excluded from this action.) If moving
-' controls means the whole dialog box must expand, such as when you need to shift
-' everything to the right by a certain amount, include the "Begin Dialog" line in the
-' copied text. Its size will be expanded by the same amount, and in the same
-' dimension(s), as the coordinates of the controls.
+' box definition--and if it isn't, you can tell what was actually copied, or at least the
+' first part of it. The macro reads the text from the Clipboard and, by working from the
+' commas in each line, adds whitespace to align the coordinates of the dialog box
+' controls, as well as labels, IDs, and comments. Dialog box controls--push buttons,
+' checkboxes, radio buttons, etc.--are defined by statements. All dialog box statements
+' are indented two spaces from the beginning indention, which does not have to be the
+' beginning of the line; any initial indention of the whole dialog box definition is
+' preserved. Option button coordinates are indented a further space below the OptionGroup
+' statement. If a ButtonGroup is defined, pushbuttons beneath it are indented too. The
+' macro will also change the horizontal and vertical coordinates of the controls, if
+' numbers are entered in the text boxes; the maximum change allowed is 999. To align the
+' columns of code or change the positions of only some of the controls, select only the
+' affected lines from the dialog box definition. For example, to move the bottom half of
+' a dialog box down to make room for a new control in the top half, simply select those
+' controls that need to move. (Because the selected lines must be contiguous, some
+' rearranging of dialog box statements may be necessary to group together all affected
+' controls.) If moving controls means the whole dialog box must expand, such as when you
+' need to shift everything to the right by a certain amount, include the "Begin Dialog"
+' line in the copied text. The dimensions of the dialog box will be expanded by the same
+' amount, and in the same dimension(s), as the coordinates of the controls inside the
+' box are shifted. Note that the dialog box will not shrink if its controls are moved
+' inward or upward. Clicking the OK button replaces the original text on the Clipboard
+' with the modified text. Finish by toggling back to the dialog box to paste in that
+' text, which is a simple matter of pressing [CTRL-V] or using the "Paste" button in the
+' ribbon at the top of the editor.
 '
 ' The unit of measurement in the dialog definition for all these coordinates is the DLU,
 ' which in the horizontal dimension is 1/4 the average width of the system font, and in
 ' the vertical, 1/8 the height of the system font. The actual size in pixels of the
 ' dialog box and its controls will vary according to screen resolution.
 '
-' The macro offers several options as it aligns the code. The first is to add the numeric
-' identifiers of the controls. While it's usually better to identify controls with names,
-' sometimes it can be convenient to use numbers instead, as when several controls appear
-' in a regular pattern, and their states or values can be processed by some sort of
-' iteration. Numeric identifiers appear as comments, starting at zero with the first
-' control. All controls have numeric identifiers even if they are not actionable, such as
-' text areas. All the macro does by adding the identifiers is make them apparent, so you
-' don't have to count lines to see the number of any control, or use the "DlgControlID"
-' function to discover them. If the macro has already added control numbers, and the
-' lines have been rearranged, the macro re-assigns the numbers. If only selected lines
-' from the dialog box have been copied, the macro starts its numbering with the lowest
-' number found, re-numbering the controls in order.
+' The macro offers several options to go along with its alignment of code. The first is
+' to add the numeric identifiers of the controls. While it's usually better to identify
+' controls with names, as names can carry meaning numbers can't, sometimes it can be
+' convenient to use numbers instead, as when several controls appear in a regular
+' pattern, and their states or values can be processed by some sort of iteration. Numeric
+' identifiers appear as comments (marked by a preceding single quotation mark), starting
+' at zero with the first statement. All statements except the "Caption" and the "Begin
+' Dialog...End Dialog" statements have numeric identifiers. This is the case even if the
+' controls are not actionable, such as the "Text" statement. All the macro does by adding
+' the numeric identifiers is make them apparent, so you don't have to count lines to see
+' the number of any control, or use the "DlgControlID" function to discover them. If the
+' macro has already added control numbers, and the lines have been rearranged, the macro
+' re-assigns the numbers. If only selected lines from the dialog box have been copied,
+' the macro starts its numbering with the lowest number found, re-numbering the controls
+' in order.
 '
-' The second option is to what I call "optimize" the controls. This option does two
-' things. It makes certain controls a regular height (according to OML suggestions): The
-' height of text boxes and radio buttons are made to be 12 DLUs, pushbuttons 14, and text
-' areas multiples of 8. Selecting this option also makes the macro attempt to align
-' controls within the dialog box, not just their coordinates in the code. Controls that
-' are within 8 DLUs of each other horizontally, and 6 vertically, will have their
-' coordinates changed to align the controls along their left and top edges, respectively.
-' Related controls, such as groups of radio buttons or checkboxes, are evenly spaced as
-' they are aligned. Choosing this option makes the most sense when running the macro
-' immediately after having used the dialog editor to create or edit controls. You can add
-' controls and drag them around with the mouse to roughly achieve a functional and useful
-' layout without bothering to position things exactly, and then run the macro to
-' automatically do some of the lining up of controls as a first step in the editing
-' process. However, the macro does not check for overlapping or even proper spacing of
-' controls, and won't rearrange the lines in the code.
+' The second option is what I call optimizing the controls. This option affects the
+' appearance and placement of controls in the dialog box, not in the code, and it does
+' two things. It makes certain controls a regular height (following some suggestions in
+' old, unavailable documentation): The height of text boxes and radio buttons are made to
+' be 12 DLUs, pushbuttons 14, and text areas multiples of 8. Selecting this option also
+' makes the macro attempt to align controls within the dialog box. Controls that are
+' within 8 DLUs of each other horizontally, and 6 vertically, will have their coordinates
+' changed to align the controls along their left and top edges, respectively. Related
+' controls, such as groups of radio buttons or checkboxes, are evenly spaced as they are
+' aligned. Choosing this option makes the most sense when running the macro immediately
+' after having used the dialog editor to create or edit controls. You can add controls
+' and drag them around with the mouse to roughly achieve a functional and useful layout
+' without having to position things exactly, and then run the macro to automatically do
+' some of the lining up of controls as a first step in the editing process. However, the
+' macro does not check for overlapping or even proper spacing of controls, and won't
+' rearrange the lines in the code.
 '
 ' The third option is to space controls evenly in the dialog box. This option works only
 ' on lines of code that contain controls, so the macro fails if, for example, an
-' OptionGroup is is included in the copied lines. It is intended to help get correct or
-' pleasing spacing for sets of similar controls, such as groups of checkboxes or radio
-' buttons, although it works on any controls, whether they are the same kind or not. When
-' this option is selected, the desired space between controls must be a number between 1
-' and 8. In the vertical dimension, the space is DLUs between the bottom edge of the
-' control (or of the tallest control, if there is more than one control on the line) on
-' the upper line, and the top edge of controls on the lower line. In the horizontal
-' dimension, the space is between the right edge of the left control and the left edge of
-' the right control. Note that choosing too great a space between controls could cause
-' some controls to be misaligned with respect to other controls, or to be pushed out of
-' the dialog box entirely. This option will not actually create nice columns of controls
-' in the dialog box.
+' "OptionGroup" statement is is included in the copied lines. It is intended to help get
+' correct or pleasing spacing for sets of similar controls, such as groups of checkboxes
+' or radio buttons, although it works on any controls, whether they are the same kind or
+' not. When this option is selected, the desired space between controls must be a number
+' between 1 and 8. In the vertical dimension, the space is DLUs between the bottom edge
+' of the control (or of the tallest control, if there is more than one control on the
+' line) on the upper line, and the top edge of controls on the lower line. In the
+' horizontal dimension, the space is between the right edge of the left control and the
+' left edge of the right control. Note that choosing too great a space between controls
+' could cause some controls to be misaligned with respect to other controls, or to be
+' pushed out of the dialog box entirely. This option will not actually create nice
+' columns of controls in the dialog box.
 '
-' If these lines of code are copied:
+' As an example, if these lines of code are copied:
 '
 ' Begin Dialog DialogBox 304, 341, "Align/Change dialog box coordinates", .Controll
 '    OkButton  193, 320, 50, 14
@@ -111,7 +126,7 @@
 '    Text  17, 34, 96, 16, "(negative numbers move controls left)"
 '
 ' and "-2" is entered for the horizontal coordinate change, and "8" for the vertical, the
-' macro produces this output, copied to the clipboard for pasting in:
+' macro produces this output, copied to the Clipboard for pasting in:
 '
 ' Begin Dialog DialogBox  304, 349, "Align/Change dialog box coordinates", .Controll
 '   OkButton      191, 328,  50,  14
@@ -138,8 +153,8 @@
 '   CheckBox       18, 128, 280,  12, "",                .Replace    '4
 '   GroupBox      232,  24,  92,  57, "Codes or terms?"              '5
 '
-' If no change in the positions of the controls is indicated, and neither option is
-' chosen, the result is only the making of neat columns in the code.
+' If no change in the positions of the controls is indicated, and control placement is
+' not requested, the result is only the making of neat columns in the code.
 '
 ' If the position of the dialog box on the screen is given, the macro ignores it.
 '
@@ -185,10 +200,10 @@ Const INFORMATION_MESSAGE  As Integer = 64
 Const OUT_OF_STRING_SPACE  As Integer = 14
 Const WARNING_MESSAGE      As Integer = 48
 
-Dim CRLF As String*2              : CRLF              = Chr$( 013 ) & Chr$( 010 )
+Dim CRLF              As String*2 : CRLF              = Chr$( 013 ) & Chr$( 010 )
 Dim LABEL_PLACEHOLDER As String*1 : LABEL_PLACEHOLDER = Chr$( 182 )
-Dim SEPARATOR As String*1         : SEPARATOR         = ","
-Dim SINGLE_QUOTE As String*1      : SINGLE_QUOTE      = Chr$( 039 )
+Dim SEPARATOR         As String*1 : SEPARATOR         = ","
+Dim SINGLE_QUOTE      As String*1 : SINGLE_QUOTE      = Chr$( 039 )
 
 Dim ArrayElement$
 Dim ChangeHorizontal%
@@ -674,14 +689,16 @@ If Dialog1.AddNumbers = 1 Then
               End If
           End If
       End If
-      If CodeLines( aCONTROL_NAME, i ) = "$" Then
+      If CodeLines( aCONTROL_NAME, i ) = "$" Or InStr( CodeLines( aCONTROL_NAME, i ), "Caption" ) > 0 Then
           Skip = TRUE
       End If
-      If Left$( CodeLines( aCONTROL_NAME, i ), 5 ) <> "Begin" And Left$( CodeLines( aCONTROL_NAME, i ), 3 ) <> "End" Then
+      If Left$( CodeLines( aCONTROL_NAME, i ), 5 ) <> "Begin" And _
+         Left$( CodeLines( aCONTROL_NAME, i ), 3 ) <> "End" Then
           If Skip = FALSE Then
-              CodeLines( aCONTROL_COMMENT, i ) = Chr$( 039 ) & Trim$( Str$( ControlID_Number% ) ) & Comment$
+              CodeLines( aCONTROL_COMMENT, i ) = SINGLE_QUOTE & Trim$( Str$( ControlID_Number% ) ) & Comment$
               ControlID_Number%                = ControlID_Number% + 1
             Else
+              CodeLines( aCONTROL_COMMENT, i ) = ""
               Skip = FALSE
           End If
       End If
@@ -803,7 +820,7 @@ For LineCount% = 0 To UBound( CodeLines, 2 )
   ArrayElement$ = CodeLines( aCONTROL_LABEL, LineCount% )
   If ArrayElement$ <> "" Then
       If InStr( WorkLine$, "Caption" ) Then
-          z = IDDot% - LongestControlName% - 10
+          z         = FirstComma% - 8
           WorkLine$ = WorkLine$ & Space$( z ) & ArrayElement$
         Else
           WorkLine$ = WorkLine$ & Separator & " " & ArrayElement$
@@ -1434,8 +1451,8 @@ Select Case Action%
 End Select
 
 End Function
-'143863800
+'145565223
 '
 'Macro name: DialogBoxCodeStraightener
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:05 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.

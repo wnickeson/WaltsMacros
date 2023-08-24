@@ -1,4 +1,4 @@
-'MacroName:MapCalculatorTool.2023.30
+'MacroName:MapCalculatorTool.2023.31
 'MacroDescription:Calculates scales and scaled lengths and areas for cataloging
 ' cartographic resources.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 22 February 2023.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works. Run the macro to calculate the scale of a map; or, given a scale, run the
@@ -1801,8 +1801,8 @@ ReCalc:
 End Select
 
 End Function
-'180574840
+'180574829
 '
 'Macro name: MapCalculatorTool
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:00 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:59:37 AM using "MacroBookInspector" macro by Walter F. Nickeson.

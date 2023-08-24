@@ -1,24 +1,29 @@
-'MacroName:GetEnvironment.2022.03
+'MacroName:GetEnvironment.2023.03
 'MacroDescription:Displays some environment variables.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Freely adapted from OCLC's example of use of the BASIC command "Environ."
+' Freely adapted from OCLC's example of use of the BASIC function "Environ" in old
+' documentation, no longer available.
 '
-' Last updated: 27 September 2022.
+' Last updated: 29 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro to see the "environment variables." The macro formats them
 ' to display nicely in a dialog box, and also copies the whole list of strings to the
-' Windows clipboard for pasting into an application if desired.
+' Windows clipboard for pasting into an application if desired. Environment variables
+' contain path names for various locations within the operating system, and knowing the
+' paths to the local files necessary for the Client is essential for macros to manipulate
+' those files. Knowing environment variables is also key to being able to share macros,
+' so they are not tethered to particular computers.
 '****************************************************************************************
 
 Option Explicit
@@ -200,7 +205,7 @@ Select Case Action%
 ' and page 2. If there are more pages to display, two buttons are needed, dedicated to
 ' the "Next" and "Previous" pages (but disabled as appropriate on the first and last
 ' pages). The button controls are labeled "left" and "right" corresponding to their
-' placement in the dialog box, not according to their function when the dialog box runs.
+' placement in the dialog box, not their function when the dialog box runs.
 
       Case "Left"
         If PageCount% = 2 Then
@@ -249,8 +254,8 @@ Select Case Action%
 End Select
 
 End Function
-'2539071
+'2589436
 '
 'Macro name: GetEnvironment
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:14 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:43 AM using "MacroBookInspector" macro by Walter F. Nickeson.

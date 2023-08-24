@@ -308,4 +308,4 @@ End Sub
 '
 'Macro name: ExpandStateNames
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:59:05 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:01:29 AM using "MacroBookInspector" macro by Walter F. Nickeson.

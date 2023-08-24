@@ -536,4 +536,4 @@ End Function
 '
 'Macro name: SearchFrom670
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:59:41 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:02:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.

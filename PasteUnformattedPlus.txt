@@ -1,4 +1,4 @@
-'MacroName:PasteUnformattedPlus.2023.02
+'MacroName:PasteUnformattedPlus.2023.04
 'MacroDescription:Removes formatting from text placed on the Windows Clipboard for
 ' pasting into a bibliographic record. Clears typographical formatting and converts many
 ' Windows-1252 characters to OCLC-MARC. Allows adding a multi-line selection to the
@@ -8,13 +8,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 29 May 2023.
+' Last updated: 18 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Use this macro to paste text copied to the Windows Clipboard from outside
@@ -24,6 +24,9 @@
 ' sources. In the bibliographic record, place the cursor where the copied material should
 ' go, and run the macro. Or, if several lines have been copied, they can be added as
 ' multiple fields to the record; in that case, cursor position is not important.
+' Unfortunately, the macro language's Clipboard object can only retrieve data in Text
+' format, so the macro can't do anything with Unicode data--it's limited to ASCII data
+' only.
 '
 ' Specifically, this macro:
 '  + Collapses white space, by deleting consecutive space characters, tabs, and line
@@ -1603,8 +1606,8 @@ Select Case Action%
 End Select
 
 End Function
-'160760183
+'161060361
 '
 'Macro name: PasteUnformattedPlus
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:53:41 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:56:11 AM using "MacroBookInspector" macro by Walter F. Nickeson.

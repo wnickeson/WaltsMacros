@@ -1,4 +1,4 @@
-'MacroName:ViewExportFiles.2023.03
+'MacroName:ViewExportFiles.2023.04
 'MacroDescription:Shows the records in the defined export files and allows deletion of
 ' individual records or of the whole file being viewed. Also shows the current export
 ' options.
@@ -7,13 +7,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 23 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro (there is no need to log on) to see the records in the
@@ -1803,8 +1803,8 @@ Select Case Action%
 End Select
 
 End Function
-'180773594
+'180773586
 '
 'Macro name: ViewExportFiles
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 5/30/2023 11:01:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:14 AM using "MacroBookInspector" macro by Walter F. Nickeson.

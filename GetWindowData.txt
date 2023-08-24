@@ -1,17 +1,17 @@
-'MacroName:GetWindowData.2022.06
+'MacroName:GetWindowData.2023.01
 'MacroDescription:Gets data about the current window.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 5 November 2022.
+' Last updated: 24 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run this macro while viewing a Connexion window to view some information
@@ -131,8 +131,8 @@ If CS.GetWindowTitle( -1, WindowTitle$ ) Then
 End If
 
 End Sub
-'1354872
+'1354862
 '
 'Macro name: GetWindowData
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:19 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:48 AM using "MacroBookInspector" macro by Walter F. Nickeson.

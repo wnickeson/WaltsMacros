@@ -11,15 +11,15 @@
 ' Thanks to Christine Riggle and her colleagues at Harvard Business School for helpful
 ' suggestions and comments.
 '
-' Last updated: 26 May 2023.
+' Last updated: 21 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
-'****************************************************************************************!
+'****************************************************************************************#
 ' How it works: Run the macro in a bibliographic record for something other than a book--
 ' that is, something that is not monographic printed language material--to produce an RDA
 ' (ISBD) record for a book manifestation. Choose to derive a new record or simply adapt
@@ -30,7 +30,7 @@
 ' so much relevant and useful information that it would be easier to tweak the record
 ' than to enter the data all over again.
 '
-' The macro strips all fields with tags below 033, with two exceptions. An 010 field is
+' The macro strips all fields with tags below 033, with two exceptions. A 010 field is
 ' retained if the record is edited, but in a new record, its content is moved to 776
 ' subfield $w. All ISBNs are retained in the 020 fields if the record is edited; if a new
 ' record is created, invalid ISBNs are deleted, and valid ones moved to a 776 field. For
@@ -1209,8 +1209,8 @@ RelatorTerms( 61 ) = "videographer"
 RelatorTerms( 62 ) = "voice actor"
 
 End Sub
-'121347319
+'121347312
 '
 'Macro name: DeriveBookFromAnyFormat
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:58:57 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:01:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.

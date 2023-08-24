@@ -967,4 +967,4 @@ End Function
 '
 'Macro name: GetCitationFor510
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:59:12 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:01:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.

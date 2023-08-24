@@ -1,4 +1,4 @@
-'MacroName:QuoteFlipper.2023.01
+'MacroName:QuoteFlipper.2023.02
 'MacroDescription:Flips single quotation marks to double and vice versa, in a selection
 ' within a field, or within a whole field.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 23 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Select a text string in a single field in a Connexion record and run the
@@ -167,8 +167,8 @@ ErrorMessage:
 MsgBox "Sorry, this macro could not change the quotation marks in the selection.", CRITICAL_MESSAGE, WaltsMacros$
 
 End Sub
-'1716648
+'1716640
 '
 'Macro name: QuoteFlipper
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 5/30/2023 11:01:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:06 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,4 +1,4 @@
-'MacroName:Show007Micro.2022.04
+'MacroName:Show007Micro.2023.01
 'MacroDescription:Displays the codes in an 007 field in a bibliographic record for
 ' microforms in a friendly way for verification and/or correction.
 '
@@ -8,13 +8,13 @@
 '
 ' with some ideas from Joel Hahn.
 '
-' Last updated: 22 June 2022.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '***************************************************************************************#
 ' How it works: In a record for a microform, run the macro. It looks for the first
@@ -22,7 +22,7 @@
 ' so the values can be verified and changed if necessary. If the cursor is placed in a
 ' microform 007, that field is used in the macro. If there is no 007, use the dialog box
 ' to enter correct values in a new field. Default values for new fields can be set in the
-' section below that starts on line 117.
+' section below that starts on line 111.
 '****************************************************************************************
 
 Option Explicit
@@ -106,10 +106,13 @@ Dim p As Integer
 AddNew       = FALSE
 WaltsMacros$ = "[Walt's macros] Extras1:Show007Micro"
 
-'****************************************************************************************
+'########################################################################################
+
 ' SET THE DEFAULT VALUES FOR NEW 007 FIELDS HERE
+
 ' Enter values in lowercase. Input a blank (" ") as the value for optional subfields that
 ' will not be coded.
+
 DEFAULT_SUBFIELD_B = "d"   'MANDATORY SUBFIELD
 DEFAULT_SUBFIELD_D = "a"   'MANDATORY SUBFIELD
 DEFAULT_SUBFIELD_E = "f"   'MANDATORY SUBFIELD
@@ -119,7 +122,8 @@ DEFAULT_SUBFIELD_G = "b"   'OPTIONAL SUBFIELD
 DEFAULT_SUBFIELD_H = "a"   'OPTIONAL SUBFIELD
 DEFAULT_SUBFIELD_I = "c"   'REQUIRED IF APPLICABLE
 DEFAULT_SUBFIELD_J = "a"   'OPTIONAL SUBFIELD
-'****************************************************************************************
+
+'########################################################################################
 
 ' If what is displayed is not a bibliographic record, quit.
 
@@ -571,8 +575,8 @@ ProblemInput:
 End Select
 
 End Function
-'57521176
+'57921177
 '
 'Macro name: Show007Micro
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:22 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:59:59 AM using "MacroBookInspector" macro by Walter F. Nickeson.

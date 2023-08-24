@@ -1,26 +1,26 @@
-'MacroName:BibCopyAndClose.2022.11
+'MacroName:BibCopyAndClose.2023.01
 'MacroDescription:Makes a copy of a bibliographic record and closes the original.
 
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 14 November 2022.
+' Last updated: 21 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '***************************************************************************************#
 ' How it works: Run the macro while viewing a bibliographic record you want to make a
 ' copy of (cursor position is irrelevant). The macro makes a copy of the record, using
 ' the "DeriveNewRecord" command. By default, it transfers the fixed field values to the
 ' copy, but that action can be changed by changing the variable "CopyFixedField" on line
-' 41 below to "FALSE". The macro then closes the window with the original record. If
-' other windows are present, the macro finishes by making the window with the copied
-' record the topmost window.
+' 41 below to "FALSE". The macro then closes the window of the original record. If other
+' windows are present, the macro finishes by making the window with the copied record the
+' topmost window.
 '
 ' The macro works by getting the title of the window of the original record. After making
 ' a copy of that record, it then goes through all the Client windows, comparing the title
@@ -115,8 +115,8 @@ If CS.SetTopWindow( WindowCount% - 2 ) Then
 End If
 
 End Sub
-'1194924
+'1194911
 '
 'Macro name: BibCopyAndClose
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:58:33 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:00:55 AM using "MacroBookInspector" macro by Walter F. Nickeson.

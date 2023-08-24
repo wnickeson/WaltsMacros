@@ -1,18 +1,18 @@
-'MacroName:CopyCallNumber.2022.05
-'MacroDescription:Gets a call number from an authority or bibliographic record and
-' returns to a bibliographic record to paste it in.
+'MacroName:CopyCallNumber.2023.02
+'MacroDescription:Gets a call number or classification number from a bibliographic or
+' authority record and returns to a bibliographic record to paste it in.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 26 June 2022.
+' Last updated: 27 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: This macro was developed in a workflow of keeping a bibliographic record
@@ -20,15 +20,14 @@
 ' type call number or classification number to copy into it. Run the macro in the record
 ' containing the call number to be copied. Cursor position is irrelevant (although if the
 ' cursor is placed in a specific 053, 050, or 090 field, the number in that field will be
-' offered as the default number to paste if there is more than one call number in the
+' offered as the default number to paste if there are other numbers available in the
 ' record). The macro copies all such fields from the source record and then returns to
-' the bibliographic record(s) to paste the copied number in as an 050 field, with first
-' indicator value "[blank]" and second indicator value "4". If only one target record is
-' available, and only one call number was copied, the macro will copy the number into the
-' bibliographic record directly, and then stop. If several classification numbers are
-' candidates, they are presented in a dialog box for selection. If several bibliographic
-' records are open, the macro displays each one, in turn, as an option for pasting the
-' number into.
+' the bibliographic record(s) to paste the copied number in as a 050 field, with
+' indicator values "[blank]4". If only one target record is available, and only one call
+' number was copied, the macro will copy the number into the bibliographic record
+' directly, and then stop. If several classification numbers are candidates, they are
+' presented in a dialog box for selection. If several bibliographic records are open, the
+' macro displays each one, in turn, as an option for pasting the number into.
 '
 ' When copying a classification number from an authority record, the disciplines
 ' associated with those numbers are displayed to assist in deciding which one to paste,
@@ -38,7 +37,7 @@
 ' second "Mineralogy," and so on.
 '
 ' The chosen number is also copied to the Windows clipboard for, e.g., pasting into
-' ClassWeb for verification.
+' ClassWeb for verification or for further refinement.
 '****************************************************************************************
 
 Option Explicit
@@ -103,9 +102,9 @@ Dim CallNumbersFormatted() As String
 
 DELIMITER = Chr$( 223 )
 
-' First: Is the cursor in an 050 or 090 field (in a bibliographic record) or an 053
-' field (in an authority record)? If so, get that field and store it to make that number
-' the default value when a list of numbers is presented.
+' First: Is the cursor in a 050 or 090 field (in a bibliographic record) or a 053 field
+' (in an authority record)? If so, get that field and store it to make that number the
+' default value when a list of numbers is presented.
 
 Row% = CS.CursorRow
 If CS.GetFieldLine( Row%, FieldData$ ) Then
@@ -527,8 +526,8 @@ Select Case Action%
 End Select
 
 End Function
-'53120135
+'53020136
 '
 'Macro name: CopyCallNumber
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:52:52 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:55:23 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,4 +1,4 @@
-'MacroName:BreakField.2023.06
+'MacroName:BreakField.2023.07
 'MacroDescription:Breaks a field at the cursor position, moving all subsequent text in
 ' that field to a new field, with a blank tag, immediately following.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 25 May 2023.
+' Last updated: 23 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Put the cursor in a variable field at the point where you want to divide
@@ -132,8 +132,8 @@ If CS.GetFieldUnicode( "...", CurrentRow%, FieldData$ ) = FALSE Then
 End If
 
 End Sub
-'1365379
+'1365373
 '
 'Macro name: BreakField
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 5/30/2023 11:00:27 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:02:36 AM using "MacroBookInspector" macro by Walter F. Nickeson.

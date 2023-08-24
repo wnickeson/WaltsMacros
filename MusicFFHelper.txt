@@ -1,28 +1,28 @@
-'MacroName:MusicFFHelper.2022.04
+'MacroName:MusicFFHelper.2023.01
 'MacroDescription:Helps fill in elements in the fixed field for music materials: "AccM",
-' "Comp", "FMus", "LTxt", "Part", and "TrAr". Also helps add or edit an 047 field.
+' "Comp", "FMus", "LTxt", "Part", and "TrAr". Also helps add or edit field 047.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 27 June 2022.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro while viewing a bibliographic record for music material,
 ' that is, a sound recording or notated music (e.g., a score). The macro displays the
 ' contents and codes, with explanations (when available), of these elements in the fixed
 ' field: "AccM", "Comp", "FMus", "LTxt", "Part", and "TrAr"--depending on the type of
-' record displayed. It also shows the contents of an 047 field, if present. Use the
-' mouse pointer to select a code in the macro's list boxes to add it to or remove it from
-' the fixed field element. If the macro doesn't already show the code, the click adds it.
-' If the code is present, the click removes it. Clicking on a code also displays the
+' record displayed. It also shows the contents of a 047 field, if present. Use the mouse
+' pointer to select a code in the macro's list boxes to add it to or remove it from the
+' fixed field element. If the macro doesn't already show the code, the click adds it. If
+' the code is present, the click removes it. Clicking on a code also displays the
 ' explanation of its use from the MARC documentation. The explanation remains displayed
 ' until a different code is selected. The dialog box remains open until all changes have
 ' been made. When done, click "OK" to apply those changes to the bibliographic record.
@@ -48,19 +48,19 @@
 '
 '  + "Comp" is an appropriate element for all types of records for music. If more than
 '    one code is applicable for a manifestation, the value of "Comp" should be "mu", and
-'    the specific codes given in an 047 field. The macro displays the codes in an 047
-'    field in a separate listbox. If "Comp" is empty, selecting a code adds it; clicking
-'    on that same code again removes it. Selecting a second code changes "Comp" to "mu",
-'    and both codes appear in the listbox. Selecting additional codes simply adds them to
-'    the listbox. Although these codes in the 047 field should ultimately appear in order
-'    of importance, they can be entered in the macro in any order, and rearranged later.
-'    The listbox has "Up" and "Down" buttons to move a selected code (unfortunately, the
+'    the specific codes given in a 047 field. The macro displays the codes in a 047 field
+'    in a separate listbox. If "Comp" is empty, selecting a code adds it; clicking on
+'    that same code again removes it. Selecting a second code changes "Comp" to "mu", and
+'    both codes appear in the listbox. Selecting additional codes simply adds them to the
+'    listbox. Although these codes in the 047 field should ultimately appear in order of
+'    importance, they can be entered in the macro in any order, and rearranged later. The
+'    listbox has "Up" and "Down" buttons to move a selected code (unfortunately, the
 '    macro language doesn't allow dragging and dropping), and a "Remove" button to delete
 '    it from the field. Removing codes so only one is left changes "Comp" back from "mu"
 '    to the single remaining code, and the 047 listbox disappears.
 
 '    The five codes "mu", "nn", "uu", "zz", or "||" are a special class. If any of them
-'    have been selected, they are added only to "Comp" and not to the list for an 047
+'    have been selected, they are added only to "Comp" and not to the list for a 047
 '    field. All but "mu" will empty and close the 047 listbox, if displayed, when
 '    clicked. If any of the five codes are present in "Comp", clicking on it a second
 '    time clears "Comp" and also clears all codes assembled in the 047 listbox.
@@ -264,7 +264,7 @@ Select Case TypeOfWindow%
                 OriginalLTxt$ = LTxt$
             End If
 
-' Check for an 047 field. If one is found, the code in "Comp:" must be "mu". If it isn't,
+' Check for field 047. If one is found, the code in "Comp:" must be "mu". If it isn't,
 ' offer to fix the problem, by either changing the code or deleting the field.
 
             If CS.GetField( "047", 1, FieldData$ ) Then
@@ -275,7 +275,7 @@ Select Case TypeOfWindow%
                     OptionDelete047$  = OptionDelete047$ & " the 047 field"
                     OptionDoNothing1$ = "Do &nothing (but Comp: will be marked with an asterisk"
                     OptionDoNothing2$ = "to indicate a problem)"
-                    OptionOptions$    = "The presence of an 047 field means the value of Comp: should be " & DOUBLE_QUOTE
+                    OptionOptions$    = "The presence of field 047 means the value of Comp: should be " & DOUBLE_QUOTE
                     OptionOptions$    = OptionOptions$ & "mu" & DOUBLE_QUOTE & " instead of " & DOUBLE_QUOTE & Comp$
                     OptionOptions$    = OptionOptions$ & DOUBLE_QUOTE & ". Choose a solution:"
 
@@ -325,8 +325,8 @@ Continue:
 ' If no 047 field exists but there is a code in "Comp" other than the values "mu", "nn",
 ' "uu", "zz", or "||", create the array to build that field, just in case, with that
 ' initial code as the first element. The code "mu" might mean that eventually there will
-' be codes named that will constitute an 047 field, but "mu" will not appear in it. For
-' the other special codes, their very definition precludes an 047 field from existing at
+' be codes named that will constitute a 047 field, but "mu" will not appear in it. For
+' the other special codes, their very definition precludes a 047 field from existing at
 ' all.
 
               Else
@@ -505,7 +505,7 @@ End If
 
 If ChangeFF And Change047 Then
     If Original047$ = "" Then
-        MsgBox "The fixed field was changed and an 047 field was added.", INFORMATION_MESSAGE, WaltsMacros$
+        MsgBox "The fixed field was changed and a 047 field was added.", INFORMATION_MESSAGE, WaltsMacros$
       ElseIf Original047$ <> "" And Candidate047$ = "" Then
         MsgBox "The fixed field was changed and the 047 field was deleted.", INFORMATION_MESSAGE, WaltsMacros$
       Else
@@ -542,7 +542,7 @@ End Sub
 
 Sub Build047( InString$ )
 
-' This routine takes a string of codes in an 047 field and parses them into an array for
+' This routine takes a string of codes in a 047 field and parses them into an array for
 ' manipulation in a dialog box listbox.
 
 Dim Candidate047$
@@ -795,9 +795,9 @@ Select Case ListBox$
                     j = j + 1
                   Loop Until j > UpperBoundField047Codes%
 
-' The code "mu" for "Comp" dictates the presence of an 047 field, whereas some other
-' codes dictate its absence. In the latter case, the addition of those codes empties the
-' 047 array. If "mu" is a new addition it also empties the array so the new codes can be
+' The code "mu" for "Comp" dictates the presence of a 047 field, whereas some other codes
+' dictate its absence. In the latter case, the addition of those codes empties the 047
+' array. If "mu" is a new addition it also empties the array so the new codes can be
 ' added.
 
                   If CandidateCode$ = "mu" Or CandidateCode$ = "nn" Or CandidateCode$ = "uu" Or _
@@ -1568,7 +1568,7 @@ Recycle:
         End Select
 
 ' The "Remove" button has to account for when the next-to-last code is removed. When only
-' one "Comp" code remains, an 047 field is inappropriate, so the 047 listbox must be
+' one "Comp" code remains, a 047 field is inappropriate, so the 047 listbox must be
 ' removed and the tab value changed to that last code.
 
       Case "Remove"
@@ -1955,8 +1955,8 @@ If AccM$ <> OriginalAccM$ Or FMus$ <> OriginalFMus$ Or LTxt$ <> OriginalLTxt$ Or
 End If
 
 End Function
-'195989050
+'195989024
 '
 'Macro name: MusicFFHelper
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:04 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:59:42 AM using "MacroBookInspector" macro by Walter F. Nickeson.

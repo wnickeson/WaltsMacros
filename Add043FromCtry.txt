@@ -1,37 +1,37 @@
-'MacroName:Add043FromCtry.2023.10
-'MacroDescription:Adds an 043 field from the place of publication in the fixed field
+'MacroName:Add043FromCtry.2023.12
+'MacroDescription:Adds a 043 field from the place of publication in the fixed field
 ' element "Ctry".
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 5 February 2023.
+' Last updated: 3 August 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run this macro in a bibliographic record (cursor position is irrelevant)
-' to quickly add a Geographic Area Code ("GAC") in an 043 field based on the code in the
+' to quickly add a Geographic Area Code ("GAC") in a 043 field based on the code in the
 ' fixed field element "Ctry". Usually the GAC is based on information in the record's
-' subject headings, and 043 fields can be easily added using OCLC's "Generate043" in the
-' OCLC-supplied macrobook. But GACs can also be added when no geographic subject headings
+' subject headings, and 043 fields can be easily added using the "Generate043" macro in
+' the "OCLC" macrobook. But GACs can also be added when no geographic subject headings
 ' exist. Bibliographic Formats & Standards currently says, "Assign geographic area codes
 ' for corporate bodies," and offers two examples of GACs assigned for works about
-' corporate bodies, presumably in records containing no subject headings. A 2013 version
-' of this documentation included the more general statement, "Assign geographic area
-' codes if the subject matter warrants, even if the subject heading does not use a
-' specific geographic term." If the place of publication could serve as a geographic
-' subject access point to the resource, this macro can instantly add the corresponding
-' GAC in an 043 field.
+' corporate bodies, presumably in records containing no subject headings with geographic
+' elements. A 2013 version of this documentation included the more general statement,
+' "Assign geographic area codes if the subject matter warrants, even if the subject
+' heading does not use a specific geographic term." If the place of publication could
+' serve as a geographic subject access point to the resource, this macro can instantly
+' add the corresponding GAC in a 043 field.
 '
-' All Country of Publication codes can be matched with a Geographic Area Code except in
-' three cases. An unknown place of publication (code "xx") and multiple places of
-' publication (the old "Various places," "vp") can't be used to generate an 043 field.
+' All Country of Publication codes can be simply matched with a Geographic Area Code
+' except in three cases. An unknown place of publication (code "xx") and multiple places
+' of publication (the old "Various places," "vp") can't be used to generate a 043 field.
 ' And the "Ctry" code for the Caribbean Netherlands requires choosing between three
 ' specific areas for the GAC. In this last case, the macro offers a dialog box with
 ' checkboxes to add codes for these places.
@@ -40,10 +40,10 @@
 ' coded. This macro adds hyphens to the remaining positions to extend the string to the
 ' required length of seven characters.
 '
-' The macro works by simply matching every valid "Ctry" code with its corresponding
+' The macro works by merely matching every valid "Ctry" code with its corresponding
 ' geographic area code. It then adds a new 043 field with the selected code, the new
 ' field following existing 043 fields. The macro checks for duplication of codes, so it
-' won't add a new field if the calculated GAC is already present in an 043 field.
+' won't add a new field if the calculated GAC is already present in a 043 field.
 '****************************************************************************************
 
 Option Compare Text
@@ -484,7 +484,7 @@ End If
 
 GAC$ = Ctry_GAC_Table( GAC_CODE, Result% )
 
-' Display an information message for the two cases in which an 043 field can't be added.
+' Display an information message for the two cases in which a 043 field can't be added.
 
 If GAC$ = "NOT POSSIBLE" Then
 
@@ -534,7 +534,7 @@ If GAC$ = "NOT POSSIBLE" Then
 
 End If
 
-' Check for the existence of an 043 field that also contains the GAC. If one is found,
+' Check for the existence of a 043 field that also contains the GAC. If one is found,
 ' quit.
 
 i = 1
@@ -542,7 +542,7 @@ Do
   FoundField = CS.GetField( "043", i, FieldData$ )
   If FoundField Then
       If InStr( FieldData$, GAC$ ) > 0 Then
-          MsgBox "This record already has an 043 field with the Geographic Area Code " & DOUBLE_QUOTE & GAC$ & DOUBLE_QUOTE & "!", INFORMATION_MESSAGE, WaltsMacros$
+          MsgBox "This record already has a 043 field with the Geographic Area Code " & DOUBLE_QUOTE & GAC$ & DOUBLE_QUOTE & "!", INFORMATION_MESSAGE, WaltsMacros$
           Exit Sub
       End If
   End If
@@ -555,14 +555,14 @@ Loop Until FoundField = FALSE
 ' new field and manually integrate its code into an existing field as appropriate.
 
 If CS.AddField( 9, "043  " & GAC$ ) = FALSE Then
-    MsgBox "Sorry, the macro failed to add an 043 field.", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, the macro failed to add a 043 field.", CRITICAL_MESSAGE, WaltsMacros$
 End If
 
 CS.HomeRecord
 
 End Sub
-'56537975
+'56537985
 '
 'Macro name: Add043FromCtry
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:58:20 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:00:43 AM using "MacroBookInspector" macro by Walter F. Nickeson.

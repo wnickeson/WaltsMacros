@@ -1,4 +1,4 @@
-'MacroName:CollationCheck.2022.04
+'MacroName:CollationCheck.2023.02
 'MacroDescription:Compares leaf and page counts in the statement of extent (300 subfield
 ' $a) and a standard signature statement.
 '
@@ -6,27 +6,32 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 28 June 2022.
+' Last updated: 3 August 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
-' How it works: Run this macro in a bibliographic record for a book to calculate the
-' total pagination as given in the statement of extent in field 300 subfield $a, and the
-' pagination implied by the signature count in a 500 field. Compare these totals to
-' verify the accuracy of the record's description of the volume. Or, simply use those
-' totals to verify complex statements of extent or signature statements. Cataloging rules
-' are ignored in the calculations, but punctuation, especially spacing and comma
-' placement, is critical for accurate results. The macro may produce better answers if
-' some information is temporarily altered or removed from a field, especially when
-' checking an older record. It is the only way the macro will work when dealing with a
-' multi-volume set. Results are given in drop-down lists so each element of each field
-' can be reviewed. Note that in the dialog box and its elements only the superscript
-' characters "1", "2", and "3" will display properly; all others display as filled boxes.
+' How it works: This macro compares the pagination count given explicitly in a
+' bibliographic record for a book in the statement of extent (field 300, subfield $a) and
+' implicitly in a statement of signatures in a 500 field. If the numbers don't match, one
+' of the fields may not be correct.
+'
+' Run this macro in a bibliographic record (cursor position is irrelevant). It calculates
+' the total pagination as given in subfield $a of field 300, and the pagination implied
+' by the signature statement. Compare these totals to verify the accuracy of the record's
+' description of the volume. Or, simply use those totals to verify complex statements of
+' extent or signature statements. Cataloging rules are ignored in the calculations, but
+' punctuation, especially spacing and comma placement, is critical for accurate results.
+' The macro may produce better answers if some information is temporarily altered or
+' removed from a field, especially when checking an older record. It is the only way the
+' macro will work when dealing with a multi-volume set. Results are given in drop-down
+' lists so each element of each field can be reviewed. Note that in the dialog box and
+' its elements only the superscript numbers "1", "2", and "3" will display properly; all
+' other superscript numbers display as filled boxes.
 '
 ' The macro begins by adding up all the pieces of an extent statement. A "piece" of an
 ' extent statement is a sequence of pagination or foliation which is delimited by commas
@@ -57,19 +62,19 @@
 ' be calculated. Superscript numbers that indicate duplicated signings are ignored
 ' unless two of them in a sequence don't match. The macro can generally figure out
 ' alternating gatherings if the "dot in middle of line" character or the slash is used to
-' separate the two (not three, sorry) gathering numbers. Everything that is not a signed
-' gathering or range of gatherings should be enclosed by parentheses; added text not in
-' parentheses, or enclosed by square brackets, such as the explanation "leaf dd2 signed
-' cc ii," or additional description "[horizontal chain lines]", will be treated as
-' problematic gatherings, with nonsensical results. Parenthetical information qualifying
-' a preceding gathering, such as "(-A8)", is also problematic. If such information
-' contains plus or minus signs, showing inserted or missing leaves, the macro modifies
-' the leaf count for that gathering by one, because it can't tell when more than one leaf
-' is being described. Counts for signings that use parentheses should be checked
-' manually. Temporarily editing the field by replacing problem signature characters, or
-' by adding or removing parentheses and brackets, may be necessary to get good results.
-' Changing "A[para]-G[para]²" to "A-G²" will enable the macro to calculate the leaf
-' count.
+' separate two gathering numbers. (This macro can't handle gatherings in groups of
+' three.) Everything that is not a signed gathering or range of gatherings should be
+' enclosed by parentheses; added text not in parentheses, or enclosed by square brackets,
+' such as the explanation "leaf dd2 signed cc ii," or additional description "[horizontal
+' chain lines]", will be treated as problematic gatherings, with nonsensical results.
+' Parenthetical information qualifying a preceding gathering, such as "(-A8)", is also
+' problematic. If such information contains plus or minus signs, showing inserted or
+' missing leaves, the macro modifies the leaf count for that gathering by one, because
+' it can't tell when more than one leaf is being described. Counts for signings that use
+' parentheses should be checked manually. Temporarily editing the field by replacing
+' problem signature characters, or by adding or removing parentheses and brackets, may be
+' necessary to get good results. For example, changing "A[para]-G[para]²" to "A-G²" will
+' enable the macro to calculate the leaf count.
 '****************************************************************************************
 
 Option Explicit
@@ -1723,8 +1728,8 @@ Select Case Action%
 End Select
 
 End Function
-'172764110
+'173264449
 '
 'Macro name: CollationCheck
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:58:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:01:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -461,4 +461,4 @@ End Function
 '
 'Macro name: ConvertDateToYMD
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:58:54 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:01:17 AM using "MacroBookInspector" macro by Walter F. Nickeson.

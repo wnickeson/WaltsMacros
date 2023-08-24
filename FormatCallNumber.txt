@@ -1,4 +1,4 @@
-'MacroName:FormatCallNumber.2023.04
+'MacroName:FormatCallNumber.2023.05
 'MacroDescription:Formats an LC-type call number; checks for matching dates in the call
 ' number, 260/264 subfield $c, and the fixed field; and copies the call number to the
 ' Windows Clipboard.
@@ -7,13 +7,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 18 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Place the cursor in an LC call number field (050 or 090) in a
@@ -47,7 +47,7 @@
 ' or 264 fields, the macro will copy the date in the fixed field to the call number
 ' (again, with the exception of serials).
 '
-' When formatting an 050, the macro assumes the call number is not assigned by LC and
+' When formatting field 050, the macro assumes the call number is not assigned by LC and
 ' sets the second indicator to "4." If no formatting is necessary the macro does nothing
 ' to the record.
 '
@@ -912,8 +912,8 @@ End If
 ExtractDate = Trim$( DateIn26X$ )
 
 End Function
-'91534687
+'91634681   
 '
 'Macro name: FormatCallNumber
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:53:22 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:55:50 AM using "MacroBookInspector" macro by Walter F. Nickeson.

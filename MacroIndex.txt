@@ -1,4 +1,4 @@
-'MacroName:MacroIndex.2023.01
+'MacroName:MacroIndex.2023.03
 'MacroDescription:Lists all the macros and their descriptions in all the macro books in
 ' the default folder "Macros". Also lists the macros in individual macro books. Offers
 ' searching for text in macro names and descriptions, and saving of all lists as text
@@ -10,22 +10,21 @@
 '
 ' Thanks to Joel Hahn for pointing out that macro books are instances of Microsoft's
 ' Compound File Binary File Format, the specification for which was last retrieved from
-' <https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/53989ce4-7b05-4f8d-829b-d08d6148375b>
-' on 4 November 2022 (version 20210625).
+' https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/53989ce4-7b05-4f8d-829b-d08d6148375b
+' on the date below (version 20210625).
 '
 ' The "Quicksort" sorting algorithm is adapted from the example of the same name in
-' "General Program Examples" of the documentation for IBM's CognosScript Language, which appears to be
-' almost identical to OCLC's Macro Language:
-' <https://www.ibm.com/docs/en/cognos-series-7/7.5.0?topic=SSTQPQ_7.5.0/com.ibm.swg.im.cognos.cgspmac.7.5.0.doc/cgspmac_id24986Quicksort.html#Quicksort>
-' viewed 17 March 2023.
+' "General Program Examples" of the documentation for IBM's CognosScript Language, which
+' appears to be almost identical to OCLC's Macro Language. That documentation is
+' apparently no longer available online.
 '
-' Last updated: 17 March 2023.
+' Last updated: 2 August 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro to view all the macros, in alphabetical order, in all the
@@ -39,10 +38,10 @@
 ' a single macro book) can be saved to a text file; the default location for this file is
 ' the "Macros" folder. These saved lists include the macro name, macro book (except if
 ' the list is of the macros in a single book), and description. The lists can also be
-' copied to the Clipboard; however, they contain macro names only. Click the search
-' button to search for a text string in the macro names and descriptions. The search can
-' be narrowed to descriptions only, and can also be forced to match case. The search
-' results can be saved to a file or copied to the Clipboard like any other list.
+' copied to the Clipboard; however, these lists contain macro names only. Click the
+' search button to search for a text string in the macro names and descriptions. The
+' search can be narrowed to descriptions only, and can also be forced to match case. The
+' search results can be saved to a file or copied to the Clipboard like any other list.
 '
 ' The macro runs very slowly with large numbers of macros. A macro book larger than 4 MB
 ' won't be included in the index.
@@ -215,7 +214,6 @@ End Dialog
 Dim Dialog1 as Dialog1Definition
 On Error Resume Next
 Dialog Dialog1
-If Err = DLG_STATEMENT_CANCEL Then Exit Sub
 
 End Sub
 
@@ -1266,8 +1264,8 @@ Select Case Action%
 End Select
 
 End Function
-'127050893
+'126850730
 '
 'Macro name: MacroIndex
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:35 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:05:02 AM using "MacroBookInspector" macro by Walter F. Nickeson.

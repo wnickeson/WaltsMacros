@@ -1,4 +1,4 @@
-'MacroName:VisMatHelper.2023.02
+'MacroName:VisMatHelper.2023.03
 'MacroDescription:Helps correct and add fixed field and 007 field values in bibliographic
 ' records for visual materials.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 4 March 2023.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record (the cursor position is
@@ -2523,8 +2523,8 @@ Add007:
 End Select
 
 End Function
-'252799378
+'252799371
 '
 'Macro name: VisMatHelper
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:42 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:00:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.

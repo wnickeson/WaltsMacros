@@ -1,4 +1,4 @@
-'MacroName:RDAHelper(PrintedMaterial).2023.02
+'MacroName:RDAHelper(PrintedMaterial).2023.03
 'MacroDescription:Makes changes to a bibliographic record for printed material (resources
 ' whose carrier type is "volume" or "sheet"--including books, maps, music scores,
 ' posters, etc.), to help convert it to RDA (ISBD) form.
@@ -7,13 +7,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 7 February 2023.
+' Last updated: 18 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************#
 ' How it works: Run the macro in an English language bibliographic record for printed
@@ -3128,8 +3128,8 @@ If Action% = 1 Then
 End If
 
 End Function
-'3132114298
+'3132114288
 '
 'Macro name: RDAHelper(PrintedMaterial)
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:53:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:56:17 AM using "MacroBookInspector" macro by Walter F. Nickeson.

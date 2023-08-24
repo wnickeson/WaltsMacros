@@ -1,4 +1,4 @@
-'MacroName:KeywordSearchHelper.2022.13
+'MacroName:KeywordSearchHelper.2023.01
 'MacroDescription:Helps construct a keyword search, including using a displayed
 ' record as a basis for the search terms.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 4 November 2022.
+' Last updated: 18 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 10 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '***************************************************************************************#
 ' How it works: Use this macro to help construct a keyword search. Run the macro to
@@ -43,7 +43,7 @@
 ' if a record is displayed. See below for details.
 '
 ' If a bibliographic record is used as a basis for the search, that record must contain
-' only Latin script characters. The presence of an 066 field will prevent the macro from
+' only Latin script characters. The presence of field 066 will prevent the macro from
 ' executing.
 '
 ' When extracting information from a bibliographic record, the macro presents that
@@ -429,12 +429,11 @@ End If
 
 ' The next check is to see if what's on the screen. If a bibliographic record is
 ' displayed, determine if it contains non-Latin script characters; if it does (indicated
-' by the presence of an 066 field), the macro can't proceed. Otherwise, the macro
-' continues by extracting information from the record. If an authority record is
-' displayed, the only information to be extracted is the established heading, if it is a
-' name, title, or subject; if it is something else, the macro quits. If no record is
-' displayed, the next thing the macro does is show the dialog box--there is no
-' information to extract.
+' by the presence of field 066), the macro can't proceed. Otherwise, the macro continues
+' by extracting information from the record. If an authority record is displayed, the
+' only information to be extracted is the established heading, if it is a name, title, or
+' subject; if it is something else, the macro quits. If no record is displayed, the next
+' thing the macro does is show the dialog box--there is no information to extract.
 
 TypeOfWindow% = CS.ItemType
 
@@ -3700,8 +3699,8 @@ KeepDialogOpen:
 End Select
 
 End Function
-'3704145597
+'3703145578
 '
 'Macro name: KeywordSearchHelper
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:53:32 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:56:01 AM using "MacroBookInspector" macro by Walter F. Nickeson.

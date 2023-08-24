@@ -1,4 +1,4 @@
-'MacroName:Show041B.2023.02
+'MacroName:Show041B.2023.05
 'MacroDescription:Displays the language codes in an 041 field in a bibliographic record
 ' for guided entry or verification.
 '
@@ -9,13 +9,13 @@
 ' Thanks to Terry Simpkins in earlier days for clarifying discussion. However, all
 ' responsibility for this macro's appearance and functionality are mine alone.
 '
-' Last updated: 4 February 2023.
+' Last updated: 1 August 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 
 '****************************************************************************************
 ' How it works: Run the macro to display an 041 field in a view with labeled subfields
@@ -519,8 +519,10 @@ If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
                     MsgBox "Sorry, could not replace 041 field.", CRITICAL_MESSAGE, WaltsMacros$
                 End If
               Else
-                If CS.SetField( 1, NewField$ ) = FALSE Then
-                    MsgBox "Sorry, could not replace 041 field.", CRITICAL_MESSAGE, WaltsMacros$
+                If Len( NewField$ ) > 8 Then
+                    If CS.SetField( 1, NewField$ ) = FALSE Then
+                        MsgBox "Sorry, could not replace 041 field.", CRITICAL_MESSAGE, WaltsMacros$
+                    End If
                 End If
             End If
         End If
@@ -1648,6 +1650,18 @@ ReShow:
             DlgEnable       "OriginalsTextBox",     DISABLED
         End If
 
+' Match subfield codes of the original language with the subfield codes of the
+' translations.
+
+        Select Case CurrSubfieldCode$
+          Case "a", "d", "f", "j"
+            CurrSubfOriginal$ = "h"
+          Case "b", "g"
+            CurrSubfOriginal$ = "m"
+          Case "e"
+            CurrSubfOriginal$ = "n"
+        End Select
+
 ' Go through the list of subfields to see if this is a new subfield being added, or an
 ' existing subfield being added to.
 
@@ -1679,36 +1693,29 @@ ReShow:
             PrevValTBPrimaries$    = ""
             PrevValTBIntermediate$ = ""
             PrevValTBOriginal$     = ""
-            Select Case CurrSubfieldCode$
-              Case "a", "d", "f", "j"
-                CurrSubfOriginal$ = "h"
-              Case "b", "g"
-                CurrSubfOriginal$ = "m"
-              Case "e"
-                CurrSubfOriginal$ = "n"
-            End Select
-            DlgText         "OriginalLang",         "Original language(s) [subfield $" & CurrSubfOriginal$ & "]"
         End If
         DlgFocus        "PrimariesTextBox"
+
+        DlgText         "OriginalLang",         "Original language(s) [subfield $" & CurrSubfOriginal$ & "]"
 
         RelatedSubfields( 0 ) = CurrSubfieldCode$
         RelatedSubfields( 1 ) = CurrSubfInter$
         RelatedSubfields( 2 ) = CurrSubfOriginal$
-        DlgListBoxArray "SubfieldTrioListBox",      RelatedSubfields()
+        DlgListBoxArray "SubfieldTrioListBox",  RelatedSubfields()
 
       Case "LanguageSelectionListBox"
 
         LanguageSelection% = DlgValue( "LanguageSelectionListBox" )
         ReDim ShowCodesNames( 0 )
         ShowCodesNames( 0 ) = LanguageNames( LanguageSelection% )
-        DlgListBoxArray "ViewCodesListBox",         ShowCodesNames()
-        DlgValue        "ViewCodesListBox",         0
-        DlgVisible      "AddButton",                VISIBLE
-        DlgVisible      "AddCodePrompt",            VISIBLE
-        DlgVisible      "SubfieldTrioListBox",      VISIBLE
+        DlgListBoxArray "ViewCodesListBox",     ShowCodesNames()
+        DlgValue        "ViewCodesListBox",     0
+        DlgVisible      "AddButton",            VISIBLE
+        DlgVisible      "AddCodePrompt",        VISIBLE
+        DlgVisible      "SubfieldTrioListBox",  VISIBLE
         DlgFocus        "AddButton"
-        DlgText         "ViewCodesGroupBox",        "Add language codes"
-        DlgText         "ViewCodesLegend",          "Add code for this language ..."
+        DlgText         "ViewCodesGroupBox",    "Add language codes"
+        DlgText         "ViewCodesLegend",      "Add code for this language ..."
         SearchDone = TRUE
 
 
@@ -1786,7 +1793,7 @@ ReShow:
                 DlgVisible      "AddButton",            VISIBLE
                 DlgVisible      "AddCodePrompt",        VISIBLE
                 DlgVisible      "SubfieldTrioListBox",  VISIBLE
-                DlgText         "SearchBox",               ""
+                DlgText         "SearchBox",            ""
             End If
             SearchDone = FALSE
         End If
@@ -1829,38 +1836,40 @@ ReShow:
 ' match the fixed field, or to ignore the mismatch and continue.
 
     If AddNew = FALSE Then
-        If ( FirstCode$ <> FF_Lang$ ) Then
-            If IgnoreMismatch = FALSE Then
+        If FirstCode$ <> "" Then
+            If ( FirstCode$ <> FF_Lang$ ) Then
+                If IgnoreMismatch = FALSE Then
 
-                Begin Dialog Dialog2Definition  160, 104, WaltsMacros$
-                  OkButton        38,  80,  52,  14
-                  CancelButton    98,  80,  52,  14
-                  Text            10,   6, 140,  24, MismatchLegend$
-                  OptionGroup                                                   .OptionGroup1
-                   OptionButton   18,  34,  88,  12, "Change &fixed field now", .OptionButton1
-                   OptionButton   18,  46,  88,  12, "Change &041",             .OptionButton2
-                   OptionButton   18,  58,  88,  12, "&Ignore difference",      .OptionButton3
-                End Dialog
+                    Begin Dialog Dialog2Definition  160, 104, WaltsMacros$
+                      OkButton        38,  80,  52,  14
+                      CancelButton    98,  80,  52,  14
+                      Text            10,   6, 140,  24, MismatchLegend$
+                      OptionGroup                                                   .OptionGroup1
+                       OptionButton   18,  34,  88,  12, "Change &fixed field now", .OptionButton1
+                       OptionButton   18,  46,  88,  12, "Change &041",             .OptionButton2
+                       OptionButton   18,  58,  88,  12, "&Ignore difference",      .OptionButton3
+                    End Dialog
 
-                Dim Dialog2 As Dialog2Definition
-                If Dialog( Dialog2 ) = 0 Then
-                    DlgEnd 0
-                  Else
-                    Select Case Dialog2.OptionGroup1
-                      Case 0
-                        If CS.SetFixedField( "Lang", FirstCode$ ) = FALSE Then
-                            MsgBox "Sorry, could not update the language code in the fixed field.", WARNING_MESSAGE, WaltsMacros$
-                          Else
+                    Dim Dialog2 As Dialog2Definition
+                    If Dialog( Dialog2 ) = 0 Then
+                        DlgEnd 0
+                      Else
+                        Select Case Dialog2.OptionGroup1
+                          Case 0
+                            If CS.SetFixedField( "Lang", FirstCode$ ) = FALSE Then
+                                MsgBox "Sorry, could not update the language code in the fixed field.", WARNING_MESSAGE, WaltsMacros$
+                              Else
+                                IgnoreMismatch = TRUE
+                                DlgVisible      "FFChangeNote",         VISIBLE
+                            End If
+                          Case 1
+                            Mid$( Subfields( InitialSubfSelection% ).tPrimaryLangs, 1, 3 ) = FF_Lang$
                             IgnoreMismatch = TRUE
-                            DlgVisible      "FFChangeNote",         VISIBLE
-                        End If
-                      Case 1
-                        Mid$( Subfields( InitialSubfSelection% ).tPrimaryLangs, 1, 3 ) = FF_Lang$
-                        IgnoreMismatch = TRUE
-                        GoTo ReShow:
-                      Case 2
-                        IgnoreMismatch = TRUE
-                    End Select
+                            GoTo ReShow:
+                          Case 2
+                            IgnoreMismatch = TRUE
+                        End Select
+                    End If
                 End If
             End If
         End If
@@ -1977,26 +1986,34 @@ ReShow:
 
 ' If the field contains only a single language code, it shouldn't be added, so the text
 ' on the action button is just "Close," as it is when the display field is the same as
-' the original field Otherwise, set the text on the action button to make it clear that
+' the original field. Otherwise, set the text on the action button to make it clear that
 ' clicking it will add a new field or replace an existing one.
 
     If Len( NewField$ ) < 9 Then
+        AddNew = FALSE
         If DlgText( "OK" ) <> KLOSE Then
             DlgText         "OK",                   KLOSE
         End If
       Else
+        If OriginalField$ = "" Then AddNew = TRUE
         If AddNew Then
             If DlgText( "OK" ) <> ADD Then
                 DlgText         "OK",                   ADD
             End If
           Else
-            If NewField$ <> OriginalField$ Then
-                If DlgText( "OK" ) <> REPLACE Then
-                    DlgText         "OK",                   REPLACE
+            If OriginalField$ = "" Then
+                If DlgText( "OK" ) <> ADD Then
+                    DlgText         "OK",                   ADD
                 End If
               Else
-                If DlgText( "OK" ) <> KLOSE Then
-                    DlgText         "OK",                   KLOSE
+                If NewField$ <> OriginalField$ Then
+                    If DlgText( "OK" ) <> REPLACE Then
+                        DlgText         "OK",                   REPLACE
+                    End If
+                  Else
+                    If DlgText( "OK" ) <> KLOSE Then
+                        DlgText         "OK",                   KLOSE
+                    End If
                 End If
             End If
         End If
@@ -2007,8 +2024,8 @@ ReShow:
 End Select
 
 End Function
-'201193689
+'202894312
 '
 'Macro name: Show041B
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:30 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:00:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.

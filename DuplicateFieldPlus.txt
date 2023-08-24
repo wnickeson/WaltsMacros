@@ -1,25 +1,27 @@
-'MacroName:DuplicateFieldPlus.2022.06
-'MacroDescription:Copies a field and pastes it in a new field directly below the
-' original, automatically making some useful changes in tag, indicators, and content.
+'MacroName:DuplicateFieldPlus.2023.02
+'MacroDescription:Copies a field in a bibliographic record and pastes it in a new field
+' directly below the original, automatically making some useful changes in tag,
+' indicators, and content.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 21 November 2022.
+' Last updated: 27 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
-' How it works: With the cursor in the field to be copied, run the macro. It copies the
-' entire field to a new field directly following the original, automatically making some
-' useful changes. These are the changes it makes:
+' How it works: While viewing a bibliographic record with the cursor in the field to be
+' copied, run the macro. It copies the entire field to a new field directly following the
+' original, automatically making some useful changes. These are the changes it makes:
 '
 '    original tag      new tag in copied field
+'   ________________   _______________________
 '   050 #0, 051,
 '        090, 099      050 #4
 '        1XX, 7XX      6XX     (minus subfields $e, $4, and $i, and subfields $0 and $1)
@@ -49,9 +51,9 @@
 '   Original:   650  0 Latin language $v Dictionaries $x English.
 '   Duplicate:  650  0 English language $v Dictionaries $x Latin.
 '
-' If an 050 field contains an alternative class number (and so contains two subfields
-' $a), the macro retains the original field and copies the second call number to another
-' 050 field, with second indicator 4 to indicate assignation by an agency other than LC:
+' If a 050 field contains an alternative class number (and so contains two subfields $a),
+' the macro retains the original field and copies the second call number to another 050
+' field, with second indicator 4 to indicate assignation by an agency other than LC:
 '
 '   Original:   050 00 Z8230.2 $b .B78 1990 $a PS3554.I32
 '   Duplicate:  050 04 PS3554.I32
@@ -133,17 +135,6 @@ Centuries( 9  ) = "19th century"
 Centuries( 10 ) = "20th century"
 Centuries( 11 ) = "21st century"
 
-Dim SourceTerms( 7 ) As String
-
-SourceTerms( 0 ) = "aat - Art & architecture thesaurus"
-SourceTerms( 1 ) = "fast - Faceted application of subject terminology"
-SourceTerms( 2 ) = "gmgpc - Thesaurus for graphic materials: TGM II, Genre and physical characteristic terms"
-SourceTerms( 3 ) = "gsafd - Guidelines on subject access to individual works of fiction, drama, etc."
-SourceTerms( 4 ) = "lcgft - Library of Congress genre/form terms for library and archival materials"
-SourceTerms( 5 ) = "lctgm - Thesaurus for graphic materials: TGM I, Subject terms"
-SourceTerms( 6 ) = "marcgt - MARC genre terms"
-SourceTerms( 7 ) = "migfg - Moving image genre-form guide"
-
 Row% = CS.CursorRow
 Col% = CS.CursorColumn
 
@@ -155,7 +146,7 @@ Select Case TypeOfWindow%
 End Select
 
 If Col% > FIXED_FIELD_COLUMN Then
-    If CS.GetFieldLineUnicode( Row%, FieldData$ ) = FALSE Then
+    If CS.GetFieldUnicode( "...", Row%, FieldData$ ) = FALSE Then
         MsgBox "Sorry, this macro can't proceed.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
@@ -564,8 +555,8 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'56823036
+'55922468
 '
 'Macro name: DuplicateFieldPlus
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:53:18 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:55:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.

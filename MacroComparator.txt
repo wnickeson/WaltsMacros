@@ -1,4 +1,4 @@
-'MacroName:MacroComparator.2022.04
+'MacroName:MacroComparator.2023.01
 'MacroDescription:Displays two macro books, and selected macros from each, side by side
 ' for some simple metadata comparison.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 16 January 2022.
+' Last updated: 24 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run this macro to see the macro books in the default macro directory; the
@@ -1537,8 +1537,8 @@ Select Case Action%
   End Select
 
 End Function
-'154158942
+'154158932
 '
 'Macro name: MacroComparator
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:30 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:58 AM using "MacroBookInspector" macro by Walter F. Nickeson.

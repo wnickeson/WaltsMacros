@@ -1,4 +1,4 @@
-'MacroName:GetAuthority.2022.06
+'MacroName:GetAuthority.2023.02
 'MacroDescription:Gets the authorized heading (the 1XX field) from an authority record,
 ' returns to the bibliographic record, and pastes in the heading at the user's choice of
 ' tag, or a subdivision at an appropriate place in a subject heading. Also copies other
@@ -14,13 +14,13 @@
 ' 2004. My development of his code and the resulting performance of this macro are my
 ' responsibility alone.
 '
-' Last updated: 26 June 2022.
+' Last updated: 27 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' This macro and my "BrowseAuthority" macro work together to efficiently add authorized
@@ -31,13 +31,14 @@
 '
 ' How it works: Run this macro while viewing an authority record (cursor position is
 ' irrelevant). The macro copies the authorized heading (the 1XX field) and toggles back
-' to the bibliographic record to present options for automatic pasting. If the cursor is
-' already in a heading field (as it might be if the authority record was found by using
-' my "BrowseAuthority" macro in that field), the options include replacing the heading
-' or adding it as a new field with a different tag. Other information from the authority
-' record (see below) can be added in the same operation. If more than one bibliographic
-' record is open, the macro will cycle through them, starting with the one most recently
-' opened, for you to choose the record into which the macro will paste the copied data.
+' to the bibliographic record to present options for pasting. If the cursor is already in
+' a heading field (as it might be if the authority record was found by using my
+' "BrowseAuthority" macro in that field), the options include replacing the heading or
+' adding it as a new field with a different tag. Other information from the authority
+' record can be added in the same operation, and is described below. If more than one
+' bibliographic record is open, the macro will cycle through them, starting with the one
+' most recently opened, for you to choose the record into which the macro will paste the
+' copied data.
 '
 ' If the copied heading is not a subject subdivision, the macro will add it to a
 ' bibliographic record as a new field with the appropriate tag--1XX, 6XX, 7XX, or 8XX, as
@@ -78,24 +79,24 @@
 ' adds the heading, whether or not the retrieved heading matches that in the
 ' bibliographic record:
 '
-'  + Any classification number in an 053 field or a call number in an 050 field. These
-'    are added, if desired, in 050 #4. If the 053 field contains a range of numbers, only
-'    the number for the beginning of the range is copied; a plus sign displays to warn
-'    that the call number inserted may not be specific enough. (To retrieve only
-'    classification numbers from an authority record, use my macro "CopyCallNumber,"
-'    which can also copy call numbers from bibliographic records.)
+'  + Any classification number in a 053 field or a call number in a 050 field. These are
+'    added in field 050 with indicators "[blank]4". If the 053 field contains a range of
+'    numbers, only the number for the beginning of the range is copied; a plus sign
+'    displays to warn that the call number inserted may not be specific enough. (To
+'    retrieve only classification numbers from an authority record, use my macro
+'    "CopyCallNumber," which can also copy call numbers from bibliographic records.)
 '
-'  + A geographic area code (GAC) in an 043 field.
+'  + A geographic area code (GAC) in a 043 field.
 '
 '  + A series numbering example in a 642 field. The macro includes a fill character when
 '    it copies this information, to remind you to correct the data before proceeding.
 '
-'  + An ISSN in an 022 field. This is added as the last subfield in an 8XX field.
+'  + An ISSN in field 022. This is added as the last subfield in an 8XX field.
 '
 '  + A 752 field, either as the only information copied from the authority record, or as
-'    an addition to a copied heading or subdivision. Because it is a simple derivation
-'    from the 781 field, this addition should always be checked for completeness and
-'    accuracy.
+'    an addition to a copied heading or subdivision. Although it is derived from the
+'    authority record's 781 field, the two fields are constructed from different rules,
+'    so a new 752 field should always be checked for completeness and accuracy.
 '****************************************************************************************
 
 Option Explicit
@@ -424,9 +425,14 @@ If CS.GetField( "1..", 1, FieldData$ ) Then
         Exit Sub
     End If
 
-' Copy the GAC, if present.
+' Copy the GAC, if present. Delete anything other than the code itself, such as an
+' authority record control number appearing in subfield $0.
 
     If CS.GetField( "043", 1, FieldData$ ) Then
+        p = InStr( FieldData$, DELIMITER )
+        If p > 0 Then
+            FieldData$ = Trim$( Left$( FieldData$, p - 1 ) )
+        End If
         AuthorityData.tGAC = Mid$( FieldData$, 6 )
     End If
 
@@ -783,8 +789,8 @@ If AuthorityData.tNew752 <> "" Then
     End If
 End If
 
-' Continue by looking for an 043 field. If one is found, and it contains a GAC that
-' matches what was copied from the authority record, the latter won't be added.
+' Continue by looking for field 043. If one is found, and it contains a GAC that matches
+' what was copied from the authority record, the latter won't be added.
 
 If AuthorityData.tGAC <> "" Then
     If CS.GetField( "043", 1, FieldData$ ) Then
@@ -2254,7 +2260,7 @@ Function Transform781( InString$ )
 '
 '   781 $z England $z London   => 752 $a England $d London.
 '
-' In the case of the United States and Canada, if there is an 043 field to help out, the
+' In the case of the United States and Canada, if field 043 is present to help out, the
 ' missing country term is able to be supplied, and the first subfield $z becomes subfield
 ' $b, "First-order political jurisdiction":
 '
@@ -2280,7 +2286,7 @@ Dim p As Integer
 TempString$ = Mid$( InString$, 6 )
 
 ' For the U.S. and Canada, the country name is omitted from the 781 field. If it is found
-' in the appropriate place in an 043 field, supply it in the 752.
+' in the appropriate place in field 043, supply it in the 752.
 
 If CS.GetField( "043", 1, FieldData$ ) Then
     If InStr( FieldData$, "us" ) = SECOND_LEVEL Then
@@ -2642,7 +2648,7 @@ Function Dialog4ControlFunction( Id$, Action%, SValue& )
 '    numbers are presented in a drop-list box. The default state of the checkbox is
 '    unchecked.
 '
-'  + An 043 field. The default state of this checkbox is checked.
+'  + A 043 field. The default state of this checkbox is checked.
 '
 '  + A 752 field generated from the authority record's 781, if present. The default state
 '    of this checkbox is unchecked. (If the intent of finding the authority record was
@@ -3151,8 +3157,8 @@ Select Case Action%
 End Select
 
 End Function
-'3155130028
+'3161130356
 '
 'Macro name: GetAuthority
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:53:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:55:55 AM using "MacroBookInspector" macro by Walter F. Nickeson.

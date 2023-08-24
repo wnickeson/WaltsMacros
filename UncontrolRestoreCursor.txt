@@ -1,4 +1,4 @@
-'MacroName:UncontrolRestoreCursor.2023.01
+'MacroName:UncontrolRestoreCursor.2023.02
 'MacroDescription:Uncontrols a heading in a bibliographic record but keeps the cursor in
 ' its original position.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 23 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run this macro to uncontrol a heading but keep the cursor where it was.
@@ -62,8 +62,8 @@ If CS.UncontrolHeading Then
 End If
 
 End Sub
-'662522
+'662514
 '
 'Macro name: UncontrolRestoreCursor
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 5/30/2023 11:01:31 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:04:10 AM using "MacroBookInspector" macro by Walter F. Nickeson.

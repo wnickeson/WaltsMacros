@@ -1,4 +1,4 @@
-'MacroName:GetHeadingMeta.2023.01
+'MacroName:GetHeadingMeta.2023.02
 'MacroDescription:Gets the authorized heading, the LCCN, and the cataloging agency from
 ' an authority record, and puts it in formatted form on the Windows Clipboard for
 ' pasting.
@@ -7,13 +7,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 23 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: This macro gets the authorized heading, LC control number, MARC code for
@@ -22,7 +22,9 @@
 ' formatted string, e.g.:
 '
 '   Aristotle. $t De animalium incessu [nr97034878 (UPB)]
+'
 ' or:
+'
 '   Pattattanam, Srini [n89113224 (DLC)] (Diacritics removed)
 '
 ' Useful for sending headings via e-mail.
@@ -136,8 +138,8 @@ Clipboard.SetText Heading$
 MsgBox Heading$, INFORMATION_MESSAGE, WaltsMacros$
 
 End Sub
-'1404488
+'1424486
 '
 'Macro name: GetHeadingMeta
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 5/30/2023 11:01:09 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:03:22 AM using "MacroBookInspector" macro by Walter F. Nickeson.

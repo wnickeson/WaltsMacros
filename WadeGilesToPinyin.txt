@@ -1417,4 +1417,4 @@ End Function
 '
 'Macro name: WadeGilesToPinyin
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/31/2023 12:44:26 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:02:23 AM using "MacroBookInspector" macro by Walter F. Nickeson.

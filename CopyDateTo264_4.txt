@@ -1,4 +1,4 @@
-'MacroName:CopyDateTo264_4.2022.05
+'MacroName:CopyDateTo264_4.2023.01
 'MacroDescription:Copies the date from a 264 #1 field to a 264 #4 field in a
 ' bibliographic RDA record, adding the appropriate symbol for copyright and updating the
 ' fixed field to include both dates.
@@ -7,13 +7,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 27 June 2022.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record cataloged according to RDA to
@@ -198,8 +198,8 @@ If p <> 0 Then
 End If
 
 End Sub
-'2027748
+'2027741
 '
 'Macro name: CopyDateTo264_4
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:56:43 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:59:09 AM using "MacroBookInspector" macro by Walter F. Nickeson.

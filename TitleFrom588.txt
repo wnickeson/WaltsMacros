@@ -1,4 +1,4 @@
-'MacroName:TitleFrom588.2022.05
+'MacroName:TitleFrom588.2023.01
 'MacroDescription:Changes source of title note tag in a bibliographic record to 588, or
 ' quickly adds selected source of title notes to certain formats: "cover" for volumes,
 ' "label" for discs, "container" for AV.
@@ -7,13 +7,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 27 June 2022.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro while viewing a bibliographic record (cursor position is
@@ -388,8 +388,8 @@ If Success = FALSE Then
 End If
 
 End Sub
-'39214488
+'39214481
 '
 'Macro name: TitleFrom588
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:00:16 AM using "MacroBookInspector" macro by Walter F. Nickeson.

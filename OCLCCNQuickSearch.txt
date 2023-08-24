@@ -1,4 +1,4 @@
-'MacroName:OCLCCNQuickSearch.2023.01
+'MacroName:OCLCCNQuickSearch.2023.02
 'MacroDescription:Searches WorldCat for the number string selected in a Connexion window
 ' or copied to the Windows Clipboard.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 10 April 2023.
+' Last updated: 18 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 10 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Select an OCLC number in a Connexion window, or copy an OCLC number from
@@ -194,8 +194,8 @@ If CS.Search( "WC", "#" & SearchString$ ) = 0 Then
 End If
 
 End Sub
-'1987204
+'1987196
 '
 'Macro name: OCLCCNQuickSearch
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:53:36 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:56:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.

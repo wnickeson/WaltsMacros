@@ -1,17 +1,17 @@
-'MacroName:ClipboardSearch.2023.01
+'MacroName:ClipboardSearch.2023.02
 'MacroDescription:Performs a directed search from text on the Windows Clipboard.
 
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 17 March 2023.
+' Last updated: 21 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Either select some text in a Connexion record, or select and copy text
@@ -481,8 +481,8 @@ Select Case Action%
 End Select
 
 End Function
-'48514503
+'48514495
 '
 'Macro name: ClipboardSearch
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:58:42 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:01:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.

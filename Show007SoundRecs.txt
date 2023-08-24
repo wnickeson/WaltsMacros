@@ -1,4 +1,4 @@
-'MacroName:Show007SoundRecs.2022.04
+'MacroName:Show007SoundRecs.2023.01
 'MacroDescription:Displays the codes in 007 fields in a bibliographic record for sound
 ' recordings in a friendly way for verification and/or correction.
 '
@@ -9,19 +9,19 @@
 ' Thank to Joel Hahn for some good ideas for an earlier draft of this macro. However, all
 ' responsibility for this macro's appearance and functionality are mine alone.
 '
-' Last updated: 27 June 2022.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '***************************************************************************************#
 ' How it works: Run the macro in a bibliographic record. If no 007 field for a sound
 ' recording is found, the macro offers to add one, the default values being those for
 ' compact discs. (All default values can be set in the "SetDefaults" subroutine, starting
-' on line 652.) If sound recordings 007 fields are found, the macro shows their
+' on line 644.) If sound recordings 007 fields are found, the macro shows their
 ' codes with explanations in a dialog box with drop-down lists, so the values can easily
 ' be verified and changed if necessary. Additional 007 fields can be added with the
 ' default values defined at the end of the macro. The macro does no error-checking,
@@ -1037,8 +1037,8 @@ AddNew:
 End Select
 
 End Function
-'104142989
+'104142982
 '
 'Macro name: Show007SoundRecs
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:00:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.

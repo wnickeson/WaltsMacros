@@ -1,37 +1,43 @@
-'MacroName:MakeTitleAddedEntry.2023.53
-'MacroDescription:Helps to quickly add selected text to a bibliographic record as a title
-' added entry or uniform title heading, and also checks indicators in those title fields.
+'MacroName:MakeTitleAddedEntry.2023.62
+'MacroDescription:Helps to quickly add selected text in a bibliographic record as a title
+' added entry or uniform title heading, as well as adding a subtitle or part title as a
+' 246 field. Also checks indicators in those title fields.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 31 May 2023.
+' Last updated: 2 August 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 11 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Select text in a bibliographic record to add it as a new title field
 ' (130, 240, 246, 730, or 740) and run the macro. The macro displays a dialog box for
 ' selecting which field to add, and shows the indicator values for that field. Select the
-' appropriate tag and indicator values, and the macro adds the field.
+' appropriate tag and indicator values, and the macro adds the field. If the selection is
+' in English, the macro will strip an initial article, and if the first letter is encoded
+' in MARC-8, it will be capitalized.
+'
+' Or, run the macro with the cursor in a 245 field that contains a subfield $b or a
+' subfield $p to quickly add that subfield as a new 246 field, with the bonus features
+' described above. The macro looks first for a subfield $b, Remainder of title, and if
+' it's not found, it checks for a subfield $p, Name of part/section of a work, and takes
+' the first one to work with.
 '
 ' Or, run the macro with the cursor anywhere in the record to check the indicator values
 ' for whichever of those title fields are present, and quickly change them, if necessary.
 ' The macro displays the fields found in a list; select one to see the valid indicator
 ' values, and the definition of each value, for that field. Select a different indicator
-' value from the drop-down list to make a change. This feature of the macro is probably
-' most useful for checking the 246 field, which has a lot of different indicator values
-' that may be hard to keep in mind if that field isn't dealt with frequently, but the
-' macro can be used like an in-record help system for the five title fields it is
-' designed for.
+' value from the drop-down list to make a change. This feature is a little like an in-
+' record help system for the five title fields it is designed for.
 '
-' Because of the limits of the macro language, Unicode characters won't display properly.
-' The macro therefore replaces any undisplayable character with a pair of brackets to
+' Because of the limits of the macro language, the fields displayed can only be in Latin
+' script. The macro replaces any undisplayable character with a pair of brackets to
 ' simulate an empty box: "[]".
 '
 ' The macro will always add 246, 730, and 740 fields from selected text, but it won't
@@ -39,22 +45,19 @@
 ' won't be added if a 1XX field is already in the record, and a 240 field won't be added
 ' if a 130 field is present.
 '
-' When adding a title field from a selection, the macro capitalizes the first letter,
-' and adds a period or full stop to fields 130, 730, and 740. It removes that period
-' from the end of fields 240 and 246.
+' When adding a title field from a selection, in addition to capitalizing the first
+' letter, the macro adds a period or full stop to fields 130, 730, and 740. It removes
+' that period from the end of fields 240 and 246.
 '
-' If the language of the resource is English, the macro automatically does these things
-' with selected text:
+' If the language of the resource is English, the macro also does these things with
+' selected text:
 '
 '  + If it detects alternative titles, by the presence of the connecting string ", or, ",
 '    it will add the two titles as separate fields, each with indicators "30".
-'  + If the first word of the selection, and if the first word of either of the
-'    alternative titles to be added, is one of the articles "a", "an", and "the", the
-'    macro will remove it.
 '  + If it finds an ampersand in the selection, it will change the first one to the word
 '    "and".
 '
-' It is good practice to not include an initial article when selecting text for this
+' It is good practice to NOT include an initial article when selecting text for this
 ' macro to add a title access point.
 '****************************************************************************************
 
@@ -120,6 +123,8 @@ Const CRITICAL_MESSAGE     As Integer = 16
 Const DISPLAY_FF_AT_TOP    As Integer = 1
 Const DLG_STATEMENT_CANCEL As Integer = 102
 Const INFORMATION_MESSAGE  As Integer = 64
+Const MSGBOX_RETURN_CANCEL As Integer = 2
+Const MSGBOX_RETURN_YES    As Integer = 6
 
 Const FIXED_FIELD          As Integer = 0
 
@@ -130,26 +135,30 @@ Const ADD_730              As Integer = 2
 Const ADD_740              As Integer = 3
 
 Dim FAKE_FILL_CHAR  As String*1  : FAKE_FILL_CHAR = Chr$( 127 )
-Dim REAL_FILL_CHAR  As String*1  : REAL_FILL_CHAR  = Chr$( 252 )
+Dim REAL_FILL_CHAR  As String*1  : REAL_FILL_CHAR = Chr$( 252 )
 
+Dim AddFrom245%
 Dim Col%
 Dim CurrentRow%
 Dim CursorFieldTag$
+Dim Delimiter$
 Dim DialogLegend$
-Dim DisplayTextIndicatorProblem$ : DisplayTextIndicatorProblem$ = "*When subfield $i is present, 2nd indicator must be blank."
+Dim DisplayTextIndicatorProblem$
 Dim FieldData$
 Dim Lang$
+Dim LenDelimiter%
 Dim LineNumber%
 Dim NewField$
 Dim OptionButton1Text$ 'The first option button text depends on whether a 1XX field is present.
-Dim OptionButton2Text$           : OptionButton2Text            = "&246 Varying form of title"
-Dim OptionButton3Text$           : OptionButton3Text            = "7&30 Added entry--Uniform title"
-Dim OptionButton4Text$           : OptionButton4Text            = "&740 Added Entry--Uncontrolled related/analytical title"
+Dim OptionButton2Text$
+Dim OptionButton3Text$
+Dim OptionButton4Text$
 Dim OptionButtonSelection%
 Dim PosFF%
 Dim SelectedField%
 Dim SelectedIndicator1$
 Dim SelectedIndicator2$
+Dim SubfieldToAdd$
 Dim Tag$
 Dim Title1$
 Dim Title2$
@@ -160,14 +169,19 @@ Dim WaltsMacros$                 : WaltsMacros$                 = "[Walt's macro
 Dim ChangedFFView                : ChangedFFView                = FALSE
 Dim FoundField
 
-Dim i As Integer, p As Integer
+Dim i As Integer, p As Integer, q As Integer
 
-Field1XX$      = NO_1XX
-Field240       = FALSE
-NAME_1XX       = "N"
-NO_1XX         = " "
-TITLE_1XX      = "T"
-UnicodeFound   = FALSE
+Field1XX$    = NO_1XX
+Field240     = FALSE
+NAME_1XX     = "N"
+NO_1XX       = " "
+TITLE_1XX    = "T"
+UnicodeFound = FALSE
+
+DisplayTextIndicatorProblem$ = "*When subfield $i is present, 2nd indicator must be blank."
+OptionButton2Text            = "&246 Varying form of title"
+OptionButton3Text            = "7&30 Added entry--Uniform title"
+OptionButton4Text            = "&740 Added Entry--Uncontrolled related/analytical title"
 
 ' First, make sure that a bibliographic record is displayed.
 
@@ -177,6 +191,24 @@ Select Case TypeOfWindow%
     MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End Select
+
+' If the language of the resource is English, the macro is able to do more than simply
+' add the text as a new field. Otherwise, the language of the resource is of no concern
+' to the macro.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+If CS.GetFixedField ( "Lang", Lang$ ) Then
+    If Lang$ = "eng" Or Lang$ = "zxx" Then
+        English = TRUE
+      Else
+        English = FALSE
+    End If
+End If
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
 
 ' Then get the cursor position. If it's in a variable field, get the tag, by using the
 ' "GetFieldLineUnicode" command. The content of the field doesn't matter at this point,
@@ -244,24 +276,6 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
         ListBox2Selection% = 0
     End If
     DialogLegend$ = "Add selected text as title field:"
-
-' If the language of the resource is English, the macro is able to do more than simply
-' add the text as a new field. Otherwise, the language of the resource is of no concern
-' to the macro.
-
-    PosFF% = CS.FixedFieldPosition
-    If PosFF% <> DISPLAY_FF_AT_TOP Then
-        CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
-        ChangedFFView         = TRUE
-    End If
-    If CS.GetFixedField ( "Lang", Lang$ ) Then
-        If Lang$ = "eng" Or Lang$ = "zxx" Then
-            English = TRUE
-          Else
-            English = FALSE
-        End If
-    End If
-    If ChangedFFView Then CS.FixedFieldPosition = PosFF%
 
     Begin Dialog Dialog1Definition  268, 156, WaltsMacros$, .Dialog1ControlFunction
       OkButton       146, 132,  52,  14
@@ -406,43 +420,124 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
 
   Else
 
-' If no text has been selected, the macro displays the contents of all the title fields
-' 130, 240, 246, 730, and 740, present in the record. This display shows the valid
-' indicator values in each field, to help explain them or to guide changing them. Because
-' the dialog box may not be able to display the full set of characters in the record, the
-' raw data from the field is manipulated for display. MARC characters may need to be
-' converted into Windows equivalents, if possible, and Unicode characters are turned into
-' apparent empty boxes, formed by adjacent brackets []. The fill character is represented
-' by a filled box. The row number of each field is also stored in case the field is to be
-' replaced because the indicators have been changed.
+' If no text has been selected, the first thing is to check if the cursor is in the 245
+' field. If it is, look first for the remainder of title in subfield $b, and if there is
+' none, for the first part/section title available in a subfield $p. If one of those
+' subfields is found, quickly add that subfield as a new 246 field with indicators "30"--
+' but with confirmation, as the cursor may be in the 245 field by accident.
 
     SelectedText$ = ""
-    LineNumber%   = 1
-      Do
-        FoundField = CS.GetFieldUnicode( "...", LineNumber%, FieldData$ )
-        If FoundField Then
-            Tag$ = Left$( FieldData$, 3 )
-            If Tag$ Like "[127][34][06]" Then
-                If Mid$( FieldData$, 5, 1 ) = REAL_FILL_CHAR Then
-                    Mid$( FieldData$, 5, 1 ) = FAKE_FILL_CHAR
-                End If
-                ReDim Preserve TitleFields( TitleFieldCount% )
-                TitleFields( TitleFieldCount% ).tRawData    = FieldData$
-                TitleFields( TitleFieldCount% ).tLineNumber = LineNumber%
-                If InStr( FieldData$, "&#x" ) > 0 Then
-                    TitleFields( TitleFieldCount% ).tDisplayData = ConvertUnicode( FieldData$ )
-                    UnicodeFound = TRUE
-                  Else
-                    TitleFields( TitleFieldCount% ).tDisplayData = ConvertTo8859( FieldData$ )
-                End If
-                TitleFieldCount% = TitleFieldCount% + 1
-                If LineNumber% = CurrentRow% Then
-                    TitleArraySelection% = TitleFieldCount%
+    If CS.GetFieldUnicode( "...", CurrentRow%, FieldData$ ) Then
+        If Left$( FieldData$, 3 ) = "245" Then
+            If InStr( FieldData$, Chr$( 223 ) ) > 0 Then
+                Delimiter$    = Chr$( 223 )
+                LenDelimiter% = 1
+              Else
+                If InStr( FieldData$, "01C2" ) > 0 Then
+                    Delimiter$    = "&#x01C2;"
+                    LenDelimiter% = 8
                 End If
             End If
+            p = InStr( FieldData$, DELIMITER & "b" )
+            If p = 0 Then
+                p = InStr( FieldData$, DELIMITER & "p" )
+                If p > 0 Then
+                    SubfieldToAdd$ = "p"
+                End If
+              Else
+                SubfieldToAdd$ = "b"
+            End If
+            If p > 0 Then
+                q = InStr( p + 1, FieldData$, DELIMITER )
+                If q > 0 Then
+                    Title1$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2, ( q - p ) - ( LenDelimiter% + 2 ) ) )
+                  Else
+                    Title1$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2 ) )
+                End If
+
+' The punctuation marks in Western languages that can end a field can be ignored:
+' quotation marks, the exclamation point, and the question mark. Otherwise, strip the
+' title string of other characters. This step gets rid of ISBD punctuation. It does
+' remove a period, which may be an incorrect action, but this macro can't decide that.
+
+                If Right$( Title1$, 1 ) = Chr$( 034 ) Or Right$( Title1$, 1 ) = Chr$( 039 ) Or _
+                   Right$( Title1$, 1 ) = "!" Or Right$( Title1$, 1 ) = "?" Then
+                  ElseIf Right$( Title1$, 1 ) Like "[!0-9A-Za-z]" Then
+                    Title1$ = Trim$( Left$( Title1$, Len( Title1$ ) - 1 ) )
+
+' But the last character may also be the semicolon of a Numeric Character Reference. If
+' the beginning three characters of an NCR are found at the end of the title string,
+' assume the semicolon was removed, and put it back.
+
+                    If InStr( Mid$( Title1$, Len( Title1$ ) - 7 ), "&#x" ) > 0 Then
+                        Title1$ = Title1$ & ";"
+                    End If
+                End If
+                Title1$ = MakeInitialCapital( RemoveInitialArticle( Title1$ ) )
+                If Len( Title2$ ) > 64 Then
+                    p = InStr( 64, Title2$, " " )
+                    If p > 0 Then
+                        Title2$ = Left$( Title2$, p - 1 ) & "... "
+                    End If
+                End If
+
+' Get confirmation before adding the new field.
+
+                AddFrom245% = MsgBox( "Make 246 field title from this subfield $" & SubfieldToAdd$ & "?", 35, WaltsMacros$ )
+                Select Case AddFrom245%
+                  Case MSGBOX_RETURN_CANCEL
+                    Exit Sub
+                  Case MSGBOX_RETURN_YES
+                    Title1$ = "24630" & MakeInitialCapital( Title1$ )
+                    If CS.AddField( 1, Title1$ ) = FALSE Then
+                        MsgBox "Sorry, cannot create 246.", CRITICAL_MESSAGE, WaltsMacros$
+                    End If
+                    Exit Sub
+                End Select
+            End If
         End If
-        LineNumber% = LineNumber% + 1
-      Loop Until FoundField = FALSE
+      Else
+        MsgBox "Sorry, cannot create a 246 field from this field's subfield $" & SubfieldToAdd$ & ".", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+' If the part of the title found is not to be added as a 246 field, or if the cursor is
+' not in a 245 field, continue by retrieving the contents of all the title fields present
+' in the record--that is, fields 130, 240, 246, 730, and 740. Display them to show the
+' valid indicator values in each field, to help explain them or to guide changing them.
+' Because the dialog box may not be able to display the full set of characters in the
+' record, manipulate the raw data from the field for display. MARC characters may need to
+' be converted into Windows equivalents, if possible, and Unicode characters are turned
+' into apparent empty boxes, formed by a pair of brackets []. The fill character is
+' represented by a filled box. Store the row number of each field in case the field is to
+' be replaced because the indicators have been changed.
+
+    LineNumber%  = 1
+    Do
+      FoundField = CS.GetFieldUnicode( "...", LineNumber%, FieldData$ )
+      If FoundField Then
+          Tag$ = Left$( FieldData$, 3 )
+          If Tag$ Like "[127][34][06]" Then
+              If Mid$( FieldData$, 5, 1 ) = REAL_FILL_CHAR Then
+                  Mid$( FieldData$, 5, 1 ) = FAKE_FILL_CHAR
+              End If
+              ReDim Preserve TitleFields( TitleFieldCount% )
+              TitleFields( TitleFieldCount% ).tRawData    = FieldData$
+              TitleFields( TitleFieldCount% ).tLineNumber = LineNumber%
+              If InStr( FieldData$, "&#x" ) > 0 Then
+                  TitleFields( TitleFieldCount% ).tDisplayData = ConvertUnicode( FieldData$ )
+                  UnicodeFound = TRUE
+                Else
+                  TitleFields( TitleFieldCount% ).tDisplayData = ConvertTo8859( FieldData$ )
+              End If
+              TitleFieldCount% = TitleFieldCount% + 1
+              If LineNumber% = CurrentRow% Then
+                  TitleArraySelection% = TitleFieldCount%
+              End If
+          End If
+      End If
+      LineNumber% = LineNumber% + 1
+    Loop Until FoundField = FALSE
 
     If TitleFieldCount% = 0 Then
         MsgBox "Please select some text to add as a title field!", CRITICAL_MESSAGE, WaltsMacros$
@@ -848,8 +943,9 @@ Function SetDisplayArrays( TitleFieldsIndex% ) As String
 '
 ' When the arrays display, the current value of each indicator is selected.
 
-Dim DELIMITER As String* 1   : DELIMITER = Chr$( 223 )
-Dim QUOTE As String*1        : QUOTE     = Chr$( 034 )
+Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
+Dim QUOTE     As String*1    : QUOTE     = Chr$( 034 )
+
 Dim Tag$
 Dim TempString$
 
@@ -1073,6 +1169,8 @@ Static PreviousSecondsRemaining%
 Static StartTimer&
 Static WarningCounter
 
+Dim CurrTextListBoxInd1$
+Dim CurrTextListBoxInd2$
 Dim ElapsedSeconds%
 Dim FieldSelection%
 Dim IndicatorSelection%
@@ -1297,9 +1395,17 @@ Select Case Action%
     PreviousSecondsRemaining% = SecondsRemaining%
 
 ' If an indicator value is invalid, the OK button doesn't work--or it would add an
-' invalid value to the record.
+' invalid value to the record. Here, provision must be made for the fact that the list
+' box for the second indicator of the 130 field is invisible, so testing for the presence
+' of the word "INVALID" is impossible.
 
-    If ( InStr( DlgText( "ListBoxInd1" ), "INVALID" ) > 0 ) Or ( InStr( DlgText( "ListBoxInd2" ), "INVALID" ) > 0 ) Then
+    CurrTextListBoxInd1$ = DlgText( "ListBoxInd1" )
+    If DlgVisible( "ListBoxInd2" ) = INVISIBLE Then
+        CurrTextListBoxInd2$ = ""
+      Else
+        CurrTextListBoxInd2$ = DlgText( "ListBoxInd2" )
+    End If
+    If ( InStr( CurrTextListBoxInd1$, "INVALID" ) > 0 ) Or ( InStr( CurrTextListBoxInd2$, "INVALID" ) > 0 ) Then
         DlgEnable       "OK",                DISABLED
       Else
         DlgEnable       "OK",                ENABLED
@@ -1310,8 +1416,8 @@ Select Case Action%
 End Select
 
 End Function
-'131448600
+'142053214
 '
 'Macro name: MakeTitleAddedEntry
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/31/2023 12:44:35 PM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:59:33 AM using "MacroBookInspector" macro by Walter F. Nickeson.

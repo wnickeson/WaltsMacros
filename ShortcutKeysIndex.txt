@@ -1,4 +1,4 @@
-'MacroName:ShortcutKeysIndex.2023.46
+'MacroName:ShortcutKeysIndex.2023.48
 'MacroDescription:Shows all the keys used for all keyboard shortcuts (macros, menu
 ' commands, characters, and text strings), and lists all the shortcuts that employ a
 ' selected key. Copies lists of shortcuts to the Windows Clipboard. Allows searching for
@@ -8,13 +8,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 14 April 2023.
+' Last updated: 2 August 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run this macro to see the items (macros, characters, text strings, and
@@ -57,10 +57,10 @@
 '
 ' Lists of shortcut keys can be copied to the Windows Clipboard. You can produce a list
 ' of all the shortcuts used in the Client, or filter the shortcuts by type of item, and
-' whether to include app-assigned shortcuts. The output is a tab-delimited string, able
-' to be pasted into a word processing or spreadsheet program for further manipulation.
-' The list is arranged by key group, and within each group, alphabetically by the base
-' key.
+' decide whether to include app-assigned shortcuts. The output is a tab-delimited string,
+' able to be pasted into a word processing or spreadsheet program for further
+' manipulation. The list is arranged by key group, and within each group, alphabetically
+' by the base key.
 '
 ' The Client stores user-assigned shortcuts in files in the user's profile folder; the
 ' default location for those files is "X:\Users\[username]\AppData\Roaming\OCLC\Connex\
@@ -87,13 +87,14 @@
 '
 ' The search function of the macro works in reverse: The macro searches in the arrays
 ' for all the items that match the search term to find the key used in the shortcuts of
-' those items. However, characters are excluded from that type of search. To search for
-' the shortcut that might have been assigned to produce a character, select the character
-' from a drop-down list. Unfortunately, the dialog box can't display many characters
-' beyond the basic ASCII repertoire, so there is no possibility of matching a name with a
-' picture of the character. (It also doesn't help that the OCLC/ALA character set retains
-' antiquated or provincial forms of names for some characters, like "turkish i without
-' dot, lowercase", which the Unicode world knows as "Latin small letter dotless i".)
+' those items. However, characters that have shortcuts assigned to them are excluded from
+' that type of search. To search for the shortcut that might have been assigned to
+' produce a character, select the character from a drop-down list. Unfortunately, the
+' dialog box can only display characters from the ISO 8859-1 character set, so there is
+' no possibility of matching a name with a representation of the character. (It also
+' doesn't help that the OCLC/ALA character set retains antiquated or provincial forms of
+' names for some characters, like "turkish i without dot, lowercase", which the Unicode
+' world knows as "Latin small letter dotless i".)
 '
 ' The result of a search is a display with names of items and keys showing in separate
 ' list boxes. A search for macros also retrieves the names of their macrobooks (although
@@ -104,8 +105,8 @@
 ' between the two (or three) boxes. If the number of entries in a list exceeds the
 ' capacity of the box, requiring scrolling up and down to see the beginning or end of the
 ' list, the list in the other box doesn't move accordingly. However, selecting an item in
-' any box will automatically select the corresponding item in the other. The two lists
-' may not appear synchronized, but they in fact are.
+' any box will automatically select the corresponding item in the other. The two list
+' boxes may not appear synchronized, but they in fact are.
 '
 ' This macro can work with only 12 function keys. It should be noted that a few keys on
 ' the keyboard are not identified by name, only by code, and can differ by region or
@@ -3336,8 +3337,8 @@ Select Case Action%
 End Select
 
 End Function
-'3340160509
+'3341160559
 '
 'Macro name: ShortcutKeysIndex
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 5/30/2023 11:02:46 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:05:13 AM using "MacroBookInspector" macro by Walter F. Nickeson.

@@ -1,4 +1,4 @@
-'MacroName:CalcTimes.2022.05
+'MacroName:CalcTimes.2023.02
 'MacroDescription:Adds and converts times.
 '
 ' This macro was written by Walter F. Nickeson,
@@ -9,28 +9,30 @@
 ' some great ideas in the early days. All responsibility for this macro's appearance and
 ' functionality are mine alone.
 '
-' Last updated: 28 June 2022.
+' Last updated: 3 August 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: To add times (as in durations of pieces of music or of video): Enter two
 ' or more times in the input box, or paste in a string containing times, or run the macro
-' with the cursor in a contents field that contains times. The macro adds the times
-' entered and displays the result of the addition as a single time. This display is
-' initially in the format "hh:mm:ss", but repeated clicking of the "Change format" button
-' cycles the display between three formats: with colons, with abbreviations ("hr., min.,
-' sec."), and the sum reduced to one or two units. (See examples below.) The displayed
-' format is also copied to the Clipboard for pasting. If the macro detects something that
-' looks like a time but is entered incorrectly (e.g., "4:72"), it shows the string of
-' time entries ending with the possible problem, for review and correction. If the macro
-' can't match parentheses, it shows the string of time entries up to the last entry it's
-' sure of. After the macro adds up all the times in a string of time entries, it formats
-' that string for insertion in the bibliographic record as a 306 and/or a 500 field.
+' with the cursor in a contents field in a bibliographic record that contains times.
+' Being logged on is necessary only for the last situation. The macro adds the times
+' entered, or the times it finds in the bibliographic record, and displays the result of
+' the addition as a single time. This display is initially in the format "hh:mm:ss", but
+' repeated clicking of the "Change format" button cycles the display between three
+' formats: with colons, with abbreviations ("hr., min., sec."), and the sum reduced to
+' one or two units. (See examples below.) The displayed format is also copied to the
+' Clipboard for pasting. If the macro detects something that looks like a time but is
+' entered incorrectly (e.g., "4:72"), it shows the string of time entries ending with the
+' possible problem, for review and correction. If the macro can't match parentheses in a
+' contents field, it shows the string of time entries up to the last entry it's sure of.
+' After the macro adds up all the times in a string of time entries, it formats that
+' string for insertion in the bibliographic record as a 306 and/or a 500 field.
 '
 ' Enter a single time, and the macro will convert it between punctuated and non-
 ' punctuated format as explained below.
@@ -1138,8 +1140,8 @@ InputProb:
 End Select
 
 End Function
-'114246782
+'114446938
 '
 'Macro name: CalcTimes
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 5/30/2023 10:58:38 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 10:00:59 AM using "MacroBookInspector" macro by Walter F. Nickeson.

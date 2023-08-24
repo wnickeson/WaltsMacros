@@ -1,4 +1,4 @@
-'MacroName:Show007Maps.2022.04
+'MacroName:Show007Maps.2023.01
 'MacroDescription:Displays the codes in an 007 field in a bibliographic record for
 ' cartographic resources in a friendly way for verification and/or correction.
 '
@@ -8,13 +8,13 @@
 '
 ' with some ideas from Joel Hahn.
 '
-' Last updated: 27 June 2022.
+' Last updated: 19 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '***************************************************************************************#
 ' How it works: In a record for a map, run the macro. It looks for the first map 007
@@ -22,7 +22,7 @@
 ' can be verified and changed if necessary. If the cursor is placed in a map 007, that
 ' field is used in the macro (i.e., the macro will not search for another 007 field). If
 ' there is no 007, use the dialog box to enter correct values in a new field. Default
-' values for new fields can be set in the section below that starts on line 106.
+' values for new fields can be set in the section below that starts on line 97.
 '****************************************************************************************
 
 Option Explicit
@@ -83,9 +83,9 @@ Dim SUBFIELD_H         As String*2 : SUBFIELD_H   = Chr$( 223 ) & "h"
 Dim Field007String$
 Dim FieldData$
 Dim Instance%                      : Instance%    = 1
-Dim Row%                           
-Dim TypeOfWindow%                  
-                                   
+Dim Row%
+Dim TypeOfWindow%
+
 Dim Changed                        : Changed      = FALSE
 Dim Field007Bool                   : Field007Bool = FALSE
 
@@ -97,7 +97,7 @@ WaltsMacros$ = "[Walt's macros] Extras1:Show007Maps"
 ' SET THE DEFAULT VALUES FOR NEW 007 FIELDS HERE
 
 ' Enter values in lowercase. Input a blank (" ") as the value for optional subfields that
-' will not be coded
+' will not be coded.
 
 DEFAULT_SUBFIELD_B = "j"   'MANDATORY SUBFIELD
 DEFAULT_SUBFIELD_D = "a"   'OPTIONAL SUBFIELD
@@ -387,8 +387,8 @@ Select Case Action%
 End Select
 
 End Function
-'39113077
+'39112990
 '
 'Macro name: Show007Maps
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 5/30/2023 10:57:18 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:59:55 AM using "MacroBookInspector" macro by Walter F. Nickeson.

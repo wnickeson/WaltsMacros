@@ -1,4 +1,4 @@
-'MacroName:BrowseAuthority.2023.01
+'MacroName:BrowseAuthority.2023.03
 'MacroDescription:Browses the Authority File using an existing heading or selected text
 ' within a field.
 '
@@ -6,13 +6,13 @@
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
 '
-' Last updated: 16 March 2023.
+' Last updated: 27 July 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' This macro and my "GetAuthority" macro work together to efficiently add authorized
@@ -27,18 +27,18 @@
 ' Windows-1252, rather than as OCLC-MARC, the macro will attempt a browse, but it will be
 ' browsing on incorrect data and so will probably fail.
 '
-' When the appropriate heading is found, use my "GetAuthority" macro to efficiently add
-' it to the bibliographic record.
+' When the appropriate heading is found, use my "GetAuthority" macro to quickly add it to
+' the bibliographic record.
 '
 ' In a bibliographic record, heading fields are 1XX, 490, 600-653 and 655, 700-730, and
-' 800-830. The macro language doesn't allow for searching genre headings, so the 655 may
-' be searched as a subject. In an authority record, heading fields are 1XX, 4XX, and 5XX,
-' with the exceptions of X47, X48, X55, and X62; but if the cursor is in any other field
-' in the record, the macro browses on the heading in the 1XX, ignoring extra subfields,
-' such as subject subdivisions, subordinate units of a corporate name, or a title
-' following a name. If the cursor is not in a heading field the macro offers, if
-' available, the option to browse on headings referred to in 680 and 681 fields, or in a
-' 260 or 360 field.
+' 800-830. OCLC Macro Language (OML) doesn't allow for searching genre headings, so the
+' 655 can only be searched as an LC subject. In an authority record, heading fields are
+' 1XX, 4XX, and 5XX, with the exceptions of X47, X48, X55, and X62; but if the cursor is
+' in any other field in the record, the macro browses on the heading in the 1XX, ignoring
+' extra subfields, such as subject subdivisions, subordinate units of a corporate name,
+' or a title following a name. If the cursor is not in a heading field the macro offers,
+' if available, the option to browse on headings referred to in 680 and 681 fields, or in
+' a 260 or 360 field.
 '
 ' If the heading to be browsed consists of a simple name or title, or an undivided
 ' subject term, the macro executes the search immediately, choosing the index to browse in
@@ -63,11 +63,11 @@
 '    subdivisions and for some of their combinations, or the LCSH index for the main
 '    heading with the subdivision(s) added as an expanded scan.
 '
-'  + For a genre/form term: OCLC macro language doesn't allow for browsing the genre
-'    authority file, so any genre term must be browsed as an LC subject. If the term is
-'    identified as being LCSH, whether by the second indicator or by the presence of
-'    "lcsh" in subfield $2, it is browsed immediately in the subject index; if not, a
-'    message box pops up asking whether or not to proceed.
+'  + For a genre/form term: OML doesn't allow for browsing the genre authority file, so
+'    any genre term must be browsed as an LC subject. If the term is identified as being
+'    LCSH, whether by the second indicator value of zero or by the presence of "lcsh" in
+'    subfield $2, it is browsed immediately in the subject index; if not, a message box
+'    pops up asking whether or not to proceed.
 '
 ' In all these cases, the headings to be browsed are presented in normalized form in
 ' editable text boxes for review and modification, if desired, before searching.
@@ -77,24 +77,25 @@
 ' the selection is of two or three words, an additional option is offered: to invert the
 ' selection and browse the Personal Names index by the last word (or the last two, if
 ' they are joined by a hyphen, or if the middle word is one of the prefixes "De", "Du",
-' "Le", "St.", "Van", or "Von"--cf. RDA F.11.4), on the assumption that such a selection
-' is likely to be the name of a person. The macro also looks in the selected text for
-' some words that might indicate a corporate body, such as "&", "of", "Commission", names
-' of certain cities and countries, etc. If such words are found, the macro chooses the
-' Corporate/Conference Name index in which to browse. If the selection contains a forward
-' slash surrounded by spaces--such as might be found in a contents note (e.g., "Clair de
-' lune / $r Claude Debussy")--the macro treats the part before the slash as a title, and
-' the part following, as a statement of responsibility. The macro thus considers the
-' selection to be a name/title field, and browses for it as if it were such a field,
-' presenting the option of inverting a two- or three-word "statement of responsibility"
-' as described above. As with some of the field browses, the search string is able to be
-' edited before sending for more accurate results.
+' "Le", "St.", "Van", or "Von"--see RDA Appendix F, 11.4), on the assumption that such a
+' selection is likely to be the name of a person. The macro also looks in selected text
+' for some words that might indicate a corporate body, such as "&", "of", "Commission",
+' names of certain cities and countries, etc. If such words are found, the macro chooses
+' the Corporate/Conference Name index in which to browse. If the selection contains a
+' forward slash surrounded by spaces--such as might be found in a contents note (e.g.,
+' "Clair de lune / $r Claude Debussy")--the macro treats the part before the slash as a
+' title, and the part following, as a statement of responsibility. The macro thus
+' considers the selection to be a name/title field, and browses for it as if it were such
+' a field, presenting the option of inverting a two- or three-word "statement of
+' responsibility" as described above. As with some of the field browses, the search
+' string is able to be edited before sending, which might lead to more accurate results.
 '
 ' A 720 field with no indication of what type of name it is will be treated as a
 ' selection. The presence of a comma suggests that the heading is a personal name in
 ' inverted form, so the macro presents that as the first search option. Otherwise, the
-' macro considers that name to be in direct order, and browses the LC Names index. The
-' terms in the heading can be rearranged in the dialog box for a more accurate search.
+' macro considers that name to be in direct order, and browses the LC Names index. Again,
+' the search string presented in the dialog box can be edited, such as by rearranging the
+' terms, to help lead to a more accurate search.
 '
 ' Keep a selection within a field. A selection can span subfields, but the subfield codes
 ' are ignored and the whole selection is treated as the browse phrase. Don't include
@@ -103,12 +104,11 @@
 ' the default option--unless there is an apparent statement of responsibility, as
 ' described above.
 '
-' If the search string is to be displayed before browsing, to choose an index or to
-' select a portion of the whole heading, it is normalized following NACO normalization
-' rules <http://www.loc.gov/aba/pcc/naco/normrule-2.html>.
+' The "normalization" of the search string follows NACO normalization rules, found at
+' http://www.loc.gov/aba/pcc/naco/normrule-2.html.
 '
-' The maximum length of a browse string is 60 characters, so the macro truncates any
-' string longer than that.
+' The maximum length of a browse string is 60 characters. The macro truncates any string
+' longer than that limit.
 '
 ' If no matching heading is found for a selection, and the selection should be added to a
 ' bibliographic record as a name heading as is, my macro "PasteInverted" will paste the
@@ -2746,8 +2746,8 @@ Select Case Action%
 End Select
 
 End Function
-'2750105843
+'2750105833
 '
 'Macro name: BrowseAuthority
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 5/30/2023 10:52:40 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 8/22/2023 9:55:15 AM using "MacroBookInspector" macro by Walter F. Nickeson.
