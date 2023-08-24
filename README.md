@@ -2,7 +2,7 @@
 Macros for the OCLC Connexion client written by Walter F. Nickeson, University of Rochester, Rochester, NY, 14627.
 wnickeson@library.rochester.edu
 
-These macros work for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise & 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+These macros work for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 
 The five macrobook files are: Essentials.mbk, Extras1.mbk, Extras2.mbk, Extras3.mbk, and MacroTools.mbk. See the PDF file "Walt's Macros" for a list of which macros are in each macrobook. To get all the macros, simply download the macrobook files into [X]:\Users\[your user name]\AppData\Roaming\OCLC\Connex\Macros\. Then, in Connexion, assign keystrokes to the macros.
 
