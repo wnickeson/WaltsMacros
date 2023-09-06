@@ -1,4 +1,4 @@
-'MacroName:GetAuthority.2023.02
+'MacroName:GetAuthority.2023.06
 'MacroDescription:Gets the authorized heading (the 1XX field) from an authority record,
 ' returns to the bibliographic record, and pastes in the heading at the user's choice of
 ' tag, or a subdivision at an appropriate place in a subject heading. Also copies other
@@ -14,7 +14,7 @@
 ' 2004. My development of his code and the resulting performance of this macro are my
 ' responsibility alone.
 '
-' Last updated: 27 July 2023.
+' Last updated: 5 September 2023.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -346,19 +346,15 @@ If CS.GetField( "260", 1, UnestablishedHeading$ ) Then
 End If
 
 ' If the 1XX field is established, populate the "AuthorityData" record variable with data
-' from the authority record. Note that in an authority record title field, it is the
-' second indicator that states the number of non-filing characters, but in a
-' bibliograhpic record title field, it is the first indicator that holds that value. So
-' for a title, the indicators must be switched.
+' from the authority record. In a title field, the second indicator numbers the non-
+' filing characters, but in a bibliographic record 130, 630, or 730 field, it is the
+' first indicator that has that role, so when adding the heading as one of those fields,
+' the indicator position must be switched.
 
 If CS.GetField( "1..", 1, FieldData$ ) Then
-    AuthTag                     = Left$( FieldData$, 3 )
+    AuthTag                      = Left$( FieldData$, 3 )
     AuthorityData.tHeadingType   = Mid$( FieldData$, 2, 2 )
-    If AuthTag = "130" Then
-        AuthorityData.tIndicators = Mid$( FieldData$, 5, 1 ) & Mid$( FieldData$, 4, 1 )
-      Else
-        AuthorityData.tIndicators = Mid$( FieldData$, 4, 2 )
-    End If
+    AuthorityData.tIndicators    = Mid$( FieldData$, 4, 2 )
     AuthorityData.tCopiedHeading = Mid$( FieldData$, 6 )
 
 ' If the established heading is a genre term, grab the "thesaurus convention" from
@@ -399,16 +395,16 @@ If CS.GetField( "1..", 1, FieldData$ ) Then
     If p <> 0 Then
         AuthorityData.tNamePortion  = Trim$( Left$( AuthorityData.tCopiedHeading, p - 1 ) )
         AuthorityData.tTitlePortion = Trim$( Mid$( AuthorityData.tCopiedHeading, p + 2 ) )
-        AuthorTitle                = TRUE
+        AuthorTitle                 = TRUE
       Else
         AuthorityData.tNamePortion  = AuthorityData.tCopiedHeading
-        AuthorTitle                = FALSE
+        AuthorTitle                 = FALSE
     End If
 
 ' Use the "FixString" function to format the copied heading for nice display.
 
     AuthorityData.tCopiedHeadingD = FixString( AuthorityData.tCopiedHeading )
-    CopiedHeadingD$              = MakeDisplayString( FIX_AMPERSAND, AuthorityData.tCopiedHeadingD )
+    CopiedHeadingD$               = MakeDisplayString( FIX_AMPERSAND, AuthorityData.tCopiedHeadingD )
 
     TagValue% = Val( AuthTag )
 
@@ -416,7 +412,7 @@ If CS.GetField( "1..", 1, FieldData$ ) Then
 
     If TagValue% > 179 And TagValue% < 186 Then
         AuthorityData.tHeadingType = SUBDIVISION
-        SubjectOnly               = FALSE
+        SubjectOnly                = FALSE
 
 ' At this time the macro doesn't do anything with the 162 field.
 
@@ -443,10 +439,10 @@ If CS.GetField( "1..", 1, FieldData$ ) Then
 ' bibliographic record, either by itself or in addition to the heading.
 
     If CS.GetField( "781", 1, FieldData$ ) Then
-        TempString$                          = Mid$( FieldData$, 6 )
+        TempString$                           = Mid$( FieldData$, 6 )
         AuthorityData.tGeographicSubdivision  = TempString$
         AuthorityData.tGeographicSubdivisionD = FixString( TempString$ )
-        TempString$                          = Transform781( FieldData$ )
+        TempString$                           = Transform781( FieldData$ )
         AuthorityData.tHierarchicalHeading    = TempString$
         AuthorityData.tHierarchicalHeadingD   = FixString( TempString$ )
 
@@ -487,9 +483,9 @@ If CS.GetField( "1..", 1, FieldData$ ) Then
         End Select
 
         If Dialog1.CheckBox = CHECKED Then
-            Add752                = TRUE
+            Add752                 = TRUE
             AuthorityData.tNew752  = "752  " & AuthorityData.tHierarchicalHeading
-            TempString$           = MakeDisplayString( 24, AuthorityData.tHierarchicalHeading )
+            TempString$            = MakeDisplayString( 24, AuthorityData.tHierarchicalHeading )
             AuthorityData.tNew752D = FixString$( TempString$ )
         End If
 
@@ -530,7 +526,7 @@ If CS.GetFixedField( "Ser use", FFData$ ) Then
 End If
 
 ' The value "c" in "Series" (008/12, "Type of series code") indicates the heading is a
-' series-like phrase. The macro can only add this heading as a DOUBLE_QUOTEd note (or replace
+' series-like phrase. The macro can only add this heading as a quoted note (or replace
 ' the heading if it appears in the bibliographic record as a 490).
 
 If CS.GetFixedField( "Series", FFData$ ) Then
@@ -582,7 +578,7 @@ If ChangedFFView Then CS.FixedFieldPosition = PosFF%
 Do
   FoundField = CS.GetField( "05[03]", CountOf05Xs% + 1, FieldData$ )
   If FoundField Then
-      AuthTag    = Left$( FieldData$, 3 )
+      AuthTag     = Left$( FieldData$, 3 )
       TempString$ = Mid$( FieldData$, 6 )
       Start%      = 1
       Do
@@ -653,7 +649,7 @@ End If
 ' Get an ISSN, if present.
 
 If CS.GetField( "022", 1, FieldData$ ) Then
-    AuthorityData.tISSN              = Trim$( Mid$( FieldData$, 6 ) )
+    AuthorityData.tISSN             = Trim$( Mid$( FieldData$, 6 ) )
     AdditionsArray( AllAdditions% ) = "&ISSN:"
     AllAdditions%                   = AllAdditions% + 1
     AuthorityAdditions%             = AuthorityAdditions% + 1
@@ -1074,7 +1070,7 @@ If CS.GetFieldLine( CurrentRow%, CurrentField$ ) Then
 
 ' A series-like phrase can be added without any further processing. The question is
 ' whether to replace the current field (if the phrase was searched from a 490) or add
-' the phrase as a 500 DOUBLE_QUOTEd note.
+' the phrase as a 500 quoted note.
 
         If AuthorityData.tSeriesUse = SERIES_LIKE_PHRASE Then
             If BibTag = "490" Or BibTag = "500" And InStr( CurrentField$, AuthorityData.tCopiedHeading ) Then
@@ -1088,7 +1084,7 @@ If CS.GetFieldLine( CurrentRow%, CurrentField$ ) Then
                     GoTo AddHeading:
                 End If
               Else
-                MsgBoxMessage$ = "The copied heading is a series-like phrase and will be added to the record as a DOUBLE_QUOTEd note."
+                MsgBoxMessage$ = "The copied heading is a series-like phrase and will be added to the record as a quoted note."
                 If MsgBox( MsgBoxMessage$, WARNING_MESSAGE + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_OK Then
                     HeadingToAdd$ = "500  " & DOUBLE_QUOTE & AuthorityData.tCopiedHeading & "." & DOUBLE_QUOTE
                     GoTo AddHeading:
@@ -1332,7 +1328,7 @@ If AddOrReplace = REPLACE Then
         ActionPrompt$ = "Replace " & BibTag & " field?"
     End If
     PushButtonsVisible% = 2
-    PushButton1Text$     = "&Replace"
+    PushButton1Text$    = "&Replace"
     If Val( AuthorityData.tHeadingType ) > 30 Then
         PushButton2Text$ = "&No, add as new " & TAG_GROUP_SUBJECT & AuthorityData.tHeadingType
       Else
@@ -1372,12 +1368,12 @@ If AddOrReplace = REPLACE Then
 
         If SubjectOnly Then
             If AllAdditions% > 0 Then
-                PushButtonsVisible%   = 1
-                TempString$           = TAG_GROUP_SUBJECT & AuthorityData.tHeadingType
-                PushButton1Text$      = "&" & TempString$
-                ActionPrompt$         = "Add copied heading as field " & TempString$ & "?"
+                PushButtonsVisible% = 1
+                TempString$         = TAG_GROUP_SUBJECT & AuthorityData.tHeadingType
+                PushButton1Text$    = "&" & TempString$
+                ActionPrompt$       = "Add copied heading as field " & TempString$ & "?"
               Else
-                HeadingToAdd$         = TAG_GROUP_SUBJECT & AuthorityData.tHeadingType & Left$( AuthorityData.tIndicators, 1 ) & LCSH_INDICATOR & AuthorityData.tCopiedHeading
+                HeadingToAdd$       = TAG_GROUP_SUBJECT & AuthorityData.tHeadingType & Left$( AuthorityData.tIndicators, 1 ) & LCSH_INDICATOR & AuthorityData.tCopiedHeading
                 GoTo AddHeading:
             End If
           Else
@@ -1482,12 +1478,12 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
             If Left$( BibTag, 1 ) = TAG_GROUP_SERIES Then
                 If VarType( SeriesExampleSelection ) = VARTYPE_INTEGER Then
                     SeriesSubfieldV$ = " ; " & DELIMITER & "v " & SeriesNumbering( SeriesExampleSelection ) & FILLCHAR
-                    HeadingToAdd$     = Left$( CurrentHeading$, 5 ) & AuthorityData.tCopiedHeading & SeriesSubfieldV$
+                    HeadingToAdd$    = Left$( CurrentHeading$, 5 ) & AuthorityData.tCopiedHeading & SeriesSubfieldV$
                   Else
-                    HeadingToAdd$     = Left$( CurrentHeading$, 5 ) & AuthorityData.tCopiedHeading
+                    HeadingToAdd$    = Left$( CurrentHeading$, 5 ) & AuthorityData.tCopiedHeading
                 End If
                 If AddISSN Then
-                    HeadingToAdd$     = HeadingToAdd$ & ". " & DELIMITER & "x " & AuthorityData.tISSN
+                    HeadingToAdd$    = HeadingToAdd$ & ". " & DELIMITER & "x " & AuthorityData.tISSN
                 End If
               ElseIf AuthorityData.tHeadingType = GENRE_HEADING Then
                 HeadingToAdd$ = TAG_GROUP_SUBJECT & AuthorityData.tHeadingType & " 7" & AuthorityData.tCopiedHeading
@@ -1501,11 +1497,18 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
                 HeadingToAdd$ = Left$( CurrentHeading$, 4 ) & LCSH_INDICATOR & AuthorityData.tCopiedHeading
               Else
                 TempString$ = AddSubfields( AuthorityData.tCopiedHeading )
-                If BibTag = "720" Then
-                    HeadingToAdd$ = TAG_GROUP_ADDED_ENTRY & AuthorityData.tHeadingType & AuthorityData.tIndicators & TempString$
-                  Else
+                Select Case BibTag
+                  Case "130", "630"
+                    HeadingToAdd$ = BibTag & Right$( AuthorityData.tIndicators, 1 ) & UNDEFINED_INDICATOR & TempString$
+                  Case "720"
+                    HeadingToAdd$ = TAG_GROUP_ADDED_ENTRY & AuthorityData.tHeadingType & Left$( AuthorityData.tIndicators, 1 ) & UNDEFINED_INDICATOR & TempString$
+                  Case "700", "710", "711"
+                    HeadingToAdd$ = BibTag & Left$( AuthorityData.tIndicators, 1 ) & FILLCHAR & TempString$
+                  Case "730"
+                    HeadingToAdd$ = BibTag & Right$( AuthorityData.tIndicators, 1 ) & FILLCHAR & TempString$
+                  Case Else
                     HeadingToAdd$ = BibTag & AuthorityData.tIndicators & TempString$
-                End If
+                End Select
             End If
             If AuthorTitle And AuthorityData.tSeriesUse <> APPROPRIATE And Left$( CurrentHeading$, 1 ) = TAG_GROUP_MAIN_ENTRY Then
                 Title240$     = "24010" & AuthorityData.tTitlePortion
@@ -1523,7 +1526,7 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
       Case ADD
         If BibTag = "240" Then
             AddOrReplace = ADD
-            Insert240 = FALSE
+            Insert240    = FALSE
             GoTo NewField:
         End If
         If IdenticalHeadings Then GoTo Additions:
@@ -1556,11 +1559,19 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
               Else
                 TempString$ = AuthorityData.tCopiedHeading
             End If
-            HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & Right$( AuthorityData.tIndicators, 1 ) & AddSubfields( TempString$ )
+            If AuthorityData.tHeadingType = "30" Then
+                HeadingToAdd$ = FieldToAdd & Right$( AuthorityData.tIndicators, 1 ) & UNDEFINED_INDICATOR & AddSubfields( TempString$ )
+              Else
+                HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & Right$( AuthorityData.tIndicators, 1 ) & AddSubfields( TempString$ )
+            End If
 
           Case TAG_GROUP_SUBJECT
             TempString$   = AddSubfields( AuthorityData.tCopiedHeading )
-            HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & LCSH_INDICATOR & TempString$
+            If AuthorityData.tHeadingType = "30" Then
+                HeadingToAdd$ = FieldToAdd & Right$( AuthorityData.tIndicators, 1 ) & LCSH_INDICATOR & TempString$
+              Else
+                HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & LCSH_INDICATOR & TempString$
+            End If
 
           Case TAG_GROUP_ADDED_ENTRY
             If AuthorityData.tHeadingType = "30" Then
@@ -1572,13 +1583,17 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
                     HeadingToAdd$ = FieldToAdd & Left$( AuthorityData.tIndicators, 1 ) & FILLCHAR & TempString$
                   Else
                     TempString$   = AddSubfields( AuthorityData.tCopiedHeading )
-                    HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & UNDEFINED_INDICATOR & TempString$
+                    HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & FILLCHAR & TempString$
                 End If
             End If
 
           Case TAG_GROUP_SERIES
             TempString$   = AddSubfields( AuthorityData.tCopiedHeading )
-            HeadingToAdd$ = FieldToAdd & AuthorityData.tIndicators & TempString$
+            If FieldToAdd = "830" Then
+                HeadingToAdd$ = FieldToAdd & UNDEFINED_INDICATOR & Right$( AuthorityData.tIndicators, 1 ) & TempString$
+              Else
+                HeadingToAdd$ = FieldToAdd & Left$( AuthorityData.tIndicators, 1 ) & UNDEFINED_INDICATOR & TempString$
+            End If
             If VarType( SeriesExampleSelection ) = VARTYPE_INTEGER Then
                 SeriesSubfieldV$ = " ; " & DELIMITER & "v " & SeriesNumbering( SeriesExampleSelection ) & FILLCHAR
                 HeadingToAdd$    = HeadingToAdd$ & SeriesSubfieldV$
@@ -1826,7 +1841,7 @@ Do
                     SubjectFieldsLines ( i ) = RecordRow%
                     TempDisplay$             = FixString( Left$( FieldDisplay$, DelimiterPosition% - 1 ) )
                     SubjectFieldsD     ( i ) = Str$( SubjectDisplayLines% ) & "   " & Left$( TempDisplay$, 3 ) & "  " & Mid$( TempDisplay$, 4, 2 ) & "  " & Mid$( TempDisplay$, 6 )
-                    SubjectDisplayLines%      = SubjectDisplayLines% + 1
+                    SubjectDisplayLines%     = SubjectDisplayLines% + 1
 
                   Case Else
                     i = i - 1
@@ -1838,7 +1853,7 @@ Do
                 SubjectFieldsLines ( i ) = RecordRow%
                 TempDisplay$             = FixString( FieldDisplay$ )
                 SubjectFieldsD     ( i ) = Str$( SubjectDisplayLines% ) & "   " & Left$( TempDisplay$, 3 ) & "  " & Mid$( TempDisplay$, 4, 2 ) & "  " & Mid$( TempDisplay$, 6 )
-                SubjectDisplayLines%      = SubjectDisplayLines% + 1
+                SubjectDisplayLines%     = SubjectDisplayLines% + 1
             End If
             i = i + 1
           Loop Until DelimiterPosition% = 0
@@ -2079,13 +2094,13 @@ End If
 CleanBibHeading = TagInd$ & HeadingSubfields$
 
 If InitialSubfields$ <> "" Then
-    InitialSubfields$                = Trim$( InitialSubfields$ )
+    InitialSubfields$               = Trim$( InitialSubfields$ )
     AdditionsArray( AllAdditions% ) = "&<<:"
     AllAdditions%                   = AllAdditions% + 1
 End If
 
 If TerminalSubfields$ <> "" Then
-    TerminalSubfields$               = Trim$( TerminalSubfields$ )
+    TerminalSubfields$              = Trim$( TerminalSubfields$ )
     AdditionsArray( AllAdditions% ) = "&>>:"
     AllAdditions%                   = AllAdditions% + 1
 End If
@@ -3157,8 +3172,8 @@ Select Case Action%
 End Select
 
 End Function
-'3161130356
+'3176131393
 '
 'Macro name: GetAuthority
 'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:55:55 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'Saved: 9/6/2023 9:21:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.
