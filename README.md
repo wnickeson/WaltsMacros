@@ -4,7 +4,7 @@ wnickeson@library.rochester.edu
 
 These macros work for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit Windows 10 Pro, but no guarantees are promised or implied.
 
-The five macrobook files are: Essentials.mbk, Extras1.mbk, Extras2.mbk, Extras3.mbk, and MacroTools.mbk. See the PDF file "Walt's Macros" for a list of which macros are in each macrobook. To get all the macros, simply download the macrobook files into [X]:\Users\[your user name]\AppData\Roaming\OCLC\Connex\Macros\. Then, in Connexion, assign keystrokes to the macros.
+The five macrobook files are: Essentials.mbk, Extras1.mbk, Extras2.mbk, Extras3.mbk, and MacroTools.mbk. See the PDF file "Walt's Macros" for a list of which macros are in each macrobook. To get all the macros, simply download the macrobook files into [X]:\Users\\[your user name]\AppData\Roaming\OCLC\Connex\Macros\. Then, in Connexion, assign keystrokes to the macros.
 
 Read a .txt file to see the macro code. Look for the "How it works" section near the top for complete information on how to use the macro and its features.
 
