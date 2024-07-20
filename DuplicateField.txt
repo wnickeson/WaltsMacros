@@ -1,18 +1,19 @@
-'MacroName:DuplicateField.2022.04
+'MacroName:DuplicateField.2024.01
 'MacroDescription:Copies a field in a bibliographic or authority record and pastes it in
-' as a new blank field directly following the copied field.
+' as a new field directly following the copied field.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 29 June 2022.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: With the cursor in the field to be copied, run the macro. It copies the
@@ -56,7 +57,7 @@ End Select
 Row% = CS.CursorRow
 Col% = CS.CursorColumn
 If Col% > FIXED_FIELD_COL_POS Then
-    If CS.GetFieldLine ( Row%, FieldData$ ) Then
+    If CS.GetField( "...", Row%, FieldData$ ) Then
         If CS.AddFieldLine ( Row% + 1, FieldData$ ) Then
             Exit Sub
         End If
@@ -69,8 +70,4 @@ End If
 MsgBox "Sorry, this macro was not able to duplicate the field!", CRITICAL_MESSAGE, WaltsMacros$
 
 End Sub
-'732485
-'
-'Macro name: DuplicateField
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:26 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'742519

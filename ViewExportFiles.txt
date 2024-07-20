@@ -1,4 +1,4 @@
-'MacroName:ViewExportFiles.2023.04
+'MacroName:ViewExportFiles.2024.01
 'MacroDescription:Shows the records in the defined export files and allows deletion of
 ' individual records or of the whole file being viewed. Also shows the current export
 ' options.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 23 July 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -104,7 +105,6 @@ Const BAD_FILE                    As Integer = 5      'Undetermined problem with
 Const DOES_NOT_EXIST              As Integer = 11     'Defined export file does not exist.
 Const EMPTY_FILE                  As Integer = 6      'File of zero length.
 Const FILE_NOT_FOUND              As Integer = 53     'Error code in BASIC for the specified file not being found.
-Const MAX_ATTEMPTS_ENVIRON        As Integer = 128
 Const NONE_EXIST                  As Integer = 12     'Defined export files do not exist.
 Const NON_MARC_FILE               As Integer = 7      'Non-MARC or corrupt MARC file.
 Const NORMAL_FILE                 As Integer = 0
@@ -120,7 +120,7 @@ Const SECOND_BUTTON               As Integer = 256
 Const WARNING_MESSAGE             As Integer = 48
 Const WARNING_QUERY               As Integer = 32
 
-Dim AppData$
+Dim AppDataPath$
 Dim Attributes%
 Dim ConnectsINIPath$
 Dim ConnectsLine$
@@ -128,7 +128,6 @@ Dim CountOfFileSegments%
 Dim DestinationName$
 Dim DestinationPath$
 Dim DestinationsFound%
-Dim EnvironmentString$
 Dim ExportConnections$
 Dim ExportFile$
 Dim FileLength&
@@ -174,16 +173,8 @@ ExportInformation( 0, 6 ) = "ExportAuthFieldsToDelete"
 ' string settings until the keyword sought--"APPDATA"--is found. If it hasn't been found
 ' after 128 attempts, give up.
 
-i = 1
-Do
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppData$ = Mid$( EnvironmentString$, 9 )
-      Exit Do
-  End If
-  i = i + 1
-Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
-If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then
+AppDataPath$ = Environ( "APPDATA" )
+If AppDataPath$ = "" Then
     ProblemID% = NO_APPDATA
     GoTo WhatsTheProblem:
 End If
@@ -191,8 +182,8 @@ End If
 ' The complete path to each file is built by adding the information specified in the
 ' Connexion client documentation to the path to the user profile, obtained above.
 
-ConnectsINIPath$ = AppData$ & "\OCLC\Connex\Connects.ini"
-OptionsXmlPath$  = AppData$ & "\OCLC\Connex\Profiles\MyProfile\Options.xml"
+ConnectsINIPath$ = AppDataPath$ & "\OCLC\Connex\Connects.ini"
+OptionsXmlPath$  = AppDataPath$ & "\OCLC\Connex\Profiles\MyProfile\Options.xml"
 
 On Error Resume Next
 Attributes% = GetAttr( OptionsXmlPath$ )
@@ -1803,8 +1794,4 @@ Select Case Action%
 End Select
 
 End Function
-'180773586
-'
-'Macro name: ViewExportFiles
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:04:14 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'179873335

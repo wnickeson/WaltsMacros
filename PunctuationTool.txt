@@ -1,0 +1,1339 @@
+'MacroName:PunctuationTool.2024.18
+'MacroDescription:Fixes or checks some punctuation in bib records: Corrects form of
+' dashes, replaces dashes with semicolons, finds unpaired parentheses and brackets, and
+' flips single and double quotation marks.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
+'
+' Last updated: 17 July 2024.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro to display a dialog box offering four separate operations
+' or functions that change, or help to change, some punctuation in bibliographic records.
+' Click the appropriate button to make the change or find the punctuation. Some
+' operations aren't immediately available when the macro runs, and the dialog box shows
+' them as being disabled. Cursor position is relevant for those operations that make
+' changes to fields or selections within fields; those conditions are described below for
+' each operation. The macro can't make any changes in fields that contain characters
+' outside the MARC-8 repertoire, and the macro may quit if it encounters them.
+'
+' Dashes 1: This function changes hyphens in the current field to dashes. The macro
+'   follows OCLC policy and the Chicago Manual of Style in considering a dash to be two
+'   hyphens without any spaces before, between, or after--like this. (Bibliographic
+'   Formats and Standards, in section 2.7, "Character set," explicitly instructs using
+'   two hyphens instead of the true em dash character, U+2014). Hyphens incorrectly used
+'   as dashes, whether they look like this - or this- or this -or even this-are
+'   identified and can be changed by the macro. Dashes with spaces around them -- like
+'   these -- may also be cleaned up; however, since such a dash is correct formatting in
+'   a contents note, the macro won't run at all in a 505 field.
+'
+'   If even one hyphen is detected in the field, this function is available. Starting at
+'   the beginning of the field, the macro looks for the first hyphen. If that hyphen is
+'   part of a correctly formed dash it is ignored; otherwise, the macro analyzes the
+'   immediately surrounding characters to determine what needs to change to convert the
+'   hyphen into a proper dash. It displays the hyphen with some surrounding words from
+'   the field for context, and asks whether to make the change or not. The macro
+'   continues by finding the next hyphen, repeating its search and its requests for input
+'   until it has reached the end of the field. Changes approved are not applied until the
+'   macro has dealt with every hyphen in the field, after which the whole field is
+'   replaced with the "SetField" command. At any point the "Stop" button will stop the
+'   macro and apply whatever changes have been okayed so far. When the macro has
+'   finished, the dialog box that reports the actions taken (because changes made may not
+'   be obvious at first glance) closes itself in five seconds.
+'
+'   This macro works best, of course, in an English-language record with English-language
+'   text, and will probably be most useful in a lengthy summary note that contains many
+'   amplifying or explanatory phrases set off with dashes.
+'
+' Dashes 2: This operation changes dashes in a selection in a contents field to
+'   semicolons, and so isn't available if the cursor is not in a 505 field and nothing
+'   has been selected. The ISBD standard recommends punctuating notes, including contents,
+'   in the same way the corresponding area is punctuated. Therefore, a contents note that
+'   lists multiple titles "by same author, etc." should have those titles separated by
+'   semicolons, as they would be in the 245 field in a resource without a collective
+'   title. In the selection, all correctly formed dashes (space-hyphen-hyphen-space) are
+'   changed to semicolons with no questions asked.
+'
+'   The macro uses the "GetSelectedText," "CutSelected," and "SetSelectedText" commands
+'   to remove and replace the selection, so the field is not replaced.
+'
+' Parentheses: This operation checks the whole record for properly paired parentheses and
+'   square brackets. It checks each field (excepting the 066 field, in which a single
+'   parenthesis is part of the sign that the record contains a non-Latin script), but
+'   only if it is in Latin script; those fields are simply skipped. If a parenthesis or
+'   bracket lacks a partner, the macro places the cursor in the field just before that
+'   solitary character, and then stops. The macro must be run repeatedly to find all
+'   occurrences of unpaired parentheses or brackets.
+'
+'   Cursor position doesn't matter as the macro works on the whole record.
+'
+' Quotes: This operation converts all double quotation marks in a selection in a field to
+'   single quotation marks, and vice versa. If no text has been selected, it flips all
+'   the quotation marks in the whole field. Use this macro when dealing with quotations
+'   within quotations, or when switching between American and British styles of quotation
+'   marks. The macro considers only traditional English quotation marks, as used in this
+'   text (characters with ASCII coding 034 and 039); «guillemets», lowered quotation
+'   marks, and other forms of this punctuation are ignored. The macro makes no initial
+'   check for either character being present in the field in which the cursor is placed.
+'
+'   The macro distinguishes between single quotation marks and apostrophes by whether
+'   letters appear on both sides of the character. If letters aren't present on both
+'   sides, it will be considered a quotation mark and be flipped. Note that an apostrophe
+'   used at the end of a word as indicating the possessive case will be subject to
+'   change, as it doesn't have a letter on its right side. For example,
+'
+'     farmers' market
+'
+'   will become
+'
+'     farmers" market
+'
+'   if the apostrophe is included in the selection, or if the whole field is subject to
+'   change. Also note that this macro will not work if the quotation marks are "smart" or
+'   "curly," as may be found in text copied from a document or the Web.
+'
+'   The macro replaces the whole field if changes are made, even if only a portion of the
+'   field is selected. Its action is a simple flipping of one form to the other with no
+'   attempt to make sure marks are paired. After it has edited the field (or part of the
+'   field), the macro uses the "SetField" command to replace it.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub Dashes_1
+Declare Sub Dashes_2
+Declare Sub Parens
+Declare Sub Quotes
+Declare Sub ShowProblem( ParenPos%, LeftOrRight%, WhichMark% )
+
+Declare Function ConvertTo8859( InputString$ ) As String
+Declare Function EvaluateHyphen()              As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+Declare Function Dialog2ControlFunction( Id$, Action%, SValue& )
+Declare Function Dialog3ControlFunction( Id$, Action%, SValue& )
+
+Global Const aLEFT_CHAR                  As Integer = 0
+Global Const aRIGHT_CHAR                 As Integer = 1
+Global Const CONTROL_CHANGE              As Integer = 2
+Global Const CRITICAL_MESSAGE            As Integer = 16
+Global Const DLG_FUNCTION_CANCEL         As Integer = 0
+Global Const DISABLED                    As Integer = 0
+Global Const INFORMATION_MESSAGE         As Integer = 64
+Global Const INITIALIZE                  As Integer = 1
+Global Const KEEP_DLG_OPEN               As Integer = -1
+Global Const MSGBOX_SETBUTTONS_OK_CANCEL As Integer = 1
+Global Const NO_BUTTON                   As Integer = 1
+Global Const YES_BUTTON                  As Integer = 2
+
+Global DOUBLE_QUOTE As String*1
+
+Global ActionAsked%
+Global ActionQuestion$
+Global ChangeCount%
+Global Col%
+Global FieldData$
+Global HyphenPos%
+Global Indicators$
+Global LeftOffset%
+Global LineNumber%
+Global RightOffset%
+Global Row%
+Global SelectedText$
+Global Tag$
+Global WaltsMacros$
+Global WorkString$
+
+Global HyphensPresent
+Global PreDialogHyphenTest
+
+Global CharacterPositions() As Integer
+Global Characters( 1, 1 )   As String
+
+Global CS As Object
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const FIXED_FIELD As Integer = 0
+
+Dim Dashes_1Doc$
+Dim Dashes_2Doc$
+Dim ParensDoc$
+Dim QuotesDoc$
+Dim TypeOfWindow%
+
+WaltsMacros$ = "[WaltsMacros] Extras3:PunctuationTool"
+
+DOUBLE_QUOTE = Chr$( 034 )
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Find out what field the cursor is in. Quit if it is in the fixed field.
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+If Col% = FIXED_FIELD Then
+    MsgBox "Please put the cursor in a variable field!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Check for Unicode data in the field.
+
+If CS.GetField( "...", Row%, FieldData$ ) Then
+    If FieldData$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro works only in fields containing Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        Tag$        = Left$( FieldData$, 3 )
+        Indicators$ = Mid$( FieldData$, 4, 2 )
+
+' Do a quick check for the presence of hyphens, to determine whether or not to enable the
+' first button. No hyphens, nothing to (potentially) change to dashes.
+
+        If InStr( FieldData$, "-" ) > 0 Then
+            HyphensPresent = TRUE
+          Else
+            HyphensPresent = FALSE
+        End If
+
+' Check for text having been selected.
+
+        If CS.GetSelectedText( SelectedText$ ) Then
+        End If
+    End If
+End If
+
+Dashes_1Doc$ = "Helps find and replace hyphens incorrectly used as dashes in the current field."
+Dashes_2Doc$ = "Converts dashes to semicolons in a selection in a contents field when dashes are used to separate titles."
+ParensDoc$   = "Helps find unpaired parentheses and brackets in the whole record."
+QuotesDoc$   = "Flips single quotation marks to double and vice versa, within the current field, or within a selected portion of it."
+
+Begin Dialog Dialog1Definition  272, 130, WaltsMacros$, .Dialog1ControlFunction
+  CancelButton  210, 106,  52,  14
+  PushButton     10,   8,  64,  16, "&Dashes 1",        .PBDashes1
+  PushButton     10,  32,  64,  16, "D&ashes 2",        .PBDashes2
+  PushButton     10,  56,  64,  16, "&Parentheses",     .PBParens
+  PushButton     10,  80,  64,  16, "&Quotation marks", .PBQuotes
+  PushButton    150, 106,  52,  14, "&?",               .Help
+  Text           80,   8, 182,  16, Dashes_1Doc$,       .TextDashes_1
+  Text           80,  32, 182,  16, Dashes_2Doc$,       .TextDashes_2
+  Text           80,  56, 182,  16, ParensDoc$,         .TextParens
+  Text           80,  80, 182,  16, QuotesDoc$,         .TextQuotes
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+
+Select Case Dialog( Dialog1 )
+  Case 0
+    Exit Sub
+  Case 1
+    Dashes_1
+  Case 2
+    Dashes_2
+  Case 3
+    Parens
+  Case 4
+    Quotes
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Sub Dashes_1
+
+Const STOP_BUTTON As Integer = 3
+
+Dim ActionAction%
+Dim ChangeText$
+Dim Dummy$
+
+Dim MacroStopped             : MacroStopped = FALSE
+
+PreDialogHyphenTest = TRUE
+
+' Then get the row in which the cursor is located. If the field contains non-Latin
+' script, stop. Otherwise, make sure the field is not a contents field, because the
+' dashes there should have spaces. If the field passes these two preliminary checks, find
+' the first hyphen. Run the function to determine whether it is actually part of a
+' regular dash. If it is, find the next dash and repeat. Keep searching until a hyphen is
+' found that isn't part of a normal dash. Then display the dialog box for user input, and
+' evaluate the remainder of the field from within it.
+
+If Tag$ = "505" Then
+    MsgBox "Sorry, this macro won't work in a contents field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    WorkString$ = Mid$( FieldData$, 6 )
+End If
+
+Col% = 1
+
+Do
+
+  HyphenPos% = InStr( Col%, WorkString$, "-" )
+  If HyphenPos% = 0 Then
+
+' If the hyphen position is zero, either the macro found no hyphens at all in the field,
+' or it finished going through the field and has dealt with at least one hyphen. If the
+' cursor is still in its initial position, the field contains no hyphens. Otherwise, the
+' macro is done, and so prepares a report on actions taken.
+
+      If PreDialogHyphenTest Then
+          MsgBox "There seem to be no hyphens in this field!", INFORMATION_MESSAGE, WaltsMacros$
+          Exit Sub
+
+        Else
+
+Summary:
+
+          Select Case ChangeCount%
+            Case 0
+              If ActionAsked% = 0 Then
+                  ChangeText$ = "There seem to be no hyphens in this field!"
+              Else
+                  ChangeText$ = "No changes were made to this field."
+              End If
+            Case 1
+              ChangeText$ = "One change was made to this field."
+            Case 2
+              ChangeText$ = "Two changes were made to this field."
+            Case 3
+              ChangeText$ = "Three changes were made to this field."
+            Case 4
+              ChangeText$ = "Four changes were made to this field."
+            Case 5
+              ChangeText$ = "Five changes were made to this field."
+            Case 6
+              ChangeText$ = "Six changes were made to this field."
+            Case 7
+              ChangeText$ = "Seven changes were made to this field."
+            Case 8
+              ChangeText$ = "Eight changes were made to this field."
+            Case 9
+              ChangeText$ = "Nine changes were made to this field."
+            Case Else
+              ChangeText$ = Trim$( Str$( ChangeCount% ) ) & " changes were made to this field."
+          End Select
+
+          If MacroStopped Then
+              ChangeText$ = "Macro stopped. " & ChangeText$
+            Else
+              If ActionAsked% > 0 Then
+                  ChangeText$ = "All done. " & ChangeText$
+              End If
+          End If
+
+          Begin Dialog Dialog2Definition  192,  48, WaltsMacros$, .Dialog2ControlFunction
+            OKButton       40,  24,  52,  14
+            CancelButton  102,  24,  52,  14
+            Text           10,   6, 172,   8, ChangeText$
+          End Dialog
+          Dim Dialog2 As Dialog2Definition
+          On Error Resume Next
+          Dialog Dialog2
+
+          Exit Sub
+      End If
+
+    Else
+
+' Don't show the dialog box until it's been determined that the hyphen found is one that
+' might need to be acted upon. That means calling the function (discarding the result in
+' the variable "Dummy") in order to generate the variable ActionQuestion$. A normal dash
+' will leave the variable empty; any other hyphen raises the question of what to do with
+' the hyphen. As soon as ActionQuestion$ has content, the dialog box can be invoked, and
+' it will remain open until the whole field has been analyzed.
+
+      PreDialogHyphenTest = TRUE
+      Dummy$              = EvaluateHyphen()
+      If ActionQuestion$ <> "" Then
+
+          Begin Dialog Dialog3Definition  236,  64, WaltsMacros$, .Dialog3ControlFunction
+            PushButton     10,  40,  48,  14, "&No",           .NoButton
+            PushButton     66,  40,  48,  14, "&Yes",          .YesButton
+            PushButton    122,  40,  48,  14, "&Stop",         .StopButton
+            CancelButton  178,  40,  48,  14
+            Text           62,   6, 112,   8, ActionQuestion$, .Question
+            Text           10,  20, 216,   8, "",              .Snippet
+          End Dialog
+
+          Dim Dialog3 As Dialog3Definition
+          ActionAction% = Dialog( Dialog3 )
+
+          Select Case ActionAction%
+
+            Case DLG_FUNCTION_CANCEL
+
+              Exit Sub
+
+            Case NO_BUTTON, YES_BUTTON
+
+              If ChangeCount% > 0 Then
+                  If CS.SetFieldLine( Row%, Tag$ & Indicators$ & WorkString$ ) = FALSE Then
+                      MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+                  End If
+              End If
+              If ActionAction% = STOP_BUTTON Then
+                  MacroStopped = TRUE
+              End If
+              GoTo Summary:
+
+          End Select
+
+      End If
+      Col% = HyphenPos% + 2
+  End If
+
+Loop Until ActionQuestion <> ""
+
+End Sub
+
+'****************************************************************************************
+
+Sub Dashes_2
+
+Dim p As Integer
+
+    Do
+      p = InStr( SelectedText$, " -- " )
+      If p > 0 Then
+          SelectedText$ = Left$( SelectedText$, p ) & ";" & Mid$( SelectedText$, p + 3 )
+      End If
+    Loop Until p = 0
+
+CS.CutSelected
+
+CS.SetSelectedText( SelectedText$ )
+
+End Sub
+
+'****************************************************************************************
+
+Sub Parens
+
+Const MSGBOX_RETURN_CANCEL   As Integer = 2
+Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9
+
+Dim BracketCount%
+Dim CharactersIndex%
+Dim CharT$
+Dim Count%
+Dim EndUp%
+Dim LEFT_CHARACTER
+Dim ParenCount%
+Dim RIGHT_CHARACTER
+Dim TotalCount%
+
+Dim FoundField
+Dim MacroFinished
+Dim Paired
+
+Characters( 0, 0 ) = "("
+Characters( 1, 0 ) = ")"
+Characters( 0, 1 ) = "["
+Characters( 1, 1 ) = "]"
+
+Dim i As Integer, j As Integer
+
+' Look for field 066 indicating the presence of non-Latin script characters. If found, it
+' means the macro can't check the whole record, only those fields in Latin script.
+
+If CS.GetField( "066", 1, FieldData$ ) Then
+    If MsgBox( "This macro can check for paired punctuation only in the fields containing Latin script. Continue?", 33, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then Exit Sub
+End If
+
+LineNumber% = 1
+
+For CharactersIndex% = 0 To 1
+
+  LEFT_CHARACTER  = Characters( aLEFT_CHAR, CharactersIndex% )
+  RIGHT_CHARACTER = Characters( aRIGHT_CHAR, CharactersIndex% )
+
+  Do
+    Erase CharacterPositions
+    FoundField = CS.GetField( "...", LineNumber%, FieldData$ )
+    If FoundField Then
+        Count% = 0
+        Tag$   = Left$( FieldData$, 3 )
+        If Tag$ <> "066" And FieldData$ <> "Data contains non-latin script" Then
+            FieldData$ = Mid$( FieldData$, 6 )
+
+' Go through the field, character by character, looking for left and right parentheses
+' and brackets.
+
+            For i = 1 To Len( FieldData$ )
+
+              Paired = FALSE
+              CharT$  = Mid$( FieldData$, i, 1 )
+
+              Select Case CharT$
+
+' If a left mark of punctuation is found, record its position in the first dimension of
+' the array. Keep going through the string, as the matching right mark may lie just
+' ahead.
+
+                Case LEFT_CHARACTER
+
+                  ReDim Preserve CharacterPositions( 1, Count% )
+                  CharacterPositions( aLEFT_CHAR, Count% ) = i
+                  Count% = Count% + 1
+
+' If a right mark of punctuation is found, immediately step back through the array,
+' looking for a zero in the second dimension. This indicates a left mark without a match.
+' If found, record the position of the right mark in the second dimension of the array.
+' The two numbers at the index of the array indicate a pair of punctuation marks. If no
+' empty entry in the array is found--that is, partners have been found for all the left
+' marks--stop searching the field, and call the function to display the section of the
+' field containing the solitary right mark.
+
+                Case RIGHT_CHARACTER
+
+                  On Error Resume Next
+                  For j = UBound( CharacterPositions, 2 ) To 0 Step -1
+                    If Err = SUBSCRIPT_OUT_OF_RANGE Then
+                        Paired = FALSE
+                        Exit For
+                    End If
+                    If CharacterPositions( aRIGHT_CHAR, j ) = 0 Then
+                        CharacterPositions( aRIGHT_CHAR, j ) = i
+                        Paired = TRUE
+                        Exit For
+                    End If
+                  Next j
+                  If Paired = FALSE Then
+                      Call ShowProblem( i, aRIGHT_CHAR, CharactersIndex% )
+                      MacroFinished = TRUE
+                      EndUp%        = i
+                      Exit For
+                  End If
+
+              End Select
+
+            Next i
+
+            If MacroFinished Then
+                Exit Do
+              Else
+                MacroFinished = FALSE
+            End If
+
+            TotalCount% = TotalCount% + Count%
+
+' The macro may have done its job before the entire string has been gone through if a
+' right mark of punctuation was discovered to have no left mark to pair up with. A
+' solitary left mark, on the other hand, can only be discovered after the whole string
+' has been examined. It is found by going through the array from beginning to end,
+' looking for the position of a left mark of punctuation in the first dimension that has
+' no corresponding position for the matching right mark in the second dimension.
+
+            If Count% > 0 Then
+                For i = 0 To UBound( CharacterPositions, 2 )
+                  If CharacterPositions( aRIGHT_CHAR, i ) = 0 Then
+                      Call ShowProblem( CharacterPositions( aLEFT_CHAR, i ), aLEFT_CHAR, CharactersIndex% )
+                      MacroFinished = TRUE
+                      EndUp%        = CharacterPositions( aLEFT_CHAR , i )
+                      Exit For
+                  End If
+                Next i
+                If MacroFinished Then
+                    Exit Do
+                End If
+            End If
+        End If
+    End If
+    LineNumber% = LineNumber% + 1
+  Loop Until FoundField = FALSE
+
+  If MacroFinished Then
+      CS.CursorRow    = LineNumber%
+      CS.CursorColumn = EndUp% + 5
+      Exit Sub
+  End If
+
+  LineNumber% = 1
+  If CharactersIndex% = 0 Then
+      ParenCount% = TotalCount%
+    Else
+      BracketCount% = TotalCount% - ParenCount%
+  End If
+Next CharactersIndex%
+
+If CharactersIndex% = 2 Then
+    If TotalCount% = 0 Then
+        MsgBox "There are no parentheses or brackets in this record.", MSGBOX_SETBUTTONS_OK_CANCEL + INFORMATION_MESSAGE, WaltsMacros$
+      Else
+        If ParenCount% > 0 And BracketCount% = 0 Then
+            MsgBox "All parentheses in this record seem to be paired!", MSGBOX_SETBUTTONS_OK_CANCEL + INFORMATION_MESSAGE, WaltsMacros$
+          ElseIf ParenCount% = 0 And BracketCount% > 0 Then
+            MsgBox "All brackets in this record seem to be paired!", MSGBOX_SETBUTTONS_OK_CANCEL + INFORMATION_MESSAGE, WaltsMacros$
+          ElseIf ParenCount% > 0 And BracketCount% > 0 Then
+            MsgBox "All parentheses and brackets in this record seem to be paired!", MSGBOX_SETBUTTONS_OK_CANCEL + INFORMATION_MESSAGE, WaltsMacros$
+        End If
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub Quotes
+
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE = Chr$( 039 )
+
+Dim DoubleQuoteCount%
+Dim LenSelectedText%
+Dim SingleQuoteCount%
+Dim TestChar$
+
+Dim i As Integer
+
+' Although the macro needs to know if text has been selected, it also needs to have the
+' whole field in hand, because it does its finding and replacing in the field, not the
+' selection.
+
+' If no text has been selected, the whole field will be evaluated, beginning with the
+' first position, which is column 6.
+
+If SelectedText$ = "" Then
+    SelectedText$ = FieldData$
+    Col%          = 6
+  Else
+
+' If the selection spans a field, end the macro.
+
+    If InStr( SelectedText$, Chr$( 013 ) ) Then
+        MsgBox "Please keep the text selection within a field!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+
+' If the selection is in a tag or indicator cell, take the selection to be the whole
+' field.
+
+      ElseIf Col% < 6 Then
+        SelectedText$ = FieldData$
+        Col%   = 6
+    End If
+End If
+LenSelectedText% = Len( SelectedText$ )
+
+' Go through the field, character by character, from the beginning of the selection
+' (identified by the integer CurrentCol%) to its end, calculated by the length of the
+' selection. If the whole field is under consideration the beginning of the selection is
+' column 6 (the first character after the second indicator) and the selection ends with
+' the end of the field. Whenever a quotation mark is found, flip it. If the quotation
+' mark is single, check to see if there is space on one side only; that shows that it is
+' not an apostrophe. Unfortunately, sometimes it is an apostrophe, so the macro's results
+' need to be verified by inspection.
+
+For i = Col% To Col% + LenSelectedText%
+  TestChar$ = Mid$( FieldData$, i, 1 )
+  If TestChar$ = SINGLE_QUOTE Then
+      If i = 1 Or i = LenSelectedText% Then
+          Mid$( FieldData$, i, 1 ) = DOUBLE_QUOTE
+          SingleQuoteCount% = SingleQuoteCount% + 1
+        Else
+          If Mid$( FieldData$, i - 1, 1 ) Like "[A-Za-z]" And Mid$( FieldData$, i + 1, 1 ) Like "[A-Za-z]" Then
+
+' Apostrophe: don't change
+
+            Else
+              Mid$( FieldData$, i, 1 ) = DOUBLE_QUOTE
+              SingleQuoteCount% = SingleQuoteCount% + 1
+          End If
+      End If
+    ElseIf TestChar$ = DOUBLE_QUOTE Then
+      DoubleQuoteCount%        = DoubleQuoteCount% + 1
+      Mid$( FieldData$, i, 1 ) = SINGLE_QUOTE
+  End If
+Next i
+
+' The quotation marks found need to be counted so if there actually weren't any, a
+' message can be displayed.
+
+If DoubleQuoteCount% + SingleQuoteCount% = 0 Then
+    MsgBox "There are no quotation marks in the selection, single or double, to change!", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If the field was replaced, the macro is done. Otherwise the error message will be displayed.
+
+If CS.SetFieldLine( Row%, FieldData$ ) Then
+    Exit Sub
+End If
+
+ErrorMessage:
+
+MsgBox "Sorry, this macro could not change the quotation marks in the selection.", CRITICAL_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Sub ShowProblem( ParenPos%, LeftOrRight%, WhichMark% )
+
+Const WARNING_MESSAGE As Integer = 48
+
+Dim CharacterName$
+Dim LineNum$
+Dim PositionMessage$
+Dim Word1$
+Dim Word2$
+
+LineNum$ = Trim$( Str$( LineNumber% ) )
+
+Select Case WhichMark%
+  Case 0
+    CharacterName$ = "parenthesis"
+  Case 1
+    CharacterName$ = "bracket"
+End Select
+
+' Adjust the wording.
+
+If LeftOrRight% = aLEFT_CHAR Then
+    Word1$ = "opening"
+    Word2$ = "a closing"
+  Else
+    Word1$ = "closing"
+    Word2$ = "an opening"
+End If
+
+PositionMessage$ = "The " & Word1$ & " " & CharacterName$ & " at position " & Trim$( Str$( ParenPos% ) ) & " in line "
+PositionMessage$ = PositionMessage$ & LineNum$ & ", field " & Tag$ & ", lacks " & Word2$ & " " & CharacterName$ & "."
+
+MsgBox PositionMessage$, MSGBOX_SETBUTTONS_OK_CANCEL + WARNING_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Function ConvertTo8859( InputString$ ) As String
+
+' This function converts the MARC21 string to ISO/IEC 8859-1 encoding, to make it
+' possibly easier to read in the dialog box.
+
+Dim Character$               : Character$ = " "
+Dim CharNext%
+Dim CharRead%
+Dim TempString$
+
+Dim i As Integer
+
+InputString$ = InputString$ & Character$
+For i = 1 To Len( InputString$ ) - 1
+  CharRead% = Asc( Mid$( InputString$, i, 1 ) )
+  CharNext% = Asc( Mid$( InputString$, i + 1, 1 ) )
+
+  Select Case CharRead%
+
+    Case 32 To 64
+      Character$ = Chr$( CharRead% )
+
+' OCLC-MARC modified characters are turned into precomposed characters, when possible.
+
+    Case 32 To 64, 66, 68, 70 To 72, 74 To 77, 80 To 82, 84, 86 To 88, 91 To 96
+      Character$ = Chr$( CharRead% )
+
+    Case 98, 100, 102 To 104, 106 To 109, 112 To 114, 116, 118 To 120, 123 To 128
+      Character$ = Chr$( CharRead% )
+
+    Case 65, 97   'A, a
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 127 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 128 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 129 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 130 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 234  'ring
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224, 229 To 231, 233, 235 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 67, 99   'C, c
+      Select Case CharNext%
+        Case 240  'cedilla
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224 To 239, 241 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 69, 101  'E, e
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 73, 105  'I, i
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 78, 110  'N, n
+      Select Case CharNext%
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 224 To 227, 229 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 79, 111  'O, o
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 229 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 83, 115  'S, s
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 85, 117  'U, u
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 89, 121  'Y, y
+      Select Case CharNext%
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 232  'diaeresis
+          If CharRead% = 121 Then
+              Character$ = Chr$( 255 )
+            Else
+              Character$ = Chr$( CharRead% )
+          End If
+          i = i + 1
+        Case 224 To 225, 227 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 90, 122  'Z, z
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 158   'Degree sign
+      Character$ = Chr$( 176 )
+    Case 160   'Euro
+      Character$ = Chr$( 128 )
+    Case 162   'Crossed O
+      Character$ = Chr$( 216 )
+    Case 163   'Eth
+      Character$ = Chr$( 208 )
+    Case 164   'Thorn
+      Character$ = Chr$( 222 )
+    Case 165   'AE Ligature
+      Character$ = Chr$( 198 )
+    Case 166   'OE Ligature
+      Character$ = "Oe"
+    Case 169   'Musical flat: does not copy
+      Character$ = Chr$( 129 )
+    Case 170   'registered
+      Character$ = Chr$( 174 )
+    Case 171   'Plus-minus
+      Character$ = Chr$( 177 )
+    Case 178   'crossed o
+      Character$ = Chr$( 248 )
+    Case 179   'eth
+      Character$ = Chr$( 240 )
+    Case 180   'thorn
+      Character$ = Chr$( 254 )
+    Case 181   'ae ligature
+      Character$ = Chr$( 230 )
+    Case 182   'oe ligature
+      Character$ = "oe"
+    Case 185   'Pound
+      Character$ = Chr$( 163 )
+    Case 202   'Copyright
+      Character$ = Chr$( 169 )
+    Case 203   'Sound recording copyright: does not copy
+      Character$ = "p"
+    Case 204   'Musical sharp: does not copy
+      Character$ = "#"
+    Case 223   'Delimiter
+      If Character$ = " " And Mid$( InputString$, i + 1, 2 ) Like "[a-z0-9] " Then
+          Character$ = "$"
+        Else
+          Character$ = Chr$( 223 )
+      End If
+    Case Else
+      Character$ = Chr$( CharRead% )
+
+  End Select
+
+  TempString$ = TempString$ & Character$
+
+Next i
+
+ConvertTo8859 = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function EvaluateHyphen() As String
+
+' This function generates the question about the action to be taken, extracts context
+' from the hyphen found, and calculates how the field needs to be altered if the hyphen
+' is changed.
+
+Const MIN_LEN_HALF_SNIPPET As Integer = 20  'The minimum length of context to display on either side of a hyphen, except if
+                                            ' another hyphen is found.
+
+Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
+
+Dim CharacterCount%
+Dim LenField%
+Dim Snippet$
+Dim SnippetEnd%
+Dim SnippetStart%
+Dim TestChar$
+Dim TestString$
+
+Dim i As Integer
+
+' If a hyphen is found, begin by getting paragraph context. Look forward and backward in
+' the field from the hyphen until at least the number of characters specified in the
+' constant MIN_LEN_HALF_SNIPPET have been found in each direction. Continue searching
+' until the next space is encountered. Display the string from that position, before the
+' hyphen, to the appropriate space after the hyphen. However, if another hyphen is found
+' within the MIN_LEN_HALF_SNIPPET-character string, exit the stepthrough, so the snippet
+' displayed includes only one hyphen.
+
+Do
+
+  CharacterCount% = 0
+  For i = HyphenPos% - 1 To 1 Step -1
+    TestChar$ = Mid$( WorkString$, i, 1 )
+    If TestChar$ = " " Then
+        If CharacterCount% > MIN_LEN_HALF_SNIPPET Then
+            SnippetStart% = i
+            Exit For
+          Else
+            CharacterCount% = CharacterCount% + 1
+        End If
+      ElseIf TestChar$ = "-" Then
+        SnippetStart%   = i + 1
+        Exit For
+      Else
+        CharacterCount% = CharacterCount% + 1
+    End If
+  Next i
+  If i = 0 Then SnippetStart% = 1
+
+  LenField%       = Len( WorkString$ )
+  SnippetEnd%     = 0
+  CharacterCount% = 0
+  For i = HyphenPos% + 1 To LenField%
+    TestChar$ = Mid$( WorkString$, i, 1 )
+    If TestChar$ = " " Then
+        If CharacterCount% > MIN_LEN_HALF_SNIPPET Then
+            Snippet$        = Trim$( Mid$( WorkString$, SnippetStart%, i - SnippetStart% ) )
+            SnippetEnd%     = i
+            Exit For
+          Else
+            CharacterCount% = CharacterCount% + 1
+        End If
+
+'   If the character immediately following a hyphen is another hyphen, keep searching.
+
+      ElseIf TestChar$ = "-" Then
+        If i = HyphenPos% + 1 Then
+            CharacterCount% = CharacterCount% + 1
+          Else
+            Snippet$        = Trim$( Mid$( WorkString$, SnippetStart%, i - SnippetStart% ) )
+            Exit For
+        End If
+      Else
+        CharacterCount% = CharacterCount% + 1
+    End If
+  Next i
+  If i < LenField% Then
+      SnippetEnd% = i
+    Else
+      Snippet$    = Trim$( Mid$( WorkString$, SnippetStart% ) )
+  End If
+
+' If the beginning of the extract is not the beginning of the field, add an ellipsis to
+' indicate an omission, and similarly at the end.
+
+   If SnippetStart% > 1 Then Snippet$ = "... " & Snippet$
+   If SnippetEnd%   > 0 Then Snippet$ = Snippet$ & " ..."
+
+' Convert characters to make a nice display in the dialog box.
+
+  EvaluateHyphen = ConvertTo8859( Snippet$ )
+
+' Starting with the character immediately before the hyphen, or to its left, examine the
+' next few characters, checking for spaces, word characters, or other hyphens. If that
+' character string matches one of the patterns below, the text of the question to ask in
+' the dialog box is set, as well as what part of the field will change to accommodate the
+' dash if conversion is selected. For a regular hyphen, surrounded by anything other than
+' a space, the default action will be to leave it alone. If a space is found next to the
+' hyphen, the default action is assumed to be to make it into a dash.
+
+  TestString$ = Mid$( WorkString$, HyphenPos% - 1, 3 )
+  If TestString$ Like "[!- ]-[!- ]" Then
+      ActionQuestion$ = "Change this hyphen to a dash?"
+      LeftOffset%     = 1
+      RightOffset%    = 1
+    ElseIf TestString$ = " - " Then
+      ActionQuestion$ = "Change this hyphen to a dash?"
+      LeftOffset%     = 2
+      RightOffset%    = 2
+    ElseIf TestString$ Like "[!- ]- " Then
+      ActionQuestion$ = "Change this hyphen to a dash?"
+      LeftOffset%     = 1
+      RightOffset%    = 2
+    ElseIf TestString$ Like " -[!- ]" Then
+      ActionQuestion$ = "Change this hyphen to a dash?"
+      LeftOffset%     = 2
+      RightOffset%    = 1
+    Else
+      TestString$ = Mid$( WorkString$, HyphenPos% - 1, 4 )
+      If TestString$ Like "[! ]--[! ]" Then
+          ActionQuestion$ = ""
+        ElseIf TestString$ Like "[! ]-- " Then
+          If Mid$( WorkString$, HyphenPos% + 3, 1 ) <> DELIMITER Then
+              ActionQuestion$ = "Clean up this dash?"
+              LeftOffset%     = 1
+              RightOffset%    = 3
+            Else
+              ActionQuestion$ = ""
+          End If
+        ElseIf TestString$ Like " --[! ]" Then
+          If Mid$( WorkString$, HyphenPos% - 3, 1 ) <> DELIMITER Then
+              ActionQuestion$ = "Clean up this dash?"
+              LeftOffset%     = 2
+              RightOffset%    = 2
+            Else
+              ActionQuestion$ = ""
+          End If
+        ElseIf TestString$ = " -- " Then
+          ActionQuestion$ = "Clean up this dash?"
+          LeftOffset%     = 2
+          RightOffset%    = 3
+      End If
+  End If
+
+  If ActionQuestion = "" Then
+      If PreDialogHyphenTest Then
+          Exit Do
+        Else
+          HyphenPos% = InStr( HyphenPos% + 2, WorkString$, "-" )
+          If HyphenPos% = 0 Then
+              Exit Function
+          End If
+      End If
+  End If
+
+Loop Until ActionQuestion <> ""
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim Dashes1Doc$
+Dim Dashes2Doc$
+Dim ParensDoc$
+Dim QuotesDoc$
+
+Dashes1Doc$ = "Dashes 1: This operation changes hyphens in the current field to dashes, a dash being two hyphens without any"
+Dashes1Doc$ = Dashes1Doc$ & " spaces before, between, or after--like this. Hyphens incorrectly used as dashes, whether they"
+Dashes1Doc$ = Dashes1Doc$ & " look like this - or this- or this -can be changed. Dashes with spaces around them -- like these"
+Dashes1Doc$ = Dashes1Doc$ & " -- may also be cleaned up. (However, since that is correct formatting in a contents note, the"
+Dashes1Doc$ = Dashes1Doc$ & " macro won't run at all in a 505 field.) All hyphens are displayed for review because a mass"
+Dashes1Doc$ = Dashes1Doc$ & " change is likely to result in some edits having been made incorrectly. Changes approved aren't"
+Dashes1Doc$ = Dashes1Doc$ & " applied until the macro is stopped or all possibilities have been reviewed."
+
+Dashes2Doc$ = "Dashes 2: This operation changes dashes in a selection in a contents field to semicolons. Use this feature of"
+Dashes2Doc$ = Dashes2Doc$ & " the macro when dashes have been used to separate titles where semicolons are more appropriate."
+Dashes2Doc$ = Dashes2Doc$ & " These cases might be when consecutive titles are by the same creator, or when grouping titles"
+Dashes2Doc$ = Dashes2Doc$ & " within sections, where dashes are used to separate sections, can make a crowded note more"
+Dashes2Doc$ = Dashes2Doc$ & " comprehensible."
+
+ParensDoc$  = "Parentheses: This operation reviews the whole record for unmatched parentheses and square brackets. If one of"
+ParensDoc$  = ParensDoc$ & " those marks of punctuation seems to lack a partner, the macro places the cursor in the field just"
+ParensDoc$  = ParensDoc$ & " before that position, and then stops. After fixing that problem, run the macro again to find the"
+ParensDoc$  = ParensDoc$ & " next solitary parenthesis or bracket."
+
+QuotesDoc$  = "Quotation marks: This operation converts all double quotation marks in the selection or field to single, and"
+QuotesDoc$  = QuotesDoc$ & " vice versa. Use this macro when dealing with quotations within quotations, or when switching"
+QuotesDoc$  = QuotesDoc$ & " between American and British styles of quotation. It tests a single quotation mark that could be"
+QuotesDoc$  = QuotesDoc$ & " an apostrophe by whether it has letters on both sides; if it doesn't, it will be considered a"
+QuotesDoc$  = QuotesDoc$ & " quotation mark and be flipped. But an apostrophe used at the end of a word as a mark of the"
+QuotesDoc$  = QuotesDoc$ & " possessive will be subject to change. For example, >farmers' market< will become >farmers"
+QuotesDoc$  = QuotesDoc$ & DOUBLE_QUOTE & " market< if the apostrophe is included in the selection."
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If Tag$ = "505" Then
+        DlgEnable "PBDashes1",    DISABLED
+        DlgEnable "TextDashes_1", DISABLED
+        If SelectedText$ = "" Then
+            DlgEnable "PBDashes2",    DISABLED
+            DlgEnable "TextDashes_2", DISABLED
+        End If
+      Else
+        DlgEnable "PBDashes2",    DISABLED
+        DlgEnable "TextDashes_2", DISABLED
+        If HyphensPresent = FALSE Then
+            DlgEnable "PBDashes1",    DISABLED
+            DlgEnable "TextDashes_1", DISABLED
+        End If
+    End If
+
+  Case CONTROL_CHANGE
+
+    If Id$ = "Help" Then
+
+        Begin Dialog Dialog4Definition  256, 296, WaltsMacros$
+          OkButton      134, 272,  52,  14
+          CancelButton  194, 272,  52,  14
+          Text           10,   6, 236,  72, Dashes1Doc$
+          Text           10,  86, 236,  48, Dashes2Doc$
+          Text           10, 142, 236,  40, ParensDoc$
+          Text           10, 190, 236,  72, QuotesDoc$
+        End Dialog
+
+        Dim Dialog4 As Dialog4Definition
+        On Error Resume Next
+        Dialog Dialog4
+        If Err = DLG_STATEMENT_CANCEL Then DlgEnd 0
+        DlgFocus  "Cancel"
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End If
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$, Action%, SValue& )
+
+' This dialog control function simply closes the summary dialog box five seconds after
+' the macro has finished.
+
+Const COUNTDOWN  As Integer = 5   'The number of seconds the dialog box is to remain open.
+Const IDLE_STATE As Integer = 5
+
+Static PreviousSecondsRemaining%
+Static StartTimer&
+
+Dim ElapsedSeconds%
+Dim SecondsRemaining%
+Dim SecondsWord$
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    StartTimer& = Timer
+
+
+  Case IDLE_STATE
+
+    ElapsedSeconds%   = Timer - StartTimer&
+    SecondsRemaining% = COUNTDOWN - ElapsedSeconds%
+    If SecondsRemaining% <= 0 Then
+        DlgEnd    0
+    End If
+    PreviousSecondsRemaining% = SecondsRemaining%
+    Dialog2ControlFunction    = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog3ControlFunction( Id$, Action%, SVal& )
+
+' This function keeps the dialog box open until the macro has evaluated all the hyphens
+' in the field, or until the "Stop" or "Cancel" buttons are clicked.
+
+Const ENABLED As Integer = 1
+
+Dim ActionStop%
+Dim CancelMessage$
+Dim ReplaceMessage$
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText   "Snippet",    EvaluateHyphen()
+    DlgEnable "StopButton", DISABLED
+    ActionAsked%        = ActionAsked% + 1
+    PreDialogHyphenTest = FALSE
+
+
+  Case CONTROL_CHANGE
+
+    ActionAsked% = ActionAsked% + 1
+
+    Select Case Id$
+
+      Case "NoButton", "YesButton"
+
+        If Id$ = "YesButton" Then
+            WorkString$  = Left$( WorkString$, HyphenPos% - LeftOffset% ) & "--" & Mid$( WorkString$, HyphenPos% + RightOffset% )
+            ChangeCount% = ChangeCount% + 1
+        End If
+        HyphenPos% = InStr( HyphenPos% + 2, WorkString$, "-" )
+        If HyphenPos% > 0 Then
+            DlgText   "Snippet",    EvaluateHyphen()
+            DlgText   "Question",   ActionQuestion$
+        End If
+        Dialog3ControlFunction = KEEP_DLG_OPEN
+
+      Case "StopButton"
+
+' The Stop button has three meanings. It could have its standard meaning in the context
+' of the dialog box: I want to back out of here and return to where I came from (the main
+' dialog box), where I may consider whether to continue the macro. Or it could mean: Halt
+' the macro, set the field with the changes I've made so far, and then exit. Finally, it
+' could mean: Stop the macro, don't do anything more, I want to exit the macro
+' immediately. Therefore, clicking the Stop button presents these choices as push buttons
+' by which the appropriate meaning of "Stop" may be chosen.
+
+        Select Case ChangeCount%
+          Case 1
+            ReplaceMessage$ = "&Replace field with the single change made so far, then quit"
+          Case Else
+            ReplaceMessage$ = "&Replace field with the " & Trim$( Str$( ChangeCount% ) ) & " changes made so far, then quit"
+        End Select
+
+        CancelMessage$ = "&Close this dialog box and return to the main macro window"
+
+        Begin Dialog Dialog1Definition  208, 88, WaltsMacros$
+          CancelButton   16,  20,  52,  14
+          PushButton     16,  42,  52,  14, "&Replace"
+          PushButton     16,  64,  52,  14, "&Quit"
+          Text           16,   6,  64,   8, "Stop and do what?"
+          Text           76,  19, 128,  16, CancelMessage$
+          Text           76,  41, 128,  16, ReplaceMessage$
+          Text           76,  66, 128,   8, "Stop everything and exit macro"
+        End Dialog
+        Dim Dialog1 As Dialog1Definition
+
+        ActionStop% = Dialog( Dialog1 )
+
+        Select Case ActionStop%
+          Case 0
+            Dialog3ControlFunction = KEEP_DLG_OPEN
+          Case 1
+            DlgEnd    YES_BUTTON
+          Case 2
+            DlgEnd    DLG_FUNCTION_CANCEL
+        End Select
+
+    End Select
+
+    If HyphenPos% = 0 Then
+        DlgEnd    YES_BUTTON
+    End If
+    If ChangeCount% > 0 Then
+        DlgEnable "StopButton", ENABLED
+    End If
+
+End Select
+
+End Function
+'134049788

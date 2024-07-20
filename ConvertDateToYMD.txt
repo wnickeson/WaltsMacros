@@ -1,18 +1,19 @@
-'MacroName:ConvertDateToYMD.2022.04
+'MacroName:ConvertDateToYMD.2024.01
 'MacroDescription:Converts a date or date range in a field in a bibliographic record into
 ' the format "Year Month Day."
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
-'
-' Last updated: 28 June 2022.
+' https://orcid.org/0000-0003-0484-6938
+
+' Last updated: 4 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Select a single date, or a single date range, and run the macro. The
@@ -457,8 +458,4 @@ If i < InStringLength% Then
 End If
 
 End Function
-'46114346
-'
-'Macro name: ConvertDateToYMD
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:17 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'46214378

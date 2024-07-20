@@ -1,11 +1,12 @@
-'MacroName:DialogBoxCharacters.2023.07
+'MacroName:DialogBoxCharacters.2024.03
 'MacroDescription:Shows the ISO/IEC 8859-1 character set, used in OML dialog boxes.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 28 July 2023.
+' Last updated: 17 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -219,8 +220,4 @@ On Error Resume Next
 Dialog Dialog1
 
 End Sub
-'22313815
-'
-'Macro name: DialogBoxCharacters
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:04:31 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'22413860

@@ -1,4 +1,4 @@
-'MacroName:DeleteAllSuchPlus.2023.03
+'MacroName:DeleteAllSuchPlus.2024.03
 'MacroDescription:Deletes all fields sharing characteristics of the field in which the
 ' cursor is placed. Those characteristics are the tag, subject thesaurus or term source,
 ' or subfield $5.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 18 July 2023.
+' Last updated: 6 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -44,9 +45,7 @@
 '    deletes only those headings with a matching source code in subfield $2. Thus, for
 '    example, it will delete from a record all "fast" headings but not "bisach" headings:
 '    While both headings have second indicator 7, the terms for the source of the code in
-'    subfield $2 are different. If the source code in subfield $2 in a candidate field is
-'    from a different authority file, as identified by its MARC organization code in
-'    subfield $0, it won't be deleted.
+'    subfield $2 are different.
 '
 '  + All fields with the same tag as the selected field. The cursor does not need to be
 '    in a specific occurrence of the field; it may be placed in the first, last, fifth,
@@ -114,7 +113,7 @@ Select Case TypeOfWindow%
 End Select
 
 If Col% > 0 Then             '0 = Fixed field
-    If CS.GetFieldLine( Row%, SelectedFieldData$ ) = TRUE Then
+    If CS.GetField( "...", Row%, SelectedFieldData$ ) = TRUE Then
 
 ' Then check for the presence of subfield $5 in the selected field.
 
@@ -178,7 +177,7 @@ If Col% > 0 Then             '0 = Fixed field
 
                 LineCount% = 1
                 Do
-                  FoundField = CS.GetFieldLine( LineCount%, CandidateFieldData$ )
+                  FoundField = CS.GetField( "...", LineCount%, CandidateFieldData$ )
                   If FoundField Then
                       CandidateFieldTag$ = Left$( CandidateFieldData$, 3 )
                       If Val( CandidateFieldTag$ ) > 599 And Val( CandidateFieldTag$ ) < 700 Then
@@ -248,7 +247,7 @@ Dim Success
 
 LineCount% = 1
 Do
-  FoundField = CS.GetFieldLine( LineCount%, SelectedFieldData$ )
+  FoundField = CS.GetField( "...", LineCount%, SelectedFieldData$ )
   If FoundField Then
       Test$ = GetCode( SelectedFieldData$, SubfieldCode$ )
       If Test$ = CodeToMatch$ Then
@@ -266,49 +265,23 @@ End Sub
 Function GetCode( InString$, SubfieldCode$ ) As String
 
 ' This function returns the code in the specified subfield. If the subfield is not
-' present in the field, the output of the function is a hyphen. If the subfield is
-' followed by a subfield $0 that contains a MARC Organization code which is responsible
-' for the authority record from which the code is drawn, as in "$2 fast $0
-' (OCoLC)fst01205542," add the organization code to the code found in the specified
-' subfield. In this example, the macro will delete FAST headings only from OCLC, as it
-' is looking for the source code "fast(OCoLC)". FAST headings in the record from another
-' source, or whose source is not further identified, would be ignored.
+' present in the field, the output of the function is a hyphen.
 
 Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
 
-Dim AuthRecMARCOrg$
-Dim Delimiter1%
-Dim Delimiter2%
-Dim TempString$
+Dim p As Integer, q As Integer
 
-Dim p As Integer
-
-Delimiter1% = InStr( InString$, DELIMITER & SubfieldCode$ )
-If Delimiter1% > 0 Then
-    Delimiter2% = InStr( Delimiter1% + 1, InString$, DELIMITER )
-    If Delimiter2% = 0 Then
-        TempString$ = Trim$( Mid$( InString$, Delimiter1% + 3 ) )
+p = InStr( InString$, DELIMITER & SubfieldCode$ )
+If p > 0 Then
+    q = InStr( p + 1, InString$, DELIMITER )
+    If q = 0 Then
+        GetCode = Trim$( Mid$( InString$, p + 3 ) )
       Else
-        If Mid$( InString$, Delimiter2% + 1, 1 ) = "0" Then
-            TempString$ = Trim$( Mid$( InString$, Delimiter2% + 2 ) )
-            If Left$( TempString$, 1 ) = "(" Then
-                p = InStr( TempString$, ")" )
-                If p > 0 Then
-                    AuthRecMARCOrg$ = Mid$( TempString$, 2, p - 2 )
-                End If
-            End If
-            TempString$ = Trim$( Mid$( InString$, Delimiter1% + 3, Delimiter2% - ( Delimiter1% + 3 ) ) )
-        End If
+        GetCode = Trim$( Mid$( InString$, p + 2, q - p - 2 ) )
     End If
   Else
-    TempString$ = "-"
+    GetCode = "-"
 End If
 
-GetCode = TempString$ & AuthRecMARCOrg$
-
 End Function
-'31113607
-'
-'Macro name: DeleteAllSuchPlus
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:55:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'28812354

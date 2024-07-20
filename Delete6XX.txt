@@ -1,0 +1,1538 @@
+'MacroName:Delete6XX.2024.77
+'MacroDescription:Helps delete 6XX fields in a bibliographic record, in groups by
+' thesaurus/source, and all such groups at one time.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
+'
+' Last updated: 16 July 2024.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run this macro to quickly remove 6XX fields from a bibliographic record
+' that use thesauri you don't want to keep. The macro displays a list of all the
+' different source or thesaurus codes by those headings, in alphabetical order, along
+' with a count of the fields belonging to each one. Click on a code in the list to mark
+' or unmark it, and to display the full name of the thesaurus used. When all the codes to
+' be deleted have been marked, click the "Delete marked fields" button, and the macro
+' deletes all the fields that use those thesauri or sources. The dialog box displays even
+' if there is only one 6XX field, or if all 6XX fields are from the same thesaurus.
+'
+' Two additional push buttons in the dialog box help with marking groups of fields: One
+' unmarks everything--in effect, clearing the list, or returning it to its initial state;
+' the other inverts the selection. This latter button is useful if the record contains
+' many thesauri, but only one or a few are to be retained. Mark the fields to keep, and
+' click the "Invert" button. Those fields become unmarked, and all the other fields in
+' the list become marked for deletion.
+'
+' Cursor position doesn't matter. However, if the cursor is in a subject field when the
+' macro is invoked, the thesaurus or source used in that field will be the default
+' selection when the dialog box opens. In this case, although a thesaurus is selected, it
+' is not marked for deletion. After the dialog box opens, selecting an entry in the list
+' does indeed mark or unmark it.
+'
+' The macro can help always keep or always delete certain types of subject headings, by
+' means of a file of thesaurus codes in the Macros folder that acts as a sort of template
+' or preferences. If the macro can read this file, it adds an "Apply presets" button in
+' the dialog box. Clicking this button marks or unmarks the displayed list of headings in
+' the record to match the entries in the file. To use this feature, create a plain text
+' file in the Connexion Macros folder with this name:
+'
+' C:\Users\[your username]\AppData\Roaming\OCLC\Connex\Macros\Delete6XX.ini.
+'
+' The file must contain at least these two lines: "[AlwaysKeep]" and "[AlwaysDelete]".
+' Beneath each of these stanza names, add the appropriate codes, one per line, in
+' lowercase, matching the forms given in the array below. The file might look like this
+' example:
+'
+'   [AlwaysKeep]
+'   lcsh
+'   lcgft
+'   [AlwaysDelete]
+'   cct
+'   rvm
+'
+' Using this file, the macro presents the list of thesauri or sources in the record with
+' "lcsh" and "lcgft" headings already unmarked (regardless of any previous marking), and
+' "cct" and "rvm" headings also already marked for deletion. This marking can always be
+' modified before the deletion takes place. Headings not in the file are ignored.
+'
+' To always keep only some kinds of headings, and delete all others without specifying
+' which ones, or to always delete some kinds of headings, and keep all others without
+' explicitly naming them, use the term "ALL OTHERS" under the appropriate stanza. For
+' example, to always keep only "lcsh" and "lcgft" headings, and to always delete all
+' other kinds of headings, on every bibliographic record being edited, the file would
+' look like this:
+'
+'   [AlwaysKeep]
+'   lcsh
+'   lcgft
+'   [AlwaysDelete]
+'   ALL OTHERS
+'
+' There should, of course, be no specific codes listed along with "ALL OTHERS," because
+' in this example, all codes not under "[AlwaysKeep]" are deleted. Conversely, to always
+' delete only certain types of headings, and keep all others, the "ALL OTHERS" phrase
+' will be the only item in the "[AlwaysKeep]" stanza--the opposite of the example above.
+' There can be only one "ALL OTHERS" line in the file.
+'
+' Leaving a stanza empty simply means no thesauri will be considered for that action. In
+' the example above, if the "[AlwaysDelete]" line were followed by nothing at all, the
+' macro will unmark the record's "lcsh" and "lcgft" headings, and ignore all other
+' thesauri. That is, all the other codes will remain marked or unmarked, in whichever
+' state they were when the "Apply presets" button was clicked.
+'
+' The button to apply presets is only available if the correctly formed file appears in
+' the Macros folder. If the macro finds the file, but detects that it has errors, or the
+' file is not plain text (such as if it were created by a word processing program), the
+' button appears but is disabled.
+'
+' The macro determines the source of the heading term primarily by the field tag and the
+' second indicator. In fields 600 to 651, and field 655, values 0 to 6 for the second
+' indicator identify the thesaurus. All headings from an unspecified thesaurus (value
+' "4") are lumped together by the macro and will be deleted as a group. Terms in field
+' 655 whose thesaurus is identified by the second indicator display in the list so
+' qualified, as, for example, "lcsh [655]" (the field therefore having tag and indicator
+' "655 #0"). In the other 6XX fields, the second indicator has other functions, and is
+' ignored. In all 6XX fields, the source of the heading may be identified in subfield $2.
+' If the macro can't determine the thesaurus or source by the tag, second indicator, or
+' content of subfield $2, it looks for a parenthetical term in subfield $0, which it will
+' take as a source. This string might be a MARC Organization code or a Standard
+' Identifier source code. If after searching in all these places no source or thesaurus
+' can be found, the macro can only note that it is "Unknown."
+'
+' My macro "DeleteAllSuchPlus" can also delete lots of subject headings at once, but only
+' one thesaurus at a time.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillArray
+Declare Sub MarkUnmark( ArrayRow%, Which% )
+
+Declare Function IsolateTerm( InString$ )
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Type FieldInfo
+  Line     As Integer
+  SourceID As Integer
+End Type
+
+Global Const CODE                 As Integer = 0
+Global Const CODE_COUNT           As Integer = 529
+Global Const DLG_STATEMENT_CANCEL As Integer = 102
+Global Const MARK                 As Integer = 1
+Global Const NO_SELECTION         As Integer = -1
+Global Const OPPOSITE             As Integer = -1
+Global Const TITLE                As Integer = 1
+Global Const UNMARK               As Integer = 0
+
+Global DOUBLE_QUOTE               As String*1
+Global LENGTH_MARKER              As Integer
+Global MARKER                     As String
+
+Global FileName$
+Global Marked%
+Global StartingCode%
+Global UBCodeArrays%
+Global UBDelArray%
+Global UBKeepArray%
+Global WaltsMacros$
+
+Global CodeArray1()               As String
+Global DelArray()                 As String
+Global FieldsArray()              As FieldInfo
+Global KeepArray()                As String
+Global Sources( 1, CODE_COUNT )   As String
+Global SourcesTitle()             As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE       As Integer = 16
+Const INFORMATION_MESSAGE    As Integer = 64
+
+Const CASE_IGNORED           As Integer = 1
+Const CODES_TO_DELETE        As Integer = 2
+Const CODES_TO_KEEP          As Integer = 1
+Const EQUAL_TO               As Integer = 0
+Const GREATER_THAN           As Integer = 1
+Const LESS_THAN              As Integer = -1
+Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9
+
+Dim DELIMITER    As String
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE = Chr$( 039 )
+
+Dim ArrayIndex%
+Dim Attributes%
+Dim Candidate$
+Dim CharT$
+Dim CodesString$
+Dim Compare%
+Dim CountOfCodes%
+Dim CurrentRow%
+Dim EmptyArray%
+Dim FieldData$
+Dim FileNum%
+Dim High%
+Dim Incumbent$
+Dim Ind2$
+Dim Instructions$
+Dim LenDelimiter%
+Dim LineCount%
+Dim Low%
+Dim Middle%
+Dim NewUBFieldsArray%
+Dim OriginalSourceID%
+Dim Result%
+Dim SourceCode$
+Dim SourceCodeCount%
+Dim SourceID%
+Dim StanzaCheck%
+Dim State%
+Dim StringIn$
+Dim SubfieldCode$
+Dim Swapped
+Dim Tag$
+Dim TempString$
+Dim TempVal%
+Dim TermWidth%
+Dim TypeOfWindow%
+Dim UBFieldsArray%
+
+Dim ArrayFilled              : ArrayFilled       = FALSE
+Dim Found6XX                 : Found6XX          = FALSE
+Dim FoundField
+Dim StartingCodeFound        : StartingCodeFound = FALSE
+Dim TermAdded
+
+Dim i As Integer, j As Integer, k As Integer, p As Integer, q As Integer
+
+Dim CodeArray2() As String
+Dim FieldCount() As Integer
+
+ReDim CodeArray1( 0 )
+ReDim FieldCount( 0 )
+
+DOUBLE_QUOTE  = Chr$( 034 )
+MARKER        = "==> "
+LENGTH_MARKER = Len( MARKER )
+WaltsMacros$  = "[Walt's macros] Extras1:Delete6XX"
+
+Instructions$ = "Click on a thesaurus/source to mark/unmark its fields for deletion, and to show the full name of the resource"
+Instructions$ = Instructions$ & " or the field definition."
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Build an array of the 6XX fields, recording the original line number of each field, its
+' thesaurus as a number--the index of that term in the array of thesauri found--and the
+' field itself.
+
+CurrentRow% = CS.CursorRow
+LineCount%  = 1
+Do
+  FoundField = CS.GetFieldUnicode( "...", LineCount%, FieldData$ )
+  If FoundField Then
+      If Left$( FieldData$, 1 ) = "6" Then
+          If ArrayFilled = FALSE Then
+              FillArray
+              ArrayFilled = TRUE
+          End If
+          If Found6XX = FALSE Then
+              If ArrayIndex% > 0 Then
+                  Exit Do
+                Else
+                  Found6XX    = TRUE
+                  ArrayIndex% = 0
+              End If
+            Else
+              ArrayIndex% = ArrayIndex% + 1
+          End If
+          ReDim Preserve FieldsArray( ArrayIndex% )
+          Tag$  = Left$( FieldData$, 3 )
+          Ind2$ = Mid$( FieldData$, 5, 1 )
+
+' How the delimiter symbol is encoded may be important for finding information in the
+' field.
+
+          If InStr( FieldData$, "&#x01C2;" ) = 0 Then
+              DELIMITER     = Chr$( 223 )
+              LenDelimiter% = 1
+            Else
+              DELIMITER     = "&#x01C2;"
+              LenDelimiter% = 8
+          End If
+          Select Case Tag$
+
+            Case "600", "610", "611", "630", "647", "648", "650", "651", "655"
+
+' These fields identify the source or thesaurus used by the value of the second
+' indicator.
+
+              Select Case Ind2$
+
+                Case "0"
+                  SourceCode$ = "lcsh"
+                Case "1"
+                  SourceCode$ = "cyac"
+                Case "2"
+                  SourceCode$ = "mesh"
+                Case "3"
+                  SourceCode$ = "nal"
+                Case "4"
+                  SourceCode$ = "Not specified"
+                Case "5"
+                  SourceCode$ = "cash"
+                Case "6"
+                  SourceCode$ = "rvm"
+
+              End Select
+
+' Qualify a 655 genre heading by the thesaurus in use.
+
+              If Tag$ = "655" and Ind2$ Like "[!47]" Then
+                  SourceCode$ = SourceCode$ & "  [655]"
+              End If
+
+          End Select
+
+' If the tag and indicator don't reveal anything, look in subfields $2 and $0.
+
+          If SourceCode$ = "" Then
+              For i = 1 To 2
+                If i = 1 Then
+                    SubfieldCode$ = "2"
+                  Else
+                    SubfieldCode$ = "0"
+                End If
+                p = InStr( 6, FieldData$, DELIMITER & SubfieldCode$ )
+                If p > 0 Then
+                    q = InStr( p + 1, FieldData$, DELIMITER )
+                    If q = 0 Then
+                        SourceCode$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2 ) )
+                      Else
+                        SourceCode$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2, q - p - LenDelimiter% - 2 ) )
+                    End If
+                    Exit For
+                End If
+              Next i
+                If SubfieldCode$ = "2" Then
+                    If InStr( "lcsh,cyac,mesh,nal,Not specified,cash,rvm", SourceCode$ ) Then
+                        SourceCode$ = SourceCode$ & "  [" & Tag$ & "]"
+                    End If
+                End If
+          End If
+
+' In subfield $0, text surrounded by parentheses will be taken as the source of the
+' heading.
+
+          If SourceCode$ <> "" Then
+              If Left$( SourceCode$, 1 ) = "(" Then
+                  p = InStr( SourceCode$, ")" )
+                  If p > 0 Then
+                      SourceCode$ = Mid$( SourceCode$, 2, p - 2 )
+                  End If
+              End If
+            Else
+              SourceCode$ = Tag$
+          End If
+
+' Fill the array with the different codes found. The number of occurrences of each code
+' is tracked by another array. The codes themselves are used only in display; for the
+' final action of deleting fields, the codes are identified by their index in the array.
+
+          If SourceCodeCount% = 0 Then
+              CodeArray1( 0 )  = SourceCode$
+              SourceCodeCount% = SourceCodeCount% + 1
+              SourceID%        = 0
+              FieldCount( 0 )  = 1
+            Else
+              For i = 0 To UBound( CodeArray1 )
+                If SourceCode$ = CodeArray1( i ) Then
+                    SourceID%       = i
+                    FieldCount( i ) = FieldCount( i ) + 1
+                    Exit For
+                  Else
+                    If i = UBound( CodeArray1 ) Then
+                        ReDim Preserve CodeArray1( SourceCodeCount% )
+                        CodeArray1( SourceCodeCount% ) = SourceCode$
+                        ReDim Preserve FieldCount( SourceCodeCount% )
+                        FieldCount( SourceCodeCount% ) = 1
+                        SourceID%                      = SourceCodeCount%
+                        SourceCodeCount%               = SourceCodeCount% + 1
+                        Exit For
+                    End If
+                End If
+              Next i
+          End If
+          FieldsArray( ArrayIndex% ).Line     = LineCount%
+          FieldsArray( ArrayIndex% ).SourceID = SourceID%
+
+' If the cursor is placed in a subject field, the thesaurus or source used in that field
+' will be the default selection in the dialog box. Otherwise, the list box shows no
+' default selection.
+
+          If LineCount% = CurrentRow% Then
+              StartingCode% = SourceID%
+          End If
+        Else
+          If LineCount% = CurrentRow% Then
+              StartingCode% = NO_SELECTION
+          End If
+      End If
+    Else
+      Exit Do
+  End If
+  LineCount%  = LineCount% + 1
+  SourceCode$ = ""
+Loop Until FoundField = FALSE
+
+UBFieldsArray% = UBound( FieldsArray )
+
+' The macro executes even if there is only one 6XX field in the record. If there are
+' none, the macro quits.
+
+If SourceCodeCount% = 0 Then
+    MsgBox "There are no 6XX fields in this record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Add the field count of the terms to each element of the thesaurus list. Also add, at
+' the end of the line and temporarily, the original order of the codes. This is necessary
+' to adjust the values in the fields array after the code list has been alphabetized,
+' which likely means they have been rearranged. Also, the macro language doesn't allow
+' for proper columns in dialog box list boxes, so the field count numbers can't be nicely
+' aligned. Nonetheless, to try to come close, this For...Next loop does some fiddling
+' with spaces, using some arbitrary numbers that seem to work, more or less. Each code
+' consists of a maximum of twelve lowercase alphabetic characters, which this dialog box
+' design just accommodates. The spaces to add so the field count numbers line up (as far
+' as is allowed) vary depending upon the length of the code string. Other characters to
+' account for are the two brackets and a capital "N" (in "Not specified").
+
+UBCodeArrays% = UBound( CodeArray1 )
+
+For i = 0 To UBCodeArrays%
+  TempString$ = CodeArray1( i )
+  For j = 1 To Len( TempString$ )
+    CharT$ = Mid$( TempString$, j, 1 )
+    If CharT$ Like "[ijl]" Then
+        TermWidth% = TermWidth% + 1
+      ElseIf CharT$ Like "[frt]" Or CharT$ = "[" Or CharT$ = "]" Then
+        TermWidth% = TermWidth% + 2
+      ElseIf CharT$ Like "[ 1]" Then
+        TermWidth% = TermWidth% + 3
+      ElseIf CharT$ Like "[sxz]" Then
+        TermWidth% = TermWidth% + 4
+      ElseIf CharT$ Like "[023456789abcdeghknopquvy]" Then
+        TermWidth% = TermWidth% + 5
+      ElseIf CharT$ = "N" Then
+        TermWidth% = TermWidth% + 6
+      ElseIf CharT$ Like "[mw]" Then
+        TermWidth% = TermWidth% + 7
+    End If
+  Next j
+  CodeArray1( i ) = TempString$ & Space$( Int( ( 116 - TermWidth% ) / 2.6 ) - 16 ) & "{" & Trim$( Str$( FieldCount( i ) ) ) & "}" & Trim$( Str$( i ) )
+  TermWidth% = 0
+Next i
+
+' Sort the list of thesauri, for easier reading when displayed in the dialog box. Use a
+' simple insertion sort, putting the fields in order in the other CodeArray. Make sure
+' the tags used as thesauri and the term "Not specified" get put at the end of the list;
+' this is done by prefixing the string with the letter "ÿ" (ASCII value 255).
+
+ReDim CodeArray2( UBCodeArrays% )
+
+For i = 0 To UBCodeArrays%
+  TermAdded = FALSE
+  For j = 0 To UBCodeArrays%
+    Candidate$ = CodeArray1( i )
+    If Left$( Candidate$, 13 ) = "Not specified" Or Left$( Candidate$, 1 ) = "6" Then
+        Candidate$ = "ÿ" & Candidate$
+    End If
+    Incumbent$ = CodeArray2( j )
+    If StrComp( Candidate$, Incumbent$, CASE_IGNORED ) = LESS_THAN Then  'Candidate$ < Incumbent$
+        For k = UBCodeArrays% To j + 1 Step - 1
+          CodeArray2( k ) = CodeArray2( k - 1 )
+        Next k
+        CodeArray2( k ) = Candidate$
+        TermAdded       = TRUE
+      Else
+        If CodeArray2( j ) = "" Then
+            CodeArray2( j ) = Candidate$
+            TermAdded       = TRUE
+            Exit For
+        End If
+    End If
+    If TermAdded Then Exit For
+  Next j
+Next i
+
+If Left$( CodeArray2( UBCodeArrays% ), 1 ) = "ÿ" Then
+    CodeArray2( UBCodeArrays% ) = Mid$( CodeArray2( UBCodeArrays% ), 2 )
+End If
+
+' Now the source code IDs in the fields array--which are simply ordinal numbers,
+' reflecting the encounter with the source codes in the record--may have to be changed,
+' to correspond with the possibly changed (because of the previous alphabetization) order
+' of codes in the list.
+
+For i = 0 To UBFieldsArray%
+  For j = 0 To UBCodeArrays%
+    TempString$       = CodeArray2( j )
+    p                 = InStr( TempString$, "}" )
+    TempVal%          = Val( Mid$( TempString$, p + 1 ) )
+    OriginalSourceID% = FieldsArray( i ).SourceID
+    If OriginalSourceID% = TempVal% Then
+        FieldsArray( i ).SourceID = j
+        Exit For
+    End If
+  Next j
+Next i
+
+' Finally, make a copy of the sorted list, in the original, or first, array, which is the
+' one that displays in the dialog box. When the dialog box has finished its purpose and
+' has closed, the differences between the two arrays tell which fields are to be deleted;
+' the differences being, of course, the presence or absence of the marker for deletion.
+
+For i = 0 To UBCodeArrays%
+  TempString$ = CodeArray2( i )
+  p           = InStr( TempString$, "}" )
+  TempVal%    = Val( Mid$( TempString$, p + 1 ) )
+  If StartingCodeFound = FALSE Then
+      OriginalSourceID% = TempVal%
+      If OriginalSourceID% = StartingCode% Then
+          StartingCode%     = i
+          StartingCodeFound = TRUE
+      End If
+  End If
+  TempString$     = Left$( TempString$, p )
+  CodeArray2( i ) = TempString$
+  CodeArray1( i ) = TempString$
+Next i
+
+' Look up the title associated with the thesaurus code in the big array. This is done
+' with a binary search.
+
+ReDim SourcesTitle( UBCodeArrays% )
+For i = 0 To UBCodeArrays%
+  TempString$ = CodeArray1( i )
+  p           = InStr( TempString$, "{" )
+  SourceCode$ = Trim$( Left$( CodeArray1( i ), p - 1 ) )
+  p           = InStr( SourceCode$, "[" )
+  If p > 0 Then
+      SourceCode$ = Trim$( Left$( SourceCode$, p - 1 ) )
+  End If
+  If SourceCode$ = "653" Then
+      SourcesTitle( i ) = "Index term--Uncontrolled"
+    ElseIf SourceCode$ = "Not specified" Then
+      SourcesTitle( i ) = "Source not specified (2nd indicator value " & SINGLE_QUOTE & "4" & SINGLE_QUOTE & ")"
+    Else
+      High% = CODE_COUNT
+      Low%  = 0
+      Do While Low% <= High%
+        Middle%  = Int( ( High% + Low% ) / 2 )
+        Compare% = StrComp( Left$( Sources( CODE, Middle% ), 12 ), SourceCode$ )
+        Select Case Compare%
+          Case LESS_THAN
+            Low%    = Middle% + 1
+          Case EQUAL_TO
+            Result% = Middle%
+            Exit Do
+          Case GREATER_THAN
+            High%   = Middle% - 1
+        End Select
+      Loop
+      If Low% > High% Then
+          SourceCode$ = ""
+      End If
+      If SourceCode$ = "" Then
+          SourcesTitle( i ) = "[Unknown]"
+        Else
+          SourcesTitle( i ) = Sources( TITLE, Result% )
+          If InStr( TempString$, "[655]" ) > 0 Then
+              SourcesTitle( i ) = SourcesTitle( i ) & " (as Genre/Form index term)"
+          End If
+      End If
+  End If
+Next i
+
+' If the .ini file is found, read it and put its terms into the two arrays, for keeping
+' and deleting.
+
+FileName$ = Environ( "APPDATA" ) & "\OCLC\Connex\Macros\Delete6XX.ini"
+FileNum%  = Freefile
+
+On Error Resume Next
+Attributes% = GetAttr( FileName$ )
+If Err = 0 Then
+
+' The file name "X" means the file is present but is structurally problematic.
+
+    If FileLen( FileName$ ) < 29 Then
+        FileName$ = "X"
+        GoTo ShowDialogBox:
+    End If
+    If Attributes% = 0 Or Attributes% = 32 Then
+        Open FileName$ For Input Access Read As #FileNum%
+        Do While Not Eof( FileNum% )
+          Line Input #FileNum%, StringIn$
+          On Error Resume Next
+
+' The file name "" means the file doesn't exist or is completely unusable.
+
+          If Err > 0 Then
+              FileName$ = ""
+              Exit Do
+          End If
+          Select Case StringIn$
+            Case "[AlwaysKeep]"
+              State%        = CODES_TO_KEEP
+              CountOfCodes% = 0
+              StanzaCheck%  = StanzaCheck% + 1
+            Case "[AlwaysDelete]"
+              State%        = CODES_TO_DELETE
+              CountOfCodes% = 0
+              StanzaCheck%  = StanzaCheck% + 2
+            Case ""
+            Case Else
+              Select Case State%
+                Case CODES_TO_KEEP
+                  ReDim Preserve KeepArray( CountOfCodes% )
+                  KeepArray( CountOfCodes% ) = StringIn$
+                  CountOfCodes%              = CountOfCodes% + 1
+                Case CODES_TO_DELETE
+                  ReDim Preserve DelArray( CountOfCodes% )
+                  DelArray( CountOfCodes% )  = StringIn$
+                  CountOfCodes%              = CountOfCodes% + 1
+
+' If no "State" has been established, this may not be a text file. If this is
+' encountered, don't bother any more with the arrays.
+
+                Case Else
+                  FileName$ = "X"
+                  GoTo ShowDialogBox:
+              End Select
+              If InStr( CodesString$, StringIn$ ) Then
+                  FileName$ = "X"
+                  GoTo ShowDialogBox:
+                Else
+                  CodesString$ = CodesString$ & "," & StringIn$
+              End If
+          End Select
+          StringIn$ = ""
+        Loop
+        Close #FileNum%
+        Reset
+
+' Check that both stanza titles are present.
+
+        If StanzaCheck% <> 3 Then
+            FileName$ = "X"
+            GoTo ShowDialogBox:
+        End If
+
+' Check for empty arrays. Both can't be empty, but if one is empty, it is given one
+' element, an empty string, so it can participate in array comparisons. Also check that
+' an empty array does not have "ALL OTHERS" in the other array.
+
+        On Error Resume Next
+        UBKeepArray% = UBound( KeepArray )
+        If Err = SUBSCRIPT_OUT_OF_RANGE Then
+            ReDim KeepArray( 0 )
+            KeepArray( 0 ) = ""
+            EmptyArray%    = EmptyArray% + 1
+        End If
+        On Error Resume Next
+        UBDelArray% = UBound( DelArray )
+        If Err = SUBSCRIPT_OUT_OF_RANGE Then
+            ReDim DelArray( 0 )
+            DelArray( 0 )  = ""
+            EmptyArray%    = EmptyArray% + 2
+        End If
+        If EmptyArray% = 3 Then
+            FileName$ = "X"
+            GoTo ShowDialogBox:
+        End If
+
+        If ( KeepArray( 0 ) = "" And DelArray( 0 ) = "ALL OTHERS" ) Or _
+           ( DelArray( 0 ) = "" And KeepArray( 0 ) = "ALL OTHERS" ) Then
+            FileName$ = "X"
+            GoTo ShowDialogBox:
+        End If
+        UBKeepArray% = UBound( KeepArray )
+        UBDelArray%  = UBound( DelArray )
+
+' Alphabetize the two arrays, using a simple bubble sort.
+
+        If UBKeepArray% > 0 Then
+            Do
+              Swapped = FALSE
+              For i = 0 To UBKeepArray% - 1
+                If KeepArray( i ) > KeepArray( i + 1 ) Then
+                    TempString$        = KeepArray( i )
+                    KeepArray( i )     = KeepArray( i + 1 )
+                    KeepArray( i + 1 ) = TempString$
+                    Swapped            = TRUE
+                End If
+              Next i
+            Loop Until Swapped = FALSE
+        End If
+
+        If UBDelArray% > 0 Then
+            Do
+              Swapped = FALSE
+              For i = 0 To UBDelArray% - 1
+                If DelArray( i ) > DelArray( i + 1 ) Then
+                    TempString$       = DelArray( i )
+                    DelArray( i )     = DelArray( i + 1 )
+                    DelArray( i + 1 ) = TempString$
+                    Swapped           = TRUE
+                End If
+              Next i
+            Loop Until Swapped = FALSE
+        End If
+    End If
+  Else
+    FileName$ = ""
+End If
+
+ShowDialogBox:
+
+' Now run the dialog box.
+
+Begin Dialog Dialog1Definition  264, 126, WaltsMacros$, .Dialog1ControlFunction
+  PushButton    106,  99,  78,  16, "&Delete marked fields", .OK
+  CancelButton  192,  99,  60,  16
+  ListBox        10,  26,  88,  96, CodeArray1(),            .ListBox
+  PushButton    106,  26,  58,  14, "&Invert selection",     .Invert
+  PushButton    106,  44,  58,  14, "&Unmark all",           .UnmarkAll
+  PushButton    106,  62,  58,  14, "&Apply presets",        .Presets
+  Text           10,   6, 244,  16, Instructions$
+  Text          176,  28,  72,  56, "",                      .SourceTitle
+  GroupBox      172,  22,  80,  70, "",                      .TitleBox
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+' The first step in deleting fields is to check if any thesaurus has been marked for
+' deletion. Compare the original thesaurus array to the one modified by the dialog box.
+
+For i = 0 To UBCodeArrays%
+  If CodeArray1( i ) <> CodeArray2( i ) Then
+      i = -1
+      Exit For
+  End If
+Next i
+If i > -1 Then
+    MsgBox "No fields were selected for deletion! Macro exiting.", INFORMATION_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Then go through the fields array, from the end back to the beginning, deleting fields
+' by line number if their source ID matches the mark status of the thesaurus used.
+
+For i = UBFieldsArray% To 0 Step -1
+  If Left$( CodeArray1( FieldsArray( i ).SourceID ), LENGTH_MARKER ) = MARKER Then
+      If CS.DeleteFieldLine( FieldsArray( i ).Line ) = FALSE Then
+          MsgBox "Sorry, the macro could not delete a field.", CRITICAL_MESSAGE, WaltsMacros$
+          Exit Sub
+      End If
+  End If
+Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray
+
+' The source codes in this array are drawn from LC's Subject Heading and Term Source
+' Codes (<https://www.loc.gov/standards/sourcelist/subject.html> dated June 18, 2024,
+' with updates) and Genre/Form Code and Term Source Codes
+' (<https://www.loc.gov/standards/sourcelist/genre-form.html> dated July 16, 2024).
+' Information about the organizations publishing or maintaining the codes has been
+' omitted.
+
+Sources( CODE, 0   ) = "aass"         : Sources( TITLE, 0   ) = DOUBLE_QUOTE & "Asian American Studies Library subject headings" & DOUBLE_QUOTE & " in A Guide for establishing Asian American core collections"
+Sources( CODE, 1   ) = "aat"          : Sources( TITLE, 1   ) = "Art && architecture thesaurus"
+Sources( CODE, 2   ) = "aatnor"       : Sources( TITLE, 2   ) = "Art and architectural thesaurus terms translated into Norwegian"
+Sources( CODE, 3   ) = "abne"         : Sources( TITLE, 3   ) = "Autoridades de la Biblioteca Nacional de España"
+Sources( CODE, 4   ) = "aedoml"       : Sources( TITLE, 4   ) = "Listado de encabezamientos de materia de música"
+Sources( CODE, 5   ) = "afo"          : Sources( TITLE, 5   ) = "AFO--Viikin kampuskirjaston ontologia"
+Sources( CODE, 6   ) = "afset"        : Sources( TITLE, 6   ) = "American Folklore Society ethnographic thesaurus"
+Sources( CODE, 7   ) = "agrifors"     : Sources( TITLE, 7   ) = "AGRIFOREST-sanasto"
+Sources( CODE, 8   ) = "agrovoc"      : Sources( TITLE, 8   ) = "AGROVOC multilingual agricultural thesaurus"
+Sources( CODE, 9   ) = "agrovocf"     : Sources( TITLE, 9   ) = "AGROVOC thésaurus agricole multilingue"
+Sources( CODE, 10  ) = "agrovocs"     : Sources( TITLE, 10  ) = "AGROVOC tesauro agrícola multilingée"
+Sources( CODE, 11  ) = "ahecc"        : Sources( TITLE, 11  ) = "Australian harmonized export commodity classification"
+Sources( CODE, 12  ) = "aiatsisl"     : Sources( TITLE, 12  ) = "AIATSIS language thesaurus"
+Sources( CODE, 13  ) = "aiatsisp"     : Sources( TITLE, 13  ) = "AIATSIS place thesaurus"
+Sources( CODE, 14  ) = "aiatsiss"     : Sources( TITLE, 14  ) = "AIATSIS subject thesaurus"
+Sources( CODE, 15  ) = "aktp"         : Sources( TITLE, 15  ) = "Alphavetikos Katalogos Thematikon Perigrapheon"
+Sources( CODE, 16  ) = "albt"         : Sources( TITLE, 16  ) = "Arbetslivsbibliotekets tesaurus"
+Sources( CODE, 17  ) = "alett"        : Sources( TITLE, 17  ) = "An alphabetical list of English text types"
+Sources( CODE, 18  ) = "allars"       : Sources( TITLE, 18  ) = "Allärs: allmän tesaurus pä svenska"
+Sources( CODE, 19  ) = "amg"          : Sources( TITLE, 19  ) = "Audiovisual material glossary"
+Sources( CODE, 20  ) = "anzsic"       : Sources( TITLE, 20  ) = "Australian and New Zealand standard industrial classification"
+Sources( CODE, 21  ) = "anzsoc"       : Sources( TITLE, 21  ) = "Australian and New Zealand standard offence classification"
+Sources( CODE, 22  ) = "anzsrc"       : Sources( TITLE, 22  ) = "Australian and New Zealand research classification"
+Sources( CODE, 23  ) = "apaist"       : Sources( TITLE, 23  ) = "APAIS thesaurus: a list of subject terms used in the Australian Public Affairs Information Service"
+Sources( CODE, 24  ) = "armarc"       : Sources( TITLE, 24  ) = "Lista ARMARC de encabezamientos de materia para bibliotecas mayores"
+Sources( CODE, 25  ) = "arxiv"        : Sources( TITLE, 25  ) = "arXiv (Cornell University)"
+Sources( CODE, 26  ) = "ascdc"        : Sources( TITLE, 26  ) = "Australian standard classification of drugs of concern"
+Sources( CODE, 27  ) = "asced"        : Sources( TITLE, 27  ) = "Australian standard classification of education"
+Sources( CODE, 28  ) = "ascl"         : Sources( TITLE, 28  ) = "African Studies thesaurus"
+Sources( CODE, 29  ) = "asft"         : Sources( TITLE, 29  ) = "Aquatic sciences and fisheries thesaurus"
+Sources( CODE, 30  ) = "ashlnl"       : Sources( TITLE, 30  ) = "Arabic subject headings of the Lebanese National Library"
+Sources( CODE, 31  ) = "asrcrfcd"     : Sources( TITLE, 31  ) = "Australian standard research classification: research fields, courses and disciplines (RFCD) classification"
+Sources( CODE, 32  ) = "asrcseo"      : Sources( TITLE, 32  ) = "Australian standard research classification: socio-economic objective (SEO) classification"
+Sources( CODE, 33  ) = "asrctoa"      : Sources( TITLE, 33  ) = "Australian standard research classification: type of activity (TOA) classification"
+Sources( CODE, 34  ) = "asth"         : Sources( TITLE, 34  ) = "Astronomy thesaurus"
+Sources( CODE, 35  ) = "ated"         : Sources( TITLE, 35  ) = "Australian thesaurus of education descriptors"
+Sources( CODE, 36  ) = "atg"          : Sources( TITLE, 36  ) = "Agricultural thesaurus and glossary"
+Sources( CODE, 37  ) = "atla"         : Sources( TITLE, 37  ) = "Religion indexes: thesaurus"
+Sources( CODE, 38  ) = "aucsh"        : Sources( TITLE, 38  ) = "Qâ'imat ru'ûs mawdû'ât al-fahras al-'Arabîyah al-mowahad = Arabic Union Catalog Subject Headings"
+Sources( CODE, 39  ) = "ausext"       : Sources( TITLE, 39  ) = "Australian extension to LCSH"
+Sources( CODE, 40  ) = "bare"         : Sources( TITLE, 40  ) = "Norwegian authority file: persons and corporate bodies"
+Sources( CODE, 41  ) = "barn"         : Sources( TITLE, 41  ) = "Svenska ämnesord för barn"
+Sources( CODE, 42  ) = "barngf"       : Sources( TITLE, 42  ) = "Svenska ämnesord för barn--Genre/Form"
+Sources( CODE, 43  ) = "bdrc"         : Sources( TITLE, 43  ) = "Buddhist Digital Resource Center"
+Sources( CODE, 44  ) = "bdrc"         : Sources( TITLE, 44  ) = "Buddhist Digital Resource Center"
+Sources( CODE, 45  ) = "bella"        : Sources( TITLE, 45  ) = "Bella: specialtesaurus för skönlitteratur"
+Sources( CODE, 46  ) = "bellobv"      : Sources( TITLE, 46  ) = "Gattungsbegriffe für Belletristik, Kinder- und Jugendliteratur"
+Sources( CODE, 47  ) = "bet"          : Sources( TITLE, 47  ) = "British education thesaurus"
+Sources( CODE, 48  ) = "bgtchm"       : Sources( TITLE, 48  ) = "Basic genre terms for cultural heritage materials"
+Sources( CODE, 49  ) = "bhammf"       : Sources( TITLE, 49  ) = "BHA, Bibliographie d'histoire de l'art, mots-matière/français"
+Sources( CODE, 50  ) = "bhashe"       : Sources( TITLE, 50  ) = "BHA, Bibliography of the history of art, subject headings/English"
+Sources( CODE, 51  ) = "bhb"          : Sources( TITLE, 51  ) = "Bibliography of the Hebrew book"
+Sources( CODE, 52  ) = "bib1814"      : Sources( TITLE, 52  ) = "1814-bibliografi: emneord for 1814-bibliografi"
+Sources( CODE, 53  ) = "bibalex"      : Sources( TITLE, 53  ) = "Bibliotheca Alexandrina name and subject authority file"
+Sources( CODE, 54  ) = "bibbi"        : Sources( TITLE, 54  ) = "BIBBI autoriteter"
+Sources( CODE, 55  ) = "biccbmc"      : Sources( TITLE, 55  ) = "BIC children's books marketing classifications"
+Sources( CODE, 56  ) = "bicssc"       : Sources( TITLE, 56  ) = "BIC standard subject categories"
+Sources( CODE, 57  ) = "bidex"        : Sources( TITLE, 57  ) = "Bilindex: a bilingual Spanish-English subject heading list"
+Sources( CODE, 58  ) = "bisacmt"      : Sources( TITLE, 58  ) = "BISAC merchandising themes"
+Sources( CODE, 59  ) = "bisacrt"      : Sources( TITLE, 59  ) = "BISAC regional themes"
+Sources( CODE, 60  ) = "bisacsh"      : Sources( TITLE, 60  ) = "BISAC subject headings"
+Sources( CODE, 61  ) = "bjornson"     : Sources( TITLE, 61  ) = "Bjornson: emneord for Bjornsonbibliografien"
+Sources( CODE, 62  ) = "blcpss"       : Sources( TITLE, 62  ) = "COMPASS subject authority system"
+Sources( CODE, 63  ) = "blmlsh"       : Sources( TITLE, 63  ) = "British Library--Map library subject headings"
+Sources( CODE, 64  ) = "blnpn"        : Sources( TITLE, 64  ) = "British Library newspaper place names"
+Sources( CODE, 65  ) = "bokbas"       : Sources( TITLE, 65  ) = "Bokbasen"
+Sources( CODE, 66  ) = "bt"           : Sources( TITLE, 66  ) = "Bioethics thesaurus"
+Sources( CODE, 67  ) = "btr"          : Sources( TITLE, 67  ) = "Brinkman onderwerp thesaurus"
+Sources( CODE, 68  ) = "buscem"       : Sources( TITLE, 68  ) = "University Library of Santiago de Compostela headings in Galician"
+Sources( CODE, 69  ) = "buscxf"       : Sources( TITLE, 69  ) = "Termos de xénero e forma en galego"
+Sources( CODE, 70  ) = "cabt"         : Sources( TITLE, 70  ) = "CAB thesaurus"
+Sources( CODE, 71  ) = "cash"         : Sources( TITLE, 71  ) = "Canadian subject headings"
+Sources( CODE, 72  ) = "cbk"          : Sources( TITLE, 72  ) = "Centraal Bestand Kinderboeken"
+Sources( CODE, 73  ) = "cbktrf"       : Sources( TITLE, 73  ) = "Centraal Bestand Kinderboeken--thematrefwoord"
+Sources( CODE, 74  ) = "cccv"         : Sources( TITLE, 74  ) = "Chicago Collections Consortium controlled vocabulary"
+Sources( CODE, 75  ) = "cck"          : Sources( TITLE, 75  ) = "Centrale catalogus kaarten"
+Sources( CODE, 76  ) = "cckthema"     : Sources( TITLE, 76  ) = "Thematrefwoorden CCK"
+Sources( CODE, 77  ) = "ccsa"         : Sources( TITLE, 77  ) = "Catalogue collectif suisse des affiches"
+Sources( CODE, 78  ) = "cct"          : Sources( TITLE, 78  ) = "Zhong guo fen lei zhu ti ci biao (di er ban) = Chinese classified thesaurus"
+Sources( CODE, 79  ) = "ccte"         : Sources( TITLE, 79  ) = "Carto-Canadiana thesaurus--English"
+Sources( CODE, 80  ) = "cctf"         : Sources( TITLE, 80  ) = "Carto-Canadiana thésaurus--Français"
+Sources( CODE, 81  ) = "cdcng"        : Sources( TITLE, 81  ) = "Catalogage des documents cartographiques: forme et structure des vedettes noms géographiques--NF Z 44-081"
+Sources( CODE, 82  ) = "ceeus"        : Sources( TITLE, 82  ) = "Counties and equivalent entities of the United States its possessions, and associated areas"
+Sources( CODE, 83  ) = "cgndb"        : Sources( TITLE, 83  ) = "Canadian Geographical Names Database"
+Sources( CODE, 84  ) = "cgpa"         : Sources( TITLE, 84  ) = "Congress.gov Policy Areas"
+Sources( CODE, 85  ) = "chirosh"      : Sources( TITLE, 85  ) = "Chiropractic subject headings"
+Sources( CODE, 86  ) = "cht"          : Sources( TITLE, 86  ) = "Chicano thesaurus for indexing Chicano materials in Chicano periodical index"
+Sources( CODE, 87  ) = "ciesiniv"     : Sources( TITLE, 87  ) = "CIESIN indexing vocabulary"
+Sources( CODE, 88  ) = "cilla"        : Sources( TITLE, 88  ) = "Cilla: specialtesaurus för musik"
+Sources( CODE, 89  ) = "cjh"          : Sources( TITLE, 89  ) = "Center for Jewish History thesaurus"
+Sources( CODE, 90  ) = "coarrt"       : Sources( TITLE, 90  ) = "COAR vocabulary for resource types"
+Sources( CODE, 91  ) = "collett"      : Sources( TITLE, 91  ) = "Collett-bibliografi: litteratur av og om Camilla Collett"
+Sources( CODE, 92  ) = "conorsi"      : Sources( TITLE, 92  ) = "CONOR.SI (name authority file)"
+Sources( CODE, 93  ) = "conorsr"      : Sources( TITLE, 93  ) = "CONOR.SR authority files of personal and corporate names"
+Sources( CODE, 94  ) = "csahssa"      : Sources( TITLE, 94  ) = DOUBLE_QUOTE & "Controlled vocabulary" & DOUBLE_QUOTE & " in Health and safety science abstracts"
+Sources( CODE, 95  ) = "csalsct"      : Sources( TITLE, 95  ) = "CSA life sciences collection thesaurus"
+Sources( CODE, 96  ) = "csapa"        : Sources( TITLE, 96  ) = DOUBLE_QUOTE & "Controlled vocabulary" & DOUBLE_QUOTE & " in Pollution abstracts"
+Sources( CODE, 97  ) = "csh"          : Sources( TITLE, 97  ) = "Kapsner, Oliver Leonard. Catholic subject headings"
+Sources( CODE, 98  ) = "csht"         : Sources( TITLE, 98  ) = "Chinese subject headings"
+Sources( CODE, 99  ) = "cstud"        : Sources( TITLE, 99  ) = "Classificatieschema's Bibliotheek TU Delft"
+Sources( CODE, 100 ) = "cyac"         : Sources( TITLE, 100 ) = "Library of Congress Children's and Young Adults' Cataloging subject headings"
+Sources( CODE, 101 ) = "czenas"       : Sources( TITLE, 101 ) = "Soubor vecnych autorit Národní knihovny CR = CZENAS thesaurus: a list of subject terms used in the National Library of the Czech Republic"
+Sources( CODE, 102 ) = "czmesh"       : Sources( TITLE, 102 ) = "Czech MeSH"
+Sources( CODE, 103 ) = "dbcsh"        : Sources( TITLE, 103 ) = "DBC Subject Headings"
+Sources( CODE, 104 ) = "dbn"          : Sources( TITLE, 104 ) = "Deskryptory Biblioteki Narodowej = National Library of Poland descriptors"
+Sources( CODE, 105 ) = "dcs"          : Sources( TITLE, 105 ) = "Descritores em ciências da saúde = Descriptores en ciencias de la salud = Health sciences descriptors"
+Sources( CODE, 106 ) = "dct"          : Sources( TITLE, 106 ) = "Dublin Core list of resource types"
+Sources( CODE, 107 ) = "ddcri"        : Sources( TITLE, 107 ) = "Dewey Decimal Classification relative index"
+Sources( CODE, 108 ) = "ddcrit"       : Sources( TITLE, 108 ) = "DDC retrieval and indexing terminology; posting terms with hierarchy and KWOC"
+Sources( CODE, 109 ) = "ddcut"        : Sources( TITLE, 109 ) = "Dewey Decimal Classification user terms"
+Sources( CODE, 110 ) = "dhb-jdg"      : Sources( TITLE, 110 ) = "Deutsche Historische Bibliografie--Jahresberichte für deutsche Geschichte--Schlagwörter"
+Sources( CODE, 111 ) = "dicgenam"     : Sources( TITLE, 111 ) = "Callegari, Horacio. Diccionario de gentilicios americanos"
+Sources( CODE, 112 ) = "dicgenes"     : Sources( TITLE, 112 ) = "Torre Aparicio, Tomás de la. Diccionario de gentilicios: toponimicos españoles"
+Sources( CODE, 113 ) = "dicgentop"    : Sources( TITLE, 113 ) = "Dicionário de gentílicos e topónimos"
+Sources( CODE, 114 ) = "dissao"       : Sources( TITLE, 114 ) = DOUBLE_QUOTE & "Dissertation abstracts online" & DOUBLE_QUOTE & " in Search tools: the guide to UNI/Data Courier Online"
+Sources( CODE, 115 ) = "dit"          : Sources( TITLE, 115 ) = "Defense intelligence thesaurus"
+Sources( CODE, 116 ) = "dltlt"        : Sources( TITLE, 116 ) = "Cuddon, J. A. A dictionary of literary terms and literary theory"
+Sources( CODE, 117 ) = "dltt"         : Sources( TITLE, 117 ) = "Quinn, E. A dictionary of literary and thematic terms"
+Sources( CODE, 118 ) = "dma"          : Sources( TITLE, 118 ) = "Digital musikkarkiv"
+Sources( CODE, 119 ) = "drama"        : Sources( TITLE, 119 ) = "Drama: specialtesaurus för teater och dans"
+Sources( CODE, 120 ) = "dtict"        : Sources( TITLE, 120 ) = "Defense Technical Information Center thesaurus"
+Sources( CODE, 121 ) = "dugfr"        : Sources( TITLE, 121 ) = "Dugas, Jean-Yves. Dictionnaire universel des gentilés en français"
+Sources( CODE, 122 ) = "ebfem"        : Sources( TITLE, 122 ) = "Encabezamientos bilingües de la Fundación Educativa Ana G. Mendez"
+Sources( CODE, 123 ) = "eclas"        : Sources( TITLE, 123 ) = "ECLAS thesaurus"
+Sources( CODE, 124 ) = "eet"          : Sources( TITLE, 124 ) = "European education thesaurus"
+Sources( CODE, 125 ) = "eflch"        : Sources( TITLE, 125 ) = "E4Libraries Category Headings"
+Sources( CODE, 126 ) = "eks"          : Sources( TITLE, 126 ) = "Eduskunnan kirjaston asiasanasto"
+Sources( CODE, 127 ) = "elsst"        : Sources( TITLE, 127 ) = "ELSST Thesaurus--European Language Social Science Thesaurus"
+Sources( CODE, 128 ) = "embehu"       : Sources( TITLE, 128 ) = "Encabezamientos de materia de la Biblioteca de la Universidad del País Vasco/Euskal Herriko Unibertsitatea"
+Sources( CODE, 129 ) = "embiaecid"    : Sources( TITLE, 129 ) = "Encabezamientos de materia de la Biblioteca Islámica de la Biblioteca AECID"
+Sources( CODE, 130 ) = "embne"        : Sources( TITLE, 130 ) = "Encabezamientos de materia de la Biblioteca Nacional de España"
+Sources( CODE, 131 ) = "embucm"       : Sources( TITLE, 131 ) = "Encabezamientos de materia de la Biblioteca Complutense"
+Sources( CODE, 132 ) = "embuz"        : Sources( TITLE, 132 ) = "Encabezamientos de materia de la Biblioteca de la Universidad de Zaragoza"
+Sources( CODE, 133 ) = "emnmus"       : Sources( TITLE, 133 ) = "Emneord for musikkdokument i EDB-kataloger"
+Sources( CODE, 134 ) = "ept"          : Sources( TITLE, 134 ) = "Evropski pedagoski tezaver = European education thesaurus (EET)"
+Sources( CODE, 135 ) = "erfemn"       : Sources( TITLE, 135 ) = "Erfaringskompetanses emneord"
+Sources( CODE, 136 ) = "ericd"        : Sources( TITLE, 136 ) = "Thesaurus of ERIC descriptors"
+Sources( CODE, 137 ) = "esar"         : Sources( TITLE, 137 ) = "Le système ESAR : pour analyser, classifier des jeux et aménager des espaces / revu et augmenté par Rolande Filion"
+Sources( CODE, 138 ) = "est"          : Sources( TITLE, 138 ) = "International energy: subject thesaurus"
+Sources( CODE, 139 ) = "estc"         : Sources( TITLE, 139 ) = "Eighteenth century short title catalogue, the cataloguing rules. New ed."
+Sources( CODE, 140 ) = "etiras"       : Sources( TITLE, 140 ) = "European Thesaurus on International Relations and Area Studies"
+Sources( CODE, 141 ) = "etuesh"       : Sources( TITLE, 141 ) = "TOBB ETÜ English Subject Headings = TOBB ETÜ Ingilizce Konu Basliklari"
+Sources( CODE, 142 ) = "etuturkob"    : Sources( TITLE, 142 ) = "TOBB ETÜ Turkish Subject Headings = TOBB ETÜ Türkçe Konu Basliklari"
+Sources( CODE, 143 ) = "eum"          : Sources( TITLE, 143 ) = "Eesti uldine märksonastik"
+Sources( CODE, 144 ) = "eurovocen"    : Sources( TITLE, 144 ) = "Eurovoc thesaurus (English)"
+Sources( CODE, 145 ) = "eurovoces"    : Sources( TITLE, 145 ) = "Eurovoc thesaurus (Spanish)"
+Sources( CODE, 146 ) = "eurovocfr"    : Sources( TITLE, 146 ) = "Eurovoc thesaurus (French)"
+Sources( CODE, 147 ) = "eurovocsl"    : Sources( TITLE, 147 ) = "Eurovoc thesaurus (Slovenian)"
+Sources( CODE, 148 ) = "fast"         : Sources( TITLE, 148 ) = "Faceted application of subject terminology"
+Sources( CODE, 149 ) = "fbg"          : Sources( TITLE, 149 ) = "Films by genre"
+Sources( CODE, 150 ) = "fcb"          : Sources( TITLE, 150 ) = "Functional classification of buildings"
+Sources( CODE, 151 ) = "fes"          : Sources( TITLE, 151 ) = "Thesaurus der Bibliothek der FES"
+Sources( CODE, 152 ) = "fgtpcm"       : Sources( TITLE, 152 ) = "Form/genre terms for printed cartoon material"
+Sources( CODE, 153 ) = "finmesh"      : Sources( TITLE, 153 ) = "FinMeSH"
+Sources( CODE, 154 ) = "fire"         : Sources( TITLE, 154 ) = "FireTalk, IFSI thesaurus"
+Sources( CODE, 155 ) = "flgeo"        : Sources( TITLE, 155 ) = "Thesaurus of Florida place names"
+Sources( CODE, 156 ) = "fmesh"        : Sources( TITLE, 156 ) = "Liste systématique et liste permutée des descripteurs français MeSH"
+Sources( CODE, 157 ) = "fnhl"         : Sources( TITLE, 157 ) = "First Nations House of Learning subject headings"
+Sources( CODE, 158 ) = "francis"      : Sources( TITLE, 158 ) = "Base de donneés FRANCIS: plan de classement = FRANCIS database classification scheme"
+Sources( CODE, 159 ) = "frst"         : Sources( TITLE, 159 ) = "Federal Reserve Subject Taxonomy"
+Sources( CODE, 160 ) = "fssh"         : Sources( TITLE, 160 ) = "FamilySearch subject headings"
+Sources( CODE, 161 ) = "ftamc"        : Sources( TITLE, 161 ) = "Form terms for archival and manuscripts control"
+Sources( CODE, 162 ) = "galestne"     : Sources( TITLE, 162 ) = "Gale Group subject thesaurus and named entity vocabulary"
+Sources( CODE, 163 ) = "gatbeg"       : Sources( TITLE, 163 ) = "Gattungsbegriffe"
+Sources( CODE, 164 ) = "gbd"          : Sources( TITLE, 164 ) = "Thesaurus der Gnomon Bibliographischen Datenbank"
+Sources( CODE, 165 ) = "gccst"        : Sources( TITLE, 165 ) = "Government of Canada core subject thesaurus"
+Sources( CODE, 166 ) = "gcipmedia"    : Sources( TITLE, 166 ) = "GAMECIP--computer game media formats"
+Sources( CODE, 167 ) = "gcipplatform" : Sources( TITLE, 167 ) = "GAMECIP--computer game platforms"
+Sources( CODE, 168 ) = "gem"          : Sources( TITLE, 168 ) = "GEM controlled vocabularies"
+Sources( CODE, 169 ) = "gemet"        : Sources( TITLE, 169 ) = "GEMET thesaurus (European Environment Agency"
+Sources( CODE, 170 ) = "gemppg"       : Sources( TITLE, 170 ) = "Glossary of Early Modern Popular Print Genres"
+Sources( CODE, 171 ) = "geni"         : Sources( TITLE, 171 ) = "Geni genealogy database"
+Sources( CODE, 172 ) = "geonet"       : Sources( TITLE, 172 ) = "Geographic Names Server"
+Sources( CODE, 173 ) = "georeft"      : Sources( TITLE, 173 ) = "GeoRef thesaurus"
+Sources( CODE, 174 ) = "gmd"          : Sources( TITLE, 174 ) = "Anglo-American Cataloguing Rules general material designation"
+Sources( CODE, 175 ) = "gmgpc"        : Sources( TITLE, 175 ) = "Thesaurus for graphic materials: TGM II, Genre and physical characteristic terms"
+Sources( CODE, 176 ) = "gnd"          : Sources( TITLE, 176 ) = "Gemeinsame Normdatei"
+Sources( CODE, 177 ) = "gnd"          : Sources( TITLE, 177 ) = "Gemeinsame Normdatei"
+Sources( CODE, 178 ) = "gnis"         : Sources( TITLE, 178 ) = "Geographic Names Information System"
+Sources( CODE, 179 ) = "gpn"          : Sources( TITLE, 179 ) = "Gazetteer of planetary nomenclature"
+Sources( CODE, 180 ) = "gsafd"        : Sources( TITLE, 180 ) = "Guidelines on subject access to individual works of fiction, drama, etc."
+Sources( CODE, 181 ) = "gsso"         : Sources( TITLE, 181 ) = "Gender, sex, and sexual orientation (GSSO) ontology"
+Sources( CODE, 182 ) = "gsso"         : Sources( TITLE, 182 ) = "Gender, sex, and sexual orientation"
+Sources( CODE, 183 ) = "gst"          : Sources( TITLE, 183 ) = "Gay studies thesaurus: a controlled vocabulary for indexing and accessing materials of relevance to gay culture, history, politics and psychology"
+Sources( CODE, 184 ) = "gtlm"         : Sources( TITLE, 184 ) = "Genre terms for law materials: a thesaurus"
+Sources( CODE, 185 ) = "gtmm"         : Sources( TITLE, 185 ) = "Robson, Diane; Yanowski, Kevin & Sassen, Catherine. Genre terms for makerspace materials"
+Sources( CODE, 186 ) = "gtt"          : Sources( TITLE, 186 ) = "GOO-trefwoorden thesaurus"
+Sources( CODE, 187 ) = "gttg"         : Sources( TITLE, 187 ) = "Robson, Diane; Yanowski, Kevin & Sassen, Catherine. Genre terms for tabletop games"
+Sources( CODE, 188 ) = "habibe"       : Sources( TITLE, 188 ) = "Habitants.be--Nom des habitants de Belgique"
+Sources( CODE, 189 ) = "habich"       : Sources( TITLE, 189 ) = "Habitants.ch--Nom des habitants de Suisse"
+Sources( CODE, 190 ) = "habifr"       : Sources( TITLE, 190 ) = "Habitants.fr"
+Sources( CODE, 191 ) = "habiit"       : Sources( TITLE, 191 ) = "Habitants.it--Nomi di abitanti d'Italia"
+Sources( CODE, 192 ) = "hamsun"       : Sources( TITLE, 192 ) = "Hamsun: emneord for Hamsunbibliografien"
+Sources( CODE, 193 ) = "hapi"         : Sources( TITLE, 193 ) = "HAPI thesaurus and name authority, 1970-2000"
+Sources( CODE, 194 ) = "helecon"      : Sources( TITLE, 194 ) = "Asiasanasto HELECON-tietikantoihin"
+Sources( CODE, 195 ) = "henn"         : Sources( TITLE, 195 ) = "Hennepin County Library cumulative authority list"
+Sources( CODE, 196 ) = "hkcan"        : Sources( TITLE, 196 ) = "Hong Kong Chinese authority file (Name)--HKCAN"
+Sources( CODE, 197 ) = "hlasstg"      : Sources( TITLE, 197 ) = "HLAS subject term glossary"
+Sources( CODE, 198 ) = "hoidokki"     : Sources( TITLE, 198 ) = "Hoitotieteellinen asiasanasto"
+Sources( CODE, 199 ) = "homoit"       : Sources( TITLE, 199 ) = "Homosaurus: an international LGBTQ linked data vocabulary"
+Sources( CODE, 200 ) = "hrvmesh"      : Sources( TITLE, 200 ) = "Croatian MeSH / Hrvatski MeSH"
+Sources( CODE, 201 ) = "hrvmr"        : Sources( TITLE, 201 ) = "Hrvatski mjesni rjecnik"
+Sources( CODE, 202 ) = "huc"          : Sources( TITLE, 202 ) = "U.S. Geological Survey water-supply paper 2294: hydrologic basins unit codes"
+Sources( CODE, 203 ) = "humord"       : Sources( TITLE, 203 ) = "HUMORD"
+Sources( CODE, 204 ) = "ibsen"        : Sources( TITLE, 204 ) = "Ibsen: emneord for den internasjonale Ibsen-bibliografien"
+Sources( CODE, 205 ) = "ica"          : Sources( TITLE, 205 ) = "Index of Christian art"
+Sources( CODE, 206 ) = "iconauth"     : Sources( TITLE, 206 ) = "Iconography authority"
+Sources( CODE, 207 ) = "icpsr"        : Sources( TITLE, 207 ) = "ICPSR controlled vocabulary system"
+Sources( CODE, 208 ) = "idas"         : Sources( TITLE, 208 ) = "ID-Archivschlüssel [Informationsdienst zur Verbreitung unterbliebener Nachrichten]"
+Sources( CODE, 209 ) = "idsbb"        : Sources( TITLE, 209 ) = "Thesaurus IDS Basel Bern"
+Sources( CODE, 210 ) = "idszbz"       : Sources( TITLE, 210 ) = "Thesaurus IDS Nebis Zentralbibliothek Zürich"
+Sources( CODE, 211 ) = "idszbzes"     : Sources( TITLE, 211 ) = "Thesaurus IDS Nebis Bibliothek Englisches Seminar der Universität Zürich"
+Sources( CODE, 212 ) = "idszbzna"     : Sources( TITLE, 212 ) = "Thesaurus IDS Nebis Zentralbibliothek Zürich, Nordamerika-Bibliothek"
+Sources( CODE, 213 ) = "idszbzzg"     : Sources( TITLE, 213 ) = "Thesaurus IDS Nebis Zentralbibliothek Zürich, Graphische Sammlung"
+Sources( CODE, 214 ) = "idszbzzh"     : Sources( TITLE, 214 ) = "Thesaurus IDS Nebis Zentralbibliothek Zürich, Handschriftenabteilung"
+Sources( CODE, 215 ) = "idszbzzk"     : Sources( TITLE, 215 ) = "Thesaurus IDS Nebis Zentralbibliothek Zürich, Kartensammlung"
+Sources( CODE, 216 ) = "iescs"        : Sources( TITLE, 216 ) = "International energy subject categories and scope"
+Sources( CODE, 217 ) = "iest"         : Sources( TITLE, 217 ) = "International energy: subject thesaurus"
+Sources( CODE, 218 ) = "ilot"         : Sources( TITLE, 218 ) = "ILO Thesaurus"
+Sources( CODE, 219 ) = "ilpt"         : Sources( TITLE, 219 ) = "Index to legal periodicals: thesaurus"
+Sources( CODE, 220 ) = "inist"        : Sources( TITLE, 220 ) = "INIS: thesaurus"
+Sources( CODE, 221 ) = "inspect"      : Sources( TITLE, 221 ) = "INSPEC thesaurus"
+Sources( CODE, 222 ) = "inspire"      : Sources( TITLE, 222 ) = "INSPIRE HEP (INSPIRE Labs)"
+Sources( CODE, 223 ) = "ipat"         : Sources( TITLE, 223 ) = "IPA thesaurus and frequency list"
+Sources( CODE, 224 ) = "ipsp"         : Sources( TITLE, 224 ) = "Defense intelligence production schedule"
+Sources( CODE, 225 ) = "iptcnc"       : Sources( TITLE, 225 ) = "IPTC NewsCodes"
+Sources( CODE, 226 ) = "isis"         : Sources( TITLE, 226 ) = DOUBLE_QUOTE & "Classification scheme" & DOUBLE_QUOTE & " in Isis"
+Sources( CODE, 227 ) = "itglit"       : Sources( TITLE, 227 ) = "International thesaurus of gay and lesbian index terms"
+Sources( CODE, 228 ) = "itis"         : Sources( TITLE, 228 ) = "Integrated Taxonomic Information System"
+Sources( CODE, 229 ) = "itrt"         : Sources( TITLE, 229 ) = "International thesaurus of refugee terminology"
+Sources( CODE, 230 ) = "jhpb"         : Sources( TITLE, 230 ) = "Jezyk hasel przedmiotowych Biblioteki Narodowej = National Library of Poland subject headings"
+Sources( CODE, 231 ) = "jhpk"         : Sources( TITLE, 231 ) = "Jezyk hasel przedmiotowych KABA = KABA subject headings"
+Sources( CODE, 232 ) = "jlabsh"       : Sources( TITLE, 232 ) = "Kihon kenmei hyômokuhyô = [Japan Library Association] Basic subject headings"
+Sources( CODE, 233 ) = "juho"         : Sources( TITLE, 233 ) = "JUHO--Julkishallinnon ontologia"
+Sources( CODE, 234 ) = "jupo"         : Sources( TITLE, 234 ) = "JUPO--Julkisen hallinnon palveluontologia"
+Sources( CODE, 235 ) = "jurivoc"      : Sources( TITLE, 235 ) = "JURIVOC"
+Sources( CODE, 236 ) = "kaa"          : Sources( TITLE, 236 ) = "Kasvatusalan asiasanasto"
+Sources( CODE, 237 ) = "kaba"         : Sources( TITLE, 237 ) = "Jezyk hasel przedmiotowych KABA = KABA subject headings"
+Sources( CODE, 238 ) = "kao"          : Sources( TITLE, 238 ) = "KVINNSAM ämnesordsregister = KVINNSAM subject headings"
+Sources( CODE, 239 ) = "kassu"        : Sources( TITLE, 239 ) = "Kassu--Kasvien suomenkieliset nimet"
+Sources( CODE, 240 ) = "kauno"        : Sources( TITLE, 240 ) = "KAUNO--Kaunokki-ontologin"
+Sources( CODE, 241 ) = "kaunokki"     : Sources( TITLE, 241 ) = "Kaunokki: kaunokirjallisuuden asiasanasto"
+Sources( CODE, 242 ) = "kdm"          : Sources( TITLE, 242 ) = "Khung dê muc hê thông thông tin khoa hoc và ky thuât quôc gia"
+Sources( CODE, 243 ) = "khib"         : Sources( TITLE, 243 ) = "Emneord, KHiB Biblioteket"
+Sources( CODE, 244 ) = "kito"         : Sources( TITLE, 244 ) = "KITO--Kirjallisuudentutkimuksen ontologia"
+Sources( CODE, 245 ) = "kitu"         : Sources( TITLE, 245 ) = "Kirjallisuudentutkimuksen asiasanasto"
+Sources( CODE, 246 ) = "kkts"         : Sources( TITLE, 246 ) = "Katalogos Kathieromenon Typon Syllogikou Katalogou Demosion Vivliothekon"
+Sources( CODE, 247 ) = "koko"         : Sources( TITLE, 247 ) = "KOKO-ontologia"
+Sources( CODE, 248 ) = "kssbar"       : Sources( TITLE, 248 ) = "Klassifikationssystem for svenska bibliotek. Ämnesordregister. Alfabetisk del"
+Sources( CODE, 249 ) = "kta"          : Sources( TITLE, 249 ) = "Kielitieteen asiasanasto"
+Sources( CODE, 250 ) = "kto"          : Sources( TITLE, 250 ) = "KTO--Kielitieteen ontologia"
+Sources( CODE, 251 ) = "ktpt"         : Sources( TITLE, 251 ) = "Kirjasto- ja tietopalvelualan tesaurus"
+Sources( CODE, 252 ) = "ktta"         : Sources( TITLE, 252 ) = "Käsi--ja taideteollisuuden asiasanasto"
+Sources( CODE, 253 ) = "kubikat"      : Sources( TITLE, 253 ) = "kubikat"
+Sources( CODE, 254 ) = "kula"         : Sources( TITLE, 254 ) = "Kulttuurien tutkimuksen asiasanasto"
+Sources( CODE, 255 ) = "kulo"         : Sources( TITLE, 255 ) = "KULO--Kulttuurien tutkimuksen ontologia"
+Sources( CODE, 256 ) = "kupu"         : Sources( TITLE, 256 ) = "He puna kupu / Maori Wordnet"
+Sources( CODE, 257 ) = "labloc"       : Sources( TITLE, 257 ) = "Dickson, Paul. Labels for locals"
+Sources( CODE, 258 ) = "lacnaf"       : Sources( TITLE, 258 ) = "Library and Archives Canada name authority file"
+Sources( CODE, 259 ) = "lapponica"    : Sources( TITLE, 259 ) = "Lapponica"
+Sources( CODE, 260 ) = "larpcal"      : Sources( TITLE, 260 ) = "Lista de assuntos referente ao programa de cadastramento automatizado de livros da USP"
+Sources( CODE, 261 ) = "lcac"         : Sources( TITLE, 261 ) = "Library of Congress Annotated Children's Cataloging Program subject headings"
+Sources( CODE, 262 ) = "lcdgt"        : Sources( TITLE, 262 ) = "Library of Congress demographic group term and code list"
+Sources( CODE, 263 ) = "lcgft"        : Sources( TITLE, 263 ) = "Library of Congress genre/form terms for library and archival materials"
+Sources( CODE, 264 ) = "lcsh"         : Sources( TITLE, 264 ) = "Library of Congress subject headings"
+Sources( CODE, 265 ) = "lcshac"       : Sources( TITLE, 265 ) = "Children's subject headings in Library of Congress subject headings: supplementary vocabularies"
+Sources( CODE, 266 ) = "lcstt"        : Sources( TITLE, 266 ) = "List of Chinese subject terms"
+Sources( CODE, 267 ) = "lctgm"        : Sources( TITLE, 267 ) = "Thesaurus for graphic materials: TGM I, Subject terms"
+Sources( CODE, 268 ) = "leaubsh"      : Sources( TITLE, 268 ) = "American University of Beirut subject headings"
+Sources( CODE, 269 ) = "lemac"        : Sources( TITLE, 269 ) = "Llista d'encapçalaments de matèria en català"
+Sources( CODE, 270 ) = "lemb"         : Sources( TITLE, 270 ) = "Lista de encabezamientos de materia para bibliotecas"
+Sources( CODE, 271 ) = "liito"        : Sources( TITLE, 271 ) = "LIITO--Liiketoimintaontologia"
+Sources( CODE, 272 ) = "liv"          : Sources( TITLE, 272 ) = "Legislative indexing vocabulary"
+Sources( CODE, 273 ) = "lnmmbr"       : Sources( TITLE, 273 ) = "Lietuvos nacionalines Martyno Mazvydo bibliotekos rubrikynas"
+Sources( CODE, 274 ) = "lobt"         : Sources( TITLE, 274 ) = "Language of Bindings Thesaurus"
+Sources( CODE, 275 ) = "local"        : Sources( TITLE, 275 ) = "Locally assigned term"
+Sources( CODE, 276 ) = "lst"          : Sources( TITLE, 276 ) = "Legislative subject terms"
+Sources( CODE, 277 ) = "ltcsh"        : Sources( TITLE, 277 ) = "Land Tenure Center Library list of subject headings"
+Sources( CODE, 278 ) = "lua"          : Sources( TITLE, 278 ) = "Liikunnan ja urheilun asiasanasto"
+Sources( CODE, 279 ) = "maaq"         : Sources( TITLE, 279 ) = "Madâkhil al-asmâ' al-'arabîyah al-qadîmah"
+Sources( CODE, 280 ) = "maknaz"       : Sources( TITLE, 280 ) = "Expanded Thesaurus (Maknaz) = al-Maknaz al-Muwassa"
+Sources( CODE, 281 ) = "maotao"       : Sources( TITLE, 281 ) = "MAO/TAO--Ontologi för museibranschen och Konstindustriella ontologin"
+Sources( CODE, 282 ) = "mar"          : Sources( TITLE, 282 ) = "Merenkulun asiasanasto = MariTerm (Maritime technology)"
+Sources( CODE, 283 ) = "marccategory" : Sources( TITLE, 283 ) = "MARC form category term list"
+Sources( CODE, 284 ) = "marcform"     : Sources( TITLE, 284 ) = "MARC form of item term list"
+Sources( CODE, 285 ) = "marcgt"       : Sources( TITLE, 285 ) = "MARC genre terms"
+Sources( CODE, 286 ) = "marcsmd"      : Sources( TITLE, 286 ) = "MARC specific material form term list"
+Sources( CODE, 287 ) = "masa"         : Sources( TITLE, 287 ) = "Museoalan asiasanasto"
+Sources( CODE, 288 ) = "mech"         : Sources( TITLE, 288 ) = "Iskanje po zbirki MECH Published by University of Ljubljana"
+Sources( CODE, 289 ) = "mero"         : Sources( TITLE, 289 ) = "MERO--Merenkulkualan ontologia"
+Sources( CODE, 290 ) = "mesh"         : Sources( TITLE, 290 ) = "Medical subject headings"
+Sources( CODE, 291 ) = "meshscr"      : Sources( TITLE, 291 ) = "Medical subject headings supplementary records"
+Sources( CODE, 292 ) = "migfg"        : Sources( TITLE, 292 ) = "Moving image genre-form guide"
+Sources( CODE, 293 ) = "mim"          : Sources( TITLE, 293 ) = "Moving image materials: genre terms"
+Sources( CODE, 294 ) = "minecost"     : Sources( TITLE, 294 ) = "Tesauro de Economía de la Biblioteca Central de MINECO"
+Sources( CODE, 295 ) = "mipfesd"      : Sources( TITLE, 295 ) = "Macrothesaurus for information processing in the field of economic and social development"
+Sources( CODE, 296 ) = "mmm"          : Sources( TITLE, 296 ) = DOUBLE_QUOTE & "Subject key" & DOUBLE_QUOTE & " in Marxism and the mass media"
+Sources( CODE, 297 ) = "mpirdes"      : Sources( TITLE, 297 ) = "Macrothesaurus para el procesamiento de la información relativa al desarrollo económico y social"
+Sources( CODE, 298 ) = "msc"          : Sources( TITLE, 298 ) = "Mathematical subject classification"
+Sources( CODE, 299 ) = "msh"          : Sources( TITLE, 299 ) = "Trimboli, T., and Martyn S. Marianist subject headings"
+Sources( CODE, 300 ) = "msupplcont"   : Sources( TITLE, 300 ) = "Supplementary content"
+Sources( CODE, 301 ) = "mtirdes"      : Sources( TITLE, 301 ) = "Macrothésaurus pour le traitement de l'information relative au développement économique et social"
+Sources( CODE, 302 ) = "mts"          : Sources( TITLE, 302 ) = "Metatietosanasto"
+Sources( CODE, 303 ) = "mts"          : Sources( TITLE, 303 ) = "Metatietosanasto"
+Sources( CODE, 304 ) = "musa"         : Sources( TITLE, 304 ) = "Musiikin asiasanasto: erikoissanasto"
+Sources( CODE, 305 ) = "muso"         : Sources( TITLE, 305 ) = "MUSO--Ontologi för musik"
+Sources( CODE, 306 ) = "muzeukc"      : Sources( TITLE, 306 ) = "MuzeMusic UK classical music classification"
+Sources( CODE, 307 ) = "muzeukn"      : Sources( TITLE, 307 ) = "MuzeMusic UK non-classical music classification"
+Sources( CODE, 308 ) = "muzeukv"      : Sources( TITLE, 308 ) = "MuzeVideo UK DVD and UMD film genre classification"
+Sources( CODE, 309 ) = "muzvukci"     : Sources( TITLE, 309 ) = "MuzeVideo UK contributor index"
+Sources( CODE, 310 ) = "naf"          : Sources( TITLE, 310 ) = "NACO authority file"
+Sources( CODE, 311 ) = "nal"          : Sources( TITLE, 311 ) = "National Agricultural Library subject headings"
+Sources( CODE, 312 ) = "nalnaf"       : Sources( TITLE, 312 ) = "National Agricultural Library name authority file"
+Sources( CODE, 313 ) = "nasat"        : Sources( TITLE, 313 ) = "NASA thesaurus"
+Sources( CODE, 314 ) = "nbdbgf"       : Sources( TITLE, 314 ) = "NBD Biblion Genres Fictie"
+Sources( CODE, 315 ) = "nbdbt"        : Sources( TITLE, 315 ) = "NBD Biblion Trefwoordenthesaurus"
+Sources( CODE, 316 ) = "nbiemnfag"    : Sources( TITLE, 316 ) = "NBIs emneordsliste for faglitteratur"
+Sources( CODE, 317 ) = "ncjt"         : Sources( TITLE, 317 ) = "National criminal justice thesaurus"
+Sources( CODE, 318 ) = "ndlgft"       : Sources( TITLE, 318 ) = "National Diet Library in Japan genre/form terms for library materials"
+Sources( CODE, 319 ) = "ndlsh"        : Sources( TITLE, 319 ) = "Koktsu Kokkai Toshokan kenmei hyômokuhyô = National Diet Library list of subject headings"
+Sources( CODE, 320 ) = "netc"         : Sources( TITLE, 320 ) = "National Emergency Training Center thesaurus"
+Sources( CODE, 321 ) = "ngl"          : Sources( TITLE, 321 ) = "Newspaper genre list"
+Sources( CODE, 322 ) = "nicem"        : Sources( TITLE, 322 ) = "NICEM subject headings and classification system"
+Sources( CODE, 323 ) = "nimacsc"      : Sources( TITLE, 323 ) = "NIMA cartographic subject categories"
+Sources( CODE, 324 ) = "nimafc"       : Sources( TITLE, 324 ) = "NIMA form codes"
+Sources( CODE, 325 ) = "niodt"        : Sources( TITLE, 325 ) = "WO2-thesaurus (NIOD Instituut voor Oorlogs-, Holocaust en Genocidestudies = Institute for War, Holocaust and Genocide Studies)"
+Sources( CODE, 326 ) = "nlgaf"        : Sources( TITLE, 326 ) = "Archeio Kathieromenon Epikephalidon"
+Sources( CODE, 327 ) = "nlggf"        : Sources( TITLE, 327 ) = "National Library of Greece genre/form for library materials"
+Sources( CODE, 328 ) = "nlgkk"        : Sources( TITLE, 328 ) = "Katalogos kathieromenon onomaton physikon prosopon"
+Sources( CODE, 329 ) = "nlgsh"        : Sources( TITLE, 329 ) = "Katalogos Hellenikon thematikon epikephalidon"
+Sources( CODE, 330 ) = "nli"          : Sources( TITLE, 330 ) = "National Library of Israel authority file"
+Sources( CODE, 331 ) = "nlksh"        : Sources( TITLE, 331 ) = "National Library of Korea subject headings"
+Sources( CODE, 332 ) = "nlmnaf"       : Sources( TITLE, 332 ) = "National Library of Medicine name authority file"
+Sources( CODE, 333 ) = "nmaict"       : Sources( TITLE, 333 ) = "National Museum of the American Indian culture thesaurus"
+Sources( CODE, 334 ) = "nmc"          : Sources( TITLE, 334 ) = "Revised nomenclature for museum cataloging: a revised and expanded version of Robert C. Chenhall's system for classifying man-made objects"
+Sources( CODE, 335 ) = "no-ubo-mr"    : Sources( TITLE, 335 ) = "Menneskerettighets-tesaurus"
+Sources( CODE, 336 ) = "nom"          : Sources( TITLE, 336 ) = "Nomenclature for Museum Cataloging = Nomenclature pour le catalogage des objets de musée"
+Sources( CODE, 337 ) = "noraf"        : Sources( TITLE, 337 ) = "Norwegian authority file"
+Sources( CODE, 338 ) = "noram"        : Sources( TITLE, 338 ) = "Noram: emneord for Norsk-amerikansk samling"
+Sources( CODE, 339 ) = "norbok"       : Sources( TITLE, 339 ) = "Norbok: emneord i Norsk bokfortegnelse"
+Sources( CODE, 340 ) = "normesh"      : Sources( TITLE, 340 ) = "Norwegian MeSH"
+Sources( CODE, 341 ) = "norvok"       : Sources( TITLE, 341 ) = "Nasjonalbibliotekets emne- og sjangervokabular"
+Sources( CODE, 342 ) = "noubojur"     : Sources( TITLE, 342 ) = "Thesaurus of law"
+Sources( CODE, 343 ) = "noubomn"      : Sources( TITLE, 343 ) = "University of Oslo Library thesaurus of science (Realfagstermer)"
+Sources( CODE, 344 ) = "nsbncf"       : Sources( TITLE, 344 ) = "Nuovo Soggettario"
+Sources( CODE, 345 ) = "nskps"        : Sources( TITLE, 345 ) = "Prirucnik za izradu predmetnog kataloga u Nacionalnoj i sveucilicnoj knjicnici u Zagrebu (Manual for NSK subject headings)"
+Sources( CODE, 346 ) = "nskzs"        : Sources( TITLE, 346 ) = "Tezaurus za zanr ili oblik"
+Sources( CODE, 347 ) = "nta"          : Sources( TITLE, 347 ) = "Nederlandse Thesaurus van Auteursnamen"
+Sources( CODE, 348 ) = "ntc"          : Sources( TITLE, 348 ) = "Nederlandse Thesaurus voor Corporaties = Dutch corporations authority file"
+Sources( CODE, 349 ) = "ntcpsc"       : Sources( TITLE, 349 ) = DOUBLE_QUOTE & "National Translations Center primary subject classification" & DOUBLE_QUOTE & " in National Translations Center primary subject classification and secondary descriptors"
+Sources( CODE, 350 ) = "ntcsd"        : Sources( TITLE, 350 ) = DOUBLE_QUOTE & "National Translations Center secondary descriptors" & DOUBLE_QUOTE & " in National Translation Center primary subject classification and secondary descriptor"
+Sources( CODE, 351 ) = "ntids"        : Sources( TITLE, 351 ) = "Norske tidsskrifter 1700-1820: emneord"
+Sources( CODE, 352 ) = "ntissc"       : Sources( TITLE, 352 ) = "NTIS subject categories"
+Sources( CODE, 353 ) = "ntsf"         : Sources( TITLE, 353 ) = "Norsk tesaurus for sjanger og form"
+Sources( CODE, 354 ) = "nzcoh"        : Sources( TITLE, 354 ) = "New Zealand choral and orchestral hire form and genre terms"
+Sources( CODE, 355 ) = "nzggn"        : Sources( TITLE, 355 ) = "New Zealand gazetteer of official geographic names"
+Sources( CODE, 356 ) = "nznb"         : Sources( TITLE, 356 ) = "New Zealand national bibliography"
+Sources( CODE, 357 ) = "odlt"         : Sources( TITLE, 357 ) = "Baldick, C. The Oxford dictionary of literary terms"
+Sources( CODE, 358 ) = "ogst"         : Sources( TITLE, 358 ) = "Oregon GILS subject tree"
+Sources( CODE, 359 ) = "olacvggt"     : Sources( TITLE, 359 ) = "OLAC Video Game Genre Terms"
+Sources( CODE, 360 ) = "opms"         : Sources( TITLE, 360 ) = "Opetusministeriön asiasanasto"
+Sources( CODE, 361 ) = "ordnok"       : Sources( TITLE, 361 ) = "Ordnokkelen: tesaurus for kulturminnevern"
+Sources( CODE, 362 ) = "orgnr"        : Sources( TITLE, 362 ) = "Norwegian national organization number"
+Sources( CODE, 363 ) = "pana"         : Sources( TITLE, 363 ) = "Pan-American authorities"
+Sources( CODE, 364 ) = "pascal"       : Sources( TITLE, 364 ) = "Base de donneés PASCAL: plan de classement = PASCAL database classification scheme"
+Sources( CODE, 365 ) = "peakbag"      : Sources( TITLE, 365 ) = "Peakbagger.com"
+Sources( CODE, 366 ) = "pepp"         : Sources( TITLE, 366 ) = "The Princeton encyclopedia of poetry and poetics"
+Sources( CODE, 367 ) = "peri"         : Sources( TITLE, 367 ) = "Perinnetieteiden asiasanasto"
+Sources( CODE, 368 ) = "periodo"      : Sources( TITLE, 368 ) = "PeriodO: a gazetteer of period definitions for linking and visualizing data"
+Sources( CODE, 369 ) = "pha"          : Sources( TITLE, 369 ) = "Puolostushallinnon asiasanasto"
+Sources( CODE, 370 ) = "pkk"          : Sources( TITLE, 370 ) = "Predmetnik za katoliske knjiznice"
+Sources( CODE, 371 ) = "pldi"         : Sources( TITLE, 371 ) = "Placenames database of Ireland"
+Sources( CODE, 372 ) = "pleiades"     : Sources( TITLE, 372 ) = "Pleiades: a gazetteer of past places"
+Sources( CODE, 373 ) = "pmbok"        : Sources( TITLE, 373 ) = "Guide to the project management body of knowledge (PMBOK guide)"
+Sources( CODE, 374 ) = "pmc"          : Sources( TITLE, 374 ) = "PubMed Central (National Library of Medicine)"
+Sources( CODE, 375 ) = "pmcsg"        : Sources( TITLE, 375 ) = "Combined standards glossary"
+Sources( CODE, 376 ) = "pmid"         : Sources( TITLE, 376 ) = "PubMed (National Library of Medicine)"
+Sources( CODE, 377 ) = "pmont"        : Sources( TITLE, 377 ) = "Powerhouse Museum object name thesaurus"
+Sources( CODE, 378 ) = "pmt"          : Sources( TITLE, 378 ) = "Project management terminology Newtown Square, PA: Project Management Institute"
+Sources( CODE, 379 ) = "poliscit"     : Sources( TITLE, 379 ) = "Political science thesaurus II"
+Sources( CODE, 380 ) = "popinte"      : Sources( TITLE, 380 ) = "POPIN thesaurus: population multilingual thesaurus"
+Sources( CODE, 381 ) = "pplt"         : Sources( TITLE, 381 ) = "Peace Palace thesaurus"
+Sources( CODE, 382 ) = "ppluk"        : Sources( TITLE, 382 ) = "Peoplefrom.co.uk--Demonyms of the United Kingdom"
+Sources( CODE, 383 ) = "precis"       : Sources( TITLE, 383 ) = "PRECIS: a manual of concept analysis and subject indexing"
+Sources( CODE, 384 ) = "prnpdi"       : Sources( TITLE, 384 ) = "Le petit Robert des noms propres: dictionnaire illustré"
+Sources( CODE, 385 ) = "proqsc"       : Sources( TITLE, 385 ) = "ProQuest subject categories"
+Sources( CODE, 386 ) = "proysen"      : Sources( TITLE, 386 ) = "Prøysen: emneord for Prøysen-bibliografien"
+Sources( CODE, 387 ) = "prvt"         : Sources( TITLE, 387 ) = "Patent- och registreringsverkets tesaurus"
+Sources( CODE, 388 ) = "psychit"      : Sources( TITLE, 388 ) = "Thesaurus of psychological index terms"
+Sources( CODE, 389 ) = "puho"         : Sources( TITLE, 389 ) = "PUHO--Puolustushallinnon ontologia"
+Sources( CODE, 390 ) = "qlit"         : Sources( TITLE, 390 ) = "Queer literature indexing thesaurus"
+Sources( CODE, 391 ) = "qlsp"         : Sources( TITLE, 391 ) = "Queens Library Spanish language subject headings"
+Sources( CODE, 392 ) = "qnaf"         : Sources( TITLE, 392 ) = "Qatar National Library name authority file"
+Sources( CODE, 393 ) = "qnlsh"        : Sources( TITLE, 393 ) = "Qatar National Library subject headings"
+Sources( CODE, 394 ) = "qrma"         : Sources( TITLE, 394 ) = "Qâ'imat ru'ûs al-mawdûât al-'Arabîyah = List of Arabic subject headings"
+Sources( CODE, 395 ) = "qrmak"        : Sources( TITLE, 395 ) = "Qâ'imat ru'ûs al-mawdû'ât al-'Arabîyah al-qiyâsîyah al-maktabât wa-marâkaz al-ma'lûmât wa-qawâid al-bayânât"
+Sources( CODE, 396 ) = "qtglit"       : Sources( TITLE, 396 ) = "A queer thesaurus: an international thesaurus of gay and lesbian index terms"
+Sources( CODE, 397 ) = "quiding"      : Sources( TITLE, 397 ) = "Quiding, Nils Herman. Svenskt allmänt författningsregister för tiden från år 1522 till och med år 1862"
+Sources( CODE, 398 ) = "radfg"        : Sources( TITLE, 398 ) = "Radio form / genre terms guide"
+Sources( CODE, 399 ) = "ram"          : Sources( TITLE, 399 ) = "RAMEAU: répertoire d'autorité-matière encyclopédique et alphabétique unifié"
+Sources( CODE, 400 ) = "rasuqam"      : Sources( TITLE, 400 ) = "Répertoire d'autorités-sujet de l'UQAM"
+Sources( CODE, 401 ) = "rbmscv"       : Sources( TITLE, 401 ) = "Controlled vocabulary for rare materials cataloging"
+Sources( CODE, 402 ) = "rda"          : Sources( TITLE, 402 ) = "Resource description and access"
+Sources( CODE, 403 ) = "renib"        : Sources( TITLE, 403 ) = "Renib [base de datos de autoridad]"
+Sources( CODE, 404 ) = "reo"          : Sources( TITLE, 404 ) = "Maori subject headings thesaurus--Nga Upoko Tukutuku"
+Sources( CODE, 405 ) = "rero"         : Sources( TITLE, 405 ) = "Indexation matiéres RERO"
+Sources( CODE, 406 ) = "rerovoc"      : Sources( TITLE, 406 ) = "Indexation matiéres RERO autorités"
+Sources( CODE, 407 ) = "reveal"       : Sources( TITLE, 407 ) = "REVEAL: fiction indexing and genre headings"
+Sources( CODE, 408 ) = "rma"          : Sources( TITLE, 408 ) = "Ru'us al-mawdu'at al-'Arabiyah"
+Sources( CODE, 409 ) = "root"         : Sources( TITLE, 409 ) = "BSI ROOT thesaurus"
+Sources( CODE, 410 ) = "rpe"          : Sources( TITLE, 410 ) = "Rubrikator po ekonomike = Rubricator on economics"
+Sources( CODE, 411 ) = "rswk"         : Sources( TITLE, 411 ) = "Regeln für den Schlagwortkatalog"
+Sources( CODE, 412 ) = "rswkaf"       : Sources( TITLE, 412 ) = "Alternativform zum Hauptschlagwort"
+Sources( CODE, 413 ) = "rugeo"        : Sources( TITLE, 413 ) = "Natsional'nyi normativnyi fail geograficheskikh nazvanii Rossiiskoi Federatsii"
+Sources( CODE, 414 ) = "rurkp"        : Sources( TITLE, 414 ) = "Predmetnye rubriki Rossiiskoi knizhnoi palaty"
+Sources( CODE, 415 ) = "rvm"          : Sources( TITLE, 415 ) = "Répertoire de vedettes-matière"
+Sources( CODE, 416 ) = "rvmfast"      : Sources( TITLE, 416 ) = "Répertoire de vedettes-matière: vocabulaire à facettes normalisé"
+Sources( CODE, 417 ) = "rvmgd"        : Sources( TITLE, 417 ) = "Thésaurus des descripteurs de groupes démographiques de l'Université Laval"
+Sources( CODE, 418 ) = "rvmgf"        : Sources( TITLE, 418 ) = "Thésaurus des descripteurs de genre/forme de l'Université Laval"
+Sources( CODE, 419 ) = "samisk"       : Sources( TITLE, 419 ) = "Sámi bibliografia (Norga) = Samisk bibliografi (Norge) = Sami bibliography (Norway)"
+Sources( CODE, 420 ) = "sanb"         : Sources( TITLE, 420 ) = "South African national bibliography authority file"
+Sources( CODE, 421 ) = "sao"          : Sources( TITLE, 421 ) = "Svenska ämnesord"
+Sources( CODE, 422 ) = "saogf"        : Sources( TITLE, 422 ) = "Svenska ämnesord--Genre/Form"
+Sources( CODE, 423 ) = "sbaa"         : Sources( TITLE, 423 ) = "Soggettario della Biblioteca " & DOUBLE_QUOTE & "Angelicum" & DOUBLE_QUOTE
+Sources( CODE, 424 ) = "sbiao"        : Sources( TITLE, 424 ) = "Svenska barnboksinstitutets ämnesordslista"
+Sources( CODE, 425 ) = "sbt"          : Sources( TITLE, 425 ) = "Soggettario sistema Bibliotecario Ticinese"
+Sources( CODE, 426 ) = "scbi"         : Sources( TITLE, 426 ) = "Soggettario per i cataloghi delle biblioteche italiane"
+Sources( CODE, 427 ) = "scgdst"       : Sources( TITLE, 427 ) = "Subject categorization guide for defense science and technology"
+Sources( CODE, 428 ) = "scisshl"      : Sources( TITLE, 428 ) = "SCIS subject headings"
+Sources( CODE, 429 ) = "scot"         : Sources( TITLE, 429 ) = "Schools online thesaurus"
+Sources( CODE, 430 ) = "sears"        : Sources( TITLE, 430 ) = "Sears list of subject headings"
+Sources( CODE, 431 ) = "sesca"        : Sources( TITLE, 431 ) = "Standard economic sector classifications of Australia"
+Sources( CODE, 432 ) = "sfit"         : Sources( TITLE, 432 ) = "Svenska filminstitutets tesaurus"
+Sources( CODE, 433 ) = "sgc"          : Sources( TITLE, 433 ) = "Splosni geslovnik COBISS.SI = COBISS.SI general list of subject headings (Slovenian subject headings)"
+Sources( CODE, 434 ) = "sgce"         : Sources( TITLE, 434 ) = "Splosni geslovnik COBISS.SI = COBISS.SI general list of subject headings (English subject headings)"
+Sources( CODE, 435 ) = "sgp"          : Sources( TITLE, 435 ) = "Svenska genrebeteckningar fr periodika"
+Sources( CODE, 436 ) = "shbe"         : Sources( TITLE, 436 ) = "Subject headings in business and economics"
+Sources( CODE, 437 ) = "she"          : Sources( TITLE, 437 ) = "SHE: subject headings for engineering"
+Sources( CODE, 438 ) = "shsples"      : Sources( TITLE, 438 ) = "Subject headings for school and public libraries = Encabezamientos de materia para bibliotecas escolares y públicas"
+Sources( CODE, 439 ) = "sigle"        : Sources( TITLE, 439 ) = "SIGLE [System for information on grey literature in Europe] manual, Part 2, Subject category list"
+Sources( CODE, 440 ) = "sipri"        : Sources( TITLE, 440 ) = "SIPRI library thesaurus"
+Sources( CODE, 441 ) = "sk"           : Sources( TITLE, 441 ) = DOUBLE_QUOTE & "Zhong guo gu ji shan ben shu zong mu" & DOUBLE_QUOTE & " fen lei biao [Si ku]"
+Sources( CODE, 442 ) = "skbb"         : Sources( TITLE, 442 ) = "Zhongguo gu ji zong mu"
+Sources( CODE, 443 ) = "skish"        : Sources( TITLE, 443 ) = "Saskatchewan indigenous subject heading"
+Sources( CODE, 444 ) = "skon"         : Sources( TITLE, 444 ) = "Att indexera skönlitteratur: Ämnesordslista, vuxenlitteratur"
+Sources( CODE, 445 ) = "slem"         : Sources( TITLE, 445 ) = "Sears: lista de encabezamientos de materia"
+Sources( CODE, 446 ) = "slm"          : Sources( TITLE, 446 ) = "Suomalainen lajityyppi- ja muotosanasto"
+Sources( CODE, 447 ) = "smda"         : Sources( TITLE, 447 ) = "Smithsonian National Air and Space Museum directory of airplanes"
+Sources( CODE, 448 ) = "snt"          : Sources( TITLE, 448 ) = "Sexual nomenclature: a thesaurus"
+Sources( CODE, 449 ) = "socio"        : Sources( TITLE, 449 ) = "Sociological abstracts thesaurus"
+Sources( CODE, 450 ) = "solstad"      : Sources( TITLE, 450 ) = "Solstad: emneord for Solstadbibliografien"
+Sources( CODE, 451 ) = "sosa"         : Sources( TITLE, 451 ) = "Sociaalialan asiasanasto"
+Sources( CODE, 452 ) = "soto"         : Sources( TITLE, 452 ) = "SOTO--Sotatieteen ontologia"
+Sources( CODE, 453 ) = "spines"       : Sources( TITLE, 453 ) = "Tesauro SPINES: un vocabulario controlado y estructurado para el tratamiento de información sobre ciencia y tecnología para el desarrollo"
+Sources( CODE, 454 ) = "ssg"          : Sources( TITLE, 454 ) = "Splosni slovenski geslovnik"
+Sources( CODE, 455 ) = "stcv"         : Sources( TITLE, 455 ) = "Short Title Catalogus Vlaanderen = Short title catalogue Flanders"
+Sources( CODE, 456 ) = "sthus"        : Sources( TITLE, 456 ) = "Subject taxonomy of the history of U.S. foreign relations"
+Sources( CODE, 457 ) = "stw"          : Sources( TITLE, 457 ) = "Standard-Thesaurus Wirtschaft = STW thesaurus for economics"
+Sources( CODE, 458 ) = "swd"          : Sources( TITLE, 458 ) = "Schlagwortnormdatei"
+Sources( CODE, 459 ) = "swemesh"      : Sources( TITLE, 459 ) = "Svenska MeSH = Swedish MeSH"
+Sources( CODE, 460 ) = "taika"        : Sources( TITLE, 460 ) = "Taideteollisuuden asiasanasto"
+Sources( CODE, 461 ) = "tasmas"       : Sources( TITLE, 461 ) = "Tesaurus de asuntos sociales del Ministerio de Asuntos Sociales de España"
+Sources( CODE, 462 ) = "taxhs"        : Sources( TITLE, 462 ) = "A taxonomy or human services: a conceptual framework with standardized terminology and definitions for the field"
+Sources( CODE, 463 ) = "tbjvp"        : Sources( TITLE, 463 ) = "Tesauro de la Biblioteca Dr. Jorge Villalobos Padilla, S.J."
+Sources( CODE, 464 ) = "tef"          : Sources( TITLE, 464 ) = "Tesauro especializado en filosofía, con enfoque de género by Marcia Ugarte Barquero"
+Sources( CODE, 465 ) = "tekord"       : Sources( TITLE, 465 ) = "TEK-ord : UBiTs emneordliste for arkitektur, realfag, og teknolog"
+Sources( CODE, 466 ) = "tept"         : Sources( TITLE, 466 ) = "Thesaurus of ephemera terms"
+Sources( CODE, 467 ) = "tero"         : Sources( TITLE, 467 ) = "TERO--Terveyden ja hyvinvoinnin ontologia"
+Sources( CODE, 468 ) = "tesa"         : Sources( TITLE, 468 ) = "Tesauro agrícola"
+Sources( CODE, 469 ) = "tesbhaecid"   : Sources( TITLE, 469 ) = "Tesauro de la Biblioteca Hispánica de la Biblioteca AECID"
+Sources( CODE, 470 ) = "test"         : Sources( TITLE, 470 ) = "Thesaurus of engineering and scientific terms"
+Sources( CODE, 471 ) = "tgfbne"       : Sources( TITLE, 471 ) = "Términos de género/forma de la Biblioteca Nacional de España"
+Sources( CODE, 472 ) = "tgfc"         : Sources( TITLE, 472 ) = "Termes de gènere/forma en català"
+Sources( CODE, 473 ) = "tgn"          : Sources( TITLE, 473 ) = "Getty thesaurus of geographic names"
+Sources( CODE, 474 ) = "tha"          : Sources( TITLE, 474 ) = "Barcala de Moyano, Graciela G., Cristina Voena. Tesauro de Historia Argentina"
+Sources( CODE, 475 ) = "thema"        : Sources( TITLE, 475 ) = "Thema"
+Sources( CODE, 476 ) = "thema"        : Sources( TITLE, 476 ) = "Thema"
+Sources( CODE, 477 ) = "thesoz"       : Sources( TITLE, 477 ) = "Thesaurus for the social sciences"
+Sources( CODE, 478 ) = "thia"         : Sources( TITLE, 478 ) = "Th.I.A.--Thesaurus italiano infanzia e adolescenza = Th.I.A.--Italian thesaurus on childhood and adolescence"
+Sources( CODE, 479 ) = "thla"         : Sources( TITLE, 479 ) = "ThLA Thesaurus for landscape"
+Sources( CODE, 480 ) = "tho"          : Sources( TITLE, 480 ) = "Thesauros Hellenikon Oron"
+Sources( CODE, 481 ) = "thub"         : Sources( TITLE, 481 ) = "Thesaurus de la Universitat de Barcelona"
+Sources( CODE, 482 ) = "tips"         : Sources( TITLE, 482 ) = "Tesauro ISOC de psicología"
+Sources( CODE, 483 ) = "tisa"         : Sources( TITLE, 483 ) = "Villagrá Rubio, Angel. Tesauro ISOC de sociología autores"
+Sources( CODE, 484 ) = "tlka"         : Sources( TITLE, 484 ) = "Investigació, Procés Tècnicn kirjaston asiasanasto"
+Sources( CODE, 485 ) = "tlsh"         : Sources( TITLE, 485 ) = "Subject heading authority list"
+Sources( CODE, 486 ) = "tmdbm"        : Sources( TITLE, 486 ) = "TMDB movies (The Movie Database)"
+Sources( CODE, 487 ) = "tmdbp"        : Sources( TITLE, 487 ) = "TMDB people (The Movie Database)"
+Sources( CODE, 488 ) = "tmdbtv"       : Sources( TITLE, 488 ) = "TMDB TV shows (The Movie Database)"
+Sources( CODE, 489 ) = "tpro"         : Sources( TITLE, 489 ) = "T-PRO Thesaurus der Provenienzbegriffe"
+Sources( CODE, 490 ) = "trfarn"       : Sources( TITLE, 490 ) = "Lokale trefwoorden de Bibliotheek Arnhem"
+Sources( CODE, 491 ) = "trfbmb"       : Sources( TITLE, 491 ) = "Lokale trefwoorden Bibliotheek Midden-Brabant"
+Sources( CODE, 492 ) = "trfdh"        : Sources( TITLE, 492 ) = "Lokale trefwoorden OB Den Haag"
+Sources( CODE, 493 ) = "trfgr"        : Sources( TITLE, 493 ) = "Lokale trefwoorden Biblionet Groningen"
+Sources( CODE, 494 ) = "trfoba"       : Sources( TITLE, 494 ) = "Lokale trefwoorden OBA (Openbare Bibliotheek Amsterdam)"
+Sources( CODE, 495 ) = "trfzb"        : Sources( TITLE, 495 ) = "Lokale trefwoorden Zeeuwse Bibliotheken"
+Sources( CODE, 496 ) = "trt"          : Sources( TITLE, 496 ) = "Transportation research thesaurus"
+Sources( CODE, 497 ) = "trtsa"        : Sources( TITLE, 497 ) = "Teatterin ja tanssin asiasanasto"
+Sources( CODE, 498 ) = "tsaij"        : Sources( TITLE, 498 ) = "Tesauro SAIJ de derecho Argentino"
+Sources( CODE, 499 ) = "tshd"         : Sources( TITLE, 499 ) = "Thai subject heading database: online Thai subject headings"
+Sources( CODE, 500 ) = "tsht"         : Sources( TITLE, 500 ) = "Thesaurus of subject headings for television"
+Sources( CODE, 501 ) = "tsr"          : Sources( TITLE, 501 ) = "TSR-ontologia"
+Sources( CODE, 502 ) = "ttka"         : Sources( TITLE, 502 ) = "Teologisen tiedekunnan kirjaston asiasanasto"
+Sources( CODE, 503 ) = "ttll"         : Sources( TITLE, 503 ) = "Roggau, Zunilda. Tell. Tesauro de lengua y literatura"
+Sources( CODE, 504 ) = "tucua"        : Sources( TITLE, 504 ) = "Thesaurus for use in college and university archives"
+Sources( CODE, 505 ) = "udc"          : Sources( TITLE, 505 ) = "Universal decimal classification"
+Sources( CODE, 506 ) = "ukslc"        : Sources( TITLE, 506 ) = "UK standard library categories"
+Sources( CODE, 507 ) = "ulan"         : Sources( TITLE, 507 ) = "Union list of artist names"
+Sources( CODE, 508 ) = "umitrist"     : Sources( TITLE, 508 ) = "University of Michigan Transportation Research Institute structured thesaurus"
+Sources( CODE, 509 ) = "unbisn"       : Sources( TITLE, 509 ) = "UNBIS name authority list"
+Sources( CODE, 510 ) = "unbist"       : Sources( TITLE, 510 ) = "UNBIS thesaurus"
+Sources( CODE, 511 ) = "unescot"      : Sources( TITLE, 511 ) = "UNESCO thesaurus = Thésaurus de l'UNESCO = Tesauro de la UNESCO"
+Sources( CODE, 512 ) = "unicefirc"    : Sources( TITLE, 512 ) = "International children's rights thesaurus"
+Sources( CODE, 513 ) = "usaidt"       : Sources( TITLE, 513 ) = "USAID thesaurus: keywords used to index documents included in the USAID Development Experience System"
+Sources( CODE, 514 ) = "usgst"        : Sources( TITLE, 514 ) = "USGS Thesaurus"
+Sources( CODE, 515 ) = "valo"         : Sources( TITLE, 515 ) = "VALO--Fotografiska ontologin"
+Sources( CODE, 516 ) = "vcaadu"       : Sources( TITLE, 516 ) = "Vocabulario controlado de arquitectura, arte, diseño y urbanismo"
+Sources( CODE, 517 ) = "vffyl"        : Sources( TITLE, 517 ) = "Vocabulario de la Biblioteca Central de la FFyL"
+Sources( CODE, 518 ) = "vgmsgg"       : Sources( TITLE, 518 ) = "Video game metadata schema: controlled vocabulary for gameplay genre"
+Sources( CODE, 519 ) = "vgmsng"       : Sources( TITLE, 519 ) = "Video game metadata schema: controlled vocabulary for narrative genre"
+Sources( CODE, 520 ) = "vmj"          : Sources( TITLE, 520 ) = "Vedettes-matière jeunesse"
+Sources( CODE, 521 ) = "waqaf"        : Sources( TITLE, 521 ) = "Maknas Uloom al Waqaf"
+Sources( CODE, 522 ) = "watrest"      : Sources( TITLE, 522 ) = "Thesaurus of water resources terms: a collection of water resources and related terms for use in indexing technical information"
+Sources( CODE, 523 ) = "wgst"         : Sources( TITLE, 523 ) = "Washington GILS subject tree"
+Sources( CODE, 524 ) = "wikidata"     : Sources( TITLE, 524 ) = "Wikidata"
+Sources( CODE, 525 ) = "wot"          : Sources( TITLE, 525 ) = "A Women's thesaurus"
+Sources( CODE, 526 ) = "wpicsh"       : Sources( TITLE, 526 ) = "WPIC Library thesaurus of subject headings"
+Sources( CODE, 527 ) = "ysa"          : Sources( TITLE, 527 ) = "Yleinen suomalainen asiasanasto"
+Sources( CODE, 528 ) = "yso"          : Sources( TITLE, 528 ) = "YSO--Yleinen suomalainen ontologia"
+Sources( CODE, 529 ) = "zst"          : Sources( TITLE, 529 ) = "Zine Subject Thesaurus"
+
+End Sub
+
+'****************************************************************************************
+
+Sub MarkUnmark( ArrayRow%, Which% )
+
+' Given whether to have the line marked or not, this subroutine adds or removes the
+' marker, as necessary. While the "MARK" and "UNMARK" directions may not change the line,
+' because an unmarked line remains the same if "UNMARK" is the "Which%", the "OPPOSITE"
+' direction always changes the line.
+
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = CodeArray1( ArrayRow% )
+If Left$( TempString$, LENGTH_MARKER ) = MARKER Then
+    If Which% = UNMARK Or Which% = OPPOSITE Then
+        TempString$             = Mid$( TempString$, LENGTH_MARKER + 1 )
+        p                       = InStr( TempString$, "{" )
+        TempString$             = Left$( TempString$, p - 1 ) & Space$( LENGTH_MARKER + 3 ) & Mid$( TempString$, p )
+        CodeArray1( ArrayRow% ) = TempString$
+        Marked%                 = Marked% - 1
+    End If
+  Else
+   If Which% = MARK Or Which% = OPPOSITE Then
+        p                       = InStr( TempString$, "{" )
+        CodeArray1( ArrayRow% ) = MARKER & Left$( TempString$, p - LENGTH_MARKER - 4 ) & Mid$( TempString$, p )
+        Marked%                 = Marked% + 1
+    End If
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function IsolateTerm( InString$ )
+
+' This function gets the code from the string in the array (disregarding the marker and
+' field count).
+
+Dim TempString$
+
+Dim p As Integer
+
+TempString$ = InString$
+If Left$( TempString$, LENGTH_MARKER ) = MARKER Then
+    TempString$ = Mid$( TempString$, LENGTH_MARKER + 1 )
+End If
+p           = InStr( TempString$, "{" )
+TempString$ = Trim$( Left$( TempString$, p - 1 ) )
+IsolateTerm = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const DISABLED       As Integer = 0
+Const ENABLED        As Integer = 1
+Const INITIALIZE     As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const KEEP_DLG_OPEN  As Integer = -1
+Const VISIBLE        As Integer = 1
+
+Dim DelTerm$
+Dim KeepTerm$
+Dim NextStart%
+Dim Selection%
+Dim TempString$
+Dim Thesaurus$
+
+Dim CR As String*1 : CR = Chr$( 013 )
+
+Dim CheckComplete
+
+Dim i As Integer, j As Integer, k As Integer, p As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    Marked% = 0
+    DlgValue        "ListBox",          StartingCode%
+    If StartingCode% < 0 Then
+        DlgVisible      "TitleBox",         INVISIBLE
+      Else
+        DlgText         "SourceTitle",      SourcesTitle( StartingCode% )
+    End If
+    If FileName$ = "" Then
+        DlgVisible      "Presets",          INVISIBLE
+      ElseIf FileName$ = "X" Then
+        DlgEnable       "Presets",          DISABLED
+    End If
+    DlgEnable       "OK",               DISABLED
+    DlgEnable       "UnmarkAll",        DISABLED
+    DlgEnable       "Invert",           DISABLED
+    DlgFocus        "Cancel"
+
+
+  Case CONTROL_CHANGE
+
+    Selection% = DlgValue( "ListBox" )
+
+    Select Case Id$
+
+      Case "ListBox"
+
+' Making a selection in the list box always changes the mark value of that line.
+
+        Call MarkUnmark( Selection%, OPPOSITE )
+        DlgListBoxArray "ListBox",          CodeArray1()
+        DlgValue        "ListBox",          Selection%
+        DlgText         "SourceTitle",      SourcesTitle( Selection% )
+        DlgVisible      "TitleBox",         VISIBLE
+        If Marked% = 0 Then
+            DlgEnable       "OK",               DISABLED
+            DlgEnable       "UnmarkAll",        DISABLED
+            DlgEnable       "Invert",           DISABLED
+          Else
+            DlgEnable       "OK",               ENABLED
+            DlgEnable       "Invert",           ENABLED
+            DlgEnable       "UnmarkAll",        ENABLED
+        End If
+
+      Case "Invert"
+
+        For i = 0 To UBCodeArrays%
+          Call MarkUnmark( i, OPPOSITE )
+        Next i
+        DlgListBoxArray "ListBox",          CodeArray1()
+        DlgValue        "ListBox",          Selection%
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "UnmarkAll"
+
+        For i = 0 To UBCodeArrays%
+          Call MarkUnmark( i, UNMARK )
+        Next i
+        Marked% = 0
+        DlgListBoxArray "ListBox",          CodeArray1()
+        DlgValue        "ListBox",          NO_SELECTION
+        DlgText         "SourceTitle",      ""
+        DlgVisible      "TitleBox",         INVISIBLE
+        DlgEnable       "OK",               DISABLED
+        DlgEnable       "Invert",           DISABLED
+        DlgEnable       "UnmarkAll",        DISABLED
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Presets"
+
+' If either of the "Keep" or "Delete" arrays contains "ALL OTHERS", the other array is
+' the one to run through. Mark or unmark the terms in the main array based on the terms
+' present in that array. Otherwise, go through the main array and check for the presence
+' of each entry in the "Keep" or "Delete" arrays, and mark or unmark accordingly.
+
+        If KeepArray( 0 ) = "ALL OTHERS" Then  'Everything is kept EXCEPT those explicitly named as deletes
+            NextStart% = 0
+            For i = 0 To UBDelArray%
+              For j = NextStart% To UBCodeArrays%
+                TempString$ = CodeArray1( j )
+                Thesaurus$  = IsolateTerm( TempString$ )
+                DelTerm$    = DelArray( i )
+                If Thesaurus$ = DelTerm$ Then
+                    Call MarkUnmark( j, MARK )
+                    NextStart% = j + 1
+                    Exit For
+                  Else
+                    Call MarkUnmark( j, UNMARK )
+                End If
+              Next j
+            Next i
+          ElseIf DelArray( 0 ) = "ALL OTHERS" Then  'Everything is deleted EXCEPT those explicitly named as keeps
+            NextStart% = 0
+            For i = 0 To UBKeepArray%
+              For j = NextStart% To UBCodeArrays%
+                TempString$ = CodeArray1( j )
+                Thesaurus$  = IsolateTerm( TempString$ )
+                KeepTerm$   = KeepArray( i )
+                If Thesaurus$ = KeepTerm$ Then
+                    Call MarkUnmark( j, UNMARK )
+                    NextStart% = j + 1
+                    Exit For
+                  Else
+                    Call MarkUnmark( j, MARK )
+                End If
+              Next j
+            Next i
+          Else  'Keep or delete according to explicitly named keeps and deletes
+            For i = 0 To UBCodeArrays%
+              TempString$ = CodeArray1( i )
+              Thesaurus$  = IsolateTerm( TempString$ )
+              For j = 0 To UBKeepArray%
+                CheckComplete = FALSE
+                KeepTerm$     = KeepArray( j )
+                If Thesaurus$ = KeepTerm$ Then
+                    Call MarkUnmark( i, UNMARK )
+                    CheckComplete = TRUE
+                    Exit For
+                End If
+              Next j
+              If CheckComplete = FALSE Then
+                  For k = 0 To UBDelArray%
+                    DelTerm$ = DelArray( k )
+                    If Thesaurus$ = DelTerm$ Then
+                        Call MarkUnmark( i, MARK )
+                        CheckComplete = TRUE
+                        Exit For
+                    End If
+                  Next k
+              End If
+            Next i
+        End If
+        DlgListBoxArray "ListBox",          CodeArray1()
+        DlgEnable       "OK",               ENABLED
+        DlgEnable       "Invert",           ENABLED
+        DlgEnable       "UnmarkAll",        ENABLED
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+End Select
+
+End Function
+'153998425

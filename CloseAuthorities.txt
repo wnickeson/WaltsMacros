@@ -1,11 +1,12 @@
-'MacroName:CloseAuthorities.2023.02
+'MacroName:CloseAuthorities.2024.01
 'MacroDescription:Closes all authority windows (records and lists).
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 23 July 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -65,8 +66,4 @@ If CountOfAuthorityWindows% = 0 Then
 End If
 
 End Sub
-'692201
-'
-'Macro name: CloseAuthorities
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:02:52 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'702246

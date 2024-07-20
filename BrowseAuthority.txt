@@ -1,12 +1,13 @@
-'MacroName:BrowseAuthority.2023.03
+'MacroName:BrowseAuthority.2024.77
 'MacroDescription:Browses the Authority File using an existing heading or selected text
-' within a field.
+' within a field, and retrieves authority records for headings in authority 5XX fields.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 27 July 2023.
+' Last updated: 13 June 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -15,146 +16,226 @@
 ' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
-' This macro and my "GetAuthority" macro work together to efficiently add authorized
-' headings to a bibliographic record. Use "BrowseAuthority" to search the Authority File,
-' and use "GetAuthority" to paste a heading into the record in the right place.
+' How it works: This macro and my "GetAuthority" macro work together to efficiently add
+' authorized headings to a bibliographic record. Use this macro, "BrowseAuthority", to
+' search the Authority File, and use "GetAuthority" to paste an authorized heading into
+' the bibliographic record in the right place.
 '
-' How it works: In a bibliographic or authority record, click to put the cursor anywhere
-' in a variable field containing a heading, or select some text within any field, and
-' run the macro. The macro browses the Authority File with the content of the field, or
-' with the text selected in the field. It cannot browse with text in non-Latin scripts,
-' or that contain Unicode characters. If the selection contains characters encoded as
-' Windows-1252, rather than as OCLC-MARC, the macro will attempt a browse, but it will be
-' browsing on incorrect data and so will probably fail.
+' In a bibliographic or authority record, place the cursor anywhere in a heading field,
+' or select text within a field, and run the macro. It browses the Authority File with
+' the content of that heading field, or with the selected text. The result is a browse
+' list that places the heading in its alphabetical context. In an authority record, if no
+' text is selected, or if the cursor is not placed in a heading field, the macro can be
+' run to retrieve the record for the heading in a 5XX field, if one is present, or to
+' browse for a heading referred to in certain note fields, if present. If the authority
+' record contains no notes or 5XX fields, the macro will browse for the base authorized
+' heading. For a name, the "base heading" is the name without a title or a corporate name
+' without subordinate units, and for a subject, it is the term without subdivisions.
 '
-' When the appropriate heading is found, use my "GetAuthority" macro to quickly add it to
-' the bibliographic record.
+' The macro cannot browse with text in non-Latin script, or text that contains Unicode
+' characters. If the selection contains characters encoded as Windows-1252, rather than
+' as OCLC-MARC, the macro's browse will probably fail.
 '
-' In a bibliographic record, heading fields are 1XX, 490, 600-653 and 655, 700-730, and
-' 800-830. OCLC Macro Language (OML) doesn't allow for searching genre headings, so the
-' 655 can only be searched as an LC subject. In an authority record, heading fields are
-' 1XX, 4XX, and 5XX, with the exceptions of X47, X48, X55, and X62; but if the cursor is
-' in any other field in the record, the macro browses on the heading in the 1XX, ignoring
-' extra subfields, such as subject subdivisions, subordinate units of a corporate name,
-' or a title following a name. If the cursor is not in a heading field the macro offers,
-' if available, the option to browse on headings referred to in 680 and 681 fields, or in
-' a 260 or 360 field.
+' The maximum length of a browse string is 60 characters. The macro truncates any string
+' longer than that limit.
 '
-' If the heading to be browsed consists of a simple name or title, or an undivided
-' subject term, the macro executes the search immediately, choosing the index to browse in
-' according to the field's tag. A 720 field marked as a personal name will be treated as
-' if it were a 700 field and searched immediately as such. The macro ignores an initial
-' subfield $i, as well as linking, control, and relator subfields. For other headings,
-' the macro presents these options:
+' In a bibliographic record, heading fields are 1XX, 490, 600 to 653, 655, 700 to 730,
+' and 800 to 830. The cursor must be placed within one of these fields to browse its
+' contents. Fields 647, 648, and 655 can be browsed on by this macro only if they are
+' coded as being LCSH (second indicator value "0"). Field 653 will be browsed on as if
+' it were LCSH, but you have to tell the macro what kind of browse to do.
 '
-'  + For a corporate body with subordinate units: Browsing the Corporate/Conference
+' In an authority record, heading fields are 1XX, 4XX, and 5XX (with the exceptions of
+' X47, X48, X55, and X62). These heading fields may be browsed by placing the cursor in
+' them and running the macro, just as in a bibliographic record. If the macro is run
+' with the cursor not placed in a heading field, the macro displays the 5XX fields,
+' grouped according to the relationship codes in subfield $w. Select a heading to
+' retrieve its authority record. Headings may also be found embedded in note fields 260,
+' 360, 680, and 681, as terms related to the established heading. The macro collects all
+' such "referred to" headings and displays them, separately from the headings in the 5XX
+' fields, in alphabetical order, with subdivisions appearing first. Select a heading to
+' browse on. Because the authorized heading is presented as an option for browsing, minus
+' any additions, in some cases a corporate body may appear twice in the macro's dialog
+' box: as the base heading with its subordinate unit(s) removed, to be browsed upon, and
+' also as the hierarchical superior of the authorized heading in the record, whose
+' authority record may be retrieved.
+'
+' The macro fetches the authority record for a heading in a 5XX field by means of a
+' search, rather than a browse. Because searching the Authority File is done by keywords,
+' the macro may have to scroll through several screens to arrive at the desired record.
+' For example, a search on the broader term "Plants" in a 550 field retrieves over 2500
+' records. The Client displays 100 records per page, and it must show about 16 pages
+' before it reaches the one containing the record for "Plants". It is possible to use the
+' macro "Browse" command to get to such a heading much more quickly, but that approach
+' will not always work, and the programming involved is more complex.
+'
+' If the cursor is placed in a heading field that consists of a simple name or title, or
+' an undivided subject term, the macro executes the browse immediately, choosing the
+' index in which to browse according to the field's tag. In a bibliographic record, the
+' macro ignores an initial subfield $i, as well as linking, control, and relator
+' subfields. For other headings browsed upon from the cursor being positioned in the
+' heading field, the macro presents these options:
+'
+'  + For a corporate body with subordinate units: To browse the Corporate/Conference
 '    Names index for each level of the hierarchy, starting from the complete heading in
 '    the field up to the main body only (subfield $a).
 '
-'  + For a name/title heading: Browsing the appropriate Name index for the name alone,
+'  + For a name/title heading: To browse the appropriate Name index for the name alone,
 '    the Titles index for the title alone, or the appropriate Name index with the title
 '    added as an expanded scan. The content of subfield $k (a form subheading, e.g.,
-'    "Manuscript" or "Selections") is considered a title in any case. A 1XX/240 pair is
-'    treated as a single, name/title field, no matter which of the two fields the cursor
-'    is placed in.
+'    "Manuscript" or "Selections") is considered a title in any case. The same options
+'    are available if the cursor is placed in a 240 field.
 '
-'  + For a subject heading with subdivisions: Browsing the LCSH index for the main
+'  + For a subject heading with subdivisions: To browse the LCSH index for the main
 '    heading (subfield $a), the Subdivision Headings index for any of the subject
 '    subdivisions and for some of their combinations, or the LCSH index for the main
 '    heading with the subdivision(s) added as an expanded scan.
 '
-'  + For a genre/form term: OML doesn't allow for browsing the genre authority file, so
-'    any genre term must be browsed as an LC subject. If the term is identified as being
-'    LCSH, whether by the second indicator value of zero or by the presence of "lcsh" in
-'    subfield $2, it is browsed immediately in the subject index; if not, a message box
-'    pops up asking whether or not to proceed.
+'  + For a genre/form term: The macro language doesn't allow for browsing the genre
+'    index, so for any genre term, the only option is to browse the LCSH index as a
+'    subject term. If the term is identified as being LCSH, whether by the second
+'    indicator value of zero or by the presence of "lcsh" in subfield $2, it is browsed
+'    immediately in the Subject index; if not, a message box pops up asking for
+'    confirmation to proceed.
 '
-' In all these cases, the headings to be browsed are presented in normalized form in
-' editable text boxes for review and modification, if desired, before searching.
+' In all these options, the headings to be browsed are presented in normalized form (all
+' capitals, with diacritical marks and punctuation removed) in editable text boxes for
+' review and modification, if desired, before searching.
+'
+' In a bibliographic record, a 720 field marked as a personal name will be treated as if
+' it were a 700 field and browsed as such. A 720 field with no indication of what type of
+' name it is will be treated as a selection. In that case, the presence of a comma
+' suggests that the heading is a personal name in inverted form, so the macro offers that
+' as the first search option. Otherwise, the macro considers that name to be in direct
+' order, and browses the LC Names index.
 '
 ' If text within a field has been selected, the macro displays the normalized string and
 ' asks whether to browse in the LC Names, LCSH, or Titles indexes with the selection. If
 ' the selection is of two or three words, an additional option is offered: to invert the
 ' selection and browse the Personal Names index by the last word (or the last two, if
 ' they are joined by a hyphen, or if the middle word is one of the prefixes "De", "Du",
-' "Le", "St.", "Van", or "Von"--see RDA Appendix F, 11.4), on the assumption that such a
-' selection is likely to be the name of a person. The macro also looks in selected text
-' for some words that might indicate a corporate body, such as "&", "of", "Commission",
-' names of certain cities and countries, etc. If such words are found, the macro chooses
-' the Corporate/Conference Name index in which to browse. If the selection contains a
-' forward slash surrounded by spaces--such as might be found in a contents note (e.g.,
-' "Clair de lune / $r Claude Debussy")--the macro treats the part before the slash as a
-' title, and the part following, as a statement of responsibility. The macro thus
-' considers the selection to be a name/title field, and browses for it as if it were such
-' a field, presenting the option of inverting a two- or three-word "statement of
-' responsibility" as described above. As with some of the field browses, the search
-' string is able to be edited before sending, which might lead to more accurate results.
-'
-' A 720 field with no indication of what type of name it is will be treated as a
-' selection. The presence of a comma suggests that the heading is a personal name in
-' inverted form, so the macro presents that as the first search option. Otherwise, the
-' macro considers that name to be in direct order, and browses the LC Names index. Again,
-' the search string presented in the dialog box can be edited, such as by rearranging the
-' terms, to help lead to a more accurate search.
+' "Le", "St.", "Van", or "Von"--see RDA Appendix F, 11.4, or AACR2 22.5D1). This option
+' is based on the assumption that such a selection is likely to be the name of a person.
+' The macro also looks in a text selection for some words that might indicate a corporate
+' body, such as "&", "of", "Commission", names of certain cities and countries, etc. If
+' such words are found, the macro chooses the Corporate/Conference Name index as the
+' default database in which to browse. If the selection contains a forward slash
+' surrounded by spaces--such as might be found in a contents note (e.g., "Clair de lune /
+' $r Claude Debussy")--the macro treats the part before the slash as a title, and the
+' part following as a statement of responsibility. The macro thus considers the selection
+' to be a name/title field, and can browse for it as if it were such a field, presenting
+' the option of inverting a two- or three-word "statement of responsibility" as described
+' above. As with some of the field browses, the search string is able to be edited before
+' starting the browse.
 '
 ' Keep a selection within a field. A selection can span subfields, but the subfield codes
-' are ignored and the whole selection is treated as the browse phrase. Don't include
+' are ignored, and the whole selection is treated as a phrase for browsing. Don't include
 ' initial articles in a selection, although if the macro recognizes them (in English,
 ' French, German, Spanish, and Italian) it will remove them and offer a title browse as
 ' the default option--unless there is an apparent statement of responsibility, as
 ' described above.
 '
-' The "normalization" of the search string follows NACO normalization rules, found at
-' http://www.loc.gov/aba/pcc/naco/normrule-2.html.
+' The 5XX fields in authority records for juvenile subject headings (identified by "sj"
+' as the LCCN prefix in field 010) are searched as regular LC subject headings.
 '
-' The maximum length of a browse string is 60 characters. The macro truncates any string
-' longer than that limit.
-'
-' If no matching heading is found for a selection, and the selection should be added to a
-' bibliographic record as a name heading as is, my macro "PasteInverted" will paste the
+' If no matching heading is found for a selection, but the selection should be added to a
+' bibliographic record as a name heading anyway, my macro "PasteInverted" will paste the
 ' selection without having to select and copy it again. That macro also offers the option
 ' of inverting a term of two or three words before pasting.
+'
+' The "normalization" of the search string follows NACO normalization rules, found at
+' http://www.loc.gov/aba/pcc/naco/normrule-2.html. Text does not need to be normalized
+' before Connexion searches the Authority File, but the process helps with display within
+' the limited capabilities of the dialog box.
 '****************************************************************************************
 
 Option Explicit
 
+Declare Sub Fill5XXArrays( WhichArray%, InArray() As String, Index%, ArrayLabel$, ArrayCount% )
 Declare Sub FillStopwords
-Declare Sub HeadingsArray( InString$ )
+Declare Sub FillStoreRefs( InString$ )
 
-Declare Function ChooseBrowse    ( OptionParam1$, OptionParam2$, OptionParam3$ ) As Integer
-Declare Function DoubleSpaceErase( SomeString$ )          As String
-Declare Function FlatSharpFix    ( SomeString$, Switch% ) As String
-Declare Function InitialArticle  ( SomeString$ )          As String
-Declare Function InvertOption    ( SomeString$ )          As Integer
+Declare Function AssignLabels                 ( InString$ )       As String
+Declare Function BrowseFromAuthorityRecord                        As String
+Declare Function BrowseFromSelectedText                           As String
+Declare Function ChooseBrowse                 ( OptionParam1$, _
+                                                OptionParam2$, _
+                                                OptionParam3$ )   As Integer
+Declare Function DisplayAuthorityRecordBrowses( OutString$ )      As String
+Declare Function DoubleSpaceErase             ( SomeString$ )     As String
+Declare Function FlatSharpFix                 ( SomeString$, _
+                                                Switch% )         As String
+Declare Function InitialArticle               ( SomeString$ )     As String
+Declare Function InvertOption                 ( SomeString$ )     As Integer
+Declare Function Normalize                    ( InString$, _
+                                                KeepDelimiter )   As String
+Declare Function Plural                       ( Label$, n% )      As String
 
-Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
-Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog2ControlFunction            ( Id$, Action%, SVal& )
+Declare Function Dialog3_1_ListBoxControlFunction  ( Id$, Action%, SVal& )
+Declare Function Dialog3_2_ListBoxesControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog3_3_ListBoxesControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog3_4_ListBoxesControlFunction( Id$, Action%, SVal& )
 
 Global CS As Object
 
-Global Const CANCEL             As Integer = 102
-Global Const CURSOR_IN_240      As Integer = -1
-Global Const DISPLAY_FF_AT_TOP  As Integer = 1
-Global Const FOCUS_CHANGE       As Integer = 4
-Global Const INITIALIZE         As Integer = 1
-Global Const MUSIC_SIGN_TO_WORD As Integer = 0    'A flag to tell the function to convert the music flat and sharp signs to the
-                                                  ' words "-flat" and "-sharp".
-Global Const NAME_INVERTED      As Integer = 4
-Global Const NAME_SELECT        As Integer = 3
-Global Const PNP_NONE           As Integer = 0    'The case of a selection being all stopwords, i.e., a corporate body.
-Global Const PNP_POSSIBLE       As Integer = 1    'The case of a selection being partly stopwords, i.e., probably a corporate body.
-Global Const PNP_PROBABLE       As Integer = 2    'The case of a selection containing no stopwords, i.e., probably a personal name.
-Global Const STOPWORD_COUNT     As Integer = 367
-Global Const TITLE_SELECT       As Integer = 6
+Global Const DLG_STATEMENT_CANCEL       As Integer = 102
+Global Const FOCUS_CHANGE               As Integer = 4
+Global Const INITIALIZE                 As Integer = 1
 
-Global COMMA As String*1
+Global Const aHEADING_TAG               As Integer = 2
+Global Const aNORMALIZED_HEADING        As Integer = 1
+Global Const aRAW_HEADING               As Integer = 0
+Global Const aRELATION_CODE             As Integer = 4
+Global Const aRELATION_TERM             As Integer = 3
+Global Const AUTHORITY_FILE             As String  = "AF"
+Global Const BROWSE_AUTHORIZED_HEADING  As String  = "1"
+Global Const BROWSE_REFERRED_TO_HEADING As String  = "2"
+Global Const CURSOR_IN_240              As Integer = -1
+Global Const FIELD_DATA_BEGINS          As Integer = 6
+Global Const GET_5XX_HEADING            As String  = "3"
+Global Const HEADING_NAME_TITLE         As Integer = 1
+Global Const INVERTIBLE_AS_OPTION       As Integer = 1   'The case of a selection being partly stopwords, i.e., inverting is an option.
+Global Const INVERTIBLE_BY_DEFAULT      As Integer = 2   'The case of a selection containing no stopwords, i.e., inverting is the first possibility.
+Global Const MUSIC_SIGN_TO_WORD         As Integer = 0   'A flag to tell the function to convert the music flat and sharp signs
+                                                         ' to the words "-flat" and "-sharp".
+Global Const NAME_INVERTED              As Integer = 4
+Global Const NAME_SELECT                As Integer = 3
+Global Const NOT_INVERTIBLE             As Integer = 0   'The case of a selection being all stopwords, i.e., not being invertible at all.
+Global Const NOT_NAME_TITLE             As Integer = 0
+Global Const NO_SELECTION               As Integer = -1
+Global Const SELECTION_NAME_TITLE       As Integer = 2
+Global Const STOPWORD_COUNT             As Integer = 367
+Global Const TITLE_SELECT               As Integer = 6
 
+Global COMMA                            As String*1
+Global DASH                             As String*1
+Global DELIMITER                        As String*1
+Global ESC                              As String*1
+Global FAILURE                          As String*1
+Global QUIT                             As String*1
+Global SUBJ_SUBDIV                      As String*1
+
+Global AFIndex$
 Global BaseHeading$
+Global BrowseRefs$
+Global CountOf5XX%
 Global CountOfNames%
+Global CountOfReferredTo%
 Global CountOfSubdivisions%
-Global HeadingCount%
+Global Display5XX_1Count%
+Global Display5XX_1Label$
+Global Display5XX_2Count%
+Global Display5XX_2Label$
+Global Display5XX_3Count%
+Global Display5XX_3Label$
+Global Invertibility%
+Global Language$
+Global MatchString$
+Global NameString$
 Global NameTitleSplit%
-Global PersonalNameProbability%
+Global NameTitleType%
+Global NormalizedString$
 Global SearchOption1$
 Global SearchOption2$
 Global SearchOption3$
@@ -162,44 +243,65 @@ Global SearchTerm1$
 Global SearchTerm2$
 Global SubjectString$
 Global TitleHeading$
+Global TitleString$
 Global WaltsMacros$
 
-Global ChangedFFView
 Global ProbableTitle
-Global Selection
+Global TextSelection
 
-Global HeadingRefs()  As String
+Global Display5XX_1() As String
+Global Display5XX_2() As String
+Global Display5XX_3() As String
+Global DisplayRefs()  As String
 Global Names()        As String
 Global Stopwords()    As String
+Global Store5XX()     As String
+Global StoreRefs()    As String
 Global Subdivisions() As String
 
 '****************************************************************************************
 
 Sub Main
 
+ReDim Display5XX_1( 0 )
+ReDim Display5XX_2( 0 )
+ReDim Display5XX_3( 0 )
+Erase StoreRefs()
+Erase Store5XX()
+
 On Error Resume Next
 Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
+COMMA          = Chr$( 044 )
+DASH           = Chr$( 016 )
+DELIMITER      = Chr$( 223 )
+ESC            = Chr$( 027 )
+FAILURE        = Chr$( 006 )
+QUIT           = Chr$( 007 )
+SUBJ_SUBDIV    = Chr$( 008 )
+
+BrowseRefs$    = "Browse headings referred to:"
+NameTitleType% = NOT_NAME_TITLE
+ProbableTitle  = FALSE
+TextSelection  = FALSE
+WaltsMacros$   = "[Walt's macros] Essentials:BrowseAuthority"
+
 Const CRITICAL_MESSAGE            As Integer = 16
 Const WARNING_QUERY               As Integer = 32
 
-Const ASCII_DIFF_CASE             As Integer = 32  'The difference between ASCII values of upper and lower case of a letter.
-Const ASCII_DIFF_SUBSCRIPT        As Integer = 96  'The difference between ASCII values of subscript and normal numbers.
-Const ASCII_DIFF_SUPERSCRIPT      As Integer = 80  'The difference between ASCII values of superscript and normal numbers.
+Const DISPLAY_FF_AT_TOP           As Integer = 1
 Const FIXED_FIELD                 As Integer = 0
-Const FIELD_DATA_BEGINS           As Integer = 6
 Const LCSH_INDICATOR              As String  = "0"
 Const MAX_LEN_SEARCH_STRING       As Integer = 60
 Const MSGBOX_RETURN_CANCEL        As Integer = 2
-Const MSGBOX_RETURN_NO            As Integer = 7
 Const MSGBOX_SETBUTTONS_OK_CANCEL As Integer = 1
-Const MSGBOX_SETBUTTONS_YES_NO    As Integer = 4
-Const MUSIC_WORD_TO_SIGN          As Integer = 1   'A flag to tell the function to convert the words "-flat" and "-sharp" to music flat and sharp signs.
-Const REC_OFFSET                  As Integer = 0
-Const SUBJECT_SELECT              As Integer = 5
-Const TAG_LENGTH                  As Integer = 3
+Const MUSIC_WORD_TO_SIGN          As Integer = 1   'A flag to tell the function to convert the words "-flat" and "-sharp" to
+                                                   ' music flat and sharp signs.
+Const REC_OFFSET                  As Integer = 0   'To browse the Authority File using an expanded scan: "That is, specify a
+                                                   ' heading and subheading for an Authority File browse."
+Const RECORDS_PER_PAGE            As Integer = 100
 
 ' Values for different types of search terms:
 
@@ -209,70 +311,54 @@ Const PERSONAL_NAME               As Integer = 1
 Const SUBJECT                     As Integer = 0
 Const UNCONTROLLED_NAME           As Integer = 5
 Const UNIFORM_TITLE               As Integer = 4
+Const UNKNOWN_NAME                As Integer = 6
 
-Dim CR As String*1           : CR              = Chr$( 013 )
-Dim DELIMITER As String*1    : DELIMITER       = Chr$( 223 )
-Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE    = Chr$( 034 )
-Dim ESC As String*1          : ESC             = Chr$( 027 )
+Dim CR           As String*1 : CR              = Chr$( 013 )
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE    = Chr$( 039 )
 
-Dim AFIndex$
-Dim CharA%
 Dim CharT$
 Dim Col%
-Dim FieldCount%
-Dim FieldText$
-Dim FieldText240$
+Dim FieldData$
+Dim FieldData240$
 Dim Filing%
 Dim FirstDelimiter%
-Dim HeadingString$
-Dim Index%
+Dim FunctionReturn$
 Dim Indicators$
-Dim InvertPoint%
-Dim LineCount%               : LineCount%      = 1
-Dim Message$
-Dim NameString$
+Dim ListRecordsFound%
+Dim MaxPages!
 Dim NextDelimiter%
-Dim NormalizedString$
 Dim OptionParam1$
 Dim OptionParam2$
 Dim OptionParam3$
+Dim PageCount%
 Dim PosFF%
 Dim RawString$
-Dim RawStringLength%
-Dim Remainder$
+Dim ResumePoint%
 Dim Row%
+Dim Search653$
+Dim SearchLabel$
+Dim SearchRecordsFound%
 Dim SearchString$
 Dim SelectedText$
 Dim Start%
 Dim StartC%
-Dim SubdivSearchMsg$
 Dim Subfield$
 Dim SubfieldCode$
-Dim SubjAuthority$
+Dim SubjHeadingSystem$
 Dim Tag$
 Dim TempString$
-Dim TitleString$
-Dim TracingNote$
 Dim TypeOfHeading%
 Dim WindowType%
-Dim WorkString$
+Dim XBooleanTerm$
 
+Dim Advance
 Dim AuthorityRecord
-Dim FoundField
+Dim ChangedFFView            : ChangedFFView   = FALSE
 Dim LCSubject                : LCSubject       = TRUE
-Dim NameTitle                : NameTitle       = FALSE
 Dim NotHeadingField          : NotHeadingField = FALSE
-Dim SubdivRef                : SubdivRef       = FALSE
 Dim SubjectHeading           : SubjectHeading  = FALSE
 
 Dim i As Integer, j As Integer, p As Integer, q As Integer
-
-COMMA         = Chr$( 044 )
-WaltsMacros$  = "[Walt's macros] Essentials:BrowseAuthority"
-
-ChangedFFView = FALSE
-ProbableTitle = FALSE
-Selection     = FALSE
 
 ' First check to see if any text has been selected; if so, that will become the search
 ' string. This line must come first because any macro code preceding it seems to cause
@@ -281,20 +367,19 @@ Selection     = FALSE
 ' browse results in no authorized heading found; that other macro can paste in the copied
 ' text as a heading, in the form it was browsed.
 
-Selection = CS.GetSelectedText( SelectedText$ )
+TextSelection = CS.GetSelectedText( SelectedText$ )
 
-' Weed out unsearchable strings, unsearchable because of how characters were encoded.
-' Unfortunately, there is no way to determine whether a string contains plain OCLC-MARC
-' characters or Windows high ASCII characters.
+' Weed out unsearchable strings of selected text. Text containing non-Latin script or
+' Unicode characters are not searchable.
 
-If Selection Then
+If TextSelection Then
     If SelectedText$ = "Data contains non-latin script" Then
-        MsgBox "The selected text is not searchable because it contains non-Latin script. This macro works only with characters in Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
+        MsgBox "The selected text is not searchable because it contains non-Latin script. This macro works only with characters in Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        GoTo Done:
       Else
         If InStr( SelectedText$, "&#x" ) > 0 Then
-            MsgBox "The selected text is not searchable because it contains characters encoded as Unicode.", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
+            MsgBox "The selected text is not searchable because it contains Unicode characters.", CRITICAL_MESSAGE, WaltsMacros$
+            GoTo Done:
         End If
     End If
     Clipboard.Clear
@@ -312,13 +397,29 @@ Col% = CS.CursorColumn
 WindowType% = CS.ItemType
 Select Case WindowType%
   Case -1, 5 To 11, 13, 15 To 16, 21 To 25
-    MsgBox "Sorry, this macro works only in a bibliographic or authority record. Open a record to select text or search on a heading.", CRITICAL_MESSAGE, WaltsMacros$
-    Exit Sub
+    MsgBox "Sorry, this macro works only in a bibliographic or authority record. Open a record to select text or browse or search on a heading.", CRITICAL_MESSAGE, WaltsMacros$
+    GoTo Done:
   Case 3 To 4, 14, 18, 20
     AuthorityRecord = TRUE
   Case Else
     AuthorityRecord = FALSE
 End Select
+
+' Get the Language code from the fixed field, to use in evaluating initial articles. Also
+' get the "Subject heading system/thesaurus" code from the element "Subj" (008/11). This
+' code differentiates between LC and other kinds of subject heading schemes.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+If CS.GetFixedField( "Lang", Language$ ) Then
+End If
+If CS.GetFixedField( "Subj", SubjHeadingSystem$ ) Then
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
 
 ' If the type of window is correct, then verify that the selection was not made in the
 ' fixed field or the tag or indicator cells of a variable field. For these locations, the
@@ -332,39 +433,42 @@ End Select
 
 If Col% = FIXED_FIELD Then
     MsgBox "The cursor seems to be in the fixed field! Please select text in a variable field or click in a heading to browse.", CRITICAL_MESSAGE, WaltsMacros$
-    Exit Sub
-  ElseIf Selection = TRUE And Col% >= FIELD_DATA_BEGINS Then
+    GoTo Done:
+  ElseIf TextSelection = TRUE And Col% >= FIELD_DATA_BEGINS Then
     SelectedText$ = Trim$( SelectedText$ )
     If InStr( SelectedText$, CR ) Then
         MsgBox "The selection is not searchable because it spans multiple fields. Please limit text selection to within one field only.", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
+        GoTo Done:
     End If
     GoTo Normalize:
-  ElseIf Selection = TRUE And Col% < FIELD_DATA_BEGINS Then
-    Selection = FALSE
+  ElseIf TextSelection = TRUE And Col% < FIELD_DATA_BEGINS Then
+    TextSelection = FALSE
 End If
 
-' If no text has been selected, check that the cursor has not been placed in the fixed
-' field. If so, the macro can proceed, using the whole field in which the cursor is
-' placed as the browse string.
+' If no text has been selected, the whole field in which the cursor is placed becomes the
+' browse string.
 
-If CS.GetFieldLine( Row%, FieldText$ ) = FALSE Then
+If CS.GetField( "...", Row%, FieldData$ ) Then
+    If FieldData$ = "Data contains non-latin script" Then
+        MsgBox "The heading in this field is not searchable because it contains non-Latin script. This macro works only with characters in Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        GoTo Done:
+      Else
+        If InStr( FieldData$, "&#x" ) > 0 Then
+            MsgBox "The selected text is not searchable because it contains characters encoded as Unicode.", CRITICAL_MESSAGE, WaltsMacros$
+            GoTo Done:
+        End If
+    End If
+  Else
     MsgBox "To run this macro, either click in a heading field or select some text in any variable field.", CRITICAL_MESSAGE, WaltsMacros$
-    Exit Sub
+    GoTo Done:
 End If
 
 GetLine:
 
-' Determine the type of heading from the tag. If the "GetField" function returns "Data
-' contains non-latin script," the tag is "Dat" and causes the macro to quit. Otherwise,
-' tag and indicators guide the macro's execution.
+' The field's tag and indicators guide the macro's execution.
 
-Tag$ = Left$( FieldText$, TAG_LENGTH )
-If Tag$ = "Dat" Then
-    MsgBox "This macro can't search headings in non-Latin scripts!", CRITICAL_MESSAGE, WaltsMacros$
-    Exit Sub
-End If
-Indicators$ = Mid$( FieldText$, 4, 2 )
+Tag$        = Left$( FieldData$, 3 )
+Indicators$ = Mid$( FieldData$, 4, 2 )
 
 Select Case Tag$
 
@@ -396,13 +500,13 @@ Select Case Tag$
       Else
         If Right$( Indicators$, 1 ) <> LCSH_INDICATOR Then
             If Right$( Indicators$, 1 ) = "7" Then
-                Start% = 6
+                Start% = FIELD_DATA_BEGINS
                 Do
-                  p = InStr( Start%, FieldText$, DELIMITER )
+                  p = InStr( Start%, FieldData$, DELIMITER )
                   If p <> 0 Then
-                      SubfieldCode$ = Mid$( FieldText$, p + 1, 1 )
+                      SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
                       If SubfieldCode$ = "2" Then
-                          If Mid$( FieldText$, p + 1, 6 ) <> "2 lcsh" Then
+                          If Mid$( FieldData$, p + 1, 6 ) <> "2 lcsh" Then
                               LCSubject = FALSE
                           End If
                       End If
@@ -432,7 +536,7 @@ Select Case Tag$
         TypeOfHeading% = PERSONAL_NAME
       Else
         MsgBox "This is not a heading field!", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
+        GoTo Done:
     End If
 
 '#####  Corporate name heading  #########################################################
@@ -447,7 +551,7 @@ Select Case Tag$
         TypeOfHeading% = CORPORATE_NAME
       Else
         MsgBox "This is not a heading field!", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
+        GoTo Done:
     End If
 
 '#####  Corporate name heading as subject  ##############################################
@@ -469,7 +573,7 @@ Select Case Tag$
         TypeOfHeading% = CONFERENCE_NAME
       Else
         MsgBox "This is not a heading field!", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
+        GoTo Done:
     End If
 
 '#####  Conference name heading as subject  #############################################
@@ -508,10 +612,20 @@ Select Case Tag$
 ' before RDA, the "main entry") first, and then getting the data from the 240 later.
 
   Case "240"
-    FieldText240$   = FieldText$
+    FieldData240$   = FieldData$
     NameTitleSplit% = CURSOR_IN_240
-    If CS.GetFieldLine( Row% - 1, FieldText$ ) Then
-        Tag$ = Left$( FieldText$, TAG_LENGTH )
+    For i = 1 To 2
+      If CS.GetField( "...", Row% - i, FieldData$ ) Then
+          If Left$( FieldData$, 1 ) = "1" Then
+              Exit For
+          End If
+      End If
+    Next i
+    If Left$( FieldData$, 1 ) <> "1" Then
+        MsgBox "Sorry, could not get a name to go with this title.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        Tag$ = Left$( FieldData$, 3 )
         Select Case Tag$
           Case "100"
             TypeOfHeading% = PERSONAL_NAME
@@ -531,7 +645,7 @@ Select Case Tag$
         TypeOfHeading% = UNIFORM_TITLE
       Else
         MsgBox "This is not a heading field!", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
+        GoTo Done:
     End If
 
 '#####  Title heading as subject  #######################################################
@@ -567,11 +681,11 @@ Select Case Tag$
 ' Otherwise, the name will be browsed in the general names index as a selection.
 
       Else
-        p = InStr( FIELD_DATA_BEGINS, FieldText$, COMMA )
+        p = InStr( FIELD_DATA_BEGINS, FieldData$, COMMA )
         If p = 0 Then
             TypeOfHeading% = UNCONTROLLED_NAME
           Else
-            CharT$ = Mid$( FieldText$, p + 2 )
+            CharT$ = Mid$( FieldData$, p + 2 )
             If CharT$ = DELIMITER Then
                 TypeOfHeading% = UNCONTROLLED_NAME
               ElseIf CharT$ Like "[12]" Then
@@ -585,20 +699,160 @@ Select Case Tag$
   Case Else
 
 ' In a bibliographic record, if the cursor is in a field that does not contain a
-' searchable heading, the macro quits. In an authority record, however, the macro browses
-' on the established heading, or if there are headings referred to in some note fields,
-' the macro offers to browse on one of those. So the first thing to do when in the
-' authority record and the cursor is not in a heading field is to pretend the cursor is
-' in the 1XX field and get its heading.
+' searchable heading, the macro quits. In an authority record, however, the macro is able
+' to offer browsing on the established heading, on headings referred to in some note
+' fields, on and most of the 5XX fields, no matter where the cursor is positioned. This
+' is not true for non-LC subject headings; the macro language can't browse or search for
+' them, so the only options are to browse as LC subject headings--in which case the
+' cursor must be in a heading field--or to quit.
 
     If AuthorityRecord Then
-        If CS.GetField( "1..", 1, FieldText$ ) Then
-            NotHeadingField = TRUE
+        If SubjHeadingSystem$ <> "a" Then
+            If MsgBox( "Although this subject heading is not LC, it will be treated as such by this macro. Continue?", WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
+                GoTo Done:
+            End If
+        End If
+        NotHeadingField = TRUE
+
+' When running this macro in an authority record, the action selected in the
+' "BrowseFromAuthorityRecord" function results in one of four values. If the chosen
+' action was to browse on headings referred to, the function will report the values for
+' success or failure, after which the macro stops. If the action was to browse on the
+' authorized heading, the macro goes back near the beginning and repeats getting
+' information from the field. If getting the authority record for a see also from heading
+' (a 5XX field) was the chosen action, that search happens now.
+
+        FunctionReturn$ = BrowseFromAuthorityRecord
+        If FunctionReturn$ = FAILURE Then
+            GoTo Failure:
+          ElseIf FunctionReturn$ = QUIT Then
+            GoTo Done:
+          ElseIf Left$( FunctionReturn$, 1 ) = BROWSE_AUTHORIZED_HEADING Then
+            FieldData$ = Mid$( FunctionReturn$, 2 )
             GoTo GetLine:
+          ElseIf Left$( FunctionReturn$, 1 ) = GET_5XX_HEADING Then
+            SearchString$ = Mid$( FunctionReturn$, 2 )
+
+' If retrieving an authority record (requiring the "Search" command), clean up the search
+' string. First, remove dashes.
+
+            Do
+              p = InStr( SearchString$, " -- " )
+              If p > 0 Then
+                  SearchString$ = Left$( SearchString$, p - 1 ) & Mid$( SearchString$, p + 3 )
+              End If
+            Loop Until p = 0
+
+' To include the Boolean terms "and", "or", and "not" in a search, they must be enclosed
+' in single quotation marks.
+
+            For i = 1 To 3
+              Do
+                Select Case i
+                  Case 1
+                    XBooleanTerm$ = "AND"
+                    ResumePoint%  = 4
+                  Case 2
+                    XBooleanTerm$ = "OR"
+                    ResumePoint%  = 3
+                  Case 3
+                    XBooleanTerm$ = "NOT"
+                    ResumePoint%  = 4
+                End Select
+                p = InStr( SearchString$, " " & XBooleanTerm$ & " " )
+                If p > 0 Then
+                    SearchString$ = Left$( SearchString$, p ) & SINGLE_QUOTE & XBooleanTerm$ & SINGLE_QUOTE & Mid$( SearchString$, p + ResumePoint% )
+                End If
+              Loop Until p = 0
+            Next i
+
+' Searching a name/title heading requires creating two separate search strings.
+
+            If Mid$( MatchString$, 2, 2 ) Like "[01][01]" Then
+                p = InStr( MatchString$, DELIMITER & "t" )
+                If p > 0 Then
+                    NameTitleType% = HEADING_NAME_TITLE
+                    NameString$    = Trim$( Left$( MatchString$, p - 1 ) )
+                    NameString$    = Normalize( Mid$( NameString$, FIELD_DATA_BEGINS ), FALSE )
+                    TitleString$   = Normalize( Trim$( Mid$( MatchString$, p + 2 ) ), FALSE )
+                End If
+            End If
+
+            Tag$          = "1" & Mid$( MatchString$, 2, 2 )
+            MatchString$  = Mid$( MatchString$, 6 ) & " " & "[" & Tag$ & "]"
+
+            Select Case Tag$
+
+              Case "100"
+                SearchLabel$ = "pn:"
+
+              Case "110"
+                SearchLabel$ = "co:"
+
+              Case "111"
+                SearchLabel$ = "cn:"
+
+              Case "130"
+                SearchLabel$ = "ti:"
+
+              Case "150"
+                SearchLabel$ = "to:"
+
+' THERE APPEARS TO BE A BUG; GEOGRAPHIC NAMES MUST BE SEARCHED AS SUBJECTS IN MACROS.
+' BROWSING SEEMS TO BE UNAFFECTED.
+'             Case "151"
+'               SearchLabel$ = "gg:"
+
+              Case "180", "185"
+                SearchLabel$ = "sb:"
+
+              Case Else
+                SearchLabel$ = "su:"
+
+            End Select
+
+            If NameTitleType% > NOT_NAME_TITLE Then
+                SearchString$       = SearchLabel$ & NameString$ & " AND " & "ti:" & TitleString$
+                SearchRecordsFound% = CS.Search( AUTHORITY_FILE, SearchString$ )
+              Else
+                SearchRecordsFound% = CS.Search( AUTHORITY_FILE, SearchLabel$ & SearchString$ )
+            End If
+            If SearchRecordsFound% > 0 Then
+'               If CS.ItemType = 10 Then   'Authority brief list
+'                   BrowseFromAuthorityRecord = QUIT
+'                   Exit Function
+'               End If
+                MaxPages! = SearchRecordsFound% / RECORDS_PER_PAGE
+                If MaxPages! > Int( MaxPages! ) Then
+                    MaxPages! = Int( MaxPages! ) + 1
+                End If
+                PageCount% = 1
+                Do
+                  ListRecordsFound% = CS.SearchList( MatchString$, "Description", TRUE )
+                  If ListRecordsFound% = 0 Then
+                      If PageCount% < MaxPages! Then
+                          Advance    = CS.GetNext100Records
+                          PageCount% = PageCount% + 1
+                        Else
+                          GoTo Failure:
+                      End If
+                    Else
+                      Advance = CS.GetFirstSelectedItem
+                      Exit Do
+                  End If
+                Loop Until ListRecordsFound% > 0
+                WindowType% = CS.ItemType
+                If WindowType% <> 3 Then
+                    MsgBox "Sorry, the authority record could not be retrieved.", CRITICAL_MESSAGE, WaltsMacros$
+                End If
+                GoTo Done:
+              Else
+                GoTo Failure:
+            End If
         End If
       Else
         MsgBox "This is not a heading field!", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
+        GoTo Done:
     End If
 
 End Select
@@ -607,23 +861,81 @@ End Select
 ' for a 240 field. If found, combine the two fields into a single name/title field.
 
 If Left$( Tag$, 1 ) = "1" And ( TypeOfHeading% = CORPORATE_NAME Or TypeOfHeading% = PERSONAL_NAME ) Then
-    If FieldText240$ <> "" Then
-        Indicators$ = Mid$( FieldText240$, 4, 2 )
+    If FieldData240$ <> "" Then
+        Indicators$ = Mid$( FieldData240$, 4, 2 )
         Filing%     = Val( Right$( Indicators$, 1 ) )
-        FieldText$  = FieldText$ & " " & DELIMITER & "t " & Mid$( FieldText240$, FIELD_DATA_BEGINS + Filing% )
+        FieldData$  = FieldData$ & " " & DELIMITER & "t " & Mid$( FieldData240$, FIELD_DATA_BEGINS + Filing% )
     End If
 End If
 
-' For a subject field, check the thesaurus used for the term (indicated by the value of
-' the second indicator). A non-LC heading requires confirmation before proceeding.
+' For a subject field, check the thesaurus used for the term (identified by the value of
+' the second indicator). A non-LC heading requires confirmation before proceeding. The
+' second indicator in a 653 field may specify the type of heading in the field, so use
+' that as the basis for a search. If the second indicator does not specify the type of
+' heading, offer a choice of how to search it.
 
 If SubjectHeading = TRUE And LCSubject = FALSE Then
+
     If Tag$ = "655" Or Tag$ = "555" Then
-        If MsgBox( "This genre heading must be searched as an LC subject. Continue?", WARNING_QUERY + MSGBOX_SETBUTTONS_YES_NO, WaltsMacros$ ) = MSGBOX_RETURN_NO Then
+        If MsgBox( "This genre heading must be searched as an LC subject. Continue?", WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
             GoTo Done:
         End If
+
+      ElseIf Tag$ = "653" Then
+        Search653$ = Right$( Indicators$, 1 )
+        If Search653$ = " " Then
+            Begin Dialog Dialog1Definition  184, 134, WaltsMacros$
+              OkButton        62,  110,  52,  14
+              CancelButton   122,  110,  52,  14
+              Text            10,   6, 160,   8, "Search this 653 field as what kind of subject?"
+              OptionGroup                                            .OptionGroup
+               OptionButton   18,  18, 128,  12, "&Topical",         .OptionButton1
+               OptionButton   18,  32, 128,  12, "&Personal name",   .OptionButton2
+               OptionButton   18,  46, 128,  12, "&Corporate name",  .OptionButton3
+               OptionButton   18,  60, 128,  12, "Co&nference name", .OptionButton4
+               OptionButton   18,  74, 128,  12, "&Geographic name", .OptionButton5
+               OptionButton   18,  88, 128,  12, "&Uniform title",   .OptionButton6
+            End Dialog
+
+            Dim Dialog1 As Dialog1Definition
+            On Error Resume Next
+            Dialog Dialog1
+            If Err = DLG_STATEMENT_CANCEL Then GoTo Done:
+            Select Case Dialog1.OptionGroup
+              Case 0
+                Search653$ = "su"
+              Case 1
+                Search653$ = "pn"
+              Case 2
+                Search653$ = "co"
+              Case 3
+                Search653$ = "cn"
+              Case 4
+                Search653$ = "gg"
+              Case 5
+                Search653$ = "ti"
+            End Select
+          Else
+            Select Case Search653$
+              Case "0"
+                Search653$ = "su"
+              Case "1"
+                Search653$ = "pn"
+              Case "2"
+                Search653$ = "co"
+              Case "3"
+                Search653$ = "cn"
+              Case "5"
+                Search653$ = "gg"
+              Case Else
+                If MsgBox( "This genre heading must be searched as an LC subject. Continue?", WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
+                    GoTo Done:
+                End If
+            End Select
+        End If
+
       Else
-        If MsgBox( "This heading is not an LC subject heading. Continue search anyway?", WARNING_QUERY + MSGBOX_SETBUTTONS_YES_NO, WaltsMacros$ ) = MSGBOX_RETURN_NO Then
+        If MsgBox( "This heading is not an LC subject heading. Continue search anyway?", WARNING_QUERY + MSGBOX_SETBUTTONS_OK_CANCEL, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
             GoTo Done:
         End If
     End If
@@ -633,9 +945,9 @@ End If
 ' filing characters.
 
 If TypeOfHeading% = UNIFORM_TITLE Then
-    FieldText$ = Mid$( FieldText$, FIELD_DATA_BEGINS + Filing% )
+    FieldData$ = Mid$( FieldData$, FIELD_DATA_BEGINS + Filing% )
   Else
-    FieldText$ = Mid$( FieldText$, FIELD_DATA_BEGINS )
+    FieldData$ = Mid$( FieldData$, FIELD_DATA_BEGINS )
 End If
 
 '########################################################################################
@@ -644,163 +956,19 @@ End If
 
 Normalize:
 
-If Selection = FALSE Then
-    RawString$ = FieldText$
+If TextSelection = FALSE Then
+    RawString$ = FieldData$
   Else
     RawString$ = SelectedText$
 End If
 
-RawStringLength% = Len( RawString$ )
-Index%           = 1
+NormalizedString$ = Normalize( RawString$, TRUE )
 
-' Examine each character in the field or selection to determine whether to add it to the
-' search string. Rules for including, excluding, and converting characters were in the
-' old Authorities User Guide, chapter 4, section 4, "Rules for Phrase Searches."
-' Subsequent documentation has lost these details. The rules followed here to normalize
-' the string are from the NACO normalization instructions. Although OCLC takes care of
-' normalization when it receives a browse string, some strings have to be altered anyway
-' for legible display in the dialog box, and normalizing those strings takes care of the
-' display problem.
-
-Do While Index% <= RawStringLength%
-  CharT$ = Mid$( RawString$, Index%, 1 )
-  CharA% = Asc( CharT$ )
-  Select Case CharA%
-
-' Illegal characters: Possibly due to a bug in Connexion when encountering Unicode
-' characters?
-
-    Case 0 To 31
-      MsgBox "Sorry, non-displayable characters were encountered.", CRITICAL_MESSAGE, WaltsMacros$
-      Exit Sub
-
-' Numbers and text characters: Include; convert lowercase to uppercase.
-
-    Case 48 to 57, 65 to 90
-      NormalizedString$ = NormalizedString$ & CharT$
-
-    Case 97 to 122
-      NormalizedString$ = NormalizedString$ & Chr$( CharA% - ASCII_DIFF_CASE )
-
-' Hyphen: Include if browsing by selection, as it probably indicates a compound surname.
-' It will get removed later.
-
-    Case 45
-      If Selection Then
-          NormalizedString$ = NormalizedString$ & CharT$
-        Else
-          NormalizedString$ = NormalizedString$ & " "
-      End If
-
-' Special characters to include:
-
-    Case 35 To 36, 38, 43, 64, 169, 185, 204
-      NormalizedString$ = NormalizedString$ & CharT$
-
-' Comma: Convert to blank in a selection. Otherwise, retain commas until constructing the
-' search string to browse by field; at that point, discard all commas after the first in
-' subfield $a.
-
-    Case 44
-      If Selection Then
-          NormalizedString$ = NormalizedString$ & " "
-        Else
-          NormalizedString$ = NormalizedString$ & CharT$
-      End If
-
-' Special characters converted to space:
-
-    Case 32, 37, 42, 60 To 62, 92, 94 To 96, 124, 126, 138 To 141, 154 To 158, 167 To 168, _
-         170 To 171, 174, 183, 202 To 203
-      NormalizedString$ = NormalizedString$ & " "
-
-' Punctuation converted to space:
-
-    Case 33 To 34, 40 To 41, 45, 58 to 59, 63, 123, 125, 200 to 201
-      NormalizedString$ = NormalizedString$ & " "
-
-' The case of "A." at the beginning of the selection. This is likely an initial, not an
-' indefinite article. Mark it so the selection is not considered to be a title, and the
-' initial is retained.
-
-    Case 46
-      If Selection Then
-          If NormalizedString$ = "A" Then
-              NormalizedString$ = NormalizedString$ & ESC
-            Else
-              NormalizedString$ = NormalizedString$ & " "
-          End If
-        Else
-          NormalizedString$ = NormalizedString$ & " "
-      End If
-
-' Forward slash: In the middle of a selection, surrounded by spaces, assume it is ISBD
-' punctuation that separates a title and a statement of responsibility. Use it to define
-' those two distinct strings, and then omit it. Otherwise, convert it to a space.
-
-    Case 47
-      If Selection Then
-          If Index% < RawStringLength% Then
-              If Right$( NormalizedString$, 1 ) = " " And Mid$( RawString$, Index% + 1, 1 ) = " " Then
-                  TitleString$    = Trim$( NormalizedString$ )
-                  NameTitleSplit% = Index%
-                Else
-                  NormalizedString$ = NormalizedString$ & " "
-              End If
-          End If
-        Else
-          NormalizedString$ = NormalizedString$ & " "
-      End If
-
-' Superscript, subscript numbers: Convert to normal.
-
-    Case 128 to 137
-      CharT$            = Chr$( CharA% - ASCII_DIFF_SUPERSCRIPT )
-      NormalizedString$ = NormalizedString$ & CharT$
-
-    Case 144 to 153
-      CharT$            = Chr$( CharA% - ASCII_DIFF_SUBSCRIPT )
-      NormalizedString$ = NormalizedString$ & CharT$
-
-' Special characters: Substitute.
-
-    Case 159
-      NormalizedString$ = NormalizedString$ & "SS"
-    Case 161, 177, 190
-      NormalizedString$ = NormalizedString$ & "L"
-    Case 162, 172, 178, 188
-      NormalizedString$ = NormalizedString$ & "O"
-    Case 163, 179, 186
-      NormalizedString$ = NormalizedString$ & "D"
-    Case 164, 180
-      NormalizedString$ = NormalizedString$ & "TH"
-    Case 165, 181
-      NormalizedString$ = NormalizedString$ & "AE"
-    Case 166, 182
-      NormalizedString$ = NormalizedString$ & "OE"
-    Case 173, 189
-      NormalizedString$ = NormalizedString$ & "U"
-    Case 184
-      NormalizedString$ = NormalizedString$ & "I"
-
-' Delimiter: Include for processing (to help identify subfields to exclude from the
-' search string), unless it's in a selection, in which case omit it along with its
-' accompanying subfield code.
-
-    Case 223
-      If Selection Then
-          Index%            = Index% + 1
-        Else
-          NormalizedString$ = NormalizedString$ & CharT$
-      End If
-
-    Case Else
-  End Select
-  Index% = Index% + 1
-
-Loop
-
-NormalizedString$ = Trim$( NormalizedString$ )
+If NormalizedString$ = FAILURE Then
+    GoTo Failure:
+  ElseIf NormalizedString$ = QUIT Then
+    GoTo Done:
+End If
 
 ' If a title has been identified, it's because the search string is a selection and the
 ' macro has interpreted a " / " string within the selection as ISBD punctuation
@@ -810,8 +978,8 @@ NormalizedString$ = Trim$( NormalizedString$ )
 If TitleString$ <> "" Then
     NameString$    = DoubleSpaceErase( Mid$( NormalizedString$, NameTitleSplit% ) )
     TitleString$   = DoubleSpaceErase( Left$( NormalizedString$, NameTitleSplit% - 1 ) )
-    NameTitle      = TRUE
-    TypeOfHeading% = PERSONAL_NAME
+    NameTitleType% = SELECTION_NAME_TITLE
+    TypeOfHeading% = UNKNOWN_NAME
 End If
 
 NormalizedString$ = DoubleSpaceErase( NormalizedString$ )
@@ -824,7 +992,16 @@ If Tag$ = "490" Then
     NormalizedString$ = InitialArticle( NormalizedString$ )
 End If
 
-If Selection Then GoTo SendSelection:
+If TextSelection Then
+    FunctionReturn$ = BrowseFromSelectedText
+    If FunctionReturn$ = FAILURE Then
+        GoTo Failure:
+      ElseIf FunctionReturn$ = QUIT Then
+        GoTo Done:
+      ElseIf FunctionReturn$ = "GoToNameTitleBrowse" Then
+        GoTo NameTitleBrowse:
+    End If
+End If
 
 '########################################################################################
 ' Build the search string, by subfield.
@@ -932,7 +1109,7 @@ Do
 
         Case "K", "T"
           If TypeOfHeading% <> UNIFORM_TITLE Then
-              NameTitle    = TRUE
+              NameTitleType% = HEADING_NAME_TITLE
           End If
           TitleString$ = TitleString$ & " " & Subfield$
 
@@ -996,153 +1173,6 @@ If NameString$ <> "" Then
     End If
 End If
 
-' If the record in view is an authority record, but the cursor is not in a heading field,
-' the macro will browse on the the base authorized heading (the heading shorn of extra
-' subfields, such as subject subdivisions, or a title following a name)--unless there are
-' headings referred to in a 260 or 360 field, or in 680 or 681 fields.
-
-If NotHeadingField Then
-
-' Go through the relevant fields searching for terms referred to (subfield $a in fields
-' 260, 360, 680, and 681). Store those terms in an array for selection for browsing.
-
-    Do
-      FoundField = CS.GetFieldLine( LineCount%, FieldText$ )
-      If FoundField Then
-          Select Case Left$( FieldText$, TAG_LENGTH )
-            Case "260", "360", "680", "681"
-              FieldCount%  = FieldCount% + 1
-              TracingNote$ = Mid$( FieldText$, FIELD_DATA_BEGINS )
-              If Left$( TracingNote$, 1 ) <> DELIMITER Then
-                  TracingNote$ = DELIMITER & "a " & TracingNote$
-              End If
-              Start%       = 1
-              Do
-                p = InStr( Start%, TracingNote$, DELIMITER )
-                If p <> 0 Then
-                    If Mid$( TracingNote$, p + 1, 1 ) = "a" Then
-                        q = InStr( p + 2, TracingNote$, DELIMITER )
-                        If q <> 0 Then
-                            HeadingString$ = Trim$( Mid$( TracingNote$, p + 2, q - p - 2 ) )
-                          Else
-                            HeadingString$ = Trim$( Mid$( TracingNote$, p + 2 ) )
-                        End If
-
-' If the word "subdivision" appears in the preceding subfield $i, treat the string as a
-' subdivision. The macro can find subdivisions in two subfields $a separated by an "and"
-' in subfield $i, but any grammatical construction more complex is beyond its scope.
-
-                        If p > 1 Then
-                            TempString$ = Trim$( Mid$( TracingNote$, Start% + 1, p - Start% - 1 ) )
-                        End If
-                        If InStr( TempString$, "subdivision" ) Then
-                            SubdivRef = TRUE
-                            HeadingString$ = "-- " & HeadingString$
-                          ElseIf TempString$ = "and" Then
-                            If SubdivRef Then
-                                HeadingString$ = "-- " & HeadingString$
-                                SubdivRef = FALSE
-                            End If
-                        End If
-                    End If
-                    Call HeadingsArray( HeadingString$ )
-                    End If
-                Start% = p + 1
-              Loop Until p = 0
-
-          End Select
-
-      End If
-      LineCount% = LineCount% + 1
-    Loop Until FoundField = FALSE
-
-' The "BaseHeading$" to browse on is the heading without qualification (names without
-' titles, subjects without subdivisions), so as to be able to quickly see, by browsing on
-' it, what possibilities are available.
-
-    If NameString$ <> "" Then
-        BaseHeading$ = NameString$
-      Else
-        If TitleString$ <> "" Then
-            BaseHeading$ = TitleString$
-          Else
-            BaseHeading$ = "-- " & Subdivisions( CountOfSubdivisions% - 1)
-        End If
-    End If
-
-    If HeadingCount% > 0 Then
-        ReDim Preserve HeadingRefs( HeadingCount% - 1 )
-
-        Begin Dialog Dialog1Definition  224, 148, WaltsMacros$, .Dialog1ControlFunction
-          OkButton       100, 124,  52,  14
-          CancelButton   160, 124,  52,  14
-          TextBox         24,  30, 188,  12,                                    .EstablishedHeading
-          ListBox         24,  62, 188,  56, HeadingRefs(),                     .HeadingsList
-          OptionGroup                                                           .OptionGroup
-           OptionButton   12,  18, 112,  12, "&Established heading:",           .OptionButton1
-           OptionButton   12,  50, 112,  12, "Heading &referred to:",           .OptionButton2
-          Text            52,   4, 112,   8, "Choose heading to browse on ..."
-        End Dialog
-
-        Dim Dialog1 As Dialog1Definition
-        On Error Resume Next
-        Dialog Dialog1
-        If Err = CANCEL Then Exit Sub
-
-        If Dialog1.OptionGroup = 0 Then
-            SearchString$ = Trim$( BaseHeading$ )
-            p = InStr( SearchString$, "--" )
-            If p = 1 Then
-                If CS.Browse( "AF", "sb", Mid$( SearchString$, 4 ) ) = FALSE Then
-                    GoTo Failure:
-                  Else
-                    Exit Sub
-                End If
-            End If
-          Else
-            SearchString$ = Trim$( HeadingRefs( Dialog1.HeadingsList ) )
-
-            p  = InStr( SearchString$, "[" )
-            If p <> 0 Then
-                SearchString$ = Trim$( Left$( SearchString$, p - 1 ) )
-            End If
-
-            p = InStr( SearchString$, COMMA )
-            If p <> 0 Then
-                SearchString$ = Left$( SearchString$, p - 1 ) & Mid$( SearchString$, p + 1 )
-            End If
-
-            p = InStr( SearchString$, "--" )
-            If p = 0 Then
-                If CS.Browse( "AF", "su", SearchString$ ) = FALSE Then
-                    GoTo Failure:
-                  Else
-
-' This next little bit of code highlights the search result that matches the search
-' exactly. When a heading is the same as a subdivision, in the list of "Root Results,"
-' the subdivision, which comes first in the list, is highlighted. Which is not what we
-' want.
-
-                    q = CS.SearchList( SearchString$, "Root Results", TRUE )
-                End If
-              ElseIf p = 1 Then
-                If CS.Browse( "AF", "sb", Mid$( SearchString$, 4 ) ) = FALSE Then GoTo Failure:
-              Else
-                Remainder$    = Trim$( Mid$( SearchString$, p + 2 ) )
-                SearchString$ = Trim$( Left$( SearchString$, p - 1 ) )
-                Do
-                  p = InStr( Remainder$, "--" )
-                  If p > 0 Then
-                      Remainder$ = Left$( Remainder$, p - 1 ) & " " & Mid$( Remainder$, p + 2 )
-                  End If
-                Loop Until p = 0
-                If CS.BrowseAuthorityExpanded( "0", "su", SearchString$, Remainder$ ) = FALSE Then GoTo Failure:
-            End If
-            Exit Sub
-        End If
-    End If
-End If
-
 ' If a heading is tagged as a subject but has no subdivisions (e.g., a 610 for a
 ' corporate body whose history is the subject of a work), do not treat it as a subject.
 
@@ -1177,9 +1207,14 @@ End If
 ' or for the marks of a corporate body. Otherwise, treat it as a 700 field.
 
 If TypeOfHeading% = UNCONTROLLED_NAME Then
-    Selection         = TRUE
+    TextSelection     = TRUE
     NormalizedString$ = NameString$
-    GoTo SendSelection:
+    FunctionReturn$   = BrowseFromSelectedText
+    If FunctionReturn$ = FAILURE Then
+        GoTo Failure:
+      ElseIf FunctionReturn$ = QUIT Then
+        GoTo Done:
+    End If
 End If
 
 '########################################################################################
@@ -1192,7 +1227,7 @@ End If
 ' found, changing them to words. Assume that any initial article either was never
 ' supplied or was accounted for in the non-filing characters indicator.
 
-If NameTitle Then
+If NameTitleType% > NOT_NAME_TITLE Then
 
     TitleHeading$ = FlatSharpFix( TitleString$, MUSIC_SIGN_TO_WORD )
 
@@ -1204,12 +1239,12 @@ NameTitleBrowse:
 
     Select Case ChooseBrowse( OptionParam1$, OptionParam2$, OptionParam3$ )
 
-      Case CANCEL
+      Case DLG_STATEMENT_CANCEL
         GoTo Done:
 
 ' Search the name portion only:
 
-      Case 0
+      Case 0, 4, 5
         SearchString$ = SearchTerm1$
         GoTo SimpleBrowse:
 
@@ -1220,7 +1255,7 @@ NameTitleBrowse:
         SearchString$ = SearchTerm2$
         SearchString$ = FlatSharpFix( SearchString$, MUSIC_WORD_TO_SIGN )
         If Len( SearchString$) > MAX_LEN_SEARCH_STRING Then SearchString$ = Left$( SearchString$, MAX_LEN_SEARCH_STRING )
-        If CS.Browse( "AF", "ti", SearchString$ ) = FALSE Then GoTo Failure:
+        If CS.Browse( AUTHORITY_FILE, "ti", SearchString$ ) = FALSE Then GoTo Failure:
 
 ' Search the name portion with the title added for an expanded browse. Distinguish
 ' between a personal name and a corporate/conference name.
@@ -1230,6 +1265,8 @@ NameTitleBrowse:
             AFIndex$ = "pn"
           ElseIf TypeOfHeading% = CORPORATE_NAME Or TypeOfHeading% = CONFERENCE_NAME Then
             AFIndex$ = "co"
+          ElseIf TypeOfHeading% = UNKNOWN_NAME Then
+            AFIndex$ = "nw"
         End If
         If Len( SearchTerm1$) > MAX_LEN_SEARCH_STRING Then SearchTerm1$ = Left$( SearchTerm1$, MAX_LEN_SEARCH_STRING )
         If Len( SearchTerm2$) > MAX_LEN_SEARCH_STRING Then SearchTerm2$ = Left$( SearchTerm2$, MAX_LEN_SEARCH_STRING )
@@ -1279,14 +1316,14 @@ NameTitleBrowse:
 ' contains one or more subject subdivisions.
 
     If CountOfSubdivisions% = 1 Then
-        OptionParam2$  = "Subject subdivision"
+        OptionParam2$ = "Subject subdivision"
       ElseIf CountOfSubdivisions% > 1 Then
-        OptionParam2$  = "Subject subdivision(s)"
+        OptionParam2$ = "Subject subdivision(s)"
     End If
 
     Select Case ChooseBrowse( OptionParam1$, OptionParam2$, OptionParam3$ )
 
-      Case CANCEL
+      Case DLG_STATEMENT_CANCEL
         GoTo Done:
 
 ' Browse on main heading only: This will be a straightforward search.
@@ -1297,13 +1334,13 @@ NameTitleBrowse:
             GoTo SimpleBrowse:
         End If
         If Len( SearchTerm1$) > MAX_LEN_SEARCH_STRING Then SearchTerm1$ = Left$( SearchTerm1$, MAX_LEN_SEARCH_STRING )
-        If CS.Browse( "AF", "ti", SearchTerm1$ ) = FALSE Then GoTo Failure:
+        If CS.Browse( AUTHORITY_FILE, "ti", SearchTerm1$ ) = FALSE Then GoTo Failure:
 
 ' Browse on subdivision(s) only:
 
       Case 1
         If Len( SearchTerm2$) > MAX_LEN_SEARCH_STRING Then SearchTerm2$ = Left$( SearchTerm2$, MAX_LEN_SEARCH_STRING )
-        If CS.Browse( "AF", "sb", SearchTerm2$ ) = FALSE Then GoTo Failure:
+        If CS.Browse( AUTHORITY_FILE, "sb", SearchTerm2$ ) = FALSE Then GoTo Failure:
 
 ' Browse on main heading but send expanded term to refine the browse:
 
@@ -1322,12 +1359,12 @@ NameTitleBrowse:
     If CountOfNames% > 1 Then
         Select Case ChooseBrowse( "Name heading", "", "" )
 
-          Case CANCEL
+          Case DLG_STATEMENT_CANCEL
             GoTo Done:
 
           Case 0
             If Len( SearchTerm1$) > MAX_LEN_SEARCH_STRING Then SearchTerm1$ = Left$( SearchTerm1$, MAX_LEN_SEARCH_STRING )
-            If CS.Browse( "AF", "co", SearchTerm1$ ) = FALSE Then GoTo Failure:
+            If CS.Browse( AUTHORITY_FILE, "co", SearchTerm1$ ) = FALSE Then GoTo Failure:
 
         End Select
       Else
@@ -1339,7 +1376,7 @@ NameTitleBrowse:
 
   ElseIf TypeOfHeading% = UNIFORM_TITLE Then
     If Len( TitleString$) > MAX_LEN_SEARCH_STRING Then TitleString$ = Left$( TitleString$, MAX_LEN_SEARCH_STRING )
-    If CS.Browse( "AF", "ti", TitleString$ ) = FALSE Then GoTo Failure:
+    If CS.Browse( AUTHORITY_FILE, "ti", TitleString$ ) = FALSE Then GoTo Failure:
 
 ' Anything else is just a simple name.
 
@@ -1371,8 +1408,11 @@ Select Case Tag$
   Case "150", "450", "550", "650", "655"
     AFIndex$ = "su"
 
-  Case "151", "451", "651"
+  Case "151", "451", "551", "651"
     AFIndex$ = "gg"
+
+  Case "653"
+    AFIndex$ = Search653$
 
 ' The only case of a field being browsed without a tag is if the field were actually a
 ' selection sent to the dialog box as a name/title field. Set the index to browse by the
@@ -1388,113 +1428,11 @@ Select Case Tag$
 
 End Select
 
-If CS.Browse( "AF", AFIndex$, SearchString$ ) = FALSE Then GoTo Failure:
-
-GoTo Done:
-
-'########################################################################################
-' Browse on selected text.
-'########################################################################################
-
-SendSelection:
-
-' The first thing to do with a selection, or the portion of a selection that has been
-' identified as a title, is to check if the first word is an article. If an initial
-' article is found the selection is assumed to be a title.
-
-CountOfNames% = 1
-If NameTitle Then
-    TempString$ = TitleString$
-  Else
-    TempString$ = NormalizedString$
-End If
-
-TempString$ = InitialArticle( TempString$ )
-
-' If the selection began with the abbreviation "A.", the abbreviation was marked so it
-' would not be considered an initial article and removed. Take out that mark now.
-
-p = InStr( TempString$, ESC )
-If p <> 0 Then
-    TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
-End If
-
-' Then check the string for music flat and sharp signs. If one is found, again, the
-' selection is assumed to be a title.
-
-TempString$ = FlatSharpFix( TempString$, MUSIC_SIGN_TO_WORD )
-
-If NameTitle Then
-    TitleHeading$ = TempString$
-    SearchString$ = NameString$
-    Selection     = FALSE
-  Else
-    SearchString$ = TempString$
-End If
-
-' If the selection is of two or three words, it is presented for choice of browsing in
-' two forms--as selected, to be browsed as a generic name, and inverted, to be browsed as
-' a personal name. The inverted form is simply the last word first, unless the last two
-' words are connected by a hyphen, in which case that pair comes first in the string. The
-' function "InvertOption" returns the position in the string where it can be broken for
-' inversion; a return value of zero means the name can't be inverted, as when the name is
-' a single word. The "Names" array holds both forms. If it seems probable that the
-' inverted form represents a personal name, that is put into the first element of the
-' array; otherwise the original form is put into the first element.
-
-InvertPoint% = InvertOption( SearchString$ )
-If InvertPoint% = 0 Then
-    ReDim Names( 0 )
-    Names( 0 ) = Trim$( SearchString$ )
-  Else
-    ReDim Names( 1 )
-    WorkString$ = Mid$( SearchString$, InvertPoint% ) & ", " & Left$( SearchString$, InvertPoint% - 1 )
-    If PersonalNameProbability% = PNP_PROBABLE Then
-        Names( 0 ) = Trim$( WorkString$ )
-        Names( 1 ) = Trim$( SearchString$ )
-      Else
-        Names( 0 ) = Trim$( SearchString$ )
-        Names( 1 ) = Trim$( WorkString$ )
-    End If
-End If
-
-' Remove any hyphens from the names in the array.
-
-For i = 0 To UBound( Names )
-  WorkString$ = Names( i )
-  Do
-    p = InStr( WorkString$, "-" )
-    If p <> 0 Then
-        WorkString$ = Left$( WorkString$, p - 1 ) & " " & Mid$( WorkString$, p + 1 )
-    End If
-  Loop Until p = 0
-  Names( i )  = WorkString$
-Next i
-
-If NameTitle Then GoTo NameTitleBrowse:
-
-Select Case ChooseBrowse( "", "", "" )
-
-  Case CANCEL
+If CS.Browse( AUTHORITY_FILE, AFIndex$, SearchString$ ) Then
     GoTo Done:
-
-  Case NAME_SELECT
-    AFIndex$ = "nw"
-
-  Case NAME_INVERTED
-    AFIndex$ = "pn"
-
-  Case SUBJECT_SELECT
-    AFIndex$ = "su"
-
-  Case TITLE_SELECT
-    AFIndex$ = "ti"
-
-End Select
-
-If CS.Browse("AF", AFIndex$, SearchTerm1$) = FALSE Then GoTo Failure:
-
-GoTo Done:
+  Else
+    GoTo Failure:
+End If
 
 Failure:
 
@@ -1506,387 +1444,83 @@ End Sub
 
 '****************************************************************************************
 
-Sub FillStopwords
+Sub Fill5XXArrays( WhichArray%, InArray() As String, Store5XXIndex%, ArrayLabel$, ArrayCount% )
 
-' This sub simply fills the array with the words that likely indicate a selection is the
-' name of a corporate body.
+' Given the sub-array to fill (1, 2, or 3, corresponding to the three list boxes
+' available), and the index of the main array, this routine fills the sub-arrays from the
+' main array and selects a relationship term or phrase for the caption of each list box.
 
-ReDim Stopwords( STOPWORD_COUNT )
+Dim InitialRelationshipCode$
+Dim InitialRelationshipTerm$
+Dim SubsequentRelationshipCode$
+Dim SubsequentRelationshipTerm$
 
-    Stopwords( 0   ) = " & "
-    Stopwords( 1   ) = " ABIDJAN "
-    Stopwords( 2   ) = " ADDIS ABABA "
-    Stopwords( 3   ) = " AGENCY "
-    Stopwords( 4   ) = " AHMEDABAD "
-    Stopwords( 5   ) = " ALABAMA "
-    Stopwords( 6   ) = " ALASKA "
-    Stopwords( 7   ) = " ALBUQUERQUE "
-    Stopwords( 8   ) = " ALEXANDRIA "
-    Stopwords( 9   ) = " ALGERIA "
-    Stopwords( 10  ) = " AMERICA "
-    Stopwords( 11  ) = " AMERICAN "
-    Stopwords( 12  ) = " AN "
-    Stopwords( 13  ) = " AND "
-    Stopwords( 14  ) = " ANGOLA "
-    Stopwords( 15  ) = " ANKARA "
-    Stopwords( 16  ) = " ARGENTINA "
-    Stopwords( 17  ) = " ARIZONA "
-    Stopwords( 18  ) = " ARKANSAS "
-    Stopwords( 19  ) = " ARLINGTON "
-    Stopwords( 20  ) = " ARMY "
-    Stopwords( 21  ) = " ASSOCIATION "
-    Stopwords( 22  ) = " AT "
-    Stopwords( 23  ) = " ATLANTA "
-    Stopwords( 24  ) = " AUSTIN "
-    Stopwords( 25  ) = " AUSTRALIA "
-    Stopwords( 26  ) = " AUTHORITY "
-    Stopwords( 27  ) = " BAGHDAD "
-    Stopwords( 28  ) = " BALTIMORE "
-    Stopwords( 29  ) = " BAND "
-    Stopwords( 30  ) = " BANDUNG "
-    Stopwords( 31  ) = " BANGALORE "
-    Stopwords( 32  ) = " BANGKOK "
-    Stopwords( 33  ) = " BANK "
-    Stopwords( 34  ) = " BEIJING "
-    Stopwords( 35  ) = " BELGIUM "
-    Stopwords( 36  ) = " BELO HORIZONTE "
-    Stopwords( 37  ) = " BERLIN "
-    Stopwords( 38  ) = " BOARD "
-    Stopwords( 39  ) = " BOGOR "
-    Stopwords( 40  ) = " BOGOTA "
-    Stopwords( 41  ) = " BOLIVIA "
-    Stopwords( 42  ) = " BOMBAY "
-    Stopwords( 43  ) = " BOSTON "
-    Stopwords( 44  ) = " BRASILIA "
-    Stopwords( 45  ) = " BRAZIL "
-    Stopwords( 46  ) = " BRIGADE "
-    Stopwords( 47  ) = " BRITAIN "
-    Stopwords( 48  ) = " BUCURESTI "
-    Stopwords( 49  ) = " BUDAPEST "
-    Stopwords( 50  ) = " BUENOS AIRES "
-    Stopwords( 51  ) = " BUREAU "
-    Stopwords( 52  ) = " CAIRO "
-    Stopwords( 53  ) = " CALCUTTA "
-    Stopwords( 54  ) = " CALI "
-    Stopwords( 55  ) = " CALIFORNIA "
-    Stopwords( 56  ) = " CANADA "
-    Stopwords( 57  ) = " CARACAS "
-    Stopwords( 58  ) = " CASABLANCA "
-    Stopwords( 59  ) = " CHANGCHUN "
-    Stopwords( 60  ) = " CHARLOTTE "
-    Stopwords( 61  ) = " CHENGDU "
-    Stopwords( 62  ) = " CHICAGO "
-    Stopwords( 63  ) = " CHILE "
-    Stopwords( 64  ) = " CHINA "
-    Stopwords( 65  ) = " CHINESE "
-    Stopwords( 66  ) = " CHONGQING "
-    Stopwords( 67  ) = " CHORUS "
-    Stopwords( 68  ) = " CHURCH "
-    Stopwords( 69  ) = " CIE "
-    Stopwords( 70  ) = " CIREBON "
-    Stopwords( 71  ) = " CLEVELAND "
-    Stopwords( 72  ) = " CLUB "
-    Stopwords( 73  ) = " CO "
-    Stopwords( 74  ) = " COALITION "
-    Stopwords( 75  ) = " COLLEGE "
-    Stopwords( 76  ) = " COLLOQUIUM "
-    Stopwords( 77  ) = " COLOMBIA "
-    Stopwords( 78  ) = " COLORADO "
-    Stopwords( 79  ) = " COLORADO SPRINGS "
-    Stopwords( 80  ) = " COLUMBUS "
-    Stopwords( 81  ) = " COMMISSION "
-    Stopwords( 82  ) = " COMMITTEE "
-    Stopwords( 83  ) = " COMMONWEALTH "
-    Stopwords( 84  ) = " COMPANY "
-    Stopwords( 85  ) = " CONFERENCE "
-    Stopwords( 86  ) = " CONGRESS "
-    Stopwords( 87  ) = " CONNECTICUT "
-    Stopwords( 88  ) = " CONSORTIUM "
-    Stopwords( 89  ) = " COOPERATIVE "
-    Stopwords( 90  ) = " CORPORATION "
-    Stopwords( 91  ) = " CORPS "
-    Stopwords( 92  ) = " COUNCIL "
-    Stopwords( 93  ) = " DALIAN "
-    Stopwords( 94  ) = " DALLAS "
-    Stopwords( 95  ) = " DELAWARE "
-    Stopwords( 96  ) = " DELHI "
-    Stopwords( 97  ) = " DENVER "
-    Stopwords( 98  ) = " DEPARTMENT "
-    Stopwords( 99  ) = " DEPT "
-    Stopwords( 100 ) = " DETROIT "
-    Stopwords( 101 ) = " DHAKA "
-    Stopwords( 102 ) = " DIVISION "
-    Stopwords( 103 ) = " EAST "
-    Stopwords( 104 ) = " ECUADOR "
-    Stopwords( 105 ) = " EGYPT "
-    Stopwords( 106 ) = " EL PASO "
-    Stopwords( 107 ) = " ENGLAND "
-    Stopwords( 108 ) = " ENGLISH "
-    Stopwords( 109 ) = " ENSEMBLE "
-    Stopwords( 110 ) = " ESTABLISHMENT "
-    Stopwords( 111 ) = " ETHIOPIA "
-    Stopwords( 112 ) = " FAISALABAD "
-    Stopwords( 113 ) = " FAMILY "
-    Stopwords( 114 ) = " FEDERAL "
-    Stopwords( 115 ) = " FEDERATION "
-    Stopwords( 116 ) = " FELLOWSHIP "
-    Stopwords( 117 ) = " FLORIDA "
-    Stopwords( 118 ) = " FOR "
-    Stopwords( 119 ) = " FORCE "
-    Stopwords( 120 ) = " FORT WORTH "
-    Stopwords( 121 ) = " FORTALEZA "
-    Stopwords( 122 ) = " FOUNDATION "
-    Stopwords( 123 ) = " FRANCE "
-    Stopwords( 124 ) = " FRENCH "
-    Stopwords( 125 ) = " FRESNO "
-    Stopwords( 126 ) = " GEORGIA "
-    Stopwords( 127 ) = " GERMAN "
-    Stopwords( 128 ) = " GERMANY "
-    Stopwords( 129 ) = " GHANA "
-    Stopwords( 130 ) = " GIZA "
-    Stopwords( 131 ) = " GREAT "
-    Stopwords( 132 ) = " GROUP "
-    Stopwords( 133 ) = " GROUP "
-    Stopwords( 134 ) = " GUANGZHOU "
-    Stopwords( 135 ) = " GUAYAQUIL "
-    Stopwords( 136 ) = " GUILD "
-    Stopwords( 137 ) = " HAERBIN "
-    Stopwords( 138 ) = " HAVANA "
-    Stopwords( 139 ) = " HAWAII "
-    Stopwords( 140 ) = " HO CHI MINH CITY "
-    Stopwords( 141 ) = " HONG KONG "
-    Stopwords( 142 ) = " HONGKONG "
-    Stopwords( 143 ) = " HOSPITAL "
-    Stopwords( 144 ) = " HOUSE "
-    Stopwords( 145 ) = " HOUSTON "
-    Stopwords( 146 ) = " HYDERABAD "
-    Stopwords( 147 ) = " IDAHO "
-    Stopwords( 148 ) = " ILLINOIS "
-    Stopwords( 149 ) = " IN "
-    Stopwords( 150 ) = " INC "
-    Stopwords( 151 ) = " INCHON "
-    Stopwords( 152 ) = " INDIA "
-    Stopwords( 153 ) = " INDIANA "
-    Stopwords( 154 ) = " INDIANAPOLIS "
-    Stopwords( 155 ) = " INDONESIA "
-    Stopwords( 156 ) = " INSTITUTE "
-    Stopwords( 157 ) = " INSTITUTION "
-    Stopwords( 158 ) = " INTERNATIONAL "
-    Stopwords( 159 ) = " IOWA "
-    Stopwords( 160 ) = " IRAN "
-    Stopwords( 161 ) = " IRAQ "
-    Stopwords( 162 ) = " ISRAEL "
-    Stopwords( 163 ) = " ISTANBUL "
-    Stopwords( 164 ) = " ITALY "
-    Stopwords( 165 ) = " IZMIR "
-    Stopwords( 166 ) = " JACKSONVILLE "
-    Stopwords( 167 ) = " JAKARTA "
-    Stopwords( 168 ) = " JAPAN "
-    Stopwords( 169 ) = " JAPANESE "
-    Stopwords( 170 ) = " JINAN "
-    Stopwords( 171 ) = " JOINT "
-    Stopwords( 172 ) = " KANPUR "
-    Stopwords( 173 ) = " KANSAS "
-    Stopwords( 174 ) = " KANSAS CITY "
-    Stopwords( 175 ) = " KARACHI "
-    Stopwords( 176 ) = " KENTUCKY "
-    Stopwords( 177 ) = " KENYA "
-    Stopwords( 178 ) = " KIEV "
-    Stopwords( 179 ) = " KINSHASA "
-    Stopwords( 180 ) = " LAHORE "
-    Stopwords( 181 ) = " LAS VEGAS "
-    Stopwords( 182 ) = " LEAGUE "
-    Stopwords( 183 ) = " LIMA "
-    Stopwords( 184 ) = " LIMITED "
-    Stopwords( 185 ) = " LOCAL "
-    Stopwords( 186 ) = " LONDON "
-    Stopwords( 187 ) = " LONG BEACH "
-    Stopwords( 188 ) = " LOS ANGELES "
-    Stopwords( 189 ) = " LOUISIANA "
-    Stopwords( 190 ) = " LOUISVILLE "
-    Stopwords( 191 ) = " LTD "
-    Stopwords( 192 ) = " MADRAS "
-    Stopwords( 193 ) = " MADRID "
-    Stopwords( 194 ) = " MAINE "
-    Stopwords( 195 ) = " MALANG "
-    Stopwords( 196 ) = " MALAYSIA "
-    Stopwords( 197 ) = " MARYLAND "
-    Stopwords( 198 ) = " MASHHAD "
-    Stopwords( 199 ) = " MASSACHUSETTS "
-    Stopwords( 200 ) = " MEDAN "
-    Stopwords( 201 ) = " MEDELLIN "
-    Stopwords( 202 ) = " MEETING "
-    Stopwords( 203 ) = " MEMPHIS "
-    Stopwords( 204 ) = " MESA "
-    Stopwords( 205 ) = " MEXICAN "
-    Stopwords( 206 ) = " MEXICO "
-    Stopwords( 207 ) = " MEXICO CITY "
-    Stopwords( 208 ) = " MIAMI "
-    Stopwords( 209 ) = " MICHIGAN "
-    Stopwords( 210 ) = " MILWAUKEE "
-    Stopwords( 211 ) = " MINNEAPOLIS "
-    Stopwords( 212 ) = " MINNESOTA "
-    Stopwords( 213 ) = " MISSION "
-    Stopwords( 214 ) = " MISSISSIPPI "
-    Stopwords( 215 ) = " MISSOURI "
-    Stopwords( 216 ) = " MONTANA "
-    Stopwords( 217 ) = " MOROCCO "
-    Stopwords( 218 ) = " MOSCOW "
-    Stopwords( 219 ) = " MOSKVA "
-    Stopwords( 220 ) = " MUSEUM "
-    Stopwords( 221 ) = " NAGOYA "
-    Stopwords( 222 ) = " NANJING "
-    Stopwords( 223 ) = " NASHVILLE "
-    Stopwords( 224 ) = " NATIONAL "
-    Stopwords( 225 ) = " NATIONS "
-    Stopwords( 226 ) = " NEBRASKA "
-    Stopwords( 227 ) = " NETHERLANDS "
-    Stopwords( 228 ) = " NEVADA "
-    Stopwords( 229 ) = " NEW HAMPSHIRE "
-    Stopwords( 230 ) = " NEW JERSEY "
-    Stopwords( 231 ) = " NEW MEXICO "
-    Stopwords( 232 ) = " NEW YORK "
-    Stopwords( 233 ) = " NEW ZEALAND "
-    Stopwords( 234 ) = " NIGERIA "
-    Stopwords( 235 ) = " NORTH "
-    Stopwords( 236 ) = " NORTH CAROLINA "
-    Stopwords( 237 ) = " NORTH DAKOTA "
-    Stopwords( 238 ) = " OAKLAND "
-    Stopwords( 239 ) = " OF "
-    Stopwords( 240 ) = " OFFICE "
-    Stopwords( 241 ) = " OHIO "
-    Stopwords( 242 ) = " OKLAHOMA "
-    Stopwords( 243 ) = " OKLAHOMA CITY "
-    Stopwords( 244 ) = " OMAHA "
-    Stopwords( 245 ) = " ON "
-    Stopwords( 246 ) = " ORCHESTRA "
-    Stopwords( 247 ) = " ORDER "
-    Stopwords( 248 ) = " OREGON "
-    Stopwords( 249 ) = " ORGANISATION "
-    Stopwords( 250 ) = " ORGANIZATION "
-    Stopwords( 251 ) = " OSAKA "
-    Stopwords( 252 ) = " PAKISTAN "
-    Stopwords( 253 ) = " PARAGUAY "
-    Stopwords( 254 ) = " PARIS "
-    Stopwords( 255 ) = " PARLIAMENT "
-    Stopwords( 256 ) = " PARTNERSHIP "
-    Stopwords( 257 ) = " PARTY "
-    Stopwords( 258 ) = " PENNSYLVANIA "
-    Stopwords( 259 ) = " PERU "
-    Stopwords( 260 ) = " PHILADELPHIA "
-    Stopwords( 261 ) = " PHILHARMONIC "
-    Stopwords( 262 ) = " PHILIPPINES "
-    Stopwords( 263 ) = " PHOENIX "
-    Stopwords( 264 ) = " POLAND "
-    Stopwords( 265 ) = " PORTLAND "
-    Stopwords( 266 ) = " PRESS "
-    Stopwords( 267 ) = " PRINTING "
-    Stopwords( 268 ) = " PTY "
-    Stopwords( 269 ) = " PUBLISHING "
-    Stopwords( 270 ) = " PUSAN "
-    Stopwords( 271 ) = " PYONGYANG "
-    Stopwords( 272 ) = " QINGDAO "
-    Stopwords( 273 ) = " QUARTET "
-    Stopwords( 274 ) = " QUEZON CITY "
-    Stopwords( 275 ) = " QUINTET "
-    Stopwords( 276 ) = " RALEIGH "
-    Stopwords( 277 ) = " RHODE ISLAND "
-    Stopwords( 278 ) = " RIO DE JANEIRO "
-    Stopwords( 279 ) = " ROMA "
-    Stopwords( 280 ) = " RUSSIA "
-    Stopwords( 281 ) = " RUSSIAN "
-    Stopwords( 282 ) = " SACRAMENTO "
-    Stopwords( 283 ) = " SALVADOR "
-    Stopwords( 284 ) = " SAN ANTONIO "
-    Stopwords( 285 ) = " SAN DIEGO "
-    Stopwords( 286 ) = " SAN FRANCISCO "
-    Stopwords( 287 ) = " SAN JOSE "
-    Stopwords( 288 ) = " SANTIAGO "
-    Stopwords( 289 ) = " SAO PAULO "
-    Stopwords( 290 ) = " SAUDI ARABIA "
-    Stopwords( 291 ) = " SCHOOL "
-    Stopwords( 292 ) = " SEATTLE "
-    Stopwords( 293 ) = " SECRETARIAT "
-    Stopwords( 294 ) = " SEMARANG "
-    Stopwords( 295 ) = " SEMINAR "
-    Stopwords( 296 ) = " SENATE "
-    Stopwords( 297 ) = " SEOUL "
-    Stopwords( 298 ) = " SERVICES "
-    Stopwords( 299 ) = " SHANGHAI "
-    Stopwords( 300 ) = " SHENYANG "
-    Stopwords( 301 ) = " SINGAPORE "
-    Stopwords( 302 ) = " SOCIETY "
-    Stopwords( 303 ) = " SOUTH "
-    Stopwords( 304 ) = " SOUTH AFRICA "
-    Stopwords( 305 ) = " SOUTH CAROLINA "
-    Stopwords( 306 ) = " SOUTH DAKOTA "
-    Stopwords( 307 ) = " SOUTH KOREA "
-    Stopwords( 308 ) = " SPAIN "
-    Stopwords( 309 ) = " SPANISH "
-    Stopwords( 310 ) = " SRI LANKA "
-    Stopwords( 311 ) = " ST. PETERSBURG "
-    Stopwords( 312 ) = " STATE "
-    Stopwords( 313 ) = " STATES "
-    Stopwords( 314 ) = " STIFTUNG "
-    Stopwords( 315 ) = " SUBCOMMITTEE "
-    Stopwords( 316 ) = " SUKABUMI "
-    Stopwords( 317 ) = " SURABAYA "
-    Stopwords( 318 ) = " SYDNEY "
-    Stopwords( 319 ) = " SYMPHONY "
-    Stopwords( 320 ) = " SYMPOSIUM "
-    Stopwords( 321 ) = " SYNDICATE "
-    Stopwords( 322 ) = " SYSTEM "
-    Stopwords( 323 ) = " TAEGU "
-    Stopwords( 324 ) = " TAIPEI "
-    Stopwords( 325 ) = " TAIWAN "
-    Stopwords( 326 ) = " TAIYUAN "
-    Stopwords( 327 ) = " TASHKENT "
-    Stopwords( 328 ) = " TEAM "
-    Stopwords( 329 ) = " TEHRAN "
-    Stopwords( 330 ) = " TENNESSEE "
-    Stopwords( 331 ) = " TEXAS "
-    Stopwords( 332 ) = " THAILAND "
-    Stopwords( 333 ) = " THE "
-    Stopwords( 334 ) = " TIANJIN "
-    Stopwords( 335 ) = " TOKYO "
-    Stopwords( 336 ) = " TORONTO "
-    Stopwords( 337 ) = " TRIO "
-    Stopwords( 338 ) = " TUCSON "
-    Stopwords( 339 ) = " TULSA "
-    Stopwords( 340 ) = " TUNISIA "
-    Stopwords( 341 ) = " TURKEY "
-    Stopwords( 342 ) = " U.N. "
-    Stopwords( 343 ) = " U.S. "
-    Stopwords( 344 ) = " UAE "
-    Stopwords( 345 ) = " UNITED "
-    Stopwords( 346 ) = " UNITED KINGDOM "
-    Stopwords( 347 ) = " UNITED STATES "
-    Stopwords( 348 ) = " UNIVERSITY "
-    Stopwords( 349 ) = " URUGUAY "
-    Stopwords( 350 ) = " US "
-    Stopwords( 351 ) = " UTAH "
-    Stopwords( 352 ) = " VENEZUELA "
-    Stopwords( 353 ) = " VERMONT "
-    Stopwords( 354 ) = " VIRGINIA "
-    Stopwords( 355 ) = " VIRGINIA BEACH "
-    Stopwords( 356 ) = " WASHINGTON "
-    Stopwords( 357 ) = " WEST "
-    Stopwords( 358 ) = " WEST VIRGINIA "
-    Stopwords( 359 ) = " WICHITA "
-    Stopwords( 360 ) = " WISCONSIN "
-    Stopwords( 361 ) = " WORKSHOP "
-    Stopwords( 362 ) = " WUHAN "
-    Stopwords( 363 ) = " WYOMING "
-    Stopwords( 364 ) = " XIAN "
-    Stopwords( 365 ) = " YANGON "
-    Stopwords( 366 ) = " YOKOHAMA "
-    Stopwords( 367 ) = " ZIBO "
+Dim Mixed                    : Mixed = FALSE
+
+Dim i As Integer, j As Integer
+
+' Starting with the previous sub-array's ending row (which will of course be 0 for the
+' first array), add terms to the array if they match what's already in the array (which
+' will be nothing if the array is just beginning to be filled). As soon as a new
+' relationship is found, it goes into the next sub-array.
+
+For i = Store5XXIndex% To CountOf5XX%
+  If j = 0 Then
+      InitialRelationshipCode$    = Store5XX( aRELATION_CODE, Store5XXIndex% )
+      InitialRelationshipTerm$    = Store5XX( aRELATION_TERM, Store5XXIndex% )
+    Else
+      SubsequentRelationshipCode$ = Store5XX( aRELATION_CODE, i )
+      SubsequentRelationshipTerm$ = Store5XX( aRELATION_TERM, i )
+  End If
+
+' If the relationship code matches, check the relationship term.
+
+  If ( j = 0 ) Or ( SubsequentRelationshipCode$ = InitialRelationshipCode$ Or WhichArray% = 3 ) Then
+      If InitialRelationshipTerm$ = "Unspecified relationship:" Then
+          Mixed = TRUE
+      End If
+
+' If the term matches, add the heading to the array, and set the label for that
+' relationship.
+
+      If ( j = 0 ) Or ( SubsequentRelationshipTerm$ = InitialRelationshipTerm$ Or WhichArray% = 3 ) Then
+          ReDim Preserve InArray( j )
+          InArray( j )   = Store5XX( aNORMALIZED_HEADING, Store5XXIndex% )
+          j              = j + 1
+          Store5XXIndex% = Store5XXIndex% + 1
+        Else
+          Exit For
+      End If
+    Else
+      Exit For
+  End If
+Next i
+
+ArrayCount% = j
+
+' If there is more than one term in an array, make its label plural.
+
+If WhichArray% < 3 Then
+    ArrayLabel$ = Plural( InitialRelationshipTerm$, j )
+  Else
+    If Mixed Then
+        ArrayLabel$ = "Other/Unspecified relationship"
+      Else
+        If SubsequentRelationshipTerm$ = "" Or InitialRelationshipTerm$ = SubsequentRelationshipTerm$ Then 'only 1 term processed
+            ArrayLabel$ = Plural( InitialRelationshipTerm$, j )
+          Else
+            ArrayLabel$ = "Other relationship"
+        End If
+    End If
+End If
+
+ArrayLabel$ = LCase( Left$( ArrayLabel$, 1 ) ) & Mid$( ArrayLabel$, 2 ) & "):"
 
 End Sub
 
 '****************************************************************************************
 
-Sub HeadingsArray( InString$ )
+Sub FillStoreRefs( InString$ )
 
 ' The subroutine takes the headings found in references in the authority record and puts
 ' them into an array, sorting them and discarding duplicates, and putting subdivisions
@@ -1896,14 +1530,23 @@ Const STRING1_EQUAL_TO     As Integer = 0
 Const STRING1_GREATER_THAN As Integer = 1
 Const STRING1_LESS_THAN    As Integer = -1
 
+Dim DisplayTerm$
 Dim FirstTerm$
 Dim HeadingSeparator%
 Dim Start%
 Dim TempString$
 
+Dim Subdivision
+
 Dim i As Integer, k As Integer, p As Integer, q As Integer
 
 TempString$ = InString$
+
+If Left$( TempString$, 1 ) = SUBJ_SUBDIV Then
+    Subdivision = TRUE
+  Else
+    Subdivision = FALSE
+End If
 
 ' Some instructions in a 680 field include a string that contains multiple numbered
 ' headings, like this one: "Works on an individual style in a specific locality are
@@ -1936,61 +1579,1322 @@ Do
   If HeadingSeparator% <> 0 Then
       FirstTerm$  = Trim$( Left$( TempString$, HeadingSeparator% - 1 ) )
       TempString$ = Trim$( Mid$( TempString$, HeadingSeparator% + 1 ) )
+      If Subdivision Then
+          If TempString$ <> "" Then
+              TempString$ = SUBJ_SUBDIV & TempString$
+          End If
+      End If
     Else
       FirstTerm$ = Trim$( TempString$ )
       If FirstTerm$ = "" Then
           Exit Sub
       End If
   End If
-  If Left$( FirstTerm$, 2 ) = "--" And Mid$( FirstTerm$, 3, 1 ) Like "[! ]" Then
-      FirstTerm$ = "-- " & Mid$( FirstTerm$, 3 )
-  End If
+
   If Right$( FirstTerm$, 1 ) Like "[.,]" Then
       FirstTerm$ = Left$( FirstTerm$, Len( FirstTerm$ ) - 1 )
   End If
-  If Left$( FirstTerm$, 2 ) = "--" Then
-      FirstTerm$ = FirstTerm$ & "  [subdivision]"
-  End If
-  p = InStr( FirstTerm$, "--[" )
-  If p <> 0 Then
-      q = InStr( p + 3, FirstTerm$, "]" )
-      If q = Len( FirstTerm$ ) Then
-          FirstTerm$ = Trim$( Left$( FirstTerm$, p - 1 ) )
+  Do
+    p = InStr( FirstTerm$, "--" )
+    If p > 0 Then
+        If p <> 2 Then
+            FirstTerm$ = Left$( FirstTerm$, p - 1 ) & DASH & Mid$( FirstTerm$, p + 2 )
+          Else
+            FirstTerm$ = Left$( FirstTerm$, p - 1 ) & Mid$( FirstTerm$, p + 2 )
+        End If
+    End If
+  Loop Until p = 0
+
+  DisplayTerm$ = Normalize( FirstTerm$, FALSE )
+
+  If Left$( FirstTerm$, 1 ) = SUBJ_SUBDIV Then
+  q = Asc( Mid$( FirstTerm$, 2, 1 ) )
+      If Mid$( FirstTerm$, 2, 1 ) <> DASH Then
+      DisplayTerm$ = "-- " & DisplayTerm$
       End If
   End If
-  ReDim Preserve HeadingRefs( HeadingCount% )
-  If HeadingCount% = 0 Then
-      HeadingRefs( HeadingCount% ) = Trim$( FirstTerm$ )
-    Else
-      For i = 0 To HeadingCount%
+  p = InStr( DisplayTerm$, "--[" )
+  If p <> 0 Then
+      q = InStr( p + 3, DisplayTerm$, "]" )
+      If q = Len( DisplayTerm$ ) Then
+          DisplayTerm$ = Trim$( Left$( DisplayTerm$, p - 1 ) )
+      End If
+  End If
 
-        Select Case StrComp( FirstTerm$, HeadingRefs( i ), 0 )
+  ReDim Preserve StoreRefs( 1, CountOfReferredTo% )
+  If CountOfReferredTo% = 0 Then
+      StoreRefs( aRAW_HEADING, CountOfReferredTo% )     = FirstTerm$
+      StoreRefs( aNORMALIZED_HEADING, CountOfReferredTo% ) = DisplayTerm$
+    Else
+      For i = 0 To CountOfReferredTo%
+        Select Case StrComp( FirstTerm$, StoreRefs( aRAW_HEADING, i ), 0 )
 
           Case STRING1_LESS_THAN    'Newest string less than older string
-            For k = HeadingCount% To i + 1 Step - 1
-              HeadingRefs( k ) = HeadingRefs( k - 1 )
+            For k = CountOfReferredTo% To i + 1 Step - 1
+              StoreRefs( aRAW_HEADING, k )     = StoreRefs( aRAW_HEADING, k - 1 )
+              StoreRefs( aNORMALIZED_HEADING, k ) = StoreRefs( aNORMALIZED_HEADING, k - 1 )
             Next k
-            HeadingRefs( i ) = FirstTerm$
+            StoreRefs( aRAW_HEADING, i )     = FirstTerm$
+            StoreRefs( aNORMALIZED_HEADING, i ) = DisplayTerm$
             Exit For
 
           Case STRING1_EQUAL_TO
-            HeadingCount% = HeadingCount% - 1
+            CountOfReferredTo% = CountOfReferredTo% - 1
             Exit For
 
           Case STRING1_GREATER_THAN
-            If i = HeadingCount% - 1 Then
-                HeadingRefs( i + 1 ) = FirstTerm$
+            If i = CountOfReferredTo% - 1 Then
+                StoreRefs( aRAW_HEADING, i + 1 )     = FirstTerm$
+                StoreRefs( aNORMALIZED_HEADING, i + 1 ) = DisplayTerm$
                 Exit For
             End If
 
         End Select
-
       Next i
   End If
-  HeadingCount% = HeadingCount% + 1
+  CountOfReferredTo% = CountOfReferredTo% + 1
 Loop Until HeadingSeparator% = 0
 
 End Sub
+
+'****************************************************************************************
+
+Sub FillStopwords
+
+' This sub simply fills the array with the words that likely indicate a selection is the
+' name of a corporate body.
+
+ReDim Stopwords( STOPWORD_COUNT )
+
+Stopwords( 0   ) = " & "
+Stopwords( 1   ) = " ABIDJAN "
+Stopwords( 2   ) = " ADDIS ABABA "
+Stopwords( 3   ) = " AGENCY "
+Stopwords( 4   ) = " AHMEDABAD "
+Stopwords( 5   ) = " ALABAMA "
+Stopwords( 6   ) = " ALASKA "
+Stopwords( 7   ) = " ALBUQUERQUE "
+Stopwords( 8   ) = " ALEXANDRIA "
+Stopwords( 9   ) = " ALGERIA "
+Stopwords( 10  ) = " AMERICA "
+Stopwords( 11  ) = " AMERICAN "
+Stopwords( 12  ) = " AN "
+Stopwords( 13  ) = " AND "
+Stopwords( 14  ) = " ANGOLA "
+Stopwords( 15  ) = " ANKARA "
+Stopwords( 16  ) = " ARGENTINA "
+Stopwords( 17  ) = " ARIZONA "
+Stopwords( 18  ) = " ARKANSAS "
+Stopwords( 19  ) = " ARLINGTON "
+Stopwords( 20  ) = " ARMY "
+Stopwords( 21  ) = " ASSOCIATION "
+Stopwords( 22  ) = " AT "
+Stopwords( 23  ) = " ATLANTA "
+Stopwords( 24  ) = " AUSTIN "
+Stopwords( 25  ) = " AUSTRALIA "
+Stopwords( 26  ) = " AUTHORITY "
+Stopwords( 27  ) = " BAGHDAD "
+Stopwords( 28  ) = " BALTIMORE "
+Stopwords( 29  ) = " BAND "
+Stopwords( 30  ) = " BANDUNG "
+Stopwords( 31  ) = " BANGALORE "
+Stopwords( 32  ) = " BANGKOK "
+Stopwords( 33  ) = " BANK "
+Stopwords( 34  ) = " BEIJING "
+Stopwords( 35  ) = " BELGIUM "
+Stopwords( 36  ) = " BELO HORIZONTE "
+Stopwords( 37  ) = " BERLIN "
+Stopwords( 38  ) = " BOARD "
+Stopwords( 39  ) = " BOGOR "
+Stopwords( 40  ) = " BOGOTA "
+Stopwords( 41  ) = " BOLIVIA "
+Stopwords( 42  ) = " BOMBAY "
+Stopwords( 43  ) = " BOSTON "
+Stopwords( 44  ) = " BRASILIA "
+Stopwords( 45  ) = " BRAZIL "
+Stopwords( 46  ) = " BRIGADE "
+Stopwords( 47  ) = " BRITAIN "
+Stopwords( 48  ) = " BUCURESTI "
+Stopwords( 49  ) = " BUDAPEST "
+Stopwords( 50  ) = " BUENOS AIRES "
+Stopwords( 51  ) = " BUREAU "
+Stopwords( 52  ) = " CAIRO "
+Stopwords( 53  ) = " CALCUTTA "
+Stopwords( 54  ) = " CALI "
+Stopwords( 55  ) = " CALIFORNIA "
+Stopwords( 56  ) = " CANADA "
+Stopwords( 57  ) = " CARACAS "
+Stopwords( 58  ) = " CASABLANCA "
+Stopwords( 59  ) = " CHANGCHUN "
+Stopwords( 60  ) = " CHARLOTTE "
+Stopwords( 61  ) = " CHENGDU "
+Stopwords( 62  ) = " CHICAGO "
+Stopwords( 63  ) = " CHILE "
+Stopwords( 64  ) = " CHINA "
+Stopwords( 65  ) = " CHINESE "
+Stopwords( 66  ) = " CHONGQING "
+Stopwords( 67  ) = " CHORUS "
+Stopwords( 68  ) = " CHURCH "
+Stopwords( 69  ) = " CIE "
+Stopwords( 70  ) = " CIREBON "
+Stopwords( 71  ) = " CLEVELAND "
+Stopwords( 72  ) = " CLUB "
+Stopwords( 73  ) = " CO "
+Stopwords( 74  ) = " COALITION "
+Stopwords( 75  ) = " COLLEGE "
+Stopwords( 76  ) = " COLLOQUIUM "
+Stopwords( 77  ) = " COLOMBIA "
+Stopwords( 78  ) = " COLORADO "
+Stopwords( 79  ) = " COLORADO SPRINGS "
+Stopwords( 80  ) = " COLUMBUS "
+Stopwords( 81  ) = " COMMISSION "
+Stopwords( 82  ) = " COMMITTEE "
+Stopwords( 83  ) = " COMMONWEALTH "
+Stopwords( 84  ) = " COMPANY "
+Stopwords( 85  ) = " CONFERENCE "
+Stopwords( 86  ) = " CONGRESS "
+Stopwords( 87  ) = " CONNECTICUT "
+Stopwords( 88  ) = " CONSORTIUM "
+Stopwords( 89  ) = " COOPERATIVE "
+Stopwords( 90  ) = " CORPORATION "
+Stopwords( 91  ) = " CORPS "
+Stopwords( 92  ) = " COUNCIL "
+Stopwords( 93  ) = " DALIAN "
+Stopwords( 94  ) = " DALLAS "
+Stopwords( 95  ) = " DELAWARE "
+Stopwords( 96  ) = " DELHI "
+Stopwords( 97  ) = " DENVER "
+Stopwords( 98  ) = " DEPARTMENT "
+Stopwords( 99  ) = " DEPT "
+Stopwords( 100 ) = " DETROIT "
+Stopwords( 101 ) = " DHAKA "
+Stopwords( 102 ) = " DIVISION "
+Stopwords( 103 ) = " EAST "
+Stopwords( 104 ) = " ECUADOR "
+Stopwords( 105 ) = " EGYPT "
+Stopwords( 106 ) = " EL PASO "
+Stopwords( 107 ) = " ENGLAND "
+Stopwords( 108 ) = " ENGLISH "
+Stopwords( 109 ) = " ENSEMBLE "
+Stopwords( 110 ) = " ESTABLISHMENT "
+Stopwords( 111 ) = " ETHIOPIA "
+Stopwords( 112 ) = " FAISALABAD "
+Stopwords( 113 ) = " FAMILY "
+Stopwords( 114 ) = " FEDERAL "
+Stopwords( 115 ) = " FEDERATION "
+Stopwords( 116 ) = " FELLOWSHIP "
+Stopwords( 117 ) = " FLORIDA "
+Stopwords( 118 ) = " FOR "
+Stopwords( 119 ) = " FORCE "
+Stopwords( 120 ) = " FORT WORTH "
+Stopwords( 121 ) = " FORTALEZA "
+Stopwords( 122 ) = " FOUNDATION "
+Stopwords( 123 ) = " FRANCE "
+Stopwords( 124 ) = " FRENCH "
+Stopwords( 125 ) = " FRESNO "
+Stopwords( 126 ) = " GEORGIA "
+Stopwords( 127 ) = " GERMAN "
+Stopwords( 128 ) = " GERMANY "
+Stopwords( 129 ) = " GHANA "
+Stopwords( 130 ) = " GIZA "
+Stopwords( 131 ) = " GREAT "
+Stopwords( 132 ) = " GROUP "
+Stopwords( 133 ) = " GROUP "
+Stopwords( 134 ) = " GUANGZHOU "
+Stopwords( 135 ) = " GUAYAQUIL "
+Stopwords( 136 ) = " GUILD "
+Stopwords( 137 ) = " HAERBIN "
+Stopwords( 138 ) = " HAVANA "
+Stopwords( 139 ) = " HAWAII "
+Stopwords( 140 ) = " HO CHI MINH CITY "
+Stopwords( 141 ) = " HONG KONG "
+Stopwords( 142 ) = " HONGKONG "
+Stopwords( 143 ) = " HOSPITAL "
+Stopwords( 144 ) = " HOUSE "
+Stopwords( 145 ) = " HOUSTON "
+Stopwords( 146 ) = " HYDERABAD "
+Stopwords( 147 ) = " IDAHO "
+Stopwords( 148 ) = " ILLINOIS "
+Stopwords( 149 ) = " IN "
+Stopwords( 150 ) = " INC "
+Stopwords( 151 ) = " INCHON "
+Stopwords( 152 ) = " INDIA "
+Stopwords( 153 ) = " INDIANA "
+Stopwords( 154 ) = " INDIANAPOLIS "
+Stopwords( 155 ) = " INDONESIA "
+Stopwords( 156 ) = " INSTITUTE "
+Stopwords( 157 ) = " INSTITUTION "
+Stopwords( 158 ) = " INTERNATIONAL "
+Stopwords( 159 ) = " IOWA "
+Stopwords( 160 ) = " IRAN "
+Stopwords( 161 ) = " IRAQ "
+Stopwords( 162 ) = " ISRAEL "
+Stopwords( 163 ) = " ISTANBUL "
+Stopwords( 164 ) = " ITALY "
+Stopwords( 165 ) = " IZMIR "
+Stopwords( 166 ) = " JACKSONVILLE "
+Stopwords( 167 ) = " JAKARTA "
+Stopwords( 168 ) = " JAPAN "
+Stopwords( 169 ) = " JAPANESE "
+Stopwords( 170 ) = " JINAN "
+Stopwords( 171 ) = " JOINT "
+Stopwords( 172 ) = " KANPUR "
+Stopwords( 173 ) = " KANSAS "
+Stopwords( 174 ) = " KANSAS CITY "
+Stopwords( 175 ) = " KARACHI "
+Stopwords( 176 ) = " KENTUCKY "
+Stopwords( 177 ) = " KENYA "
+Stopwords( 178 ) = " KIEV "
+Stopwords( 179 ) = " KINSHASA "
+Stopwords( 180 ) = " LAHORE "
+Stopwords( 181 ) = " LAS VEGAS "
+Stopwords( 182 ) = " LEAGUE "
+Stopwords( 183 ) = " LIMA "
+Stopwords( 184 ) = " LIMITED "
+Stopwords( 185 ) = " LOCAL "
+Stopwords( 186 ) = " LONDON "
+Stopwords( 187 ) = " LONG BEACH "
+Stopwords( 188 ) = " LOS ANGELES "
+Stopwords( 189 ) = " LOUISIANA "
+Stopwords( 190 ) = " LOUISVILLE "
+Stopwords( 191 ) = " LTD "
+Stopwords( 192 ) = " MADRAS "
+Stopwords( 193 ) = " MADRID "
+Stopwords( 194 ) = " MAINE "
+Stopwords( 195 ) = " MALANG "
+Stopwords( 196 ) = " MALAYSIA "
+Stopwords( 197 ) = " MARYLAND "
+Stopwords( 198 ) = " MASHHAD "
+Stopwords( 199 ) = " MASSACHUSETTS "
+Stopwords( 200 ) = " MEDAN "
+Stopwords( 201 ) = " MEDELLIN "
+Stopwords( 202 ) = " MEETING "
+Stopwords( 203 ) = " MEMPHIS "
+Stopwords( 204 ) = " MESA "
+Stopwords( 205 ) = " MEXICAN "
+Stopwords( 206 ) = " MEXICO "
+Stopwords( 207 ) = " MEXICO CITY "
+Stopwords( 208 ) = " MIAMI "
+Stopwords( 209 ) = " MICHIGAN "
+Stopwords( 210 ) = " MILWAUKEE "
+Stopwords( 211 ) = " MINNEAPOLIS "
+Stopwords( 212 ) = " MINNESOTA "
+Stopwords( 213 ) = " MISSION "
+Stopwords( 214 ) = " MISSISSIPPI "
+Stopwords( 215 ) = " MISSOURI "
+Stopwords( 216 ) = " MONTANA "
+Stopwords( 217 ) = " MOROCCO "
+Stopwords( 218 ) = " MOSCOW "
+Stopwords( 219 ) = " MOSKVA "
+Stopwords( 220 ) = " MUSEUM "
+Stopwords( 221 ) = " NAGOYA "
+Stopwords( 222 ) = " NANJING "
+Stopwords( 223 ) = " NASHVILLE "
+Stopwords( 224 ) = " NATIONAL "
+Stopwords( 225 ) = " NATIONS "
+Stopwords( 226 ) = " NEBRASKA "
+Stopwords( 227 ) = " NETHERLANDS "
+Stopwords( 228 ) = " NEVADA "
+Stopwords( 229 ) = " NEW HAMPSHIRE "
+Stopwords( 230 ) = " NEW JERSEY "
+Stopwords( 231 ) = " NEW MEXICO "
+Stopwords( 232 ) = " NEW YORK "
+Stopwords( 233 ) = " NEW ZEALAND "
+Stopwords( 234 ) = " NIGERIA "
+Stopwords( 235 ) = " NORTH "
+Stopwords( 236 ) = " NORTH CAROLINA "
+Stopwords( 237 ) = " NORTH DAKOTA "
+Stopwords( 238 ) = " OAKLAND "
+Stopwords( 239 ) = " OF "
+Stopwords( 240 ) = " OFFICE "
+Stopwords( 241 ) = " OHIO "
+Stopwords( 242 ) = " OKLAHOMA "
+Stopwords( 243 ) = " OKLAHOMA CITY "
+Stopwords( 244 ) = " OMAHA "
+Stopwords( 245 ) = " ON "
+Stopwords( 246 ) = " ORCHESTRA "
+Stopwords( 247 ) = " ORDER "
+Stopwords( 248 ) = " OREGON "
+Stopwords( 249 ) = " ORGANISATION "
+Stopwords( 250 ) = " ORGANIZATION "
+Stopwords( 251 ) = " OSAKA "
+Stopwords( 252 ) = " PAKISTAN "
+Stopwords( 253 ) = " PARAGUAY "
+Stopwords( 254 ) = " PARIS "
+Stopwords( 255 ) = " PARLIAMENT "
+Stopwords( 256 ) = " PARTNERSHIP "
+Stopwords( 257 ) = " PARTY "
+Stopwords( 258 ) = " PENNSYLVANIA "
+Stopwords( 259 ) = " PERU "
+Stopwords( 260 ) = " PHILADELPHIA "
+Stopwords( 261 ) = " PHILHARMONIC "
+Stopwords( 262 ) = " PHILIPPINES "
+Stopwords( 263 ) = " PHOENIX "
+Stopwords( 264 ) = " POLAND "
+Stopwords( 265 ) = " PORTLAND "
+Stopwords( 266 ) = " PRESS "
+Stopwords( 267 ) = " PRINTING "
+Stopwords( 268 ) = " PTY "
+Stopwords( 269 ) = " PUBLISHING "
+Stopwords( 270 ) = " PUSAN "
+Stopwords( 271 ) = " PYONGYANG "
+Stopwords( 272 ) = " QINGDAO "
+Stopwords( 273 ) = " QUARTET "
+Stopwords( 274 ) = " QUEZON CITY "
+Stopwords( 275 ) = " QUINTET "
+Stopwords( 276 ) = " RALEIGH "
+Stopwords( 277 ) = " RHODE ISLAND "
+Stopwords( 278 ) = " RIO DE JANEIRO "
+Stopwords( 279 ) = " ROMA "
+Stopwords( 280 ) = " RUSSIA "
+Stopwords( 281 ) = " RUSSIAN "
+Stopwords( 282 ) = " SACRAMENTO "
+Stopwords( 283 ) = " SALVADOR "
+Stopwords( 284 ) = " SAN ANTONIO "
+Stopwords( 285 ) = " SAN DIEGO "
+Stopwords( 286 ) = " SAN FRANCISCO "
+Stopwords( 287 ) = " SAN JOSE "
+Stopwords( 288 ) = " SANTIAGO "
+Stopwords( 289 ) = " SAO PAULO "
+Stopwords( 290 ) = " SAUDI ARABIA "
+Stopwords( 291 ) = " SCHOOL "
+Stopwords( 292 ) = " SEATTLE "
+Stopwords( 293 ) = " SECRETARIAT "
+Stopwords( 294 ) = " SEMARANG "
+Stopwords( 295 ) = " SEMINAR "
+Stopwords( 296 ) = " SENATE "
+Stopwords( 297 ) = " SEOUL "
+Stopwords( 298 ) = " SERVICES "
+Stopwords( 299 ) = " SHANGHAI "
+Stopwords( 300 ) = " SHENYANG "
+Stopwords( 301 ) = " SINGAPORE "
+Stopwords( 302 ) = " SOCIETY "
+Stopwords( 303 ) = " SOUTH "
+Stopwords( 304 ) = " SOUTH AFRICA "
+Stopwords( 305 ) = " SOUTH CAROLINA "
+Stopwords( 306 ) = " SOUTH DAKOTA "
+Stopwords( 307 ) = " SOUTH KOREA "
+Stopwords( 308 ) = " SPAIN "
+Stopwords( 309 ) = " SPANISH "
+Stopwords( 310 ) = " SRI LANKA "
+Stopwords( 311 ) = " ST. PETERSBURG "
+Stopwords( 312 ) = " STATE "
+Stopwords( 313 ) = " STATES "
+Stopwords( 314 ) = " STIFTUNG "
+Stopwords( 315 ) = " SUBCOMMITTEE "
+Stopwords( 316 ) = " SUKABUMI "
+Stopwords( 317 ) = " SURABAYA "
+Stopwords( 318 ) = " SYDNEY "
+Stopwords( 319 ) = " SYMPHONY "
+Stopwords( 320 ) = " SYMPOSIUM "
+Stopwords( 321 ) = " SYNDICATE "
+Stopwords( 322 ) = " SYSTEM "
+Stopwords( 323 ) = " TAEGU "
+Stopwords( 324 ) = " TAIPEI "
+Stopwords( 325 ) = " TAIWAN "
+Stopwords( 326 ) = " TAIYUAN "
+Stopwords( 327 ) = " TASHKENT "
+Stopwords( 328 ) = " TEAM "
+Stopwords( 329 ) = " TEHRAN "
+Stopwords( 330 ) = " TENNESSEE "
+Stopwords( 331 ) = " TEXAS "
+Stopwords( 332 ) = " THAILAND "
+Stopwords( 333 ) = " THE "
+Stopwords( 334 ) = " TIANJIN "
+Stopwords( 335 ) = " TOKYO "
+Stopwords( 336 ) = " TORONTO "
+Stopwords( 337 ) = " TRIO "
+Stopwords( 338 ) = " TUCSON "
+Stopwords( 339 ) = " TULSA "
+Stopwords( 340 ) = " TUNISIA "
+Stopwords( 341 ) = " TURKEY "
+Stopwords( 342 ) = " U.N. "
+Stopwords( 343 ) = " U.S. "
+Stopwords( 344 ) = " UAE "
+Stopwords( 345 ) = " UNITED "
+Stopwords( 346 ) = " UNITED KINGDOM "
+Stopwords( 347 ) = " UNITED STATES "
+Stopwords( 348 ) = " UNIVERSITY "
+Stopwords( 349 ) = " URUGUAY "
+Stopwords( 350 ) = " US "
+Stopwords( 351 ) = " UTAH "
+Stopwords( 352 ) = " VENEZUELA "
+Stopwords( 353 ) = " VERMONT "
+Stopwords( 354 ) = " VIRGINIA "
+Stopwords( 355 ) = " VIRGINIA BEACH "
+Stopwords( 356 ) = " WASHINGTON "
+Stopwords( 357 ) = " WEST "
+Stopwords( 358 ) = " WEST VIRGINIA "
+Stopwords( 359 ) = " WICHITA "
+Stopwords( 360 ) = " WISCONSIN "
+Stopwords( 361 ) = " WORKSHOP "
+Stopwords( 362 ) = " WUHAN "
+Stopwords( 363 ) = " WYOMING "
+Stopwords( 364 ) = " XIAN "
+Stopwords( 365 ) = " YANGON "
+Stopwords( 366 ) = " YOKOHAMA "
+Stopwords( 367 ) = " ZIBO "
+
+End Sub
+
+'****************************************************************************************
+
+Function AssignLabels( InString$ ) As String
+
+' This function pairs the most common relationship designations with alphabetic codes, so
+' as to sort the headings into a more desirable order, as well as to provide appropriate
+' labels for the listboxes.
+
+Dim TempString$
+
+  Select Case InString$
+
+    Case "a"
+      TempString$ = "aEarlier heading"
+    Case "b"
+      TempString$ = "bLater heading"
+    Case "g"
+      TempString$ = "cBroader term"
+    Case "Predecessor:"
+      TempString$ = "cPredecessor"
+    Case "h"
+      TempString$ = "dNarrower term"
+    Case "n"
+      TempString$ = "nOther heading"
+    Case "t"
+      TempString$ = "tHierarchical superior"
+    Case "Hierarchical superior:"
+      TempString$ = "tHierarchical superior"
+    Case "Successor:"
+      TempString$ = "dSuccessor"
+    Case "z"
+      TempString$ = "zUnspecified relationship"
+    Case Else
+      TempString$ = "y" & InString$
+
+  End Select
+
+AssignLabels = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function BrowseFromAuthorityRecord As String
+
+' If the record in view is an authority record, but the cursor is not in a heading field,
+' the macro will offer to browse on the the base authorized heading (the heading shorn of
+' extra subfields, such as subject subdivisions, or a title following a name), headings
+' referred to in fields 260, 360, 680, or 681, and "see also from" headings in the 5XX
+' fields able to be searched by macros (unsearchable tags are 547, 548, 555, 562, and
+' 582). Any 5XX field can of course be browsed on by placing the cursor in the field and
+' running the macro, so displaying them in a dialog box is only a small saver of time or
+' effort.
+'
+' Subject subdivisions can't be browsed using an expanded term. For example, a browse on
+' "bibliography" with "catalogs" as an expanded term just produces a list with
+' "Bibliography--Bibliography" as the first entry. But the browse string "bibliography
+' catalogs" produces a list with that entry in the middle, highlighted.
+'
+' These are the different outputs of this function:
+'
+' BROWSE_AUTHORIZED_HEADING Browse on the authorized heading minus title, subordinate
+'   units, and subject subdivisions.
+'
+' BROWSE_REFERRED_TO_HEADING Browse for the selected heading referred to in a note. A
+'   browse is done because a search retrieves headings that contain the term anywhere,
+'   arranging them alphabetically, and because there is no way to refine the search--
+'   headings referred to have no content coding to help--the browse is the only way to
+'   find the heading quickly.
+'
+' GET_5XX_HEADING Exit the function and retrieve the authority record for the selected
+'   see also heading.
+
+Dim ArrayNumber%
+Dim AuthorizedHeading$
+Dim BrowseIndex$
+Dim BrowseString$
+Dim CharT$
+Dim FieldData$
+Dim FunctionReturn$
+Dim HeadingString$
+Dim IndexStore5XX%
+Dim LineCount%
+Dim RelationshipInformation$
+Dim Remainder$
+Dim SearchableFields1$
+Dim SearchableFields2$
+Dim SearchString$
+Dim Start%
+Dim SubfieldCode$
+Dim SubjSubfieldCodesString$
+Dim Tag$
+Dim TempString$
+Dim Temp_DISPLAY_HEADING$
+Dim Temp_HEADING_TAG$
+Dim Temp_RAW_HEADING$
+Dim Temp_RELATIONSHIP$
+Dim Temp_RELATION_INFO$
+Dim TracingNote$
+
+Dim FoundField
+Dim SubdivRef
+Dim Swapped
+
+Dim i As Integer, p As Integer, q As Integer
+
+SearchableFields1$       = "[0135][01]"
+SearchableFields2$       = "[015]"
+SubjSubfieldCodesString$ = "vxyz"
+
+SubdivRef = FALSE
+
+' Start by going through the record, line by line.
+
+CountOf5XX% = -1
+LineCount%  = 1
+Do
+  FoundField = CS.GetField( "...", LineCount%, FieldData$ )
+  If FoundField Then
+      Tag$ = Left$( FieldData$, 3 )
+
+' Get the authorized heading, as that may be the subject of a browse, and it wasn't
+' captured earlier in the macro, which was only looking at data if the cursor was in a
+' heading field. Delete title, subordinate unit, and subject subdivision subfields,
+' because the browse on the authorized heading is intended to be on the base heading,
+' without any additions, so you can see what other possibilities might be available for
+' it.
+
+      If Tag$ Like ( "1" & SearchableFields1$ ) Or Tag$ Like ( "18" & SearchableFields2$ ) Then
+          AuthorizedHeading$ = FieldData$
+          p = InStr( AuthorizedHeading$, DELIMITER & "t" )
+          If p > 0 Then
+              AuthorizedHeading$ = Trim$( Left$( AuthorizedHeading$, p - 1 ) )
+          End If
+          For i = 1 To 4
+            p = InStr( 9, AuthorizedHeading$, DELIMITER & Mid$( SubjSubfieldCodesString$, i, 1 ) )
+            If p > 0 Then
+                AuthorizedHeading$ = Trim$( Left$( AuthorizedHeading$, p - 1 ) )
+            End If
+          Next i
+          If Left$( Tag$, 2 ) = "11" Then
+              p = InStr( AuthorizedHeading$, DELIMITER & "b" )
+              If p > 0 Then
+                  AuthorizedHeading$ = Trim$( Left$( AuthorizedHeading$, p - 1 ) )
+              End If
+          End If
+          BaseHeading$ = Normalize( AuthorizedHeading$, FALSE )
+
+          Select Case Left$( Tag$, 2 )
+            Case "10", "11"
+              BaseHeading$ = Tag$& Trim$( Mid$( BaseHeading$, 6 ) )
+            Case "13"
+              BaseHeading$ = Tag$ & Trim$( Mid$( BaseHeading$, 6 ) )
+            Case "18"
+              BaseHeading$ = Tag$ & Trim$( Mid$( BaseHeading$, 5 ) )
+            Case "15"
+              BaseHeading$ = Tag$ & Trim$( Mid$( BaseHeading$, 5 ) )
+          End Select
+          BaseHeading$ = Trim$( BaseHeading$ )
+
+' Terms referred to are in subfield $a in fields 260, 360, 680, and 681. Store any terms
+' found in those subfields in an array for display.
+
+        ElseIf Tag$ Like "[23]60" Or Tag$ Like "68[01]" Then
+          TracingNote$ = Mid$( FieldData$, FIELD_DATA_BEGINS )
+          If Left$( TracingNote$, 1 ) <> DELIMITER Then
+              TracingNote$ = DELIMITER & "a " & TracingNote$
+          End If
+          Start% = 1
+          Do
+            p = InStr( Start%, TracingNote$, DELIMITER )
+            If p <> 0 Then
+                If Mid$( TracingNote$, p + 1, 1 ) = "a" Then
+                    q = InStr( p + 2, TracingNote$, DELIMITER )
+                    If q <> 0 Then
+                        HeadingString$ = Trim$( Mid$( TracingNote$, p + 2, q - p - 2 ) )
+                      Else
+                        HeadingString$ = Trim$( Mid$( TracingNote$, p + 2 ) )
+                    End If
+
+' If the word "subdivision" appears in the preceding subfield $i (as in: "$i subdivision
+' $a Politics and government $i under names of countries, cities, etc."), consider the
+' string to be a subdivision. The macro can find subdivisions in two subfields $a
+' separated by an "and" in subfield $i, but any grammatical construction more complex is
+' beyond its scope.
+
+                    If p > 1 Then
+                        TempString$ = Trim$( Mid$( TracingNote$, Start% + 1, p - Start% - 1 ) )
+                    End If
+                    If InStr( TempString$, "subdivision" ) Then
+                        SubdivRef      = TRUE
+                        HeadingString$ = SUBJ_SUBDIV & HeadingString$
+                      ElseIf TempString$ = "and" Then
+                        If SubdivRef Then
+                            HeadingString$ = SUBJ_SUBDIV & HeadingString$
+                            SubdivRef      = FALSE
+                        End If
+                    End If
+                End If
+                If HeadingString$ <> "" Then
+                    Call FillStoreRefs( HeadingString$ )
+                End If
+            End If
+            Start% = p + 1
+          Loop Until p = 0
+
+' Store all the searchable 5XX fields in an array. In this case, "searchable" means able
+' to be searched, or browsed, by a macro. The macro language doesn't yet have the
+' capability, for example, to browse genre headings.
+
+        ElseIf Tag$ Like ( "5" & SearchableFields1$ ) Or Tag$ Like ( "58" & SearchableFields2$ ) Then
+          If Mid$( FieldData$, FIELD_DATA_BEGINS, 1 ) <> DELIMITER Then
+              FieldData$ = Left$( FieldData$, 5 ) & DELIMITER & "a " & Mid$( FieldData$, FIELD_DATA_BEGINS )
+          End If
+
+' Get rid of control subfields by finding the first occurrence of one and truncating the
+' string there and then.
+
+          Start% = 1
+          Do
+            p = InStr( Start%, FieldData$, DELIMITER )
+            If p > 0 Then
+                SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+                If SubfieldCode$ Like "[0-9]" Then
+                    FieldData$ = Trim$( Left$( FieldData$, p - 1 ) )
+                    Exit Do
+                End If
+              Start% = p + 1
+            End If
+          Loop Until p = 0
+
+' Look for a subfield $w in each 5XX field. If present, it can contain a single-letter
+' code or a string of codes. If the single letter is not "r," it is the old code for
+' earlier, later, broader, or narrower (this last code provided for but not implemented
+' by LC). The code "r" means that the relationship is named in subfield $i. If a string
+' of codes is present, it begins with "n" and simply means, for purposes of this macro,
+' that the relationship between the headings is not identified. If no subfield $w is
+' present, add one, using the code "z" to mean no relationship is specified.
+
+          p = InStr( FieldData$, DELIMITER & "w" )
+          If p > 0 Then
+              RelationshipInformation$ = Trim$( Mid$( FieldData$, p + 2, 3 ) )
+              FieldData$               = Left$( FieldData$, p - 1 ) & Mid$( FieldData$, p + 5 )
+              If RelationshipInformation$ = "r" Then
+                  p = InStr( FieldData$, DELIMITER & "i" )
+                  If p > 0 Then
+                      q = InStr( p + 1, FieldData$, DELIMITER )
+                      If q > 0 Then
+                          RelationshipInformation$ = Trim$( Mid$( FieldData$, p + 2, q - p - 2 ) )
+                          FieldData$               = Left$( FieldData$, p - 1 ) & Mid$( FieldData$, q + 3 )
+                        Else
+                          BrowseFromAuthorityRecord = FAILURE
+                          Exit Function
+                      End If
+                    Else
+                      BrowseFromAuthorityRecord = FAILURE
+                      Exit Function
+                  End If
+                ElseIf Left$( RelationshipInformation$, 1 ) = "n" Then
+                  RelationshipInformation$ = "z"
+              End If
+              p = InStr( FieldData$, DELIMITER )
+              If p > 0 Then
+                  If Mid$( FieldData$, p + 1, 1 ) Like "[avxyz]" Then
+                      FieldData$ = Left$( FieldData$, 5 ) & Trim$( Mid$( FieldData$, p + 2 ) )
+                  End If
+              End If
+            Else
+              FieldData$               = Left$( FieldData$, 5 ) & Trim$( Mid$( FieldData$, 8 ) )
+              RelationshipInformation$ = "z"
+          End If
+
+' Load the main array with the information collected.
+
+          CountOf5XX%                                  = CountOf5XX% + 1
+          ReDim Preserve Store5XX( aRELATION_CODE, CountOf5XX% )
+
+' Fix up the statement of relationship: Delete a terminal colon (the macro puts one back
+' in), and truncate it if it is too long to fit into the dialog box.
+
+          If Right$( RelationshipInformation$, 1 ) = ":" Then
+              RelationshipInformation$ = Left$( RelationshipInformation$, Len( RelationshipInformation$ ) - 1 )
+          End If
+          If Len( RelationshipInformation$ ) > 36 Then
+              For i = 36 To 1 Step -1
+                CharT$ = Mid$( RelationshipInformation$, i, 1 )
+                If CharT$ = " " Then
+                    RelationshipInformation$ = Left$( RelationshipInformation$, i - 1 ) & "..."
+                    Exit For
+                End If
+              Next i
+          End If
+          TempString$                                  = AssignLabels( RelationshipInformation$ )
+          Store5XX( aRELATION_CODE, CountOf5XX% )      = Left$( TempString$, 1 )
+          Store5XX( aRELATION_TERM, CountOf5XX% )      = Mid$( TempString$, 2 )
+          Store5XX( aRAW_HEADING, CountOf5XX% )        = FieldData$
+          Store5XX( aNORMALIZED_HEADING, CountOf5XX% ) = Normalize( Mid$( FieldData$, FIELD_DATA_BEGINS ), FALSE )
+          Store5XX( aHEADING_TAG, CountOf5XX% )        = Tag$
+      End If
+  End If
+  LineCount% = LineCount% + 1
+Loop Until FoundField = FALSE
+
+' If the main array of 5XX fields contains more than one term, sort them so the common
+' terms appear first. A simple bubble sort suffices to order them by the single-letter
+' code in the first element of each row, which was assigned by the function
+' "AssignLabels." Headings with the same code are not further sorted, and because of the
+' type of sort, remain in the order in which they appear in the record. Even if the main
+' array contains only one term, continue with the macro, rather than searching it
+' immediately, simply so it can be displayed and its relationship put into words from a
+' code.
+
+If CountOf5XX% > 1 Then
+    Do
+      Swapped = FALSE
+      For i = 0 To CountOf5XX% - 1
+        If Store5XX( aRELATION_CODE, i ) > Store5XX( aRELATION_CODE, i + 1 ) Then
+            Temp_RELATION_INFO$                    = Store5XX( aRELATION_CODE, i )
+            Temp_RELATIONSHIP$                     = Store5XX( aRELATION_TERM, i )
+            Temp_RAW_HEADING$                      = Store5XX( aRAW_HEADING, i )
+            Temp_DISPLAY_HEADING$                  = Store5XX( aNORMALIZED_HEADING, i )
+            Temp_HEADING_TAG$                      = Store5XX( aHEADING_TAG, i )
+            Store5XX( aRELATION_CODE, i )          = Store5XX( aRELATION_CODE, i + 1 )
+            Store5XX( aRELATION_TERM, i)           = Store5XX( aRELATION_TERM, i + 1 )
+            Store5XX( aRAW_HEADING, i )            = Store5XX( aRAW_HEADING, i + 1 )
+            Store5XX( aNORMALIZED_HEADING, i)      = Store5XX( aNORMALIZED_HEADING, i + 1 )
+            Store5XX( aHEADING_TAG, i )            = Store5XX( aHEADING_TAG, i + 1 )
+            Store5XX( aRELATION_CODE, i + 1 )      = Temp_RELATION_INFO$
+            Store5XX( aRELATION_TERM, i + 1 )      = Temp_RELATIONSHIP$
+            Store5XX( aRAW_HEADING, i + 1 )        = Temp_RAW_HEADING$
+            Store5XX( aNORMALIZED_HEADING, i + 1 ) = Temp_DISPLAY_HEADING$
+            Store5XX( aHEADING_TAG, i + 1 )        = Temp_HEADING_TAG$
+            Swapped = TRUE
+        End If
+      Next i
+    Loop Until Swapped = FALSE
+End If
+
+' Fill the arrays that will display in the dialog box. Start with the array that holds
+' headings referred to, if any.
+
+If CountOfReferredTo% > 0 Then
+    For i = 0 To UBound( StoreRefs, 2 )
+      ReDim Preserve DisplayRefs( i )
+      DisplayRefs( i ) = StoreRefs( aNORMALIZED_HEADING, i )
+    Next i
+End If
+
+' Continue by filling the arrays of 5XX fields which populate the list boxes in the
+' dialog box. Providing three arrays seems to work for most headings to display all the
+' relationships: one array for earlier/later/broader/narrower, one for another kind of
+' relationship, and the third for other or unspecified relationships. If there are more
+' than three kinds of specific relationships, the remaining ones are combined into the
+' catchall group of "Other." The relationship itself serves as the label in the dialog
+' box.
+
+IndexStore5XX% = 0
+For ArrayNumber% = 1 To 3
+  If IndexStore5XX% <= CountOf5XX% Then
+      Select Case ArrayNumber%
+        Case 1
+          Call Fill5XXArrays( ArrayNumber%, Display5XX_1(), IndexStore5XX%, Display5XX_1Label$, Display5XX_1Count% )
+        Case 2
+          Call Fill5XXArrays( ArrayNumber%, Display5XX_2(), IndexStore5XX%, Display5XX_2Label$, Display5XX_2Count% )
+        Case 3
+          Call Fill5XXArrays( ArrayNumber%, Display5XX_3(), IndexStore5XX%, Display5XX_3Label$, Display5XX_3Count% )
+      End Select
+  End If
+Next ArrayNumber%
+
+' Display the dialog box to get the term to search or browse on.
+
+If CountOfReferredTo% > 0 Or CountOf5XX% > -1 Then
+    FunctionReturn$ = DisplayAuthorityRecordBrowses( MatchString$ )
+    If FunctionReturn$ = FAILURE or FunctionReturn$ = QUIT Then
+        BrowseFromAuthorityRecord = FunctionReturn$
+        Exit Function
+    End If
+  Else
+    FunctionReturn$ = BROWSE_AUTHORIZED_HEADING & BaseHeading$
+End If
+
+Select Case Left$( FunctionReturn$, 1 )
+
+  Case BROWSE_AUTHORIZED_HEADING
+
+    Tag$          = Mid$( FunctionReturn$, 2, 3 )
+    BrowseString$ = Mid$( FunctionReturn$, 5 )
+
+    Select Case Tag$
+      Case "180", "185"
+        BrowseIndex$ = "sb"
+      Case "100"
+        BrowseIndex$ = "pn"
+      Case "110", "111"
+        BrowseIndex$ = "co"
+      Case "130"
+        BrowseIndex$ = "ti"
+      Case "150"
+        BrowseIndex$ = "to"
+      Case "151"
+        BrowseIndex$ = "gg"
+    End Select
+    If CS.Browse( AUTHORITY_FILE, BrowseIndex$, BrowseString$ ) = FALSE Then
+        BrowseFromAuthorityRecord = FAILURE
+      Else
+        BrowseFromAuthorityRecord = QUIT
+    End If
+    Exit Function
+
+  Case BROWSE_REFERRED_TO_HEADING
+
+    BrowseString$ = Mid$( FunctionReturn$, 2 )
+
+    p = InStr( BrowseString$, COMMA )
+    If p <> 0 Then
+        BrowseString$ = Left$( BrowseString$, p - 1 ) & Mid$( BrowseString$, p + 1 )
+    End If
+
+    If Left$( BrowseString$, 3 ) = "-- " Then
+        BrowseString$ = Trim$( Mid$( BrowseString$, 4 ) )
+        If CS.Browse( AUTHORITY_FILE, "sb", BrowseString$ ) = FALSE Then
+            BrowseFromAuthorityRecord = FAILURE
+            Exit Function
+        End If
+      Else
+        p = InStr( BrowseString$, "--" )
+        If p = 0 Then
+            If CS.Browse( AUTHORITY_FILE, "su", BrowseString$ ) = FALSE Then
+                BrowseFromAuthorityRecord = FAILURE
+              Else
+
+' This next little bit of code highlights the search result that matches the search
+' exactly. When a heading is the same as a subdivision, in the list of "Root Results,"
+' the subdivision, which comes first in the list, is highlighted. Which is not what we
+' want.
+
+                q = CS.SearchList( MatchString$, "Root Results", TRUE )
+                BrowseFromAuthorityRecord = QUIT
+            End If
+          Else
+            Remainder$    = Trim$( Mid$( BrowseString$, p + 2 ) )
+            BrowseString$ = Trim$( Left$( BrowseString$, p - 1 ) )
+            Do
+              p = InStr( Remainder$, "--" )
+              If p > 0 Then
+                  Remainder$ = Left$( Remainder$, p - 1 ) & " " & Mid$( Remainder$, p + 2 )
+              End If
+            Loop Until p = 0
+            If CS.BrowseAuthorityExpanded( "0", "su", BrowseString$, Remainder$ ) = FALSE Then
+                BrowseFromAuthorityRecord = FAILURE
+                Exit Function
+            End If
+        End If
+    End If
+    BrowseFromAuthorityRecord = QUIT
+    Exit Function
+
+  Case GET_5XX_HEADING
+    BrowseFromAuthorityRecord = FunctionReturn$
+    Exit Function
+
+End Select
+
+BrowseFromAuthorityRecord = QUIT
+
+End Function
+
+'****************************************************************************************
+
+Function BrowseFromSelectedText As String
+
+Const SUBJECT_SELECT As Integer = 5
+
+Dim InvertPoint%
+Dim SearchString$
+Dim TempString$
+Dim WorkString$
+
+Dim i As Integer, p As Integer
+
+' The first thing to do with a selection, or the portion of a selection that has been
+' identified as a title, is to check if the first word is an article. If an initial
+' article is found the selection is assumed to be a title.
+
+CountOfNames% = 1
+If NameTitleType% = SELECTION_NAME_TITLE Then
+    TempString$ = TitleString$
+  Else
+    TempString$ = NormalizedString$
+End If
+
+TempString$ = InitialArticle( TempString$ )
+
+' If the selection began with the abbreviation "A.", the abbreviation was marked so it
+' would not be considered an initial article and removed. Take out that mark now.
+
+p = InStr( TempString$, ESC )
+If p <> 0 Then
+    TempString$ = Left$( TempString$, p - 1 ) & Mid$( TempString$, p + 1 )
+End If
+
+' Then check the string for music flat and sharp signs. If one is found, again, the
+' selection is assumed to be a title.
+
+TempString$ = FlatSharpFix( TempString$, MUSIC_SIGN_TO_WORD )
+
+If NameTitleType% = SELECTION_NAME_TITLE Then
+    TitleHeading$ = TempString$
+    SearchString$ = NameString$
+  Else
+    SearchString$ = TempString$
+End If
+
+' If the selection is of two or three words, it is presented for choice of browsing in
+' two forms--as selected, to be browsed as a generic name, and inverted, to be browsed as
+' a personal name. The inverted form is simply the last word first, unless the last two
+' words are connected by a hyphen, in which case that pair comes first in the string. The
+' function "InvertOption" returns the position in the string where it can be broken for
+' inversion; a return value of zero means the name can't be inverted, as when the name is
+' a single word. The "Names" array holds both forms. If it seems probable that the
+' inverted form represents a personal name, that is put into the first element of the
+' array; otherwise the original form is put into the first element.
+
+InvertPoint% = InvertOption( SearchString$ )
+If InvertPoint% = 0 Then
+    ReDim Names( 0 )
+    Names( 0 ) = Trim$( SearchString$ )
+  Else
+    ReDim Names( 1 )
+    WorkString$ = Mid$( SearchString$, InvertPoint% ) & ", " & Left$( SearchString$, InvertPoint% - 1 )
+    If Invertibility% = INVERTIBLE_BY_DEFAULT Then
+        Names( 0 ) = Trim$( WorkString$ )
+        Names( 1 ) = Trim$( SearchString$ )
+      Else
+        Names( 0 ) = Trim$( SearchString$ )
+        Names( 1 ) = Trim$( WorkString$ )
+    End If
+End If
+
+' Remove any hyphens from the names in the array.
+
+For i = 0 To UBound( Names )
+  WorkString$ = Names( i )
+  Do
+    p = InStr( WorkString$, "-" )
+    If p <> 0 Then
+        WorkString$ = Left$( WorkString$, p - 1 ) & " " & Mid$( WorkString$, p + 1 )
+    End If
+  Loop Until p = 0
+  Names( i )  = WorkString$
+Next i
+
+If NameTitleType% = SELECTION_NAME_TITLE Then
+    BrowseFromSelectedText = "GoToNameTitleBrowse"
+    Exit Function
+End If
+
+Select Case ChooseBrowse( "", "", "" )
+
+  Case DLG_STATEMENT_CANCEL
+    BrowseFromSelectedText = QUIT
+    Exit Function
+
+  Case NAME_SELECT
+    AFIndex$ = "nw"
+
+  Case NAME_INVERTED
+    AFIndex$ = "pn"
+
+  Case SUBJECT_SELECT
+    AFIndex$ = "su"
+
+  Case TITLE_SELECT
+    AFIndex$ = "ti"
+
+End Select
+
+If CS.Browse( AUTHORITY_FILE, AFIndex$, SearchTerm1$ ) = FALSE Then
+    BrowseFromSelectedText = FAILURE
+  Else
+    BrowseFromSelectedText = QUIT
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function ChooseBrowse( OptionParam1$, OptionParam2$, OptionParam3$ )
+
+' The dialog box that shows what's being browsed and how to do it. It has two layouts:
+'  + For browsing by field (or a selection considered to be a name/title field), options
+'    1-3 allow a browse on a main heading, subject subdivisions or a title, or both, in
+'    an expanded browse, using one or two entry boxes.
+'  + For browsing by selection, the first three options are hidden, and a single entry
+'    box shows the string to be browsed as a name (in direct or inverted order), a
+'    subject, or a title.
+' The entry boxes that show the normalized strings are either text boxes or drop combo
+' boxes, so their contents can be edited to tweak the browse strings. The parameters
+' passed to the dialog box control the text of the radio buttons and the commit button in
+' each layout.
+
+Dim p As Integer
+
+SearchOption1$ = OptionParam1$
+SearchOption2$ = OptionParam2$
+SearchOption3$ = OptionParam3$
+
+If SearchOption3$ <> "" Then SearchOption3$ = "Expanded browse " & SearchOption3$
+
+Begin Dialog Dialog2Definition  352, 156, WaltsMacros$, .Dialog2ControlFunction
+  ButtonGroup                                           .Choice
+   PushButton     94, 134, 104,  14, "",                .CommitButton
+  CancelButton   206, 134,  52,  14
+  Text            16,  22, 128,  10, "",                .AlternateBT1
+  OptionGroup                                           .BrowseType
+   OptionButton   16,  21, 128,  12, "",                .OptionButton1
+   OptionButton   16,  65, 128,  12, "",                .OptionButton2
+   OptionButton   16, 109, 240,  12, "",                .OptionButton3
+   OptionButton   16,  21,  38,  12, "&Name",           .OptionButton4
+   OptionButton   56,  21,  64,  12, "Name, &Inverted", .OptionButton5
+   OptionButton  126,  21,  38,  12, "&Subject",        .OptionButton6
+   OptionButton  170,  21,  38,  12, "&Title",          .OptionButton7
+  TextBox         16,  34, 320,  12,                    .TextBox1
+  TextBox         16,  78, 320,  12,                    .TextBox2
+  DropComboBox    16,  34, 320,  64, Names(),           .DropComboBox1
+  DropComboBox    16,  78, 320,  96, Subdivisions(),    .DropComboBox2
+  GroupBox         8,  14, 336,  40, ""
+  GroupBox         8,  58, 336,  40, "",                .GroupBox2
+  GroupBox         8, 102, 336,  23, "",                .GroupBox3
+  Text           235,  23, 100,   8, "",                .Attention1
+  Text           243,  67,  88,   8, "",                .Attention2
+  Text             8,   6, 104,   8, "Select/edit what to browse on:"
+End Dialog
+
+Dim Dialog2 as Dialog2Definition
+On Error Resume Next
+Dialog Dialog2
+If Err = DLG_STATEMENT_CANCEL Then
+    ChooseBrowse = DLG_STATEMENT_CANCEL
+    Exit Function
+End If
+
+ChooseBrowse = Dialog2.BrowseType
+
+SearchTerm1$ = Trim$( Dialog2.TextBox1 )
+If SearchTerm1$ = "" Then SearchTerm1$ = Trim$( Dialog2.DropComboBox1 )
+
+If TextSelection And NameTitleType% = NOT_NAME_TITLE Then
+    SearchTerm2$ = ""
+  Else
+    SearchTerm2$ = Trim$( Dialog2.TextBox2 )
+    If SearchTerm2$ = "" Then SearchTerm2$ = Trim$( Dialog2.DropComboBox2 )
+End If
+
+' Remove all periods from name headings, and all dashes from subject subdivision strings.
+
+Do
+  p = InStr( SearchTerm1$, "." )
+  If p <> 0 Then SearchTerm1$ = Left$( SearchTerm1$, p - 1 ) & Mid$( SearchTerm1$, p + 1 )
+Loop Until p = 0
+
+Do
+  p = InStr( SearchTerm2$, "--" )
+  If p <> 0 Then SearchTerm2$ = Left$( SearchTerm2$, p - 1 ) & Mid$( SearchTerm2$, p + 2 )
+Loop Until p = 0
+SearchTerm2$ = Trim$( DoubleSpaceErase( SearchTerm2$ ) )
+
+End Function
+
+'****************************************************************************************
+
+Function DisplayAuthorityRecordBrowses( OutString$ ) As String
+
+Dim ArrayIndex%
+Dim EstablishedHeading$
+Dim HeadingLegend$
+Dim Prompt$
+Dim ReferredToHeading$
+Dim SeeAlsoHeading$
+Dim TextBoxInput$
+
+HeadingLegend$ = "&1  Browse authorized heading:"
+Prompt$        = "Choose action..."
+
+If CountOfReferredTo% > 0 Then
+    ReDim Preserve StoreRefs( 1, CountOfReferredTo% - 1 )
+End If
+
+If ( CountOfReferredTo% > 0 And Display5XX_1Count% = 0 ) Or _
+   ( CountOfReferredTo% = 0 And ( Display5XX_1Count% > 0 And Display5XX_2Count% = 0 ) ) Then
+    Begin Dialog Dialog3_1_ListBoxDefinition  256, 142, WaltsMacros$, .Dialog3_1_ListBoxControlFunction
+      OkButton       134, 118,  52,  14
+      CancelButton   194, 118,  52,  14
+      OptionGroup                                        .OptionGroup
+       OptionButton   10,  18, 236,  12, HeadingLegend$, .OptionButtonHeading
+       OptionButton   10,  46, 236,  12, "",             .OptionButtonListBox1
+      TextBox         22,  30, 224,  12,                 .EstablishedHeading
+      ListBox         22,  58, 224,  56, "",             .ListBox1
+      Text            10,   6, 128,   8, Prompt$
+    End Dialog
+    Dim Dialog3_1_ListBox As Dialog3_1_ListBoxDefinition
+    On Error Resume Next
+    Dialog Dialog3_1_ListBox
+    If Err = DLG_STATEMENT_CANCEL Then
+        DisplayAuthorityRecordBrowses = QUIT
+        Exit Function
+    End If
+    If Dialog3_1_ListBox.OptionGroup = 0 Then
+        TextBoxInput$ = Dialog3_1_ListBox.EstablishedHeading
+        If TextBoxInput$ = Mid$( BaseHeading$, 2 ) Then
+            EstablishedHeading$ = BaseHeading$
+          Else
+            EstablishedHeading$ = TextBoxInput$
+        End If
+      Else
+        ArrayIndex% = Dialog3_1_ListBox.ListBox1
+        If CountOfReferredTo% > 0 Then
+            ReferredToHeading$ = StoreRefs( aNORMALIZED_HEADING, ArrayIndex% )
+        End If
+    End If
+
+  ElseIf ( CountOfReferredTo% > 0 And Display5XX_2Count% = 0 ) Or _
+         ( CountOfReferredTo% = 0 And ( Display5XX_2Count% > 0 And Display5XX_3Count% = 0 ) ) Then
+    Begin Dialog Dialog3_2_ListBoxesDefinition  256, 208, WaltsMacros$, .Dialog3_2_ListBoxesControlFunction
+      OkButton       102, 184,  52,  14
+      CancelButton   162, 184,  52,  14
+      OptionGroup                                        .OptionGroup
+       OptionButton   10,  18, 236,  12, HeadingLegend$, .OptionButtonHeading
+       OptionButton   10,  46, 236,  12, "",             .OptionButtonListBox1
+       OptionButton   10, 112, 236,  12, "",             .OptionButtonListBox2
+      TextBox         22,  30, 224,  12,                 .EstablishedHeading
+      ListBox         22,  58, 224,  56, "",             .ListBox1
+      ListBox         22, 124, 224,  56, "",             .ListBox2
+      Text            10,   6, 128,   8, Prompt$
+    End Dialog
+    Dim Dialog3_2_ListBoxes As Dialog3_2_ListBoxesDefinition
+    On Error Resume Next
+    Dialog Dialog3_2_ListBoxes
+    If Err = DLG_STATEMENT_CANCEL Then
+        DisplayAuthorityRecordBrowses = QUIT
+        Exit Function
+    End If
+    Select Case Dialog3_2_ListBoxes.OptionGroup
+      Case 0
+        EstablishedHeading$ = Dialog3_2_ListBoxes.EstablishedHeading
+      Case 1
+        ArrayIndex% = Dialog3_2_ListBoxes.ListBox1
+        If CountOfReferredTo% > 0 Then
+            ReferredToHeading$ = StoreRefs( aNORMALIZED_HEADING, ArrayIndex% )
+        End If
+      Case 2
+        If CountOfReferredTo% > 0 Then
+            ArrayIndex% = Dialog3_2_ListBoxes.ListBox2
+          Else
+            ArrayIndex% = Dialog3_2_ListBoxes.ListBox2 + Display5XX_1Count%
+        End If
+    End Select
+
+  ElseIf ( CountOfReferredTo% > 0 And Display5XX_3Count% = 0 ) Or CountOfReferredTo% = 0 Then
+    Begin Dialog Dialog3_3_ListBoxesDefinition  256, 284, WaltsMacros$, .Dialog3_3_ListBoxesControlFunction
+      PushButton     102, 260,  52,  14, "&Search",      .OK
+      CancelButton   162, 260,  52,  14
+      OptionGroup                                        .OptionGroup
+       OptionButton   10,  18,  80,  12, HeadingLegend$, .OptionButtonHeading
+       OptionButton   10,  50, 236,  12, "",             .OptionButtonListBox1
+       OptionButton   10, 120, 236,  12, "",             .OptionButtonListBox2
+       OptionButton   10, 190, 236,  12, "",             .OptionButtonListBox3
+      TextBox         22,  30, 224,  12,                 .EstablishedHeading
+      ListBox         22,  62, 224,  56, Display5XX_1(), .ListBox1
+      ListBox         22, 132, 224,  56, "",             .ListBox2
+      ListBox         22, 202, 224,  56, "",             .ListBox3
+      Text            10,   6, 128,   8, Prompt$
+    End Dialog
+    Dim Dialog3_3_ListBoxes As Dialog3_3_ListBoxesDefinition
+    On Error Resume Next
+    Dialog Dialog3_3_ListBoxes
+    If Err = DLG_STATEMENT_CANCEL Then
+        DisplayAuthorityRecordBrowses = QUIT
+        Exit Function
+    End If
+    Select Case Dialog3_3_ListBoxes.OptionGroup
+      Case 0
+        EstablishedHeading$ = Dialog3_3_ListBoxes.EstablishedHeading
+      Case 1
+        ArrayIndex% = Dialog3_3_ListBoxes.ListBox1
+        If CountOfReferredTo% > 0 Then
+            ReferredToHeading$ = StoreRefs( aNORMALIZED_HEADING, ArrayIndex% )
+        End If
+      Case 2
+        If CountOfReferredTo% > 0 Then
+            ArrayIndex% = Dialog3_3_ListBoxes.ListBox2
+          Else
+            ArrayIndex% = Dialog3_3_ListBoxes.ListBox2 + Display5XX_1Count%
+        End If
+      Case 3
+        If CountOfReferredTo% > 0 Then
+            ArrayIndex% = Dialog3_3_ListBoxes.ListBox3 + Display5XX_1Count%
+          Else
+            ArrayIndex% = Dialog3_3_ListBoxes.ListBox3 + Display5XX_1Count% + Display5XX_2Count%
+        End If
+    End Select
+
+  Else
+
+    Begin Dialog Dialog3_4_ListBoxesDefinition  256, 356, WaltsMacros$, .Dialog3_4_ListBoxesControlFunction
+      PushButton     102, 332,  52,  14, "&Search",      .OK
+      CancelButton   162, 332,  52,  14
+      OptionGroup                                        .OptionGroup
+       OptionButton   10,  18,  80,  12, HeadingLegend$, .OptionButtonHeading
+       OptionButton   10,  50, 236,  12, "",             .OptionButtonListBox1
+       OptionButton   10, 120, 236,  12, "",             .OptionButtonListBox2
+       OptionButton   10, 190, 236,  12, "",             .OptionButtonListBox3
+       OptionButton   10, 260, 236,  12, "",             .OptionButtonListBox4
+      TextBox         22,  30, 224,  12,                 .EstablishedHeading
+      ListBox         22,  62, 224,  56, Display5XX_1(), .ListBox1
+      ListBox         22, 132, 224,  56, "",             .ListBox2
+      ListBox         22, 202, 224,  56, "",             .ListBox3
+      ListBox         22, 272, 224,  56, "",             .ListBox4
+      Text            10,   6, 128,   8, Prompt$
+    End Dialog
+    Dim Dialog3_4_ListBoxes As Dialog3_4_ListBoxesDefinition
+    On Error Resume Next
+    Dialog Dialog3_4_ListBoxes
+    If Err = DLG_STATEMENT_CANCEL Then
+        DisplayAuthorityRecordBrowses = QUIT
+        Exit Function
+    End If
+    Select Case Dialog3_4_ListBoxes.OptionGroup
+      Case 0
+        EstablishedHeading$ = Dialog3_4_ListBoxes.EstablishedHeading
+      Case 1
+        ReferredToHeading$ = StoreRefs( aNORMALIZED_HEADING, ArrayIndex% )
+      Case 2
+        ArrayIndex% = Dialog3_4_ListBoxes.ListBox2
+      Case 3
+        ArrayIndex% = Dialog3_4_ListBoxes.ListBox3 + Display5XX_1Count%
+      Case 4
+        ArrayIndex% = Dialog3_4_ListBoxes.ListBox4 + Display5XX_1Count% + Display5XX_2Count%
+    End Select
+
+End If
+
+' The "OutString" is the heading as it appears in the record, and is used to narrow a
+' browse or find the heading in a list after a search.
+
+If EstablishedHeading$ <> "" Then
+    DisplayAuthorityRecordBrowses = BROWSE_AUTHORIZED_HEADING & BaseHeading$
+  ElseIf ReferredToHeading$ <> "" Then
+    DisplayAuthorityRecordBrowses = BROWSE_REFERRED_TO_HEADING & ReferredToHeading$
+    OutString$                    = StoreRefs( aRAW_HEADING, ArrayIndex% )
+  Else
+    SeeAlsoHeading$               = Store5XX( aNORMALIZED_HEADING, ArrayIndex% )
+    OutString$                    = Store5XX( aRAW_HEADING, ArrayIndex% )
+    DisplayAuthorityRecordBrowses = GET_5XX_HEADING & SeeAlsoHeading$
+End If
+
+End Function
 
 '****************************************************************************************
 
@@ -2099,69 +3003,58 @@ Function InitialArticle( SomeString$ )
 ' title.
 
 Dim ArticleTest$
-Dim Language$
-Dim PosFF%
 Dim TempString$
 
 Dim p As Integer
 
-ChangedFFView = FALSE
+TempString$ = SomeString$
 
-TempString$   = SomeString$
+If Language$ <> "" Then
+    p = InStr( TempString$, " " )
+    If p <> 0 Then
+        ArticleTest$ = Left$( TempString$, p )
 
-PosFF% = CS.FixedFieldPosition
-If PosFF% <> DISPLAY_FF_AT_TOP Then
-    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
-    ChangedFFView         = TRUE
-End If
-If CS.GetFixedField( "Lang", Language$ ) Then
-    If ChangedFFView Then CS.FixedFieldPosition = PosFF%
-End If
+        Select Case ArticleTest$
 
-p = InStr( TempString$, " " )
-If p <> 0 Then
-    ArticleTest$ = Left$( TempString$, p )
+          Case "A ", "AN ", "THE "
+            If Language$ = "eng" Or Language$ = "zxx" Then
+                TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
+                ProbableTitle = TRUE
+            End If
 
-    Select Case ArticleTest$
+          Case "DAS ", "DER ", "DIE "
+            If Language$ = "ger" Then
+                TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
+                ProbableTitle = TRUE
+            End If
 
-      Case "A ", "AN ", "THE "
-        If Language$ = "eng" Or Language$ = "zxx" Then
-            TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
-            ProbableTitle = TRUE
-        End If
+          Case "L ", "LE ", "LES ", "UN ", "UNE "
+            If Language$ = "fre" Then
+                TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
+                ProbableTitle = TRUE
+            End If
 
-      Case "DAS ", "DER ", "DIE "
-        If Language$ = "ger" Then
-            TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
-            ProbableTitle = TRUE
-        End If
+          Case "LAS ", "LOS ", "UN ", "UNA "
+            If Language$ = "spa" Then
+                TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
+                ProbableTitle = TRUE
+            End If
 
-      Case "L ", "LE ", "LES ", "UN ", "UNE "
-        If Language$ = "fre" Then
-            TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
-            ProbableTitle = TRUE
-        End If
+          Case "I ", "IL ", "L ", "LE ", "LO ", "UN ", "UNA ", "UNO "
+            If Language$ = "ita" Then
+                TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
+                ProbableTitle = TRUE
+            End If
 
-      Case "LAS ", "LOS ", "UN ", "UNA "
-        If Language$ = "spa" Then
-            TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
-            ProbableTitle = TRUE
-        End If
+          Case "LA "
+            If Language$ = "ita" Or Language$ = "spa" Or Language$ = "fre" Then
+                TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
+                ProbableTitle = TRUE
+            End If
 
-      Case "I ", "IL ", "L ", "LE ", "LO ", "UN ", "UNA ", "UNO "
-        If Language$ = "ita" Then
-            TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
-            ProbableTitle = TRUE
-        End If
+        End Select
 
-      Case "LA "
-        If Language$ = "ita" Or Language$ = "spa" Or Language$ = "fre" Then
-            TempString$   = Mid$( TempString$, Len( ArticleTest$ ) + 1 )
-            ProbableTitle = TRUE
-        End If
-
-    End Select
-
+    End If
 End If
 
 InitialArticle = TempString$
@@ -2186,14 +3079,14 @@ Dim CharT$
 Dim CorporateClue%
 Dim CountOfStopwords%
 Dim FirstSpace%
-Dim LastSpace%               : LastSpace% = 1
+Dim LastSpace%
 Dim MidWord$
 Dim TempString$
 Dim WordCount%
 
-Dim i As Integer, p As Integer
+Dim Hyphen
 
-Dim Hyphen                   : Hyphen     = FALSE
+Dim i As Integer, p As Integer
 
 Dim Prefixes( PREFIX_COUNT )
 Prefixes( 0 ) = "DE"
@@ -2202,6 +3095,9 @@ Prefixes( 2 ) = "LE"
 Prefixes( 3 ) = "ST"
 Prefixes( 4 ) = "VAN"
 Prefixes( 5 ) = "VON"
+
+Hyphen     = FALSE
+LastSpace% = 1
 
 TempString$ = BaseString$
 
@@ -2237,14 +3133,14 @@ WordCount% = WordCount% + 1
 Select Case WordCount%
 
   Case 1
-    InvertOption             = 0
-    PersonalNameProbability% = PNP_NONE
+    InvertOption   = 0
+    Invertibility% = NOT_INVERTIBLE
     Exit Function
 
   Case 2
     If Hyphen Then
-        InvertOption             = 0
-        PersonalNameProbability% = PNP_NONE
+        InvertOption   = 0
+        Invertibility% = NOT_INVERTIBLE
         Exit Function
     End If
 
@@ -2252,8 +3148,8 @@ Select Case WordCount%
     MidWord$ = Trim$( MidWord$ )
     For i = 0 To PREFIX_COUNT
       If MidWord$ = Prefixes( i ) Then
-          InvertOption             = FirstSpace%
-          PersonalNameProbability% = PNP_PROBABLE
+          InvertOption   = FirstSpace%
+          Invertibility% = INVERTIBLE_BY_DEFAULT
           Exit Function
       End If
     Next i
@@ -2274,7 +3170,7 @@ If WordCount% = 2 Or WordCount% = 3 Then
           TempString$ = Left$( TempString$, p - 1 ) & " " & Mid$( TempString$, p + 1 )
       End If
     Loop Until p = 0
-    Call FillStopwords
+    FillStopwords
     For i = 0 to STOPWORD_COUNT
       CorporateClue% = InStr( TempString$, Stopwords( i ) )
       If CorporateClue% <> 0 Then
@@ -2287,135 +3183,233 @@ If WordCount% = 2 Or WordCount% = 3 Then
 ' presence of at least one stopword makes the name likely a corporate body.
 
       Case 0
-        InvertOption             = LastSpace%
-        PersonalNameProbability% = PNP_PROBABLE
+        InvertOption   = LastSpace%
+        Invertibility% = INVERTIBLE_BY_DEFAULT
 
       Case Else
-        InvertOption             = LastSpace%
-        PersonalNameProbability% = PNP_POSSIBLE
+        InvertOption   = LastSpace%
+        Invertibility% = INVERTIBLE_AS_OPTION
 
     End Select
 
 ' A selection of four or more words is unable to be inverted.
 
   Else
-    InvertOption             = 0
-    PersonalNameProbability% = PNP_NONE
+    InvertOption   = 0
+    Invertibility% = NOT_INVERTIBLE
 End If
 
 End Function
 
 '****************************************************************************************
 
-Function ChooseBrowse( OptionParam1$, OptionParam2$, OptionParam3$ )
+Function Normalize( InString$, KeepDelimiter ) As String
 
-' The dialog box that shows what's being browsed and how to do it. It has two layouts:
-' For browsing by field (or a selection considered to be a name/title field), options 1-3
-' allow a browse on a main heading, subject subdivisions or a title, or both, in an
-' expanded browse, using one or two entry boxes; for browsing by selection, the first
-' three options are hidden, and a single entry box shows the string to be browsed as a
-' name (in direct or inverted order), a subject, or a title. The entry boxes that show
-' the normalized strings are either text boxes or drop combo boxes, so their contents can
-' be edited to tweak the browse strings. The parameters passed to the dialog box control
-' the text of the radio buttons and the commit button in each layout.
+' This function uses NACO normalization rules to convert the MARC-21 string into a string
+' suitable for browsing the Authority File, omitting and converting some characters.
 
-Dim Result%
+Const ASCII_DIFF_CASE        As Integer = 32  'The difference between ASCII values of upper and lower case of a letter.
+Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The difference between ASCII values of subscript and normal numbers.
+Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  'The difference between ASCII values of superscript and normal numbers.
+
+Dim CharA%
+Dim CharT$
+Dim Index%
+Dim InStringLength%
+Dim TempString$
+
+Dim DelimiterFound           : DelimiterFound = FALSE
 
 Dim p As Integer
 
-SearchOption1$ = OptionParam1$
-SearchOption2$ = OptionParam2$
-SearchOption3$ = OptionParam3$
+InStringLength% = Len( InString$ )
+Index%          = 1
 
-If SearchOption3$ <> "" Then SearchOption3$ = "Expanded browse " & SearchOption3$
+Do While Index% <= InStringLength%
+  CharT$ = Mid$( InString$, Index%, 1 )
+  CharA% = Asc( CharT$ )
+  Select Case CharA%
 
-Begin Dialog Dialog2Definition  352, 156, WaltsMacros$, .Dialog2ControlFunction
-  ButtonGroup .Choice
-   PushButton     94, 134, 104,  14, "",                .CommitButton
-  CancelButton   206, 134,  52,  14
-  Text            16,  22, 128,  10, "",                .AlternateBT1
-  OptionGroup .BrowseType
-   OptionButton   16,  21, 128,  12, "",                .OptionButton1
-   OptionButton   16,  65, 128,  12, "",                .OptionButton2
-   OptionButton   16, 109, 240,  12, "",                .OptionButton3
-   OptionButton   16,  21,  38,  12, "&Name",           .OptionButton4
-   OptionButton   56,  21,  64,  12, "Name, &Inverted", .OptionButton5
-   OptionButton  126,  21,  38,  12, "&Subject",        .OptionButton6
-   OptionButton  170,  21,  38,  12, "&Title",          .OptionButton7
-  TextBox         16,  34, 320,  12,                    .TextBox1
-  TextBox         16,  78, 320,  12,                    .TextBox2
-  DropComboBox    16,  34, 320,  64, Names(),           .DropComboBox1
-  DropComboBox    16,  78, 320,  96, Subdivisions(),    .DropComboBox2
-  GroupBox         8,  14, 336,  40, ""
-  GroupBox         8,  58, 336,  40, "",                .GroupBox2
-  GroupBox         8, 102, 336,  23, "",                .GroupBox3
-  Text           235,  23, 100,   8, "",                .Attention1
-  Text           243,  67,  88,   8, "",                .Attention2
-  Text             8,   6, 104,   8, "Select/edit what to browse on:"
-End Dialog
+     Case Asc( DASH )
+       TempString$ = TempString$ & " -- "
 
-Dim Dialog2 as Dialog2Definition
-On Error Resume Next
-Dialog Dialog2
-If Err = CANCEL Then
-    ChooseBrowse = CANCEL
-    Exit Function
-End If
+' Numbers and text characters: Include; convert lowercase to uppercase.
 
-ChooseBrowse = Dialog2.BrowseType
+    Case 48 to 57, 65 To 90
+      TempString$ = TempString$ & CharT$
 
-SearchTerm1$ = Trim$( Dialog2.TextBox1 )
-If SearchTerm1$ = "" Then SearchTerm1$ = Trim$( Dialog2.DropComboBox1 )
+    Case 97 to 122
+      If DelimiterFound Then
+          TempString$    = TempString$ & CharT$
+          DelimiterFound = FALSE
+        Else
+          TempString$    = TempString$ & Chr$( CharA% - ASCII_DIFF_CASE )
+      End If
 
-If Selection Then
-    SearchTerm2$ = ""
-  Else
-    SearchTerm2$ = Trim$( Dialog2.TextBox2 )
-    If SearchTerm2$ = "" Then SearchTerm2$ = Trim$( Dialog2.DropComboBox2 )
-End If
+' Hyphen: Include if browsing by selection, as it probably indicates a compound surname.
+' It will get removed later.
 
-' Remove all periods from name headings, and all dashes from subject subdivision strings.
+    Case 45
+      If TextSelection Then
+          TempString$ = TempString$ & CharT$
+        Else
+          TempString$ = TempString$ & " "
+      End If
+
+' Special characters to include:
+
+    Case 35 To 36, 38, 43, 64, 169, 185, 204
+      TempString$ = TempString$ & CharT$
+
+' Comma: Convert to blank in a selection. Otherwise, retain commas until constructing the
+' search string to browse by field; at that point, discard all commas after the first in
+' subfield $a.
+
+    Case 44
+      If TextSelection Then
+          TempString$ = TempString$ & " "
+        Else
+          TempString$ = TempString$ & CharT$
+      End If
+
+' Characters converted to space:
+
+    Case 32 To 34, 37, 40 To 42, 45, 58 To 63, 92, 94 To 96, 123 To 126, _
+         138 To 141, 154 To 158, 167 To 168, 170 To 171, 174, 183, 200 To 203
+      TempString$ = TempString$ & " "
+
+' The case of "A." at the beginning of the selection. This is likely an initial, not an
+' indefinite article. Mark it so the selection is not considered to be a title, and the
+' initial is retained.
+
+    Case 46
+      If TextSelection Then
+          If TempString$ = "A" Then
+              TempString$ = TempString$ & ESC
+            Else
+              TempString$ = TempString$ & " "
+          End If
+        Else
+          TempString$ = TempString$ & " "
+      End If
+
+' Forward slash: In the middle of a selection, surrounded by spaces, assume it is ISBD
+' punctuation that separates a title and a statement of responsibility. Use it to define
+' those two distinct strings, and then omit it. Otherwise, convert it to a space.
+
+    Case 47
+      If TextSelection Then
+          If Index% < InStringLength% Then
+              If Right$( TempString$, 1 ) = " " And Mid$( InString$, Index% + 1, 1 ) = " " Then
+                  TitleString$    = Trim$( TempString$ )
+                  NameTitleSplit% = Len( TitleString$ ) + 1
+                Else
+                  TempString$     = TempString$ & " "
+              End If
+          End If
+        Else
+          TempString$ = TempString$ & " "
+      End If
+
+' Superscript, subscript numbers: Convert to normal.
+
+    Case 128 to 137
+      CharT$      = Chr$( CharA% - ASCII_DIFF_SUPERSCRIPT )
+      TempString$ = TempString$ & CharT$
+
+    Case 144 to 153
+      CharT$      = Chr$( CharA% - ASCII_DIFF_SUBSCRIPT )
+      TempString$ = TempString$ & CharT$
+
+' Special characters: Substitute.
+
+    Case 159
+      TempString$ = TempString$ & "SS"
+    Case 161, 177, 190
+      TempString$ = TempString$ & "L"
+    Case 162, 172, 178, 188
+      TempString$ = TempString$ & "O"
+    Case 163, 179, 186
+      TempString$ = TempString$ & "D"
+    Case 164, 180
+      TempString$ = TempString$ & "TH"
+    Case 165, 181
+      TempString$ = TempString$ & "AE"
+    Case 166, 182
+      TempString$ = TempString$ & "OE"
+    Case 173, 189
+      TempString$ = TempString$ & "U"
+    Case 184
+      TempString$ = TempString$ & "I"
+
+' Delimiter: If the string is a selection, omit it, along with its accompanying subfield
+' code. Also omit it when building a browse string; in that case, replace it with a dash
+' if the subfield code indicates a subject subdivision, or replace it with a full stop,
+' or period. Otherwise, keep it, to identify subfields to exclude from the search string,
+' or to match headings in a search in an expanded browse list.
+
+    Case 223
+
+      If TextSelection Then
+          Index% = Index% + 1
+        Else
+          If KeepDelimiter Then
+              TempString$ = TempString$ & CharT$
+            Else
+              If Index% < InStringLength% Then
+                  If Mid$( TempString$, Index% + 1, 1 ) Like "[vxyz]" Then
+                      TempString$ = TempString$ & "-- "
+                      Index% = Index% + 1
+                    Else
+                      If Right$( TempString$, 1 ) = " " Then
+                          TempString$ = Trim$( TempString$ )
+                      End If
+'                      TempString$ = TempString$ & "."
+                      Index%       = Index% + 1
+                  End If
+              End If
+          End If
+      End If
+
+    Case Else
+
+  End Select
+
+  Index% = Index% + 1
+
+Loop
+
+' Remove any introduced double spaces.
 
 Do
-  p = InStr( SearchTerm1$, "." )
-  If p <> 0 Then SearchTerm1$ = Left$( SearchTerm1$, p - 1 ) & Mid$( SearchTerm1$, p + 1 )
+  p = InStr( TempString$, "  " )
+  If p > 0 Then
+      TempString$ = Trim$( Left$( TempString$, p ) ) & " " & Trim$( Mid$( TempString$, p + 1 ) )
+  End If
 Loop Until p = 0
 
-Do
-  p = InStr( SearchTerm2$, "--" )
-  If p <> 0 Then SearchTerm2$ = Left$( SearchTerm2$, p - 1 ) & Mid$( SearchTerm2$, p + 2 )
-Loop Until p = 0
-SearchTerm2$ = Trim$( DoubleSpaceErase( SearchTerm2$ ) )
+Normalize = Trim$( TempString$ )
 
 End Function
 
 '****************************************************************************************
 
-Function Dialog1ControlFunction( Id$, Action%, SVal& )
+Function Plural( Label$, n% ) As String
 
-' This function simply populates the text box with the form of the established heading,
-' and makes sure clicking in the two boxes also changes the state of their respective
-' radio buttons.
+' Makes the listbox label plural if there is more than one heading in it.
 
-Select Case Action%
+Dim TestString$
 
-  Case INITIALIZE
-    DlgText    "EstablishedHeading", BaseHeading$
-
-
-  Case FOCUS_CHANGE
-
-    Select Case Id$
-
-      Case "HeadingsList"
-        DlgValue   "OptionGroup",        1
-
-      Case "EstablishedHeading"
-        DlgValue   "OptionGroup",        0
-
-    End Select
-
-End Select
+If n% = 1 Then
+    Plural = Label$
+  Else
+    TestString$ = Right$( Label$, 4 )
+    If TestString$ = "erm:" Or TestString$ = "ing:" Or TestString$ = "hip:" Then
+        Plural = Left$( Label$, Len( Label$ ) - 1 ) & "s:"
+      Else
+        Plural = Label$
+    End If
+End If
 
 End Function
 
@@ -2430,7 +3424,6 @@ Function Dialog2ControlFunction( Id$, Action%, SVal& )
 
 Const BROWSE_NAME    As Integer = 0
 Const BROWSE_SUBJECT As Integer = 1
-Const BROWSE_TITLE   As Integer = 2
 Const CONTROL_CHANGE As Integer = 2
 Const DISABLED       As Integer = 0
 Const INVISIBLE      As Integer = 0
@@ -2445,19 +3438,19 @@ Select Case Action%
 ' only one input box) to display. Whether it is a text box or a combo box depends on the
 ' number of names in the array.
 
-    If Selection Then
+    If TextSelection And NameTitleType% = NOT_NAME_TITLE Then
 
 ' Hide the controls associated with options 1-3.
 
-        DlgVisible "AlternateBT1",       INVISIBLE
-        DlgVisible "Attention2",         INVISIBLE
-        DlgVisible "DropComboBox2",      INVISIBLE
-        DlgVisible "GroupBox2",          INVISIBLE
-        DlgVisible "GroupBox3",          INVISIBLE
-        DlgVisible "OptionButton1",      INVISIBLE
-        DlgVisible "OptionButton2",      INVISIBLE
-        DlgVisible "OptionButton3",      INVISIBLE
-        DlgVisible "TextBox2",           INVISIBLE
+        DlgVisible      "AlternateBT1",         INVISIBLE
+        DlgVisible      "Attention2",           INVISIBLE
+        DlgVisible      "DropComboBox2",        INVISIBLE
+        DlgVisible      "GroupBox2",            INVISIBLE
+        DlgVisible      "GroupBox3",            INVISIBLE
+        DlgVisible      "OptionButton1",        INVISIBLE
+        DlgVisible      "OptionButton2",        INVISIBLE
+        DlgVisible      "OptionButton3",        INVISIBLE
+        DlgVisible      "TextBox2",             INVISIBLE
 
 ' If the search term consists of a single word, of four or more words, showing an
 ' inverted form is not an option; display the term in a text box. Otherwise, use the drop
@@ -2466,32 +3459,32 @@ Select Case Action%
 ' However, if it contains at least one stopword, the first element is the form in direct
 ' order, with the inverted form hidden until selected.
 
-        If PersonalNameProbability% = PNP_NONE Then
-            DlgVisible "Attention1",         INVISIBLE
-            DlgValue   "BrowseType",         NAME_SELECT
-            DlgText    "CommitButton",       "&Browse name"
-            DlgValue   "DropComboBox1",      0
-            DlgVisible "DropComboBox1",      INVISIBLE
-            DlgEnable  "OptionButton5",      DISABLED
-            DlgText    "TextBox1",           Names( 0 )
+        If Invertibility% = NOT_INVERTIBLE Then
+            DlgVisible      "Attention1",           INVISIBLE
+            DlgValue        "BrowseType",           NAME_SELECT
+            DlgText         "CommitButton",         "&Browse name"
+            DlgValue        "DropComboBox1",        0
+            DlgVisible      "DropComboBox1",        INVISIBLE
+            DlgEnable       "OptionButton5",        DISABLED
+            DlgText         "TextBox1",             Names( 0 )
           Else
-            DlgText    "Attention1",         "[Select inverted or direct order]"
-            DlgValue   "DropComboBox1",      0
-            DlgVisible "TextBox1",           INVISIBLE
-            If PersonalNameProbability% = PNP_POSSIBLE Then
-                DlgValue   "BrowseType",         NAME_SELECT
-                DlgText    "CommitButton",       "&Browse name"
+            DlgText         "Attention1",           "[Select inverted or direct order]"
+            DlgValue        "DropComboBox1",        0
+            DlgVisible      "TextBox1",             INVISIBLE
+            If Invertibility% = INVERTIBLE_AS_OPTION Then
+                DlgValue        "BrowseType",           NAME_SELECT
+                DlgText         "CommitButton",         "&Browse name"
               Else
-                DlgValue   "BrowseType",         NAME_INVERTED
-                DlgText    "CommitButton",       "&Browse inverted name"
+                DlgValue        "BrowseType",           NAME_INVERTED
+                DlgText         "CommitButton",         "&Browse inverted name"
             End If
         End If
 
         If ProbableTitle Then
-            DlgVisible "Attention1",         INVISIBLE
-            DlgValue   "BrowseType",         TITLE_SELECT
-            DlgText    "CommitButton",       "&Browse title"
-            DlgValue   "DropComboBox1",      0
+            DlgVisible      "Attention1",           INVISIBLE
+            DlgValue        "BrowseType",           TITLE_SELECT
+            DlgText         "CommitButton",         "&Browse title"
+            DlgValue        "DropComboBox1",        0
         End If
 
       Else
@@ -2499,10 +3492,10 @@ Select Case Action%
 ' For browsing by field, initialize the dialog box by hiding the options for browsing a
 ' selection.
 
-        DlgVisible "OptionButton4",      INVISIBLE
-        DlgVisible "OptionButton5",      INVISIBLE
-        DlgVisible "OptionButton6",      INVISIBLE
-        DlgVisible "OptionButton7",      INVISIBLE
+        DlgVisible      "OptionButton4",        INVISIBLE
+        DlgVisible      "OptionButton5",        INVISIBLE
+        DlgVisible      "OptionButton6",        INVISIBLE
+        DlgVisible      "OptionButton7",        INVISIBLE
 
         Select Case CountOfSubdivisions%
 
@@ -2514,13 +3507,13 @@ Select Case Action%
 ' will be set below.
 
           Case 0
-            DlgVisible "Attention2",         INVISIBLE
-            DlgVisible "DropComboBox2",      INVISIBLE
-            DlgVisible "GroupBox2",          INVISIBLE
-            DlgVisible "GroupBox3",          INVISIBLE
-            DlgVisible "OptionButton2",      INVISIBLE
-            DlgVisible "OptionButton3",      INVISIBLE
-            DlgVisible "TextBox2",           INVISIBLE
+            DlgVisible      "Attention2",           INVISIBLE
+            DlgVisible      "DropComboBox2",        INVISIBLE
+            DlgVisible      "GroupBox2",            INVISIBLE
+            DlgVisible      "GroupBox3",            INVISIBLE
+            DlgVisible      "OptionButton2",        INVISIBLE
+            DlgVisible      "OptionButton3",        INVISIBLE
+            DlgVisible      "TextBox2",             INVISIBLE
 
 ' One subdivision: Display all three options, as the browse may be executed on the main
 ' heading, the subdivision, or both as an expanded browse. Display the text box, rather
@@ -2528,32 +3521,32 @@ Select Case Action%
 ' text box also assuming it is a main heading.
 
           Case 1
-            DlgVisible "Attention2",         INVISIBLE
-            DlgVisible "DropComboBox1",      INVISIBLE
-            DlgVisible "DropComboBox2",      INVISIBLE
-            DlgText    "OptionButton1",      "&" & SearchOption1$
-            DlgText    "OptionButton2",      "&" & SearchOption2$
-            DlgText    "OptionButton3",      "&" & SearchOption3$
-            DlgText    "TextBox1",           SubjectString$
-            DlgVisible "TextBox1",           VISIBLE
-            DlgText    "TextBox2",           Subdivisions( 0 )
-            DlgVisible "TextBox2",           VISIBLE
+            DlgVisible      "Attention2",           INVISIBLE
+            DlgVisible      "DropComboBox1",        INVISIBLE
+            DlgVisible      "DropComboBox2",        INVISIBLE
+            DlgText         "OptionButton1",        "&" & SearchOption1$
+            DlgText         "OptionButton2",        "&" & SearchOption2$
+            DlgText         "OptionButton3",        "&" & SearchOption3$
+            DlgText         "TextBox1",             SubjectString$
+            DlgVisible      "TextBox1",             VISIBLE
+            DlgText         "TextBox2",             Subdivisions( 0 )
+            DlgVisible      "TextBox2",             VISIBLE
 
 ' More than one subdivision: As above, but option 2 uses the drop combo box, in order to
 ' show the contents of the subdivisions array. The reminder to select a string from the
 ' choices in the array must be made visible also.
 
           Case Is > 1
-            DlgText    "Attention2",         "[Select a subdivision string]"
-            DlgVisible "Attention2",         VISIBLE
-            DlgText    "DropComboBox2",      Subdivisions( 0 )
-            DlgVisible "DropComboBox2",      VISIBLE
-            DlgText    "OptionButton1",      "&" & SearchOption1$
-            DlgText    "OptionButton2",      "&" & SearchOption2$
-            DlgText    "OptionButton3",      "&" & SearchOption3$
-            DlgText    "TextBox1",           SubjectString$
-            DlgVisible "TextBox1",           VISIBLE
-            DlgVisible "TextBox2",           INVISIBLE
+            DlgText         "Attention2",           "[Select a subdivision string]"
+            DlgVisible      "Attention2",           VISIBLE
+            DlgText         "DropComboBox2",        Subdivisions( 0 )
+            DlgVisible      "DropComboBox2",        VISIBLE
+            DlgText         "OptionButton1",        "&" & SearchOption1$
+            DlgText         "OptionButton2",        "&" & SearchOption2$
+            DlgText         "OptionButton3",        "&" & SearchOption3$
+            DlgText         "TextBox1",             SubjectString$
+            DlgVisible      "TextBox1",             VISIBLE
+            DlgVisible      "TextBox2",             INVISIBLE
         End Select
 
 ' The next layer takes into account the number of names available to search.
@@ -2564,15 +3557,15 @@ Select Case Action%
 ' visible.
 
           Case 0
-            DlgVisible "DropComboBox1",      INVISIBLE
+            DlgVisible      "DropComboBox1",        INVISIBLE
 
 ' One name, one form: Option 1 is a text box.
 
           Case 1
-            DlgVisible "DropComboBox1",      INVISIBLE
-            DlgText    "OptionButton1",      "&" & SearchOption1$
-            DlgText    "TextBox1",           Names( 0 )
-            DlgVisible "TextBox1",           VISIBLE
+            DlgVisible      "DropComboBox1",        INVISIBLE
+            DlgText         "OptionButton1",        "&" & SearchOption1$
+            DlgText         "TextBox1",             Names( 0 )
+            DlgVisible      "TextBox1",             VISIBLE
 
 ' More than one name (i.e., a corporate body with subordinate units): Option 1 is a drop
 ' combo box, and the reminder to make a selection from the hierarchy is made visible. If
@@ -2580,13 +3573,13 @@ Select Case Action%
 ' button is clicked.
 
           Case Else
-            DlgText    "Attention1",         "[Select a level in the hierarchy]"
-            DlgVisible "Attention1",         VISIBLE
-            DlgText    "DropComboBox1",      Names( 0 )
-            DlgVisible "DropComboBox1",      VISIBLE
-            DlgText    "OptionButton1",      "&" & SearchOption1$
-            DlgVisible "TextBox1",           INVISIBLE
-            DlgText    "TextBox1",           ""
+            DlgText         "Attention1",           "[Select a level in the hierarchy]"
+            DlgVisible      "Attention1",           VISIBLE
+            DlgText         "DropComboBox1",        Names( 0 )
+            DlgVisible      "DropComboBox1",        VISIBLE
+            DlgText         "OptionButton1",        "&" & SearchOption1$
+            DlgVisible      "TextBox1",             INVISIBLE
+            DlgText         "TextBox1",             ""
 
         End Select
 
@@ -2594,10 +3587,27 @@ Select Case Action%
 ' text box.
 
         If TitleHeading$ <> "" Then
-            DlgVisible "DropComboBox2",      INVISIBLE
-            DlgText    "OptionButton2",      "&" & SearchOption2$
-            DlgText    "TextBox2",           TitleHeading$
-            DlgVisible "TextBox2",           VISIBLE
+            DlgVisible      "DropComboBox2",        INVISIBLE
+            DlgText         "OptionButton2",        "&" & SearchOption2$
+            DlgText         "TextBox2",             TitleHeading$
+            DlgVisible      "TextBox2",             VISIBLE
+            If NameTitleType% = SELECTION_NAME_TITLE Then
+                DlgVisible      "OptionButton1",        INVISIBLE
+              Else
+                DlgVisible      "OptionButton1",        VISIBLE
+            End If
+            If Invertibility% = NOT_INVERTIBLE Then
+                DlgVisible      "OptionButton5",        INVISIBLE
+                DlgVisible      "DropComboBox1",        INVISIBLE
+                DlgText         "TextBox1",             Names( 0 )
+                DlgVisible      "TextBox1",             VISIBLE
+              Else
+                DlgVisible      "OptionButton5",        VISIBLE
+                DlgVisible      "DropComboBox1",        VISIBLE
+                DlgText         "DropComboBox1",        Names( 1 )
+                DlgVisible      "TextBox1",             INVISIBLE
+                DlgText         "TextBox1",             ""
+            End If
         End If
 
 ' The final layer is based on whether option 2 is available. If not, the browse is on the
@@ -2606,22 +3616,26 @@ Select Case Action%
 ' hierarchy to browse.
 
         If TitleHeading$ <> "" Or CountOfSubdivisions% > 0 Then
-            DlgVisible "AlternateBT1",       INVISIBLE
-            DlgText    "CommitButton",       "&Browse " & LCase( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
-            DlgVisible "GroupBox2",          VISIBLE
-            DlgVisible "GroupBox3",          VISIBLE
-            DlgVisible "OptionButton1",      VISIBLE
-            DlgVisible "OptionButton2",      VISIBLE
-            DlgVisible "OptionButton3",      VISIBLE
-            DlgText    "OptionButton2",      "&" & SearchOption2$
-            DlgText    "OptionButton3",      "&" & SearchOption3$
+            DlgVisible      "AlternateBT1",         INVISIBLE
+            DlgText         "CommitButton",         "&Browse " & LCase( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
+            DlgVisible      "GroupBox2",            VISIBLE
+            DlgVisible      "GroupBox3",            VISIBLE
+            If NameTitleType% = SELECTION_NAME_TITLE Then
+                DlgVisible      "OptionButton4",        VISIBLE
+              Else
+                DlgVisible      "OptionButton4",        INVISIBLE
+            End If
+            DlgVisible      "OptionButton2",        VISIBLE
+            DlgVisible      "OptionButton3",        VISIBLE
+            DlgText         "OptionButton2",        "&" & SearchOption2$
+            DlgText         "OptionButton3",        "&" & SearchOption3$
           Else
-            DlgVisible "AlternateBT1",       VISIBLE
-            DlgText    "AlternateBT1",       "&" & SearchOption1$
-            DlgText    "CommitButton",       "&Browse " & LCase( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
-            DlgVisible "GroupBox2",          INVISIBLE
-            DlgVisible "GroupBox3",          INVISIBLE
-            DlgVisible "OptionButton1",      INVISIBLE
+            DlgVisible      "AlternateBT1",         VISIBLE
+            DlgText         "AlternateBT1",         "&" & SearchOption1$
+            DlgText         "CommitButton",         "&Browse " & LCase( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
+            DlgVisible      "GroupBox2",            INVISIBLE
+            DlgVisible      "GroupBox3",            INVISIBLE
+            DlgVisible      "OptionButton1",        INVISIBLE
         End If
 
 ' If a uniform title appears as option 2, it will be the default search if the cursor was
@@ -2629,11 +3643,11 @@ Select Case Action%
 ' name/title expanded browse.
 
         If NameTitleSplit% = CURSOR_IN_240 Then
-            DlgValue   "BrowseType",         BROWSE_SUBJECT
-            DlgText    "CommitButton",       "&Browse title heading"
+            DlgValue        "BrowseType",           BROWSE_SUBJECT
+            DlgText         "CommitButton",         "&Browse title heading"
           ElseIf NameTitleSplit% <> 0 Then
-            DlgValue   "BrowseType",         2
-            DlgText    "CommitButton",       "&Expanded browse"
+            DlgValue        "BrowseType",           2
+            DlgText         "CommitButton",         "&Expanded browse"
         End If
     End If
 
@@ -2645,78 +3659,78 @@ Select Case Action%
 ' buttons to match.
 
       Case "DropComboBox1"
-        If Selection = FALSE Then
-            DlgValue   "BrowseType",         BROWSE_NAME
+        If TextSelection = FALSE Then
+            DlgValue        "BrowseType",           BROWSE_NAME
           Else
             If DlgValue( "DropComboBox1" ) = 0 Then
-                If PersonalNameProbability% = PNP_POSSIBLE Then
-                    DlgValue   "BrowseType",         NAME_SELECT
-                    DlgText    "CommitButton",       "&Browse name"
+                If Invertibility% = INVERTIBLE_AS_OPTION Then
+                    DlgValue        "BrowseType",           NAME_SELECT
+                    DlgText         "CommitButton",         "&Browse name"
                   Else
-                    DlgValue   "BrowseType",         NAME_INVERTED
-                    DlgText    "CommitButton",       "&Browse inverted name"
+                    DlgValue        "BrowseType",           NAME_INVERTED
+                    DlgText         "CommitButton",         "&Browse inverted name"
                 End If
               Else
-                If PersonalNameProbability% = PNP_POSSIBLE Then
-                    DlgValue   "BrowseType",         NAME_INVERTED
-                    DlgText    "CommitButton",       "&Browse inverted name"
+                If Invertibility% = INVERTIBLE_AS_OPTION Then
+                    DlgValue        "BrowseType",           NAME_INVERTED
+                    DlgText         "CommitButton",         "&Browse inverted name"
                   Else
-                    DlgValue   "BrowseType",         NAME_SELECT
-                    DlgText    "CommitButton",       "&Browse name"
+                    DlgValue        "BrowseType",           NAME_SELECT
+                    DlgText         "CommitButton",         "&Browse name"
                 End If
             End If
         End If
 
       Case "DropComboBox2"
-        If Selection = FALSE Then
-            DlgValue   "BrowseType",         BROWSE_SUBJECT
-            DlgText    "CommitButton",       "&Browse subject subdivision"
+        If TextSelection = FALSE Then
+            DlgValue        "BrowseType",           BROWSE_SUBJECT
+            DlgText         "CommitButton",         "&Browse subject subdivision"
         End If
 
 ' When the radio buttons are selected, change the wording on the Commit Button, and the
 ' form of the name shown in the drop combo box, to follow suit.
 
       Case "OptionButton1"
-        DlgValue   "BrowseType",         BROWSE_NAME
-        DlgText    "CommitButton",       "&Browse " & LCase( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
+        DlgValue        "BrowseType",           BROWSE_NAME
+        DlgText         "CommitButton",         "&Browse " & LCase( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
 
       Case "OptionButton2"
-        DlgValue   "BrowseType",         BROWSE_SUBJECT
-        DlgText    "CommitButton",       "&Browse " & LCase( Left$( SearchOption2$, 1 ) ) & Mid$( SearchOption2$, 2 )
+        DlgValue        "BrowseType",           BROWSE_SUBJECT
+        DlgText         "CommitButton",         "&Browse " & LCase( Left$( SearchOption2$, 1 ) ) & Mid$( SearchOption2$, 2 )
 
       Case "OptionButton3"
-        DlgText    "CommitButton",       "&Expanded browse"
+        DlgText         "CommitButton",         "&Expanded browse"
 
       Case "OptionButton4"
-        DlgText    "CommitButton",       "&Browse name"
-        If PersonalNameProbability% = PNP_POSSIBLE Then
-            DlgValue   "DropComboBox1",      0
-          ElseIf PersonalNameProbability% = PNP_PROBABLE Then
-            DlgValue   "DropComboBox1",      1
+        DlgText         "CommitButton",         "&Browse name"
+        If Invertibility% = INVERTIBLE_AS_OPTION Then
+            DlgValue        "DropComboBox1",        0
+          ElseIf Invertibility% = INVERTIBLE_BY_DEFAULT Then
+            DlgValue        "DropComboBox1",        1
         End If
 
       Case "OptionButton5"
-        DlgText    "CommitButton",       "&Browse inverted name"
-        If PersonalNameProbability% = PNP_POSSIBLE Then
-            DlgValue   "DropComboBox1",      1
-          ElseIf PersonalNameProbability% = PNP_PROBABLE Then
-            DlgValue   "DropComboBox1",      0
+        DlgText         "CommitButton",         "&Browse inverted name"
+        If Invertibility% = INVERTIBLE_AS_OPTION Then
+            DlgValue        "DropComboBox1",        1
+          ElseIf Invertibility% = INVERTIBLE_BY_DEFAULT Then
+            DlgValue        "DropComboBox1",        0
         End If
 
       Case "OptionButton6"
-        DlgText    "CommitButton",       "&Browse subject"
-        If PersonalNameProbability% = PNP_POSSIBLE Then
-            DlgValue   "DropComboBox1",      0
-          ElseIf PersonalNameProbability% = PNP_PROBABLE Then
-            DlgValue   "DropComboBox1",      1
+        DlgText         "CommitButton",         "&Browse subject"
+        If Invertibility% = INVERTIBLE_AS_OPTION Then
+            DlgValue        "DropComboBox1",        0
+          ElseIf Invertibility% = INVERTIBLE_BY_DEFAULT Then
+            DlgValue        "DropComboBox1",        1
         End If
 
       Case "OptionButton7"
-        DlgText    "CommitButton",       "&Browse title"
-        If PersonalNameProbability% = PNP_POSSIBLE Then
-            DlgValue   "DropComboBox1",      0
-          ElseIf PersonalNameProbability% = PNP_PROBABLE Then
-            DlgValue   "DropComboBox1",      1
+        DlgText         "CommitButton",         "&Browse title"
+        If Invertibility% = INVERTIBLE_AS_OPTION Then
+            DlgValue        "DropComboBox1",        0
+          ElseIf Invertibility% = INVERTIBLE_BY_DEFAULT Then
+            DlgValue        "DropComboBox1",        1
         End If
 
     End Select
@@ -2730,15 +3744,15 @@ Select Case Action%
     Select Case Id$
 
       Case "DropComboBox1", "TextBox1"
-        If Selection = FALSE Then
-            DlgValue   "BrowseType",         BROWSE_NAME
-            DlgText    "CommitButton",       "&Browse " & LCase$( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
+        If TextSelection = FALSE Then
+            DlgValue        "BrowseType",           BROWSE_NAME
+            DlgText         "CommitButton",         "&Browse " & LCase$( Left$( SearchOption1$, 1 ) ) & Mid$( SearchOption1$, 2 )
         End If
 
       Case "DropComboBox2", "TextBox2"
-        If Selection = FALSE Then
-            DlgValue   "BrowseType",         BROWSE_SUBJECT
-            DlgText    "CommitButton",       "&Browse " & LCase$( Left$( SearchOption2$, 1 ) ) & Mid$( SearchOption2$, 2 )
+        If TextSelection = FALSE Then
+            DlgValue        "BrowseType",           BROWSE_SUBJECT
+            DlgText         "CommitButton",         "&Browse " & LCase$( Left$( SearchOption2$, 1 ) ) & Mid$( SearchOption2$, 2 )
         End If
 
     End Select
@@ -2746,8 +3760,288 @@ Select Case Action%
 End Select
 
 End Function
-'2750105833
-'
-'Macro name: BrowseAuthority
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:55:15 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+
+'****************************************************************************************
+
+Function Dialog3_1_ListBoxControlFunction( Id$, Action%, SVal& )
+
+' Controls a dialog box containing one list box, for either the headings referred to or
+' one kind of 5XX field.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If Left$( BaseHeading$, 2 ) = "18" Then
+        DlgText         "EstablishedHeading",   "-- " & Mid$( BaseHeading$, 4 )
+      Else
+        DlgText         "EstablishedHeading",   Mid$( BaseHeading$, 4 )
+    End If
+    If CountOfReferredTo% = 0 Then
+        DlgText         "OptionButtonListBox1", "&2  Retrieve authority record (" & Display5XX_1Label$
+        DlgListBoxArray "ListBox1",             Display5XX_1()
+      Else
+        DlgText         "OptionButtonListBox1", "&2  " & BrowseRefs$
+        DlgListBoxArray "ListBox1",             DisplayRefs()
+    End If
+
+  Case FOCUS_CHANGE
+
+    Select Case Id$
+
+      Case "EstablishedHeading"
+        DlgValue        "OptionGroup",          0
+        DlgValue        "ListBox1",             NO_SELECTION
+      Case "ListBox1"
+        DlgValue        "OptionGroup",          1
+      Case "OptionButtonHeading"
+        DlgValue        "OptionGroup",          0
+        DlgValue        "ListBox1",             NO_SELECTION
+      Case "OptionButtonListBox1"
+        DlgValue        "OptionGroup",          1
+        DlgValue        "ListBox1",             0
+        DlgFocus        "ListBox1"
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog3_2_ListBoxesControlFunction( Id$, Action%, SVal& )
+
+' Controls a dialog box containing two list boxes, for either the headings referred to
+' and one type of 5XX field, or two types of 5XX fields and no headings referred to.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If Left$( BaseHeading$, 2 ) = "18" Then
+        DlgText         "EstablishedHeading",   "-- " & Mid$( BaseHeading$, 4 )
+      Else
+        DlgText         "EstablishedHeading",   Mid$( BaseHeading$, 4 )
+    End If
+    If CountOfReferredTo% = 0 Then
+        DlgText         "OptionButtonListBox1", "&2  Retrieve authority record (" & Display5XX_1Label$
+        DlgText         "OptionButtonListBox2", "&3  Retrieve authority record (" & Display5XX_2Label$
+        DlgListBoxArray "ListBox1",             Display5XX_1()
+        DlgListBoxArray "ListBox2",             Display5XX_2()
+      Else
+        DlgText         "OptionButtonListBox1", "&2  " & BrowseRefs$
+        DlgText         "OptionButtonListBox2", "&3  Retrieve authority record (" & Display5XX_1Label$
+        DlgListBoxArray "ListBox1",             DisplayRefs()
+        DlgListBoxArray "ListBox2",             Display5XX_1()
+    End If
+
+
+  Case FOCUS_CHANGE
+
+    Select Case Id$
+
+      Case "EstablishedHeading"
+        DlgValue        "OptionGroup",          0
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+      Case "ListBox1"
+        DlgValue        "OptionGroup",          1
+        DlgValue        "ListBox2",             NO_SELECTION
+      Case "ListBox2"
+        DlgValue        "OptionGroup",          2
+        DlgValue        "ListBox1",             NO_SELECTION
+      Case "OptionButtonListBox1"
+        DlgValue        "OptionGroup",          1
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox1",             0
+        DlgFocus        "ListBox1"
+      Case "OptionButtonListBox2"
+        DlgValue        "OptionGroup",          2
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             0
+        DlgFocus        "ListBox2"
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog3_3_ListBoxesControlFunction( Id$, Action%, SVal& )
+
+' Controls a dialog box containing three list boxes, for either the headings referred to
+' and two types of 5XX fields, or three types of 5XX fields and no headings referred to.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If Left$( BaseHeading$, 2 ) = "18" Then
+        DlgText         "EstablishedHeading",   "-- " & Mid$( BaseHeading$, 4 )
+      Else
+        DlgText         "EstablishedHeading",   Mid$( BaseHeading$, 4 )
+    End If
+    If CountOfReferredTo% = 0 Then
+        DlgText         "OptionButtonListBox1", "&2  Retrieve authority record (" & Display5XX_1Label$
+        DlgText         "OptionButtonListBox2", "&3  Retrieve authority record (" & Display5XX_2Label$
+        DlgText         "OptionButtonListBox3", "&4  Retrieve authority record (" & Display5XX_3Label$
+        DlgListBoxArray "ListBox1",             Display5XX_1()
+        DlgListBoxArray "ListBox2",             Display5XX_2()
+        DlgListBoxArray "ListBox3",             Display5XX_3()
+      Else
+        DlgText         "OptionButtonListBox1", "&2  " & BrowseRefs$
+        DlgText         "OptionButtonListBox2", "&3  Retrieve authority record (" & Display5XX_1Label$
+        DlgText         "OptionButtonListBox3", "&4  Retrieve authority record (" & Display5XX_2Label$
+        DlgListBoxArray "ListBox1",             DisplayRefs()
+        DlgListBoxArray "ListBox2",             Display5XX_1()
+        DlgListBoxArray "ListBox3",             Display5XX_2()
+    End If
+
+
+  Case FOCUS_CHANGE
+
+    Select Case Id$
+
+      Case "EstablishedHeading"
+        DlgValue        "OptionGroup",          0
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+      Case "ListBox1"
+        DlgValue        "OptionGroup",          1
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+      Case "ListBox2"
+        DlgValue        "OptionGroup",          2
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+      Case "ListBox3"
+        DlgValue        "OptionGroup",          3
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+      Case "OptionButtonHeading"
+        DlgValue        "OptionGroup",          0
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+      Case "OptionButtonListBox1"
+        DlgValue        "OptionGroup",          1
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox1",             0
+        DlgFocus        "ListBox1"
+      Case "OptionButtonListBox2"
+        DlgValue        "OptionGroup",          2
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox2",             0
+        DlgFocus        "ListBox2"
+      Case "OptionButtonListBox3"
+        DlgValue        "OptionGroup",          3
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             0
+        DlgFocus        "ListBox3"
+
+    End Select
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog3_4_ListBoxesControlFunction( Id$, Action%, SVal& )
+
+' Controls a dialog box containing four list boxes, for headings referred to and three
+' types of 5XX fields.
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    If Left$( BaseHeading$, 2 ) = "18" Then
+        DlgText         "EstablishedHeading",   "-- " & Mid$( BaseHeading$, 4 )
+      Else
+        DlgText         "EstablishedHeading",   Mid$( BaseHeading$, 4 )
+    End If
+    DlgText         "OptionButtonListBox1", "&2  " & BrowseRefs$
+    DlgText         "OptionButtonListBox2", "&3  Retrieve authority record (" & Display5XX_1Label$
+    DlgText         "OptionButtonListBox3", "&4  Retrieve authority record (" & Display5XX_2Label$
+    DlgText         "OptionButtonListBox4", "&5  Retrieve authority record (" & Display5XX_3Label$
+    DlgListBoxArray "ListBox1",             DisplayRefs()
+    DlgListBoxArray "ListBox2",             Display5XX_1()
+    DlgListBoxArray "ListBox3",             Display5XX_2()
+    DlgListBoxArray "ListBox4",             Display5XX_3()
+
+
+  Case FOCUS_CHANGE
+
+    Select Case Id$
+
+      Case "EstablishedHeading"
+        DlgValue        "OptionGroup",          0
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+      Case "ListBox1"
+        DlgValue        "OptionGroup",          1
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+      Case "ListBox2"
+        DlgValue        "OptionGroup",          2
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+      Case "ListBox3"
+        DlgValue        "OptionGroup",          3
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+      Case "ListBox4"
+        DlgValue        "OptionGroup",          4
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+      Case "OptionButtonHeading"
+        DlgValue        "OptionGroup",          0
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+      Case "OptionButtonListBox1"
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+        DlgValue        "ListBox1",             0
+        DlgFocus        "ListBox1"
+      Case "OptionButtonListBox2"
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+        DlgValue        "ListBox2",             0
+        DlgFocus        "ListBox2"
+      Case "OptionButtonListBox3"
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox4",             NO_SELECTION
+        DlgValue        "ListBox3",             0
+        DlgFocus        "ListBox3"
+      Case "OptionButtonListBox4"
+        DlgValue        "ListBox1",             NO_SELECTION
+        DlgValue        "ListBox2",             NO_SELECTION
+        DlgValue        "ListBox3",             NO_SELECTION
+        DlgValue        "ListBox4",             0
+        DlgFocus        "ListBox4"
+
+    End Select
+
+End Select
+
+End Function
+'4048159834

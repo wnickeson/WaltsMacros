@@ -1,12 +1,13 @@
-'MacroName:MapCalculatorTool.2023.31
+'MacroName:MapCalculatorTool.2024.01
 'MacroDescription:Calculates scales and scaled lengths and areas for cataloging
 ' cartographic resources.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -223,7 +224,7 @@ ScaleSource$          = "Scale from "
 ScaleString$          = ""
 ScaleVal&             = 0
 SelectedTab%          = 0
-WaltsMacros$          = "[Walt's macros] Extras2:MapCalculatorTool"
+WaltsMacros$          = "[Walt's macros] Extras1:MapCalculatorTool"
 
 ' First, determine if a map record is displayed; if it is, try to get a scale from either
 ' the first 034 or the first 255 field, or a 507 field. The macro will run even without a
@@ -263,8 +264,10 @@ Select Case TypeOfWindow%
             End If
           Else
             p = InStr( Field034$, DELIMITER )
-            NewField034Left$  = Trim$( Left$( Field034$, p - 1 ) )
-            NewField034Right$ = Trim$( Mid$( Field034$, p ) )
+            If p > 0 Then
+                NewField034Left$  = Trim$( Left$( Field034$, p - 1 ) )
+                NewField034Right$ = Trim$( Mid$( Field034$, p ) )
+            End If
         End If
         If ScaleSource$ = "Scale from " Then
             ScaleSource$ = ScaleSource$ & "034:"
@@ -848,7 +851,7 @@ If InputType$ = SCALE_INPUT Then
 ' However, if the both a slash and a space are present, make sure they are in the correct
 ' relationship within the string.
 
-    If SlashPos% > 0 then
+    If SlashPos% > 0 Then
         If SpacePos% > SlashPos% Then
             CheckInput = CHECK_INPUT_INVALID
             Exit Function
@@ -1801,8 +1804,4 @@ ReCalc:
 End Select
 
 End Function
-'180574829
-'
-'Macro name: MapCalculatorTool
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:37 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'180874928

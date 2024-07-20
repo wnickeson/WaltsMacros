@@ -1,4 +1,4 @@
-'MacroName:CopyRecordToClipboard.2023.06
+'MacroName:CopyRecordToClipboard.2024.02
 'MacroDescription:Copies the displayed record, or a selection of fields in that record,
 ' to the Windows Clipboard in the classic layout, using only characters in ISO/IEC
 ' 8859-1:1998.
@@ -12,8 +12,9 @@
 ' This macro originally by Joel Hahn was re-written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 23 July 2023.
+' Last updated: 28 June 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -44,12 +45,11 @@
 ' fixed field shows at the top, the copied record is laid out in the classic OCLC record
 ' display, and if a monospaced font is used, the layout is properly spaced and aligned.
 '
-' Characters in the record not encoded in ISO/IEC 8859-1:1998--anything encoded with a
-' hex value greater than 0100, or UTF-8 C480--are converted to equivalent characters, if
-' possible. These conversions are generally made on the basis of visual similarity,
-' rather than of logical appropriateness. The vertical bar "|" is used to represent
-' characters for which no appropriate substitute is available. Conversions or
-' substitutions made by this macro include:
+' The limited capabilities of the ISO/IEC 8859-1:1998 character set require conversion or
+' substitution for an intelligible display. These conversions are generally made on the
+' basis of visual similarity, rather than of logical appropriateness. The vertical bar
+' "|" is used to represent characters for which no appropriate substitute is available.
+' Conversions or substitutions made by this macro include:
 '
 '  + Delimiters are represented to dollar signs. The dollar sign in subfield $c in the
 '    066 field, part of a code indicating the presence of Chinese, Japanese, or Korean
@@ -80,31 +80,36 @@
 '
 ' Characters with code points 32 to 127 are common to all versions of ASCII, as well as
 ' ISO/IEC 8859-1:1998 and OCLC-MARC; this macro will copy them exactly. Characters with
-' code points 128 to 255 are encoded in OCLC-MARC, which is quite different from the
-' encoding of ISO/IEC 8859-1:1998. Some characters will copy exactly but most will be
-' approximations. Diacritics in OCLC-MARC only appear if their combination with a base
-' character matches a precomposed character in ISO/IEC 8859-1:1998; if not, only the
-' base character is kept. Code points above 255 should be encoded in a MARC record as
-' Numeric Character References (NCR). An NCR has the form "&#x?;", where the question
-' mark stands for one or more hexadecimal digits. Almost none of these characters (which
-' number more than a million) will have a direct ISO/IEC 8859-1:1998 equivalent. A few
-' can be approximated, but most will simply not be able to display, and so are
-' represented by this macro by a vertical bar "|".
+' code points 128 to 255 are expected to be OCLC-MARC characters, which are encoded
+' differently than ISO/IEC 8859-1:1998. Some characters will copy exactly, but most will
+' either not copy at all, or be approximated. For example, the character encoded as
+' decimal 228 is the combining tilde in OCLC-MARC, but the letter "√§" otherwise, as it
+' might be if copied from outside Connexion. If the character is not the tilde, it won't
+' copy properly. (My macro "Decompose" can turn most of these precomposed characters into
+' their OCLC-MARC equivalents.) Diacritics in OCLC-MARC only appear if their combination
+' with a base character matches a precomposed character in ISO/IEC 8859-1:1998; if not,
+' only the base character is kept. Code points above 255 should be encoded in a MARC
+' record as Numeric Character References (NCR). An NCR has the form "&#x?;", where the
+' question mark stands for one or more hexadecimal digits. Almost none of these
+' characters (which number more than a million) will have a direct ISO/IEC 8859-1:1998
+' equivalent. A few can be approximated, but most will simply not be able to display, and
+' so are represented by this macro by a vertical bar "|".
 '
-' The macro gets the record's data with the "GetFieldUnicode" command, which retrieves
-' Unicode characters encoded as NCRs. Valid NCRS are converted to ISO/IEC 8859-1:1998 by
-' means of a table that matches those Unicode characters to ISO/IEC 8859-1:1998
-' characters. This table contains 898 Unicode characters that may be represented, more or
-' less closely, by ISO/IEC 8859-1:1998 characters, drawn from these Unicode blocks: Basic
-' Latin, Latin-1 Supplement, Latin Extended-A, Latin Extended-B, Latin Extended-C, Latin
-' Extended-D, Latin Extended-E, Latin Extended Additional, and General Punctuation.
+' The macro acquires the record's data with the "GetFieldUnicode" command, which
+' retrieves Unicode characters encoded as NCRs. Valid NCRS are converted to ISO/IEC
+' 8859-1:1998 by means of a table that matches those Unicode characters to ISO/IEC
+' 8859-1:1998 characters. This table contains 898 Unicode characters that may be
+' represented, more or less closely, by ISO/IEC 8859-1:1998 characters, drawn from these
+' Unicode blocks: Basic Latin, Latin-1 Supplement, Latin Extended-A, Latin Extended-B,
+' Latin Extended-C, Latin Extended-D, Latin Extended-E, Latin Extended Additional, and
+' General Punctuation.
 '
 ' The macro makes note of the three cases in which the correspondence between the
-' record's characters and the ISO/IEC 8859-1:1998 set is not exact, although it does not
-' identify any specific occurrence of a case. These situations are when a diacritic is
-' unable to be represented in combination with a base character, when a character has
-' only an approximate equivalent, and when a character has no appropriate representation
-' at all.
+' record's characters and the ISO/IEC 8859-1:1998 set is not exact, although this takes
+' the form of a general warning, and does not identify any specific occurrence of a case.
+' These situations are when a diacritic is unable to be represented in combination with a
+' base character, when a character has only an approximate equivalent, and when a
+' character has no appropriate representation at all.
 '
 ' If a selection includes non-Latin characters, the OML command "CS.GetSelectedText"
 ' returns the value "Data contains non-latin script", no matter how many fields have been
@@ -177,7 +182,7 @@ Dim Timestamp$
 Dim VariableFieldString$
 Dim WaltsMacros$             : WaltsMacros$           = "[Walt's macros] Extras3:CopyRecordToClipboard"
 Dim WarningDiacritics$       : WarningDiacritics$     = "---- SOME DIACRITICAL MARKS CANNOT BE DISPLAYED  ----"
-Dim WarningEncoding$         : WarningEncoding$       = "---- INCORRECTLY ENCODED CHARACTERS ARE REPRESENTED BY " & QUOTE & "§" & QUOTE & " ----"
+Dim WarningEncoding$         : WarningEncoding$       = "---- INCORRECTLY ENCODED CHARACTERS ARE REPRESENTED BY " & QUOTE & "¬§" & QUOTE & " ----"
 Dim WarningEquivalents$      : WarningEquivalents$    = "---- SOME CHARACTERS ARE REPRESENTED BY APPROXIMATE EQUIVALENTS ----"
 Dim Warnings$
 Dim WarningUndisplayables$   : WarningUndisplayables$ = "---- NON-DISPLAYABLE CHARACTERS ARE REPRESENTED BY " & QUOTE & "|" & QUOTE & " ----"
@@ -695,101 +700,101 @@ UnicodeChar( 91  ) = "007B 123" '{
 UnicodeChar( 92  ) = "007C 124" '|
 UnicodeChar( 93  ) = "007D 125" '}
 UnicodeChar( 94  ) = "007E 126" '~
-UnicodeChar( 95  ) = "00A1 161" '°
-UnicodeChar( 96  ) = "00A2 162" '¢
-UnicodeChar( 97  ) = "00A3 163" '£
-UnicodeChar( 98  ) = "00A4 164" '§
-UnicodeChar( 99  ) = "00A5 165" '•
-UnicodeChar( 100 ) = "00A6 166" '§
-UnicodeChar( 101 ) = "00A7 167" 'ß
-UnicodeChar( 102 ) = "00A8 168" '®
-UnicodeChar( 103 ) = "00A9 169" '©
-UnicodeChar( 104 ) = "00AA 170" '™
-UnicodeChar( 105 ) = "00AB 171" '´
-UnicodeChar( 106 ) = "00AC 172" '¨
-UnicodeChar( 107 ) = "00AD 173" '≠
-UnicodeChar( 108 ) = "00AE 174" 'Æ
-UnicodeChar( 109 ) = "00AF 175" 'Ø
-UnicodeChar( 110 ) = "00B0 176" '∞
-UnicodeChar( 111 ) = "00B1 177" '±
-UnicodeChar( 112 ) = "00B2 178" '≤
-UnicodeChar( 113 ) = "00B3 179" '≥
-UnicodeChar( 114 ) = "00B4 180" '¥
-UnicodeChar( 115 ) = "00B5 181" 'µ
-UnicodeChar( 116 ) = "00B6 182" '∂
-UnicodeChar( 117 ) = "00B7 183" '∑
-UnicodeChar( 118 ) = "00B8 184" '∏
-UnicodeChar( 119 ) = "00B9 185" 'π
-UnicodeChar( 120 ) = "00BA 186" '∫
-UnicodeChar( 121 ) = "00BB 187" 'ª
-UnicodeChar( 122 ) = "00BC 188" 'º
-UnicodeChar( 123 ) = "00BD 189" 'Ω
-UnicodeChar( 124 ) = "00BE 190" 'æ
-UnicodeChar( 125 ) = "00BF 191" 'ø
-UnicodeChar( 126 ) = "00C0 192" '¿
-UnicodeChar( 127 ) = "00C1 193" '¡
-UnicodeChar( 128 ) = "00C2 194" '¬
-UnicodeChar( 129 ) = "00C3 195" '√
-UnicodeChar( 130 ) = "00C4 196" 'ƒ
-UnicodeChar( 131 ) = "00C5 197" '≈
-UnicodeChar( 132 ) = "00C6 198" '∆
-UnicodeChar( 133 ) = "00C7 199" '«
-UnicodeChar( 134 ) = "00C8 200" '»
-UnicodeChar( 135 ) = "00C9 201" '…
-UnicodeChar( 136 ) = "00CA 202" ' 
-UnicodeChar( 137 ) = "00CB 203" 'À
-UnicodeChar( 138 ) = "00CC 204" 'Ã
-UnicodeChar( 139 ) = "00CD 205" 'Õ
-UnicodeChar( 140 ) = "00CE 206" 'Œ
-UnicodeChar( 141 ) = "00CF 207" 'œ
-UnicodeChar( 142 ) = "00D0 208" '–
-UnicodeChar( 143 ) = "00D1 209" '—
-UnicodeChar( 144 ) = "00D2 210" '“
-UnicodeChar( 145 ) = "00D3 211" '”
-UnicodeChar( 146 ) = "00D4 212" '‘
-UnicodeChar( 147 ) = "00D5 213" '’
-UnicodeChar( 148 ) = "00D6 214" '÷
-UnicodeChar( 149 ) = "00D7 215" '◊
-UnicodeChar( 150 ) = "00D8 216" 'ÿ
-UnicodeChar( 151 ) = "00D9 217" 'Ÿ
-UnicodeChar( 152 ) = "00DA 218" '⁄
-UnicodeChar( 153 ) = "00DB 219" '€
-UnicodeChar( 154 ) = "00DC 220" '‹
-UnicodeChar( 155 ) = "00DD 221" '›
-UnicodeChar( 156 ) = "00DE 222" 'ﬁ
-UnicodeChar( 157 ) = "00DF 223" 'ﬂ
-UnicodeChar( 158 ) = "00E0 224" '‡
-UnicodeChar( 159 ) = "00E1 225" '·
-UnicodeChar( 160 ) = "00E2 226" '‚
-UnicodeChar( 161 ) = "00E3 227" '„
-UnicodeChar( 162 ) = "00E4 228" '‰
-UnicodeChar( 163 ) = "00E5 229" 'Â
-UnicodeChar( 164 ) = "00E6 230" 'Ê
-UnicodeChar( 165 ) = "00E7 231" 'Á
-UnicodeChar( 166 ) = "00E8 232" 'Ë
-UnicodeChar( 167 ) = "00E9 233" 'È
-UnicodeChar( 168 ) = "00EA 234" 'Í
-UnicodeChar( 169 ) = "00EB 235" 'Î
-UnicodeChar( 170 ) = "00EC 236" 'Ï
-UnicodeChar( 171 ) = "00ED 237" 'Ì
-UnicodeChar( 172 ) = "00EE 238" 'Ó
-UnicodeChar( 173 ) = "00EF 239" 'Ô
-UnicodeChar( 174 ) = "00F0 240" '
-UnicodeChar( 175 ) = "00F1 241" 'Ò
-UnicodeChar( 176 ) = "00F2 242" 'Ú
-UnicodeChar( 177 ) = "00F3 243" 'Û
-UnicodeChar( 178 ) = "00F4 244" 'Ù
-UnicodeChar( 179 ) = "00F5 245" 'ı
-UnicodeChar( 180 ) = "00F6 246" 'ˆ
-UnicodeChar( 181 ) = "00F7 247" '˜
-UnicodeChar( 182 ) = "00F8 248" '¯
-UnicodeChar( 183 ) = "00F9 249" '˘
-UnicodeChar( 184 ) = "00FA 250" '˙
-UnicodeChar( 185 ) = "00FB 251" '˚
-UnicodeChar( 186 ) = "00FC 252" '¸
-UnicodeChar( 187 ) = "00FD 253" '˝
-UnicodeChar( 188 ) = "00FE 254" '˛
-UnicodeChar( 189 ) = "00FF 255" 'ˇ
+UnicodeChar( 95  ) = "00A1 161" '¬°
+UnicodeChar( 96  ) = "00A2 162" '¬¢
+UnicodeChar( 97  ) = "00A3 163" '¬£
+UnicodeChar( 98  ) = "00A4 164" '¬§
+UnicodeChar( 99  ) = "00A5 165" '¬•
+UnicodeChar( 100 ) = "00A6 166" '¬§
+UnicodeChar( 101 ) = "00A7 167" '¬ß
+UnicodeChar( 102 ) = "00A8 168" '¬®
+UnicodeChar( 103 ) = "00A9 169" '¬©
+UnicodeChar( 104 ) = "00AA 170" '¬™
+UnicodeChar( 105 ) = "00AB 171" '¬´
+UnicodeChar( 106 ) = "00AC 172" '¬¨
+UnicodeChar( 107 ) = "00AD 173" '¬≠
+UnicodeChar( 108 ) = "00AE 174" '¬Æ
+UnicodeChar( 109 ) = "00AF 175" '¬Ø
+UnicodeChar( 110 ) = "00B0 176" '¬∞
+UnicodeChar( 111 ) = "00B1 177" '¬±
+UnicodeChar( 112 ) = "00B2 178" '¬≤
+UnicodeChar( 113 ) = "00B3 179" '¬≥
+UnicodeChar( 114 ) = "00B4 180" '¬¥
+UnicodeChar( 115 ) = "00B5 181" '¬µ
+UnicodeChar( 116 ) = "00B6 182" '¬∂
+UnicodeChar( 117 ) = "00B7 183" '¬∑
+UnicodeChar( 118 ) = "00B8 184" '¬∏
+UnicodeChar( 119 ) = "00B9 185" '¬π
+UnicodeChar( 120 ) = "00BA 186" '¬∫
+UnicodeChar( 121 ) = "00BB 187" '¬ª
+UnicodeChar( 122 ) = "00BC 188" '¬º
+UnicodeChar( 123 ) = "00BD 189" '¬Ω
+UnicodeChar( 124 ) = "00BE 190" '¬æ
+UnicodeChar( 125 ) = "00BF 191" '¬ø
+UnicodeChar( 126 ) = "00C0 192" '√Ä
+UnicodeChar( 127 ) = "00C1 193" '√Å
+UnicodeChar( 128 ) = "00C2 194" '√Ç
+UnicodeChar( 129 ) = "00C3 195" '√É
+UnicodeChar( 130 ) = "00C4 196" '√Ñ
+UnicodeChar( 131 ) = "00C5 197" '√Ö
+UnicodeChar( 132 ) = "00C6 198" '√Ü
+UnicodeChar( 133 ) = "00C7 199" '√á
+UnicodeChar( 134 ) = "00C8 200" '√à
+UnicodeChar( 135 ) = "00C9 201" '√â
+UnicodeChar( 136 ) = "00CA 202" '√ä
+UnicodeChar( 137 ) = "00CB 203" '√ã
+UnicodeChar( 138 ) = "00CC 204" '√å
+UnicodeChar( 139 ) = "00CD 205" '√ç
+UnicodeChar( 140 ) = "00CE 206" '√é
+UnicodeChar( 141 ) = "00CF 207" '√è
+UnicodeChar( 142 ) = "00D0 208" '√ê
+UnicodeChar( 143 ) = "00D1 209" '√ë
+UnicodeChar( 144 ) = "00D2 210" '√í
+UnicodeChar( 145 ) = "00D3 211" '√ì
+UnicodeChar( 146 ) = "00D4 212" '√î
+UnicodeChar( 147 ) = "00D5 213" '√ï
+UnicodeChar( 148 ) = "00D6 214" '√ñ
+UnicodeChar( 149 ) = "00D7 215" '√ó
+UnicodeChar( 150 ) = "00D8 216" '√ò
+UnicodeChar( 151 ) = "00D9 217" '√ô
+UnicodeChar( 152 ) = "00DA 218" '√ö
+UnicodeChar( 153 ) = "00DB 219" '√õ
+UnicodeChar( 154 ) = "00DC 220" '√ú
+UnicodeChar( 155 ) = "00DD 221" '√ù
+UnicodeChar( 156 ) = "00DE 222" '√û
+UnicodeChar( 157 ) = "00DF 223" '√ü
+UnicodeChar( 158 ) = "00E0 224" '√†
+UnicodeChar( 159 ) = "00E1 225" '√°
+UnicodeChar( 160 ) = "00E2 226" '√¢
+UnicodeChar( 161 ) = "00E3 227" '√£
+UnicodeChar( 162 ) = "00E4 228" '√§
+UnicodeChar( 163 ) = "00E5 229" '√•
+UnicodeChar( 164 ) = "00E6 230" '√¶
+UnicodeChar( 165 ) = "00E7 231" '√ß
+UnicodeChar( 166 ) = "00E8 232" '√®
+UnicodeChar( 167 ) = "00E9 233" '√©
+UnicodeChar( 168 ) = "00EA 234" '√™
+UnicodeChar( 169 ) = "00EB 235" '√´
+UnicodeChar( 170 ) = "00EC 236" '√¨
+UnicodeChar( 171 ) = "00ED 237" '√≠
+UnicodeChar( 172 ) = "00EE 238" '√Æ
+UnicodeChar( 173 ) = "00EF 239" '√Ø
+UnicodeChar( 174 ) = "00F0 240" '√∞
+UnicodeChar( 175 ) = "00F1 241" '√±
+UnicodeChar( 176 ) = "00F2 242" '√≤
+UnicodeChar( 177 ) = "00F3 243" '√≥
+UnicodeChar( 178 ) = "00F4 244" '√¥
+UnicodeChar( 179 ) = "00F5 245" '√µ
+UnicodeChar( 180 ) = "00F6 246" '√∂
+UnicodeChar( 181 ) = "00F7 247" '√∑
+UnicodeChar( 182 ) = "00F8 248" '√∏
+UnicodeChar( 183 ) = "00F9 249" '√π
+UnicodeChar( 184 ) = "00FA 250" '√∫
+UnicodeChar( 185 ) = "00FB 251" '√ª
+UnicodeChar( 186 ) = "00FC 252" '√º
+UnicodeChar( 187 ) = "00FD 253" '√Ω
+UnicodeChar( 188 ) = "00FE 254" '√æ
+UnicodeChar( 189 ) = "00FF 255" '√ø
 UnicodeChar( 190 ) = "0100 065" 'A
 UnicodeChar( 191 ) = "0101 097" 'a
 UnicodeChar( 192 ) = "0102 065" 'A
@@ -806,7 +811,7 @@ UnicodeChar( 202 ) = "010C 067" 'C
 UnicodeChar( 203 ) = "010D 099" 'c
 UnicodeChar( 204 ) = "010E 068" 'D
 UnicodeChar( 205 ) = "010F 100" 'd
-UnicodeChar( 206 ) = "0110 208" '–
+UnicodeChar( 206 ) = "0110 208" '√ê
 UnicodeChar( 207 ) = "0111 100" 'd
 UnicodeChar( 208 ) = "0112 069" 'E
 UnicodeChar( 209 ) = "0113 101" 'e
@@ -922,7 +927,7 @@ UnicodeChar( 318 ) = "0182 066" 'B
 UnicodeChar( 319 ) = "0183 098" 'b
 UnicodeChar( 320 ) = "0187 067" 'C
 UnicodeChar( 321 ) = "0188 099" 'c
-UnicodeChar( 322 ) = "0189 208" '–
+UnicodeChar( 322 ) = "0189 208" '√ê
 UnicodeChar( 323 ) = "018A 068" 'D
 UnicodeChar( 324 ) = "018B 068" 'D
 UnicodeChar( 325 ) = "018C 100" 'd
@@ -935,7 +940,7 @@ UnicodeChar( 331 ) = "0199 107" 'k
 UnicodeChar( 332 ) = "019A 108" 'l
 UnicodeChar( 333 ) = "019D 078" 'N
 UnicodeChar( 334 ) = "019E 110" 'n
-UnicodeChar( 335 ) = "019F 213" '’
+UnicodeChar( 335 ) = "019F 213" '√ï
 UnicodeChar( 336 ) = "01A0 079" 'O
 UnicodeChar( 337 ) = "01A1 111" 'o
 UnicodeChar( 338 ) = "01A4 080" 'P
@@ -971,16 +976,16 @@ UnicodeChar( 367 ) = "01D1 079" 'O
 UnicodeChar( 368 ) = "01D2 111" 'o
 UnicodeChar( 369 ) = "01D3 085" 'U
 UnicodeChar( 370 ) = "01D4 117" 'u
-UnicodeChar( 371 ) = "01D5 220" '‹
-UnicodeChar( 372 ) = "01D6 252" '¸
-UnicodeChar( 373 ) = "01D7 220" '‹
-UnicodeChar( 374 ) = "01D8 252" '¸
-UnicodeChar( 375 ) = "01D9 220" '‹
-UnicodeChar( 376 ) = "01DA 252" '¸
-UnicodeChar( 377 ) = "01DB 220" '‹
-UnicodeChar( 378 ) = "01DC 252" '¸
-UnicodeChar( 379 ) = "01DE 196" 'ƒ
-UnicodeChar( 380 ) = "01DF 228" '‰
+UnicodeChar( 371 ) = "01D5 220" '√ú
+UnicodeChar( 372 ) = "01D6 252" '√º
+UnicodeChar( 373 ) = "01D7 220" '√ú
+UnicodeChar( 374 ) = "01D8 252" '√º
+UnicodeChar( 375 ) = "01D9 220" '√ú
+UnicodeChar( 376 ) = "01DA 252" '√º
+UnicodeChar( 377 ) = "01DB 220" '√ú
+UnicodeChar( 378 ) = "01DC 252" '√º
+UnicodeChar( 379 ) = "01DE 196" '√Ñ
+UnicodeChar( 380 ) = "01DF 228" '√§
 UnicodeChar( 381 ) = "01E0 065" 'A
 UnicodeChar( 382 ) = "01E1 097" 'a
 UnicodeChar( 383 ) = "01E2 065 069" 'AE
@@ -1003,12 +1008,12 @@ UnicodeChar( 399 ) = "01F4 071" 'G
 UnicodeChar( 400 ) = "01F5 103" 'g
 UnicodeChar( 401 ) = "01F8 078" 'N
 UnicodeChar( 402 ) = "01F9 110" 'n
-UnicodeChar( 403 ) = "01FA 197" '≈
-UnicodeChar( 404 ) = "01FB 229" 'Â
+UnicodeChar( 403 ) = "01FA 197" '√Ö
+UnicodeChar( 404 ) = "01FB 229" '√•
 UnicodeChar( 405 ) = "01FC 065 201" 'AE
 UnicodeChar( 406 ) = "01FD 097 101" 'ae
-UnicodeChar( 407 ) = "01FE 216" 'ÿ
-UnicodeChar( 408 ) = "01FF 248" '¯
+UnicodeChar( 407 ) = "01FE 216" '√ò
+UnicodeChar( 408 ) = "01FF 248" '√∏
 UnicodeChar( 409 ) = "0200 065" 'A
 UnicodeChar( 410 ) = "0201 097" 'a
 UnicodeChar( 411 ) = "0202 065" 'A
@@ -1047,10 +1052,10 @@ UnicodeChar( 443 ) = "0226 065" 'A
 UnicodeChar( 444 ) = "0227 097" 'a
 UnicodeChar( 445 ) = "0228 069" 'E
 UnicodeChar( 446 ) = "0229 101" 'e
-UnicodeChar( 447 ) = "022A 214" '÷
-UnicodeChar( 448 ) = "022B 246" 'ˆ
-UnicodeChar( 449 ) = "022C 213" '’
-UnicodeChar( 450 ) = "022D 245" 'ı
+UnicodeChar( 447 ) = "022A 214" '√ñ
+UnicodeChar( 448 ) = "022B 246" '√∂
+UnicodeChar( 449 ) = "022C 213" '√ï
+UnicodeChar( 450 ) = "022D 245" '√µ
 UnicodeChar( 451 ) = "022E 079" 'O
 UnicodeChar( 452 ) = "022F 111" 'o
 UnicodeChar( 453 ) = "0230 079" 'O
@@ -1085,14 +1090,14 @@ UnicodeChar( 481 ) = "02BA 034" '"
 UnicodeChar( 482 ) = "02BB 039" ''
 UnicodeChar( 483 ) = "02BC 039" ''
 UnicodeChar( 484 ) = "02BD 039" ''
-UnicodeChar( 485 ) = "02C6 094" 'à
+UnicodeChar( 485 ) = "02C6 094" 'ÀÜ
 UnicodeChar( 486 ) = "02C8 039" ''
-UnicodeChar( 487 ) = "02C9 175" 'Ø
-UnicodeChar( 488 ) = "02CA 180" '¥
+UnicodeChar( 487 ) = "02C9 175" '¬Ø
+UnicodeChar( 488 ) = "02CA 180" '¬¥
 UnicodeChar( 489 ) = "02CB 096" '`
 UnicodeChar( 490 ) = "02D6 043" '+
 UnicodeChar( 491 ) = "02D7 045" '-
-UnicodeChar( 492 ) = "02DA 176" '∞
+UnicodeChar( 492 ) = "02DA 176" '¬∞
 UnicodeChar( 493 ) = "02DC 126" '~
 UnicodeChar( 494 ) = "02DD 034" '"
 UnicodeChar( 495 ) = "02EE 034" '"
@@ -1106,28 +1111,28 @@ UnicodeChar( 502 ) = "1E04 066" 'B
 UnicodeChar( 503 ) = "1E05 098" 'b
 UnicodeChar( 504 ) = "1E06 066" 'B
 UnicodeChar( 505 ) = "1E07 098" 'b
-UnicodeChar( 506 ) = "1E08 199" '«
-UnicodeChar( 507 ) = "1E09 231" 'Á
+UnicodeChar( 506 ) = "1E08 199" '√á
+UnicodeChar( 507 ) = "1E09 231" '√ß
 UnicodeChar( 508 ) = "1E0A 068" 'D
 UnicodeChar( 509 ) = "1E0B 100" 'd
 UnicodeChar( 510 ) = "1E0C 068" 'D
 UnicodeChar( 511 ) = "1E0D 100" 'd
 UnicodeChar( 512 ) = "1E0E 068" 'D
 UnicodeChar( 513 ) = "1E0F 100" 'd
-UnicodeChar( 514 ) = "1E10 199" '«
+UnicodeChar( 514 ) = "1E10 199" '√á
 UnicodeChar( 515 ) = "1E11 100" 'd
 UnicodeChar( 516 ) = "1E12 068" 'D
 UnicodeChar( 517 ) = "1E13 100" 'd
-UnicodeChar( 518 ) = "1E14 200" '»
-UnicodeChar( 519 ) = "1E15 232" 'Ë
-UnicodeChar( 520 ) = "1E16 201" '…
-UnicodeChar( 521 ) = "1E17 233" 'È
+UnicodeChar( 518 ) = "1E14 200" '√à
+UnicodeChar( 519 ) = "1E15 232" '√®
+UnicodeChar( 520 ) = "1E16 201" '√â
+UnicodeChar( 521 ) = "1E17 233" '√©
 UnicodeChar( 522 ) = "1E18 069" 'E
 UnicodeChar( 523 ) = "1E19 101" 'e
 UnicodeChar( 524 ) = "1E1A 069" 'E
 UnicodeChar( 525 ) = "1E1B 101" 'e
 UnicodeChar( 526 ) = "1E1C 069" 'E
-UnicodeChar( 527 ) = "1E1D 232" 'Ë
+UnicodeChar( 527 ) = "1E1D 232" '√®
 UnicodeChar( 528 ) = "1E1E 070" 'F
 UnicodeChar( 529 ) = "1E1F 102" 'f
 UnicodeChar( 530 ) = "1E20 071" 'G
@@ -1144,8 +1149,8 @@ UnicodeChar( 540 ) = "1E2A 072" 'H
 UnicodeChar( 541 ) = "1E2B 104" 'h
 UnicodeChar( 542 ) = "1E2C 073" 'I
 UnicodeChar( 543 ) = "1E2D 105" 'i
-UnicodeChar( 544 ) = "1E2E 207" 'œ
-UnicodeChar( 545 ) = "1E2F 239" 'Ô
+UnicodeChar( 544 ) = "1E2E 207" '√è
+UnicodeChar( 545 ) = "1E2F 239" '√Ø
 UnicodeChar( 546 ) = "1E30 075" 'K
 UnicodeChar( 547 ) = "1E31 107" 'k
 UnicodeChar( 548 ) = "1E32 075" 'K
@@ -1174,14 +1179,14 @@ UnicodeChar( 570 ) = "1E48 078" 'N
 UnicodeChar( 571 ) = "1E49 110" 'n
 UnicodeChar( 572 ) = "1E4A 078" 'N
 UnicodeChar( 573 ) = "1E4B 110" 'n
-UnicodeChar( 574 ) = "1E4C 213" '’
-UnicodeChar( 575 ) = "1E4D 245" 'ı
-UnicodeChar( 576 ) = "1E4E 213" '’
-UnicodeChar( 577 ) = "1E4F 245" 'ı
-UnicodeChar( 578 ) = "1E50 210" '“
-UnicodeChar( 579 ) = "1E51 242" 'Ú
-UnicodeChar( 580 ) = "1E52 211" '”
-UnicodeChar( 581 ) = "1E53 243" 'Û
+UnicodeChar( 574 ) = "1E4C 213" '√ï
+UnicodeChar( 575 ) = "1E4D 245" '√µ
+UnicodeChar( 576 ) = "1E4E 213" '√ï
+UnicodeChar( 577 ) = "1E4F 245" '√µ
+UnicodeChar( 578 ) = "1E50 210" '√í
+UnicodeChar( 579 ) = "1E51 242" '√≤
+UnicodeChar( 580 ) = "1E52 211" '√ì
+UnicodeChar( 581 ) = "1E53 243" '√≥
 UnicodeChar( 582 ) = "1E54 080" 'P
 UnicodeChar( 583 ) = "1E55 112" 'p
 UnicodeChar( 584 ) = "1E56 080" 'P
@@ -1218,10 +1223,10 @@ UnicodeChar( 614 ) = "1E74 085" 'U
 UnicodeChar( 615 ) = "1E75 117" 'u
 UnicodeChar( 616 ) = "1E76 085" 'U
 UnicodeChar( 617 ) = "1E77 117" 'u
-UnicodeChar( 618 ) = "1E78 218" '⁄
-UnicodeChar( 619 ) = "1E79 250" '˙
-UnicodeChar( 620 ) = "1E7A 220" '‹
-UnicodeChar( 621 ) = "1E7B 252" '¸
+UnicodeChar( 618 ) = "1E78 218" '√ö
+UnicodeChar( 619 ) = "1E79 250" '√∫
+UnicodeChar( 620 ) = "1E7A 220" '√ú
+UnicodeChar( 621 ) = "1E7B 252" '√º
 UnicodeChar( 622 ) = "1E7C 086" 'V
 UnicodeChar( 623 ) = "1E7D 118" 'v
 UnicodeChar( 624 ) = "1E7E 086" 'V
@@ -1256,47 +1261,47 @@ UnicodeChar( 652 ) = "1E9A 097" 'a
 UnicodeChar( 653 ) = "1E9B 115" 's
 UnicodeChar( 654 ) = "1E9C 115" 's
 UnicodeChar( 655 ) = "1E9D 115" 's
-UnicodeChar( 656 ) = "1E9E 223" 'ﬂ
+UnicodeChar( 656 ) = "1E9E 223" '√ü
 UnicodeChar( 657 ) = "1EA0 065" 'A
 UnicodeChar( 658 ) = "1EA1 097" 'a
 UnicodeChar( 659 ) = "1EA2 065" 'A
 UnicodeChar( 660 ) = "1EA3 097" 'a
-UnicodeChar( 661 ) = "1EA4 194" '¬
-UnicodeChar( 662 ) = "1EA5 226" '‚
-UnicodeChar( 663 ) = "1EA6 194" '¬
-UnicodeChar( 664 ) = "1EA7 226" '‚
-UnicodeChar( 665 ) = "1EA8 194" '¬
-UnicodeChar( 666 ) = "1EA9 226" '‚
-UnicodeChar( 667 ) = "1EAA 194" '¬
-UnicodeChar( 668 ) = "1EAB 226" '‚
-UnicodeChar( 669 ) = "1EAC 194" '¬
-UnicodeChar( 670 ) = "1EAD 226" '‚
-UnicodeChar( 671 ) = "1EAE 193" '¡
-UnicodeChar( 672 ) = "1EAF 224" '‡
-UnicodeChar( 673 ) = "1EB0 192" '¿
-UnicodeChar( 674 ) = "1EB1 224" '‡
+UnicodeChar( 661 ) = "1EA4 194" '√Ç
+UnicodeChar( 662 ) = "1EA5 226" '√¢
+UnicodeChar( 663 ) = "1EA6 194" '√Ç
+UnicodeChar( 664 ) = "1EA7 226" '√¢
+UnicodeChar( 665 ) = "1EA8 194" '√Ç
+UnicodeChar( 666 ) = "1EA9 226" '√¢
+UnicodeChar( 667 ) = "1EAA 194" '√Ç
+UnicodeChar( 668 ) = "1EAB 226" '√¢
+UnicodeChar( 669 ) = "1EAC 194" '√Ç
+UnicodeChar( 670 ) = "1EAD 226" '√¢
+UnicodeChar( 671 ) = "1EAE 193" '√Å
+UnicodeChar( 672 ) = "1EAF 224" '√†
+UnicodeChar( 673 ) = "1EB0 192" '√Ä
+UnicodeChar( 674 ) = "1EB1 224" '√†
 UnicodeChar( 675 ) = "1EB2 065" 'A
-UnicodeChar( 676 ) = "1EB3 224" '‡
-UnicodeChar( 677 ) = "1EB4 195" '√
-UnicodeChar( 678 ) = "1EB5 224" '‡
+UnicodeChar( 676 ) = "1EB3 224" '√†
+UnicodeChar( 677 ) = "1EB4 195" '√É
+UnicodeChar( 678 ) = "1EB5 224" '√†
 UnicodeChar( 679 ) = "1EB6 065" 'A
-UnicodeChar( 680 ) = "1EB7 224" '‡
+UnicodeChar( 680 ) = "1EB7 224" '√†
 UnicodeChar( 681 ) = "1EB8 069" 'E
 UnicodeChar( 682 ) = "1EB9 101" 'e
 UnicodeChar( 683 ) = "1EBA 069" 'E
 UnicodeChar( 684 ) = "1EBB 101" 'e
 UnicodeChar( 685 ) = "1EBC 069" 'E
 UnicodeChar( 686 ) = "1EBD 101" 'e
-UnicodeChar( 687 ) = "1EBE 202" ' 
-UnicodeChar( 688 ) = "1EBF 234" 'Í
-UnicodeChar( 689 ) = "1EC0 202" ' 
-UnicodeChar( 690 ) = "1EC1 234" 'Í
-UnicodeChar( 691 ) = "1EC2 202" ' 
-UnicodeChar( 692 ) = "1EC3 234" 'Í
-UnicodeChar( 693 ) = "1EC4 202" ' 
-UnicodeChar( 694 ) = "1EC5 234" 'Í
-UnicodeChar( 695 ) = "1EC6 202" ' 
-UnicodeChar( 696 ) = "1EC7 234" 'Í
+UnicodeChar( 687 ) = "1EBE 202" '√ä
+UnicodeChar( 688 ) = "1EBF 234" '√™
+UnicodeChar( 689 ) = "1EC0 202" '√ä
+UnicodeChar( 690 ) = "1EC1 234" '√™
+UnicodeChar( 691 ) = "1EC2 202" '√ä
+UnicodeChar( 692 ) = "1EC3 234" '√™
+UnicodeChar( 693 ) = "1EC4 202" '√ä
+UnicodeChar( 694 ) = "1EC5 234" '√™
+UnicodeChar( 695 ) = "1EC6 202" '√ä
+UnicodeChar( 696 ) = "1EC7 234" '√™
 UnicodeChar( 697 ) = "1EC8 073" 'I
 UnicodeChar( 698 ) = "1EC9 105" 'i
 UnicodeChar( 699 ) = "1ECA 073" 'I
@@ -1305,34 +1310,34 @@ UnicodeChar( 701 ) = "1ECC 079" 'O
 UnicodeChar( 702 ) = "1ECD 111" 'o
 UnicodeChar( 703 ) = "1ECE 079" 'O
 UnicodeChar( 704 ) = "1ECF 111" 'o
-UnicodeChar( 705 ) = "1ED0 212" '‘
-UnicodeChar( 706 ) = "1ED1 244" 'Ù
-UnicodeChar( 707 ) = "1ED2 212" '‘
-UnicodeChar( 708 ) = "1ED3 244" 'Ù
-UnicodeChar( 709 ) = "1ED4 212" '‘
-UnicodeChar( 710 ) = "1ED5 244" 'Ù
-UnicodeChar( 711 ) = "1ED6 212" '‘
-UnicodeChar( 712 ) = "1ED7 244" 'Ù
-UnicodeChar( 713 ) = "1ED8 212" '‘
-UnicodeChar( 714 ) = "1ED9 244" 'Ù
-UnicodeChar( 715 ) = "1EDA 211" '”
-UnicodeChar( 716 ) = "1EDB 243" 'Û
-UnicodeChar( 717 ) = "1EDC 210" '“
-UnicodeChar( 718 ) = "1EDD 242" 'Ú
+UnicodeChar( 705 ) = "1ED0 212" '√î
+UnicodeChar( 706 ) = "1ED1 244" '√¥
+UnicodeChar( 707 ) = "1ED2 212" '√î
+UnicodeChar( 708 ) = "1ED3 244" '√¥
+UnicodeChar( 709 ) = "1ED4 212" '√î
+UnicodeChar( 710 ) = "1ED5 244" '√¥
+UnicodeChar( 711 ) = "1ED6 212" '√î
+UnicodeChar( 712 ) = "1ED7 244" '√¥
+UnicodeChar( 713 ) = "1ED8 212" '√î
+UnicodeChar( 714 ) = "1ED9 244" '√¥
+UnicodeChar( 715 ) = "1EDA 211" '√ì
+UnicodeChar( 716 ) = "1EDB 243" '√≥
+UnicodeChar( 717 ) = "1EDC 210" '√í
+UnicodeChar( 718 ) = "1EDD 242" '√≤
 UnicodeChar( 719 ) = "1EDE 079" 'O
 UnicodeChar( 720 ) = "1EDF 111" 'o
-UnicodeChar( 721 ) = "1EE0 213" '’
-UnicodeChar( 722 ) = "1EE1 245" 'ı
+UnicodeChar( 721 ) = "1EE0 213" '√ï
+UnicodeChar( 722 ) = "1EE1 245" '√µ
 UnicodeChar( 723 ) = "1EE2 079" 'O
 UnicodeChar( 724 ) = "1EE3 111" 'o
 UnicodeChar( 725 ) = "1EE4 085" 'U
 UnicodeChar( 726 ) = "1EE5 117" 'u
 UnicodeChar( 727 ) = "1EE6 085" 'U
 UnicodeChar( 728 ) = "1EE7 117" 'u
-UnicodeChar( 729 ) = "1EE8 218" '⁄
-UnicodeChar( 730 ) = "1EE9 250" '˙
-UnicodeChar( 731 ) = "1EEA 217" 'Ÿ
-UnicodeChar( 732 ) = "1EEB 249" '˘
+UnicodeChar( 729 ) = "1EE8 218" '√ö
+UnicodeChar( 730 ) = "1EE9 250" '√∫
+UnicodeChar( 731 ) = "1EEA 217" '√ô
+UnicodeChar( 732 ) = "1EEB 249" '√π
 UnicodeChar( 733 ) = "1EEC 085" 'U
 UnicodeChar( 734 ) = "1EED 117" 'u
 UnicodeChar( 735 ) = "1EEE 085" 'U
@@ -1364,7 +1369,7 @@ UnicodeChar( 760 ) = "201C 034" '"
 UnicodeChar( 761 ) = "201D 034" '"
 UnicodeChar( 762 ) = "201E 034" '"
 UnicodeChar( 763 ) = "201F 034" '"
-UnicodeChar( 764 ) = "2022 183" 'ï
+UnicodeChar( 764 ) = "2022 183" '‚Ä¢
 UnicodeChar( 765 ) = "2026 046 046 046" '...
 UnicodeChar( 766 ) = "2032 039" ''
 UnicodeChar( 767 ) = "2033 034" '"
@@ -1378,7 +1383,7 @@ UnicodeChar( 774 ) = "2044 047" '/
 UnicodeChar( 775 ) = "2047 063 063" '??
 UnicodeChar( 776 ) = "2048 063 033" '?!
 UnicodeChar( 777 ) = "2049 033 063" '!?
-UnicodeChar( 778 ) = "204B 182" '∂
+UnicodeChar( 778 ) = "204B 182" '¬∂
 UnicodeChar( 779 ) = "204E 042" '*
 UnicodeChar( 780 ) = "204F 049" ';
 UnicodeChar( 781 ) = "2053 126" '~
@@ -1445,10 +1450,10 @@ UnicodeChar( 841 ) = "A75E 086" 'V
 UnicodeChar( 842 ) = "A75F 118" 'v
 UnicodeChar( 843 ) = "A760 086 089" 'VY
 UnicodeChar( 844 ) = "A761 118 121" 'vy
-UnicodeChar( 845 ) = "A764 222" 'ﬁ
-UnicodeChar( 846 ) = "A765 254" '˛
-UnicodeChar( 847 ) = "A766 222" 'ﬁ
-UnicodeChar( 848 ) = "A767 254" '˛
+UnicodeChar( 845 ) = "A764 222" '√û
+UnicodeChar( 846 ) = "A765 254" '√æ
+UnicodeChar( 847 ) = "A766 222" '√û
+UnicodeChar( 848 ) = "A767 254" '√æ
 UnicodeChar( 849 ) = "A790 078" 'N
 UnicodeChar( 850 ) = "A791 110" 'n
 UnicodeChar( 851 ) = "A792 067" 'C
@@ -1552,7 +1557,7 @@ Dim Character$                : Character$     = " "
 Dim CharNext%
 Dim CharRead%
 Dim CodePoint$
-Dim CURRENCY_SIGN As String*1 : CURRENCY_SIGN  = "§"
+Dim CURRENCY_SIGN As String*1 : CURRENCY_SIGN  = "¬§"
 Dim NextCharPos%
 Dim TempString$
 Dim UnicodeString$            : UnicodeString$ = "&[#]x????;"
@@ -1997,8 +2002,4 @@ End If
 FindUnicodeEquivalent = Char1$ & Char2$ & Char3$
 
 End Function
-'200184302
-'
-'Macro name: CopyRecordToClipboard
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:02:57 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'200684909

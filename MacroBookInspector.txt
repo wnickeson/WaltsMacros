@@ -1,4 +1,4 @@
-'MacroName:MacroBookInspector.2023.05
+'MacroName:MacroBookInspector.2024.01
 'MacroDescription:Lists the macros in a macro book, along with their descriptions and
 ' other information, and allows saving the list, or the text of an individual macro, to a
 ' text file.
@@ -6,6 +6,7 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' Thanks to Joel Hahn for pointing out the file structure of macro books, and for
 ' instruction afforded by the macros he's shared, and to Harvey Hahn for some inspiration
@@ -18,7 +19,7 @@
 ' was retrieved from <https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/53989ce4-7b05-4f8d-829b-d08d6148375b>
 ' on the date below.
 '
-' Last updated: 30 July 2023.
+' Last updated: 12 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -157,7 +158,6 @@ Declare Sub BuildFAT             ( TotalSectorsInFAT% )
 Declare Sub BuildMiniFAT         ( TotalSectorsInMiniFAT%, FirstSectorOfMiniFAT% )
 Declare Sub BuildMinistream      ( MinistreamStart& )
 Declare Sub GetDirectoryEntries  ( FirstSectorOfDirectory& )
-Declare Sub GetEnviroVars
 Declare Sub GetFileInfo          ( SelectedMbkFile$ )
 Declare Sub GetMacroBookFiles
 Declare Sub GetMacroInfo         ( ThisMacroRecord As MacroRecord )
@@ -818,31 +818,6 @@ End Sub
 
 '****************************************************************************************
 
-Sub GetEnviroVars
-
-' This subprogram finds the path of the user's AppData directory, as found in the
-' environment table, in order to get to the macro book and options files.
-
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128
-
-Dim EnvironmentString$
-
-Dim i As Integer
-
-For i = 0 To MAX_ATTEMPTS_ENVIRON
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppDataPath$ = Mid$( EnvironmentString$, 9 )
-      Exit Sub
-  End If
-Next i
-
-AppDataPath$ = ""
-
-End Sub
-
-'****************************************************************************************
-
 Sub GetFileInfo( SelectedMbkFile$ )
 
 ' This subprogram gets important information about the selected macro book file.
@@ -902,7 +877,7 @@ HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 017 ) & Chr$( 224 ) & Chr$(
 ReDim MacroBooks( FileCounter% )
 MacroBooks( FileCounter% ) = "Select a macro book:"
 FileCounter%               = FileCounter% + 1
-Call GetEnviroVars
+AppDataPath$               = Environ( "APPDATA" )
 If AppDataPath$ = "" Then
     Exit Sub
   Else
@@ -2636,8 +2611,4 @@ Select Case Action%
 End Select
 
 End Function
-'2640109732
-'
-'Macro name: MacroBookInspector
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:04:54 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2615109167

@@ -1,12 +1,13 @@
-'MacroName:VisMatHelper.2023.03
+'MacroName:VisMatHelper.2024.01
 'MacroDescription:Helps correct and add fixed field and 007 field values in bibliographic
 ' records for visual materials.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -1975,14 +1976,12 @@ Function TransferredFieldsOptions As String
 ' transfer, alert the user to that fact, without being precise about the fields or
 ' actually copying them anyway.
 
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'The maximum number of reads of environment strings to try to get the user profile path.
 Const NORMAL_FILE          As Integer = 0    'Attribute of a normal file.
 Const NORMAL_FILE_ARCHIVE  As Integer = 32   'Attribute of a normal file with archive bit set?
 
-Dim AppData$
+Dim AppDataPath$
 Dim Attributes%
 Dim DeriveField$
-Dim EnvironmentString$
 Dim FileNum%
 Dim ItemKey$                 : ItemKey$ = "DeriveRecordFields"
 Dim OptionsXmlPath$
@@ -1990,21 +1989,13 @@ Dim QUOTE As String*1        : QUOTE    = Chr$( 034 )
 
 Dim i As Integer, p As Integer
 
-i = 1
-Do
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppData$ = Mid$( EnvironmentString$, 9 )
-      Exit Do
-  End If
-  i = i + 1
-Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
-If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GoTo NoPath:
+AppDataPath$ = Environ( "APPDATA" )
+If AppDataPath$ = "" Then GoTo NoPath:
 
 ' The complete path to the file is built by adding the information specified in the
 ' Connexion client documentation to the path to the user profile, obtained above.
 
-OptionsXmlPath$ = AppData$ & "\OCLC\Connex\Profiles\MyProfile\Options.xml"
+OptionsXmlPath$ = AppDataPath$ & "\OCLC\Connex\Profiles\MyProfile\Options.xml"
 
 On Error GoTo NoPath:
 Attributes% = GetAttr( OptionsXmlPath$ )
@@ -2523,8 +2514,4 @@ Add007:
 End Select
 
 End Function
-'252799371
-'
-'Macro name: VisMatHelper
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 10:00:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'251899032

@@ -1,4 +1,4 @@
-'MacroName:DimensionX.2023.02
+'MacroName:DimensionX.2024.01
 'MacroDescription:Inserts the multiplication or dimension sign "×" at the cursor
 ' position, or changes the letter "x" used to indicate dimensions to the actual
 ' dimension sign "×".
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 23 July 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -107,7 +108,7 @@ End If
 ' character found on both sides of the cursor position, it will be replaced. If the
 ' cursor is not next to an "x", the dimension sign will be added to the field.
 
-If CS.GetFieldLine( Row%, FieldData$ ) Then
+If CS.GetField( "...", Row%, FieldData$ ) Then
     LenFieldDataString% = Len( FieldData$ )
     If Col% > 5 Then
         For i = Col% - 1 To 1 Step -1
@@ -156,7 +157,7 @@ If CS.GetFieldLine( Row%, FieldData$ ) Then
 ' initial position.
 
       ElseIf X_ToTheLeft Or X_ToTheRight Then
-        If CS.GetFieldLine( Row%, FieldData$ ) Then
+        If CS.GetField( "...", Row%, FieldData$ ) Then
             LenFieldDataString% = Len( FieldData$ )
             Start% = 1
             Do
@@ -210,8 +211,4 @@ If CS.GetFieldLine( Row%, FieldData$ ) Then
 End If
 
 End Sub
-'2147791
-'
-'Macro name: DimensionX
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:03:14 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2157842

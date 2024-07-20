@@ -1,18 +1,19 @@
-'MacroName:GetCitationFor510.2023.01
+'MacroName:GetCitationFor510.2024.02
 'MacroDescription:Gets certain information from a bibliographic record and puts it into
 ' standard citation form for pasting into another bibliographic record as a 510 field.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 4 March 2023.
+' Last updated: 17 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: With two bibliographic records open--the source record, which describes
@@ -141,7 +142,7 @@ Dim TestChar$
 Dim TitleProper$
 Dim TitleSubfields$
 Dim TypeOfWindow%
-Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:GetCitationForm"
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:GetCitationFor510"
 Dim WindowTitle$
 
 Dim Numbered                 : Numbered     = FALSE
@@ -963,8 +964,4 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'96737599
-'
-'Macro name: GetCitationFor510
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'96837635

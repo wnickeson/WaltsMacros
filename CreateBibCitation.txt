@@ -1,4 +1,4 @@
-'MacroName:CreateBibCitation.2023.04
+'MacroName:CreateBibCitation.2024.02
 'MacroDescription:Gets the 1XX, 245-26X, and 8XX fields from a bibliographic record (with
 ' the ability to exclude any of those fields) and arranges the data into a bibliographic
 ' citation-like form on the Windows Clipboard for copying or printing.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 23 July 2023.
+' Last updated: 1 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -38,16 +39,16 @@
 '  + 830: $a, $n, $p, $v
 '
 ' Each field except 245 subfield $a can be included or omitted from the result by simply
-' clicking its checkbox. The resulting string is displayed in the dialog box for
-' confirmation before putting it on the Clipboard. In this string, MARC coding between
-' fields is removed, and other prescribed punctuation is usually simplified to commas and
-' periods. The data is modified to contain only characters encoded in ISO/IEC
-' 8859-1:1998. However, because of the limitations of that character set, some characters
-' will be represented by an equivalent or substitute, and some special characters and
-' diacritics simply won't appear. If one of the fields is in a non-Latin script, and is
-' linked to a field with Latin characters, that Latin script field is selected as the one
-' to copy. Otherwise, a field containing non-Latin characters won't be copied, and if
-' such a field is the title, the macro will quit.
+' clicking its checkbox, or typing its keyboard shortcut. The resulting string is
+' displayed in the dialog box for confirmation before putting it on the Clipboard. In
+' this string, MARC coding between fields is removed, and other prescribed punctuation is
+' usually simplified to commas and periods. The data is modified to contain only
+' characters encoded in ISO/IEC 8859-1:1998. However, because of the limitations of that
+' character set, some characters will be represented by an equivalent or substitute, and
+' some special characters and diacritics simply won't appear. If one of the fields is in
+' a non-Latin script, and is linked to a field with Latin characters, that Latin script
+' field is selected as the one to copy. Otherwise, a field containing non-Latin
+' characters won't be copied, and if such a field is the title, the macro will quit.
 '
 ' If a field or a subfield in a field is repeated, only the first occurrence is captured.
 ' A 490 field is not copied if it has a corresponding 8XX field.
@@ -58,7 +59,8 @@
 ' it can be added (or removed) by simply ticking that field's checkbox.
 '
 ' If one or more of subfields $a, $b, and $c are lacking from the publication statement,
-' an asterisk displays by the field's checkbox to indicate that something may be missing.
+' an asterisk displays by the field's checkbox to indicate that something may be missing
+' (but the asterisk itself is not included in the copied information).
 '
 ' For dates, copyright information is discarded; other information is generally kept.
 '
@@ -215,7 +217,7 @@ If FieldData$ = NON_LATIN Then
     Exit Sub
 End If
 [245a]         = "245"
-TagString$     = "245,"
+TagString$     = [245a] & ","
 FieldData$     = Mid$( FieldData$, 6 )
 StringPointer% = 1
 SubfieldCode$  = " "
@@ -236,8 +238,8 @@ Do
               TempString$ = TempString$ & ". " & SubfieldData$
           End If
         Case "c"
-          [245c]     = "245 $c"
-          TagString$ = TagString$ & "245 $c,"
+          [245c]     = "245 $&c"
+          TagString$ = TagString$ & [245c] & ","
           StatementOfResponsibility$ = ConvertToISO88591( SubfieldData$ )
           SOR$ = StatementOfResponsibility$
           StatementOfResponsibility$ = FixTerminalPunctuation( ADD, StatementOfResponsibility$ )
@@ -257,7 +259,7 @@ If FieldData$ = "" Or FieldData$ = NON_LATIN Then
     GoTo GetEdition:
   Else
     Tag$           = Left$( FieldData$, 3 )
-    [1XX]          = Tag$
+    [1XX]          = "&" & Tag$
     TagString$     = [1XX] & "," & TagString$
     FieldData$     = Mid$( FieldData$, 6 )
     StringPointer% = 1
@@ -396,8 +398,8 @@ FieldData$  = GetFieldData( "250" )
 If FieldData$ = "" Or FieldData$ = NON_LATIN Then
     GoTo PubState:
   Else
-    [250]          = "250"
-    TagString$     = TagString$ & "250,"
+    [250]          = "2&50"
+    TagString$     = TagString$ & [250] & ","
     FieldData$     = Mid$( FieldData$, 6 )
     StringPointer% = 1
     SubfieldCode$  = " "
@@ -517,7 +519,7 @@ If FieldData$ = "" Or FieldData$ = NON_LATIN Then
     If SubfieldAPresent = FALSE Or SubfieldBPresent = FALSE Or SubfieldCPresent = FALSE Then
         Tag$ = Tag$ & "*"
     End If
-    [26X]          = Tag$
+    [26X]          = "2&6" & Mid$( Tag$, 3 )
     TagString$     = TagString$ & [26X] & ","
 
 End If
@@ -536,7 +538,7 @@ If FieldData$ = "" Or FieldData$ = NON_LATIN Then
     End If
 End If
 Tag$ = Left$( FieldData$, 3 )
-[8XX/490]      = Tag$
+[8XX/490]      = "&" & Tag$
 TagString$     = TagString$ & [8XX/490]
 FieldData$     = Mid$( FieldData$, 6 )
 StringPointer% = 1
@@ -641,8 +643,8 @@ Begin Dialog Dialog1Definition  288, 108, WaltsMacros$, .Dialog1ControlFunction
   CheckBox       10,  52,  40,  12, "",                   .CheckBox4 '5
   CheckBox       10,  64,  40,  12, "",                   .CheckBox5 '6
   CheckBox       10,  76,  40,  12, "",                   .CheckBox6 '7
-  CheckBox       10,  88,  80,  12, OCLCCN$,              .CheckBox7 '8
-  CheckBox       96,  88,  64,  12, SaveNumber$,          .CheckBox8 '9
+  CheckBox       10,  88,  80,  12, "&" & OCLCCN$,        .CheckBox7 '8
+  CheckBox       96,  88,  64,  12, "&" & SaveNumber$,    .CheckBox8 '9
   Text            8,   6,  40,   8, "Include:"                       '10
   Text           62,  16, 210,  56, "",                   .Preview   '11
   Text           10,  90,  80,   8, "[Workform]",         .Workform  '12
@@ -1220,8 +1222,4 @@ Select Case Action%
 End Select
 
 End Function
-'122442981
-'
-'Macro name: CreateBibCitation
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:03:02 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'122643172

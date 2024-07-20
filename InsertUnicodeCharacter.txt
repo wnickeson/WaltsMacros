@@ -1,12 +1,13 @@
-'MacroName:InsertUnicodeCharacter.2023.46
+'MacroName:InsertUnicodeCharacter.2024.01
 'MacroDescription:Inserts the Unicode character at a given code point into a record at
 ' the cursor position.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 17 August 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -595,8 +596,4 @@ Select Case Action
 End Select
 
 End Function
-'59923643
-'
-'Macro name: InsertUnicodeCharacter
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:06:10 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'60023686

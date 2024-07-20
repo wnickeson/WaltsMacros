@@ -1,17 +1,18 @@
-'MacroName:LinkAndSequenceFields.2023.02
+'MacroName:LinkAndSequenceFields.2024.01
 'MacroDescription:Helps with working with links in subfield $8 in bibliographic records.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 26 May 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: This macro helps create and manage links between fields in a
@@ -1346,8 +1347,4 @@ Select Case Action%
 End Select
 
 End Function
-'135054737
-'
-'Macro name: LinkAndSequenceFields
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:44 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'135154776

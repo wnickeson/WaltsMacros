@@ -1,11 +1,12 @@
-'MacroName:Check33X.2023.04
+'MacroName:Check33X.2024.01
 'MacroDescription:Adds/changes RDA 336-338 fields in a bibliographic record.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 27 July 2023.
+' Last updated: 6 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -300,7 +301,7 @@ End If
 
 LineCount% = 1
 Do
-  FoundField = CS.GetFieldLine( LineCount%, FieldData$ )
+  FoundField = CS.GetField( "...", LineCount%, FieldData$ )
   If FoundField Then
       Tag$ = Left$( FieldData$, 3 )
       If Tag$ Like "33[678]" Then
@@ -2466,8 +2467,4 @@ Select Case Action%
 End Select
 
 End Function
-'2470108595
-'
-'Macro name: Check33X
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:55:20 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2471108642

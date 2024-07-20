@@ -1,0 +1,540 @@
+'MacroName:CopyLastSubfieldDown.2024.25
+'MacroDescription:Copies the last subdivision(s) of an LC subject heading, or the relator
+' codes or terms from a 700 name heading, to the immediately following heading in a
+' bibliographic record.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
+'
+' Last updated: 1 July 2024.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: In a bibliographic record, run this macro to quickly copy the last
+' subdivision in a subject heading field, or the relator terms or codes in a personal
+' name added entry, to the immediately following field. Or, if a subject heading field
+' lacks subdivisions, or a personal name added entry lacks relationship information, run
+' the macro to copy these subfields from the immediately preceding field. This macro can
+' be quite useful, for example, when adding the same geographic information to several
+' topical subject headings, or when adding many names to a record for a movie, and they
+' must all be labeled "actor."
+'
+' Begin by placing the cursor in either of two adjacent 6XX or 700 fields. If the cursor
+' is in the first of the fields, the macro copies subfields to the next field; otherwise,
+' the macro copies the subfields from the preceding field. For example, in this pair of
+' headings:
+'
+'   650  0  Excavations (Archaeology) $z Syria.
+'   650  0  Iron age.
+'
+' the macro copies "$z Syria" to "Iron age" no matter which field the cursor is
+' positioned in. The same principle applies to relator terms:
+'
+'   700 1   Benaissa, Brahim, $e editor.
+'   700 1   Capozucca, Roberto.
+'
+' The macro immediately adds "$e editor" to the heading "Capozucca, Roberto."
+'
+' After copying information to the next field, the macro moves the cursor to the end of
+' that field.
+'
+' For subject fields, the headings in both rows must be valid LC headings (fields 600 to
+' 651, with second indicator zero). The macro normally copies only the last subject
+' subdivision--one of subfields $v, $x, $y, and $z; but if the last two subdivisions are
+' geographic, consisting of a larger entity subdivided by a smaller, as in "$z Utah $z
+' Tooele", the two subdivisions will be copied together. (But if the recipient field
+' already has "$z Utah" the macro copies only "$z Tooele"). The copied information is
+' added at the end of the next field, except if the next field ends with a form
+' subdivision--in which case it gets pasted in before that last subfield. The macro
+' won't paste a geographic subdivision (or subdivision pair) into a geographic heading
+' (651).
+'
+' The macro can't determine if, after pasting, the resulting subdivision string is
+' actually correct, or appropriate for that heading.
+'
+' For name fields, the headings in both rows must be personal names (field 700). The
+' macro copies a relator term or code, or both, in subfields $e or $4, respectively. The
+' rules for copying this information are quite similar to those for copying subject
+' subdivisions: the macro will add the copied term or code to the next field only if that
+' field is also a personal name heading and it doesn't already contain the copied
+' information. If other subfields follow the relator term or code, such as control
+' subfields, the macro pastes the copied subfields before them.
+'
+' This macro is somewhat similar in function to my macros "SubjectSubfieldTool" and
+' "RelatorHelper," but is less sophisticated. "SubjectSubfieldTool" can add or delete
+' subject subdivision strings (not just the last subfield in a field) in bulk, and
+' "RelatorHelper" can add terms and codes to multiple fields at once, as well as convert
+' between codes and terms. This macro simply copies one type of subfield to the next
+' following field.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function GetLastSubfields( RowNum% ) As String
+
+Global CS As Object
+
+Global INVALID_FIELD As String*1
+Global NAME_         As String*1
+Global NO_SUBFIELDS  As String*1
+Global NON_LATIN     As String*1
+Global NOT_LCSH      As String*1
+Global SUBJ_         As String*1
+
+Global DELIMITER As String*1
+
+Global OriginalTag$
+Global TypeOfField$
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
+Dim GENRE        As String*1 : GENRE        = "v"
+Dim GEOGR        As String*1 : GEOGR        = "z"
+
+Dim CopiedSubfield1$
+Dim CopiedSubfield2$
+Dim CurrentRow%
+Dim ErrorMessage$
+Dim FieldData$
+Dim GeoCount%
+Dim LastDelimiterPos%
+Dim NewField$
+Dim OtherSubfields$
+Dim PastePos%
+Dim PlaceTest$
+Dim RecipientField%
+Dim Start%
+Dim SubfieldCode$
+Dim TagVal%
+Dim TypeOfSubject$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:CopyLastSubfieldDown"
+
+Dim p As Integer
+
+DELIMITER     = Chr$( 223 )
+INVALID_FIELD = "X"
+NAME_         = "7"
+NO_SUBFIELDS  = "0"
+NON_LATIN     = "#"
+NOT_LCSH      = "2"
+SUBJ_         = "6" 'Includes all 6XX fields, even names
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    ErrorMessage$ = "Sorry, this macro works only in a bibliographic record!"
+    GoTo ShowError:
+End Select
+
+' Then get field information from the row the cursor is in. If the field contains the
+' relevant subfields, check for their presence in the following field. Quit the macro if
+' they are there. But if the field in which the cursor is placed has none of the relevant
+' subfields, check if the preceding field has some to offer.
+
+CurrentRow%      = CS.CursorRow
+CopiedSubfield1$ = GetLastSubfields( CurrentRow% )
+
+Select Case CopiedSubfield1$
+
+  Case INVALID_FIELD
+
+    ErrorMessage$ = "Please place the cursor in a 6XX or 700 field to run this macro!"
+    GoTo ShowError:
+
+  Case NON_LATIN
+
+    ErrorMessage$ = "This macro works only in fields in Latin script!"
+    GoTo ShowError:
+
+  Case NO_SUBFIELDS
+
+    CopiedSubfield2$ = GetLastSubfields( CurrentRow% - 1 )
+
+    Select Case CopiedSubfield2$
+
+      Case INVALID_FIELD, NO_SUBFIELDS
+
+        If TypeOfField$ = SUBJ_ Then
+            ErrorMessage$ = "This field has no subdivisions to copy to the next field, and the preceding field has no subfields to copy from."
+          Else
+            ErrorMessage$ = "This field has no relator information to copy to the next field, and the preceding field has no subfields to copy from."
+        End If
+        GoTo ShowError:
+
+      Case Else
+
+        RecipientField% = CurrentRow%
+
+    End Select
+
+      Case NOT_LCSH
+
+        ErrorMessage$ = "This macro works only with LC subject headings!"
+        GoTo ShowError:
+
+  Case Else
+
+    CopiedSubfield2$ = GetLastSubfields( CurrentRow% + 1 )
+
+    Select Case CopiedSubfield2$
+
+      Case INVALID_FIELD
+
+        If TypeOfField$ = SUBJ_ Then
+            ErrorMessage$ = "The following field is not a subject field!"
+          Else
+            ErrorMessage$ = "The following field is not a name field!"
+        End If
+        GoTo ShowError:
+
+      Case NON_LATIN
+
+        ErrorMessage$ = "The following field is not in Latin script!"
+        GoTo ShowError:
+
+      Case NOT_LCSH
+
+        ErrorMessage$ = "The following field is not an LC subject heading!"
+        GoTo ShowError:
+
+      Case Else
+
+        If CopiedSubfield1$ <> CopiedSubfield2$ Then
+            RecipientField% = CurrentRow% + 1
+          Else
+            ErrorMessage$ = "The following field already contains " & DOUBLE_QUOTE & "$" & CopiedSubfield1$ & DOUBLE_QUOTE & "."
+            GoTo ShowError:
+        End If
+
+    End Select
+
+End Select
+
+If Len( CopiedSubfield1$ ) = 1 Then
+    CopiedSubfield1$ = CopiedSubfield2$
+End If
+
+TypeOfSubject$ = Left$( CopiedSubfield1$, 1 )
+
+' Now paste the copied information into the recipient field.
+
+If CS.GetField( "...", RecipientField%, FieldData$ ) Then
+
+    If TypeOfField$ = SUBJ_ Then
+        TagVal% = Val( Left$( FieldData$, 3 ) )
+        If ( TagVal% > 599 And TagVal% < 652 ) And Mid$( FieldData$, 5, 1 ) = "0" Then
+            If Right$( FieldData$, 1 ) = "." Then
+                If Mid$( FieldData$, Len( FieldData$ ) - 1, 1 ) Like "[!A-Z]" Then
+                    FieldData$ = Left$( FieldData$, Len( FieldData$ ) - 1 )
+                End If
+            End If
+
+            If TypeOfSubject$ = GEOGR Then
+
+' Don't add geographic subdivisions to a geographic heading.
+
+                If Left$( FieldData$, 3 ) = "651" Then
+                    If OriginalTag$ <> "651" Then
+                        ErrorMessage$ = "Geographic subdivisions can't be copied to a geographic heading."
+                      Else
+                        ErrorMessage$ = "A geographic heading can't have geographic subdivisions copied to it."
+                    End If
+                    GoTo ShowError:
+                  Else
+
+' Don't add a pair of geographic subdivisions to a field that also has a pair, but if the
+' recipient field has only one such subdivision, and it matches the first subdivision in
+' the donor field, go ahead and add the second subdivision from the donor field.
+
+                    Start% = 1
+                    Do
+                      p = InStr( Start%, FieldData$, DELIMITER )
+                      If p > 0 Then
+                          SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+                          If SubfieldCode$ = GEOGR Then
+                              LastDelimiterPos% = p
+                              GeoCount%         = GeoCount% + 1
+                              If GeoCount% = 2 Then
+                                  ErrorMessage$ = "The macro can't add more geographic subdivisions to this field."
+                                  GoTo ShowError:
+                              End If
+                            Else
+                              If GeoCount% = 1 Then
+                                  PlaceTest$ = Trim$( Mid$( FieldData$, Start%, p - Start% ) )
+                              End If
+                          End If
+                      End If
+                      Start% = p + 1
+                    Loop Until p = 0
+                    If PlaceTest$ = "" Then
+                        PlaceTest$ = Trim$( Mid$( FieldData$, LastDelimiterPos% + 1 ) )
+                    End If
+                    If Left$( CopiedSubfield1$, Len( PlaceTest$ ) ) = PlaceTest$ Then
+                        CopiedSubfield1$ = Mid$( CopiedSubfield1$, Len( PlaceTest$ ) + 3 )
+                    End If
+                End If
+            End If
+
+' Genre and form subdivisions get added to the end of the field, no matter what. Other
+' subdivisions get added before any form subdivisions, so the recipient field must be
+' tested for their presence.
+
+            If TypeOfSubject$ = GENRE Then
+                NewField$ = FieldData$ & " " & DELIMITER & CopiedSubfield1$ & "."
+              Else
+                Start% = 1
+                Do
+                  p = InStr( Start%, FieldData$, DELIMITER )
+                  If p > 0 Then
+                      SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+                      If SubfieldCode$ = GENRE Then
+                          PastePos% = p
+                          Exit Do
+                        Else
+                          Start%    = p + 1
+                      End If
+                  End If
+                Loop Until p = 0
+                If PastePos% = 0 Then
+                    NewField$ = FieldData$ & " " & DELIMITER & CopiedSubfield1$ & "."
+                  Else
+                    NewField$ = Left$( FieldData$, PastePos% - 1 ) & DELIMITER & CopiedSubfield1$ & Mid$( FieldData$, PastePos% - 1 )
+                End If
+            End If
+        End If
+      Else
+
+' Relator information can't be added to name/title fields, so such a field can't have
+' anything copied to it. But if a name field is eligible, determine the presence of
+' control fields; relator terms and codes must precede subfields $0-$3 and $5.
+
+        If Left$( FieldData$, 3 ) = "700" Then
+            If InStr( FieldData$, DELIMITER & "t" ) = 0 Then
+                Start%            = 1
+                LastDelimiterPos% = 0
+                Do
+                  p = InStr( Start%, FieldData$, DELIMITER )
+                  If p > 0 Then
+                      SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+                      If SubfieldCode$ Like "[01235]" Then
+                           LastDelimiterPos% = p
+                           Exit Do
+                         Else
+                           Start%            = p + 1
+                      End If
+                  End If
+                Loop Until p = 0
+                If LastDelimiterPos% = 0 Then
+                    NewField$       = FieldData$
+                  Else
+                    NewField$       = Trim$( Left$( FieldData$, LastDelimiterPos% - 1 ) )
+                    OtherSubfields$ = Trim$( Mid$( FieldData$, LastDelimiterPos% ) )
+                End If
+                If Left$( CopiedSubfield1$, 1 ) = "e" Then
+                    If Right$( NewField$, 1 ) = "." Then
+                        If Mid$( NewField$, Len( NewField$ ) - 1, 1 ) Like "[!A-Z]" Then
+                            NewField$ = Left$( NewField$, Len( NewField$ ) - 1 )
+                        End If
+                    End If
+                    NewField$ = NewField$ & ","
+                End If
+                NewField$ = NewField$ & " " & DELIMITER & CopiedSubfield1$ & " " & OtherSubfields$
+              Else
+                ErrorMessage$ = "Sorry, the copied information can't be added to a name/title heading."
+                GoTo ShowError:
+            End If
+        End If
+    End If
+End If
+
+If CS.SetFieldLine( RecipientField%, NewField$ ) Then
+    If CS.CursorColumn > 0 Then
+        If CS.CursorColumn < 6 Then
+            CS.CursorColumn = 6
+        End If
+        CS.EndCell
+    End If
+    Exit Sub
+  Else
+    ErrorMessage$ = "Sorry, this macro failed to add the copied heading to the next field."
+End If
+
+ShowError:
+
+MsgBox ErrorMessage$, CRITICAL_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Function GetLastSubfields( RowNum% ) As String
+
+' This function works in the row passed as a parameter. It get the last subdivisions in a
+' subject heading field, or the relator terms and codes in a name added entry field.
+
+Dim FieldData$
+Dim FieldType$
+Dim Geog1$
+Dim Geog2$
+Dim LastDelimiterPos%
+Dim Start%
+Dim SubfieldCode$
+Dim Tag$
+Dim TagVal%
+Dim TempString$
+
+Dim p As Integer, q As Integer
+
+If CS.GetField( "...", RowNum%, FieldData$ ) Then
+    If FieldData$ = "Data contains non-latin script" Then
+        GetLastSubfields = NON_LATIN
+        Exit Function
+    End If
+End If
+
+Tag$ = Left$( FieldData$, 5 )
+FieldType$ = Left$( Tag$, 1 )
+If FieldType$ Like "[!67]" Then
+    GetLastSubfields = INVALID_FIELD
+    Exit Function
+  Else
+    Select Case TypeOfField$
+      Case ""
+        TypeOfField$ = FieldType$
+        OriginalTag$ = Left$( FieldData$, 3 )
+      Case "6"
+        If FieldType$ <> SUBJ_ Then
+            GetLastSubfields = INVALID_FIELD
+            Exit Function
+        End If
+      Case "7"
+        If FieldType$ <> NAME_ Then
+            GetLastSubfields = INVALID_FIELD
+            Exit Function
+        End If
+    End Select
+End If
+
+If TypeOfField$ = SUBJ_ Then
+    TagVal% = Val( Left$( Tag$, 3 ) )
+    If TagVal% > 599 and TagVal% < 652 Then
+        If Right$( Tag$, 1 ) <> "0" Then
+            GetLastSubfields = NOT_LCSH
+            Exit Function
+          Else
+            Start% = 1
+            Do
+              p = InStr( Start%, FieldData$, DELIMITER )
+              If p > 0 Then
+                  SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+                  If SubfieldCode$ = "z" Then
+                      If Geog1$ = "" Then
+                          Geog1$ = Trim$( Mid$( FieldData$, p + 1 ) )
+                        Else
+                          Geog1$ = Trim$( Left$( Geog1$, ( p - LastDelimiterPos% ) - 1 ) )
+                          Geog2$ = Trim$( Mid$( FieldData$, p + 1 ) )
+                      End If
+                    Else
+                      If Geog1$ <> "" Then
+                          Geog1$ = ""
+                      End If
+                      If Geog2$ <> "" Then
+                          Geog2$ = ""
+                      End If
+                  End If
+                  LastDelimiterPos% = p
+                  Start%            = p + 1
+                Else
+                  If Start% = 1 Then
+                      GetLastSubfields = NO_SUBFIELDS
+                      Exit Function
+                    Else
+                      If SubfieldCode$ Like "[vxyz]" Then
+                          TempString$       = Trim$( Mid$( FieldData$, LastDelimiterPos% + 1 ) )
+                        Else
+                          LastDelimiterPos% = 0
+                      End If
+                  End If
+              End If
+            Loop Until p = 0
+
+            If LastDelimiterPos% = 0 Then
+                GetLastSubfields = NO_SUBFIELDS
+                Exit Function
+              Else
+
+' Trim the second part of the geographic subdivision.
+
+                If Geog2$ <> "" And SubfieldCode$ <> "z" Then
+                    p = InStr( Geog2$, DELIMITER )
+                    If p > 0 Then
+                        Geog2$ = Trim$( Left$( Geog2$, p - 1 ) )
+                    End If
+                End If
+                If Geog1$ <> "" Then
+                    If Geog2$ = "" Then
+                        TempString$ = Geog1$
+                      Else
+                        TempString$ = Geog1$ & " " & DELIMITER & Geog2$
+                    End If
+                  Else
+                    TempString$ = Trim$( Mid$( FieldData$, LastDelimiterPos% + 1 ) )
+                End If
+                If Right$( TempString$, 1 ) = "." Then
+                    TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+                End If
+            End If
+        End If
+      Else
+        GetLastSubfields = NOT_LCSH
+        Exit Function
+    End If
+
+' For a name field, it is possible that two subfields need to be copied, if both a code
+' and a term are present. It is also possible that relationship information is not in the
+' final subfield, as some control codes may follow the relationship designation.
+
+  ElseIf Left$( Tag$, 3 ) = "700" Then
+    TypeOfField$ = NAME_
+    p = InStr( FieldData$, DELIMITER & "e" )
+    q = InStr( FieldData$, DELIMITER & "4" )
+    If p = 0 And q = 0 Then
+        GetLastSubfields = NO_SUBFIELDS
+        Exit Function
+      ElseIf p = 0 Or ( q > 0 And q < p ) Then
+        p = q
+    End If
+    TempString$ = Mid$( FieldData$, p + 1 )
+    p           = InStr( TempString$, DELIMITER )
+    If p > 0 Then
+        TempString$ = Trim$( Left$( TempString$, p - 1 ) )
+    End If
+  Else
+    GetLastSubfields = INVALID_FIELD
+    Exit Function
+End If
+
+GetLastSubfields = TempString$
+
+End Function
+'54120154

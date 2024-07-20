@@ -1,18 +1,19 @@
-'MacroName:ShowDisplayConstants.2022.04
+'MacroName:ShowDisplayConstants.2024.01
 'MacroDescription:Shows the display constants of the fields in a bibliographic record
 ' that have those options, and helps make changes to those fields.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 4 November 2022.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record (cursor position is irrelevant)
@@ -108,7 +109,7 @@ RecordRow%     = 1
 ' ambiguity.
 
 Do
-  FoundField = CS.GetFieldLine( RecordRow%, FieldData$ )
+  FoundField = CS.GetField( "...", RecordRow%, FieldData$ )
   If FoundField Then
       Tag$ = Left$( FieldData$, 3 )
       If InStr( Fields$, Tag$ ) Then
@@ -654,8 +655,4 @@ GoAgain:
 End Select
 
 End Function
-'65829490
-'
-'Macro name: ShowDisplayConstants
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:02:11 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'65929528

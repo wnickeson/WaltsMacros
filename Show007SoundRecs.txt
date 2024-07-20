@@ -1,15 +1,16 @@
-'MacroName:Show007SoundRecs.2023.01
+'MacroName:Show007SoundRecs.2024.01
 'MacroDescription:Displays the codes in 007 fields in a bibliographic record for sound
 ' recordings in a friendly way for verification and/or correction.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' Thank to Joel Hahn for some good ideas for an earlier draft of this macro. However, all
 ' responsibility for this macro's appearance and functionality are mine alone.
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -1037,8 +1038,4 @@ AddNew:
 End Select
 
 End Function
-'104142982
-'
-'Macro name: Show007SoundRecs
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 10:00:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'104243026

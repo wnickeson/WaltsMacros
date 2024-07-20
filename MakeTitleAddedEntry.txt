@@ -1,4 +1,4 @@
-'MacroName:MakeTitleAddedEntry.2023.62
+'MacroName:MakeTitleAddedEntry.2024.04
 'MacroDescription:Helps to quickly add selected text in a bibliographic record as a title
 ' added entry or uniform title heading, as well as adding a subtitle or part title as a
 ' 246 field. Also checks indicators in those title fields.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 2 August 2023.
+' Last updated: 5 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -71,7 +72,7 @@ Declare Function MakeInitialCapital  ( SelectedText$ )     As String
 Declare Function RemoveInitialArticle( SelectedText$ )     As String
 Declare Function SetDisplayArrays    ( TitleFieldsIndex% ) As String
 
-Declare Function Dialog1ControlFunction( Id$, Action%, SVAl& )
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
 Global Const ABSENT        As Integer = 0  'Subfield $i in 246 is not present.
 Global Const IND_2_INVALID As Integer = 2  'Subfield $i in 246 is present but 2nd indicator value is not blank, as it should be.
@@ -220,13 +221,13 @@ If Col% = FIXED_FIELD Then
     Exit Sub
   Else
     CurrentRow% = CS.CursorRow
-    If CS.GetFieldLineUnicode( CurrentRow%, FieldData$ ) Then
+    If CS.GetFieldUnicode( "...", CurrentRow%, FieldData$ ) Then
         CursorFieldTag$ = Left$( FieldData$, 3 )
     End If
 End If
 
-' Check for the presence of a 1XX field and a 240 field. These are the nonrepeatable
-' title fields, and their addition depends upon the presence or absence of other fields.
+' Check for the presence of 1XX and 240 fields, as that affects the names of controls in
+' the dialog box.
 
 If CS.GetFieldUnicode( "1..", 1, FieldData$ ) Then
     If Left$( FieldData$, 3 ) = "130" Then
@@ -345,15 +346,16 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
                   Else
 
 ' If there is no alternative title, convert the first ampersand found in the selection to
-' the word "and".
+' the word "and", and make the second indicator value blank.
 
                     Title1$ = MakeInitialCapital( RemoveInitialArticle( SelectedText$ ) )
                     p       = InStr( Title1$, " & " )
                     If p <> 0 Then
                         Title1$ = Left$( Title1$, p ) & "and" & Mid$( Title1$, p + 2 )
                         Title1$ = "2463 " & Title1$
+                      Else
+                        Title1$ = "246" & Indicator1$ & Indicator2$ & Title1$
                     End If
-                    Title1$ = "246" & Indicator1$ & Indicator2$ & Title1$
                     If CS.AddField (1, Title1$) = FALSE Then
                         MsgBox "Sorry, cannot create 246.", CRITICAL_MESSAGE, WaltsMacros$
                         Exit Sub
@@ -361,6 +363,8 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
                 End If
 
               Else
+
+' A title in a language other than English doesn't get an expanded ampersand.
 
                 Title1$ = MakeInitialCapital( SelectedText$ )
                 Title1$ = "246" & Indicator1$ & Indicator2$ & Title1$
@@ -532,7 +536,7 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
               End If
               TitleFieldCount% = TitleFieldCount% + 1
               If LineNumber% = CurrentRow% Then
-                  TitleArraySelection% = TitleFieldCount%
+                  TitleArraySelection% = TitleFieldCount% - 1
               End If
           End If
       End If
@@ -1210,12 +1214,13 @@ Select Case Action%
 
       Else
 
-        Tag$ = SetDisplayArrays( 0 )
+        Tag$ = SetDisplayArrays( TitleArraySelection% )
         ReDim TitleArray( UBound( TitleFields ) )
         For i = 0 To UBound( TitleFields )
           TitleArray( i ) = Left$( TitleFields( i ).tDisplayData, 3 ) & " " & Mid$( TitleFields( i ).tDisplayData, 4, 2 ) & "  " & Mid$( TitleFields( i ).tDisplayData, 6 )
         Next i
         DlgListBoxArray "FieldList",         TitleArray()
+        DlgValue        "FieldList",         TitleArraySelection%
         DlgListBoxArray "ListBoxInd1",       Indicator1Array()
         DlgListBoxArray "ListBoxInd2",       Indicator2Array()
         Select Case Tag$
@@ -1236,11 +1241,6 @@ Select Case Action%
         DlgValue        "ListBoxInd1",       ListBox1Selection%
         If Tag$ <> "130" Then
             DlgValue        "ListBoxInd2",       ListBox2Selection%
-        End If
-        If TitleArraySelection% = 0 Then
-            DlgValue        "FieldList",         TitleArraySelection%
-          Else
-            DlgValue        "FieldList",         TitleArraySelection% - 1
         End If
         If UnicodeFound Then
             DlgVisible      "Unicode",           VISIBLE
@@ -1416,8 +1416,4 @@ Select Case Action%
 End Select
 
 End Function
-'142053214
-'
-'Macro name: MakeTitleAddedEntry
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:33 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'142053215

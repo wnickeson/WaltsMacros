@@ -1,4 +1,4 @@
-'MacroName:MacroIndex.2023.03
+'MacroName:MacroIndex.2024.01
 'MacroDescription:Lists all the macros and their descriptions in all the macro books in
 ' the default folder "Macros". Also lists the macros in individual macro books. Offers
 ' searching for text in macro names and descriptions, and saving of all lists as text
@@ -7,6 +7,7 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' Thanks to Joel Hahn for pointing out that macro books are instances of Microsoft's
 ' Compound File Binary File Format, the specification for which was last retrieved from
@@ -18,7 +19,7 @@
 ' appears to be almost identical to OCLC's Macro Language. That documentation is
 ' apparently no longer available online.
 '
-' Last updated: 2 August 2023.
+' Last updated: 12 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -65,7 +66,6 @@ End Type
 
 Declare Sub CopyList           ( State% )
 Declare Sub FillMacroBookMacros( BookIndex% )
-Declare Sub GetEnviroVars
 Declare Sub GetMacroBookFiles
 Declare Sub GetMacroInformation( BookIndex% )
 Declare Sub MakeMainList       ( MacroInfo As Container )
@@ -136,6 +136,8 @@ Global SearchMatches()      As Container  'All the macros found by a search.
 
 Sub Main
 
+Const CRITICAL_MESSAGE As Integer = 16
+
 Dim Instructions$
 Dim MacroBookCount$
 Dim SelectedMacroBook$
@@ -152,6 +154,10 @@ ReDim PrevSearchPaths( 0 )
 ' the list of macros.
 
 Call GetMacroBookFiles
+If AppDataPath$ = "" Then
+    MsgBox "Sorry, the macros folder couldn't be found.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
 
 For i = 0 To UBound( MacroBooksList )
   SelectedMacroBook$ = MacroBooksList( i )
@@ -287,31 +293,6 @@ End Sub
 
 '****************************************************************************************
 
-Sub GetEnviroVars
-
-' This subprogram finds the path of the user's AppData directory, as found in the
-' environment table, in order to get to the macro book and options files.
-
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128
-
-Dim EnvironmentString$
-
-Dim i As Integer
-
-For i = 0 To MAX_ATTEMPTS_ENVIRON
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppDataPath$ = Mid$( EnvironmentString$, 9 )
-      Exit Sub
-  End If
-Next i
-
-AppDataPath$ = ""
-
-End Sub
-
-'****************************************************************************************
-
 Sub GetMacroBookFiles
 
 ' This macro makes the list of macro book files in the "Macros" folder. The only
@@ -338,10 +319,13 @@ HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 017 ) & Chr$( 224 ) & Chr$(
 
 ReDim MacroBooksList( FileCounter% )
 
-Call GetEnviroVars
-
 MacroDirectoryPath$  = "\OCLC\Connex\Macros\"
-MacroDirectoryPath$  = AppDataPath$ & MacroDirectoryPath$
+AppDataPath$ = Environ( "APPDATA" )
+If AppDataPath$ = "" Then
+    Exit Sub
+  Else
+    MacroDirectoryPath$  = AppDataPath$ & MacroDirectoryPath$
+End If
 MacroDirectoryFiles$ = MacroDirectoryPath$ & "*.mbk"
 MacroBookFile$       = Dir( MacroDirectoryFiles$ )
 
@@ -1264,8 +1248,4 @@ Select Case Action%
 End Select
 
 End Function
-'126850730
-'
-'Macro name: MacroIndex
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:05:02 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'125250390

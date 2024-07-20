@@ -1,4 +1,4 @@
-'MacroName:TitleFrom588.2023.01
+'MacroName:TitleFrom588.2024.01
 'MacroDescription:Changes source of title note tag in a bibliographic record to 588, or
 ' quickly adds selected source of title notes to certain formats: "cover" for volumes,
 ' "label" for discs, "container" for AV.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -146,7 +147,7 @@ End If
 
 i = 1
 Do
-  FoundField = CS.GetFieldLine( i, FieldData$ )
+  FoundField = CS.GetField( "...", i, FieldData$ )
   If FoundField Then
       If Left$( FieldData$, 1 ) = "5" Then
           If First5XX% = 0 Then
@@ -388,8 +389,4 @@ If Success = FALSE Then
 End If
 
 End Sub
-'39214481
-'
-'Macro name: TitleFrom588
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 10:00:16 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'39314528

@@ -1,4 +1,4 @@
-'MacroName:GetAuthority.2023.06
+'MacroName:GetAuthority.2024.04
 'MacroDescription:Gets the authorized heading (the 1XX field) from an authority record,
 ' returns to the bibliographic record, and pastes in the heading at the user's choice of
 ' tag, or a subdivision at an appropriate place in a subject heading. Also copies other
@@ -8,13 +8,14 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' The code for "Get back to the bibliographic record" portion of this macro was developed
 ' from a contribution by Harvey Hahn on the OCLC-CAT e-mail List in a posting of 1 Oct
 ' 2004. My development of his code and the resulting performance of this macro are my
 ' responsibility alone.
 '
-' Last updated: 5 September 2023.
+' Last updated: 23 May 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -337,11 +338,11 @@ Select Case TypeOfWindow%
 End Select
 
 ' Then, check that the heading is actually established, that is, it does not contain an
-' explanatory 260 field (a "Complex See Reference"). If it does, there is no authorized
-' heading to copy, so the macro quits.
+' explanatory 260 field (a "Complex See Reference--Subject"). If it does, there is no
+' authorized heading to copy, so the macro quits.
 
 If CS.GetField( "260", 1, UnestablishedHeading$ ) Then
-    MsgBox "This is not a heading established for use!", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "This is not a subject heading established for use in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End If
 
@@ -536,8 +537,8 @@ If CS.GetFixedField( "Series", FFData$ ) Then
 End If
 
 ' The value in "Subject use" (008/15) determines whether a heading can be used as a
-' subject. Not all headings tagged 151 can be used as subjects, nor call such headings
-' be used as name headings, either.
+' subject. Not all headings tagged 151 can be used as subjects, and not all such headings
+' can be used as name headings, either.
 
 If CS.GetFixedField( "Subj use", FFData$ ) Then
     AuthorityData.tSubjectUse = FFData$
@@ -1503,7 +1504,12 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
                   Case "720"
                     HeadingToAdd$ = TAG_GROUP_ADDED_ENTRY & AuthorityData.tHeadingType & Left$( AuthorityData.tIndicators, 1 ) & UNDEFINED_INDICATOR & TempString$
                   Case "700", "710", "711"
-                    HeadingToAdd$ = BibTag & Left$( AuthorityData.tIndicators, 1 ) & FILLCHAR & TempString$
+                    HeadingToAdd$ = BibTag & Left$( AuthorityData.tIndicators, 1 )
+                    If AuthorTitle Then
+                        HeadingToAdd$ = HeadingToAdd$ & FILLCHAR & TempString$
+                      Else
+                        HeadingToAdd$ = HeadingToAdd$ & " " & TempString$
+                    End If
                   Case "730"
                     HeadingToAdd$ = BibTag & Right$( AuthorityData.tIndicators, 1 ) & FILLCHAR & TempString$
                   Case Else
@@ -1583,7 +1589,7 @@ If Dialog( Dialog4 ) = DIALOG_BUTTON_CANCEL Then
                     HeadingToAdd$ = FieldToAdd & Left$( AuthorityData.tIndicators, 1 ) & FILLCHAR & TempString$
                   Else
                     TempString$   = AddSubfields( AuthorityData.tCopiedHeading )
-                    HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & FILLCHAR & TempString$
+                    HeadingToAdd$ = FieldToAdd & JurisdictionIndicator$ & " " & TempString$
                 End If
             End If
 
@@ -3172,8 +3178,4 @@ Select Case Action%
 End Select
 
 End Function
-'3176131393
-'
-'Macro name: GetAuthority
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 9/6/2023 9:21:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'3182131701

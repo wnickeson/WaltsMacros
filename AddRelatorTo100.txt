@@ -1,12 +1,13 @@
-'MacroName:AddRelatorTo100.2023.01
+'MacroName:AddRelatorTo100.2024.18
 'MacroDescription:Automatically adds a relator term in subfield $e to the 100 field of a
 ' bibliographic record, according to the Type of record.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 21 July 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -16,18 +17,23 @@
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record (cursor position is irrelevant)
-' to instantly add a relator term to the 100 field. The term added is determined by the
-' type of record, as identified in the fixed field:
+' to instantly add an appropriate relator term to the 100 field. The term added is
+' determined by the type of record, as identified in the fixed field:
 '
 '  Language material (Type "a", "t", "i"): "author"
 '  Music (Type "j", "c", "d"): "composer"
 '  2D non-projected graphic (Type "k"): "artist"
 '  Cartographic material (Type "e", "f"): "cartographer"
 '
-' For any other type of material, or for any other heading field, the macro won't attempt
-' to add a relator term. The macro adds a term even when a different relator term is
-' already present in the 100 field. If the corresponding relator code in subfield $4 is
-' present, the macro asks if the code should be deleted when adding the term.
+' For any other type of material, the macro won't attempt to add a relator term to the
+' 100 field. If a different relator term is present, the macro asks whether to replace it
+' with the term is has determined is appropriate or to keep it, inserting its own term
+' before the existing term. Codes in subfield $4 that don't match the term the macro adds
+' are deleted.
+'
+' The macro adds a comma to the end of the name string, preceding the relator term,
+' unless that string ends with a hyphen (as for an open date). The macro adds a period,
+' or full stop, at the end of the relator term.
 '****************************************************************************************
 
 Option Explicit
@@ -43,28 +49,41 @@ On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
 Const CRITICAL_MESSAGE     As Integer = 16
-Const DIALOG_BUTTON_CANCEL As Integer = 0
+Const DELETE_OTHER_TERM    As Integer = 1  'DELETE can be replace if adding term or delete if term already present
 Const DISPLAY_FF_AT_TOP    As Integer = 1
-Const KEEP_CODE            As Integer = 1
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const KEEP_OTHER_TERM      As Integer = 1  'KEEP always means keeping original
+Const REPLACE_OTHER_TERM   As Integer = 0
 
 Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE  = Chr$( 034 )
 
-Dim EndOfData%
+Dim Button1Text$
+Dim Button2Text$
+Dim ControlSubfields$
+Dim CountOfOtherTerms%
+Dim DialogActionQuestion%
+Dim DialogBoxQuestion$
 Dim FieldData$
-Dim KeepOrDeleteCode%
+Dim OtherCode$
+Dim OtherTerm$
 Dim PosFF%
 Dim RecType$
 Dim RelatorCode$
+Dim RelatorCodeQ$
 Dim RelatorTerm$
-Dim Row%
-Dim TestChar$
+Dim SubfieldCode$
+Dim SubfieldContent$
+Dim TempString$
+Dim TermCount$
 Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras2:AddRelatorTo100"
 
-Dim i As Integer, p As Integer
+Dim i As Integer
 
 Dim ChangedFFView            : ChangedFFView = FALSE
 Dim CursorMove
+Dim RelatorTermPresent
 
 ' First, make sure a bibliographic record is open.
 
@@ -75,10 +94,18 @@ Select Case TypeOfWindow%
     Exit Sub
 End Select
 
-Row% = CS.CursorRow
+' Then, check that the record is English-language cataloging.
 
-' Then get the value of the fixed field element "Type" to determine the relator term and
-' code.
+If CS.GetField( "040", 1, FieldData$ ) Then
+    If InStr( FieldData$, DELIMITER & "b eng" ) = 0 Then
+        MsgBox "Sorry, this macro works only in English-language records.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' Get the value of the fixed field element "Type" to determine the relator term and code.
+' The macro can't figure out an appropriate relator term for records for computer files,
+' projected media, kits, mixed materials, and realia.
 
 PosFF% = CS.FixedFieldPosition
 If PosFF% <> DISPLAY_FF_AT_TOP Then
@@ -100,103 +127,167 @@ If PosFF% <> DISPLAY_FF_AT_TOP Then
             RelatorTerm$ = "artist"
             RelatorCode$ = "art"
           Case Else
-            MsgBox "Sorry, this macro can't automatically add a term to this heading.", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
+            RelatorTerm$ = "NONE"
         End Select
 End If
 
 If ChangedFFView Then CS.FixedFieldPosition = PosFF%
 
 ' Get the 100 field and check for the presence of relator terms and codes. If the
-' selected term is already in the field, the macro quits.
+' selected term is already in the field, the macro quits. But the macro will add what it
+' thinks the term ought to be before a different term in the field.
 
 If CS.GetField( "100", 1, FieldData$ ) Then
     If FieldData$ = "Data contains non-latin script" Then
         MsgBox "Sorry, this macro can't edit the 100 field.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
-    End If
-    p = InStr( FieldData$, DELIMITER & "e" )
-    If p > 0 Then
-        If InStr( p, FieldData$, RelatorTerm$, 1 ) Then
-            MsgBox "The relator term is already present in the field!", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
-        End If
+      ElseIf RelatorTerm$ = "NONE" Then
+        MsgBox "Sorry, this macro can't automatically add a term to this heading.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
     End If
 
 ' If the corresponding code is present in subfield $4, ask whether to keep it when adding
 ' the term. Its position determines where to cut the field or insert the term in subfield
-' $e.
+' $e. The macro assumes subfield $4 precedes control subfields $0-$3 and $5, which are
+' treated as a single string.
 
-    p = InStr( FieldData$, DELIMITER & "4" )
-    If p = 0 Then
-        EndOfData% = Len( FieldData$ )
-      Else
-        If InStr( p, FieldData$, RelatorCode$, 1 ) Then
-            For i = p - 1 To 1 Step -1
-              TestChar$ = Mid$( FieldData$, i, 1 )
-              If TestChar$ <> " " Then
-                  EndOfData% = i
-                  Exit For
-              End If
-            Next i
+    i = 1
+    Do
+      SubfieldContent$ = GetField$( FieldData$, i, DELIMITER )
+      If i = 1 Then
+          TempString$ = SubfieldContent$
+        Else
+          If SubfieldContent$ <> "" Then
+              SubfieldCode$ = Left$( SubfieldContent$, 1 )
+              Select Case SubfieldCode$
+                Case "a" To "d", "g", "j", "q", "u"
+                  TempString$ = TempString$ & DELIMITER & SubfieldContent$
+                Case Else
+                  Select Case SubfieldCode$
 
-            Begin Dialog Dialog1Definition  232, 56, WaltsMacros$
-              PushButton     10,  30,  72, 16, "&Keep the code"
-              PushButton     90,  30,  72, 16, "&Delete the code"
-              CancelButton  170,  30,  52, 16
-              Text           10,   6, 202, 16, "The relator code corresponding to the term is already present. Choose whether to:"
-            End Dialog
-            Dim Dialog1 As Dialog1Definition
-            On Error Resume Next
-            KeepOrDeleteCode% = Dialog( Dialog1 )
+                    Case "e"
+                      If InStr( SubfieldContent$, RelatorTerm$ ) = 0 Then
+                          If RelatorTermPresent = FALSE Then
+                          End If
+                          OtherTerm$         = OtherTerm$ & DELIMITER & SubfieldContent$
+                          If Right$( OtherTerm$, 1 ) Like "[.,]" Then
+                              OtherTerm$ = Left$( OtherTerm$, Len( OtherTerm$ ) - 1 )
+                          End If
+                          CountOfOtherTerms% = CountOfOtherTerms% + 1
+                        Else
+                          RelatorTermPresent = TRUE
+                      End If
 
-        End If
+                    Case "4"
+                      RelatorCodeQ$ = Trim$( Mid$( SubfieldContent$, 3 ) )
+                      If RelatorCodeQ$ = RelatorCode$ Then
+                          OtherCode$ = RelatorCode$
+                        Else
+                          OtherCode$ = ""
+                      End If
 
-        Select Case KeepOrDeleteCode%
+                    Case "0" To "5"
+                      ControlSubfields$ = ControlSubfields$ & DELIMITER & SubfieldContent$
 
-          Case DIALOG_BUTTON_CANCEL
+                  End Select
+              End Select
+          End If
+      End If
+      i = i + 1
+    Loop Until SubfieldContent$ = ""
+
+    If RelatorTermPresent Then
+        If CountOfOtherTerms% = 0 Then
+            MsgBox "The relator term " & DOUBLE_QUOTE & RelatorTerm$ & DOUBLE_QUOTE & " is already present in this 100 field.", CRITICAL_MESSAGE, WaltsMacros$
             Exit Sub
-
-' If the code is to be kept, find the previous non-space character.
-
-          Case KEEP_CODE
-            RelatorCode$ = Trim$( Mid$( FieldData$, p, p + 6 ) )
-            For i = p - 1 To 1 Step -1
-              If Mid$( FieldData$, i, 1 ) <> " " Then
-                  EndOfData% = i
-                  Exit For
-              End If
-            Next i
-
-        End Select
-
-    End If
-
-' Make a new field without a relator code and add a comma at the end if necessary.
-
-    If Mid$( FieldData$, EndOfData% - 1, 2 ) Like "[!A-Z]." Then
-        FieldData$ = Left$( FieldData$, EndOfData% - 1 ) & ","
+          Else
+            DialogActionQuestion% = DELETE_OTHER_TERM
+        End If
       Else
-        FieldData$ = FieldData$ & ","
+        If CountOfOtherTerms% = 0 Then
+            GoTo AddTerm:
+          Else
+            DialogActionQuestion% = REPLACE_OTHER_TERM
+        End If
+    End If
+    Select Case CountOfOtherTerms%
+      Case 1
+        TermCount$ = " term"
+      Case 2
+        TermCount$ = " terms"
+      Case Else
+        RelatorTerm$ = Trim$( Str$( CountOfOtherTerms% ) ) & " other relator terms."
+    End Select
+
+    If DialogActionQuestion% = REPLACE_OTHER_TERM Then
+        DialogBoxQuestion$ = "Replace the existing relator" & TermCount$ & " in the 100 field with " & DOUBLE_QUOTE & RelatorTerm$ & DOUBLE_QUOTE & "?"
+        Button1Text$       = "&Yes, replace the existing" & TermCount$
+        Button2Text$       = "&No, keep the existing" & TermCount$
+      Else
+        DialogBoxQuestion$ = "The relator term " & DOUBLE_QUOTE & RelatorTerm$ & DOUBLE_QUOTE & " is already in the 100 field. Delete the other relator" & TermCount$ & " present?"
+        Button1Text$       = "&Yes, delete the other" & TermCount$
+        Button2Text$       = "&No, keep the other" & TermCount$
     End If
 
-' Add the relator term. If the relator code is being retained, add it back at the end of
-' the new field.
+    Begin Dialog Dialog1Definition  192,  84, WaltsMacros$
+      OKButton        70,  60,  52,  14
+      CancelButton   130,  60,  52,  14
+      OptionGroup                                            .OptionGroup
+       OptionButton   16,  26, 112,  12, Button1Text$,       .OptionButton1
+       OptionButton   16,  40, 112,  12, Button2Text$,       .OptionButton2
+      Text            10,   6, 172,  16, DialogBoxQuestion$
+    End Dialog
+    Dim Dialog1 As Dialog1Definition
+    On Error Resume Next
+    Dialog Dialog1
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
 
-    FieldData$ = FieldData$ & " " & DELIMITER & "e " & RelatorTerm$ & "."
-    If KeepOrDeleteCode% = KEEP_CODE Then
-        FieldData$ = FieldData$ & " " & RelatorCode$
+    Select Case Dialog1.OptionGroup
+      Case REPLACE_OTHER_TERM
+        OtherTerm$ = ""
+      Case KEEP_OTHER_TERM
+        If DialogActionQuestion% <> REPLACE_OTHER_TERM Then
+            Exit Sub
+        End If
+    End Select
+
+AddTerm:
+
+    TempString$ = Trim$( TempString$ )
+    If Right$( TempString$, 2 ) Like "[!A-Z]." Then
+        TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
+      ElseIf Right$( TempString$, 1 ) <> "," Then
+        If Right$( TempString$, 1 ) <> "-" Then
+            TempString$ = TempString$ & ","
+        End If
     End If
 
-' Delete the existing field and add the new one (because if the field is controlled, the
-' "SetField" command can't change the field).
+    TempString$ = TempString$ & " " & DELIMITER & "e " & RelatorTerm$
+    If OtherTerm$ = "" Then
+        TempString$ = TempString$ & "."
+      Else
+        TempString$ = TempString$ & ", " & OtherTerm$ & "."
+    End If
+    If OtherCode$ <> "" Then
+        TempString$ = TempString$ & " " & DELIMITER & "4 " & OtherCode$
+    End If
+    TempString$ = TempString$ & " " & ControlSubfields$
 
-    If CS.DeleteField( "100", 1 ) = FALSE Then
+' Replace the field. If the heading is controlled, the "SetField" command only appears to
+' replace the field; the data cell remains blue. However, the hyperlink underline has
+' been removed. Oddly, the name is still linked to the authority record, so clicking on
+' the heading with the mouse displays its record. But a reformat of the bibliographic
+' record reverts the heading to its original state, restoring the hyperlink underline.
+' Adding the command to uncontrol the heading removes the blue shading in the cell as
+' well as the hyperlink. Uncontrolling the heading earlier in the macro would work, of
+' course, but finding the row number for the heading adds to the coding. The "SetField"
+' command used here moves the cursor to the 100 field as it replaces it, allowing the
+' "UncontrolHeading" statement to be used without any further lines of code necessary.
+
+    If CS.SetField( 1, TempString$ ) = FALSE Then
         MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
       Else
-        If CS.AddField( 1, FieldData$ ) = FALSE Then
-            MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+        If CS.UncontrolHeading Then
         End If
     End If
 
@@ -210,8 +301,4 @@ If CS.GetField( "100", 1, FieldData$ ) Then
 End If
 
 End Sub
-'2147428
-'
-'Macro name: AddRelatorTo100
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:00:51 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'30512033

@@ -1,15 +1,15 @@
-'MacroName:ShowCharacterCodes.2023.78
+'MacroName:ShowCharacterCodes.2024.05
 'MacroDescription:Shows the decimal and Unicode code points for the characters in a
 ' selection or a field, with the ability to toggle between displaying (as best the dialog
-' box is able) the corresponding OCLC-MARC and ASCII characters. It also offers the
-' ability to search for the names of MARC and selected Unicode Latin characters by code
-' point.
+' box is able) the corresponding OCLC-MARC and ASCII characters. Also offers searching
+' for the names of MARC and selected Unicode Latin characters by code point.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 4 August 2023.
+' Last updated: 5 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' http://docushare.lib.rochester.edu/docushare/dsweb/View/Collection-2556
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -27,8 +27,14 @@
 ' ISO 8859-1 character set, only Latin characters are possible, and even some of these
 ' can't be shown. Undisplayable characters are represented in the macro by an empty pair
 ' of square brackets: "[]". Undefined code points in MARC add the "×" sign inside the
-' brackets: "[×]". For text in Latin script, this macro doesn't try, with few exceptions,
-' to supply characters that might be similar in appearance to those in the record.
+' brackets: "[×]". Characters whose decimal code points are below 32--control characters,
+' not intended to print (except for the subfield delimiter)--are represented by "[?]".
+' (Although these characters shouldn't appear in a WorldCat record, they may show up as
+' the result of a "GetFieldLine" macro command, which seems to have a bug that doesn't
+' properly handle some ASCII characters with values above 127.) For text in Latin script,
+' this macro doesn't try, with few exceptions, to supply characters that might be similar
+' in appearance to those in the record. Finally, the field as a string of Unicode code
+' points can be copied to the Clipboard.
 '
 ' The macro window arranges the code points of the selection or field in pages containing
 ' up to 84 characters each, in six rows of 14 characters. Push buttons allow for cycling
@@ -61,24 +67,24 @@
 ' subset of ASCII used by the macro language. Because they display more or less clearly,
 ' they are not included in the search feature.
 '
-' In addition to the use of the empty box "[]" to represent undisplayable characters, and
-' a "[×]" box for undefined code points, the macro uses vertical bars to identify
-' subscript and superscript characters (numbers and punctuation). They appear as, for
-' example, "|2|". Two characters whose MARC-8 and OCLC-MARC encodings differ need some
-' explanation. One is the subfield delimiter, defined in MARC-8 as the character at
-' decimal code point 31. As a control character, not able to be printed, it has no glyph.
-' However, OCLC has assigned the subfield delimiter to code point 223, and represents it
-' with the familiar "alveolar click" character (U+01C2), which somewhat resembles a
-' double dagger. This macro follows a widespread convention in using the dollar sign to
-' represent the subfield delimiter. It encloses that sign with vertical bars |$|, and
-' shows its code points as both 223 and 01C2. The other character is the fill character,
-' defined in MARC-8 as the vertical bar, at decimal code point 127. OCLC, on the other
-' hand, has assigned it to decimal code point 252, and uses the "end of proof" symbol
-' (U+220E, which in Arial Unicode is a solid square; Wikipedia notes that this character
-' is also known as a "tombstone") as the glyph. This macro shows the code point as
-' decimal 252 and borrows the macro language's own version of the fill character (its
-' representation of undisplayable characters) to represent it; its appearance is a thick
-' vertical bar.
+' In addition to the use of the empty box "[]" to represent undisplayable characters, a
+' "[×]" box for undefined code points, and a "[?]" box for illegal code points, the macro
+' uses vertical bars to identify subscript and superscript characters (numbers and
+' punctuation). They appear as, for example, "|2|". Two characters whose MARC-8 and
+' OCLC-MARC encodings differ need some explanation. One is the subfield delimiter,
+' defined in MARC-8 as the character at decimal code point 31. As a control character,
+' not able to be printed, it has no glyph. However, OCLC has assigned the subfield
+' delimiter to code point 223, and represents it with the familiar "alveolar click"
+' character (U+01C2), which somewhat resembles a double dagger. This macro follows a
+' widespread convention in using the dollar sign to represent the subfield delimiter. It
+' encloses that sign with vertical bars |$|, and shows its code points as both 223 and
+' 01C2. The other character is the fill character, defined in MARC-8 as the vertical bar,
+' at decimal code point 127. OCLC, on the other hand, has assigned it to decimal code
+' point 252, and uses the "end of proof" symbol (U+220E, which in Arial Unicode is a
+' solid square; Wikipedia notes that this character is also known as a "tombstone") as
+' the glyph. This macro shows the code point as decimal 252 and borrows the macro
+' language's own version of the fill character (its representation of undisplayable
+' characters) to represent it; its appearance is a thick vertical bar.
 '
 ' References in the documentation to "MARC" generally includes MARC-8 and OCLC-MARC,
 ' which are not identical. The encoding shown in the macro is necessarily that of OCLC-
@@ -131,6 +137,8 @@ Global Encoding$
 Global Remainder%
 Global TotalPages%
 Global WaltsMacros$
+Global CopyString$
+
 
 Global ASCIIFound
 Global DecOnTop
@@ -309,6 +317,11 @@ Do
           CharT$ = Str$( CharA% )
       End If
 
+    Case 0 To 31
+
+      CharT$ = Trim$( Str$( CharA% ) )
+      CharT$ = " " & String$( 3 - Len( CharT$ ), "0" ) & CharT$
+
     Case Else
 
      CharT$ = Str$( CharA% )
@@ -375,194 +388,196 @@ End If
 CurrentPage% = 1
 
 Begin Dialog Dialog1Definition  358, 310, WaltsMacros$, .Dialog1ControlFunction
-  OKButton      296, 286,  52,  14                                     '0
-  CancelButton    1,  49,   1,   1                                     '1
-  PushButton    110, 275,  52,  14, "&Previous page",    .Prev         '2
-  PushButton    168, 275,  52,  14, "&Next page",        .Next         '3
-  PushButton     76,  24,  56,  14, "&Switch",           .Switch       '4
-  PushButton    318,  24,  16,  12, "&?",                .SearchHelp   '5
-  DropListBox    48, 276,  56,  64, Pages(),             .Pages        '6
-  TextBox        76,   8,  56,  12,                      .CharSet      '7
-  Text          146,  12, 140,  24, SearchLegend$,       .Instructions '8
-  TextBox       274,  24,  32,  12,                      .SearchBox    '9
-  Text           10,  10,  64,   8, "Show encoding as:"                '10
-  Text           18, 278,  24,   8, "&Range:",           .Range        '11
-  GroupBox      140,   4, 208,  40, ""                                 '12
-  GroupBox       10, 262, 220,  38, CharByteCount$                     '13
-  GroupBox       10,  50, 338,  17, "",                  .Row1GroupBox '14
-  GroupBox       10,  84, 338,  17, "",                  .Row2GroupBox '15
-  GroupBox       10, 118, 338,  17, "",                  .Row3GroupBox '16
-  GroupBox       10, 152, 338,  17, "",                  .Row4GroupBox '17
-  GroupBox       10, 186, 338,  17, "",                  .Row5GroupBox '18
-  GroupBox       10, 220, 338,  17, "",                  .Row6GroupBox '19
-  Text           15,  56,  16,   8, ""                                 '20  Row 1
-  Text           14,  68,  20,  16, ""                                 '21
-  Text           39,  56,  16,   8, ""                                 '22
-  Text           38,  68,  20,  16, ""                                 '23
-  Text           63,  56,  16,   8, ""                                 '24
-  Text           62,  68,  20,  16, ""                                 '25
-  Text           87,  56,  16,   8, ""                                 '26
-  Text           86,  68,  20,  16, ""                                 '27
-  Text          111,  56,  16,   8, ""                                 '28
-  Text          110,  68,  20,  16, ""                                 '29
-  Text          135,  56,  16,   8, ""                                 '30
-  Text          134,  68,  20,  16, ""                                 '31
-  Text          159,  56,  16,   8, ""                                 '32
-  Text          158,  68,  20,  16, ""                                 '33
-  Text          183,  56,  16,   8, ""                                 '34
-  Text          182,  68,  20,  16, ""                                 '35
-  Text          207,  56,  16,   8, ""                                 '36
-  Text          206,  68,  20,  16, ""                                 '37
-  Text          231,  56,  16,   8, ""                                 '38
-  Text          230,  68,  20,  16, ""                                 '39
-  Text          255,  56,  16,   8, ""                                 '40
-  Text          254,  68,  20,  16, ""                                 '41
-  Text          279,  56,  16,   8, ""                                 '42
-  Text          278,  68,  20,  16, ""                                 '43
-  Text          303,  56,  16,   8, ""                                 '44
-  Text          302,  68,  20,  16, ""                                 '45
-  Text          327,  56,  16,   8, ""                                 '46
-  Text          326,  68,  20,  16, ""                                 '47
-  Text           15,  90,  16,   8, ""                                 '48  Row 2
-  Text           14, 102,  20,  16, ""                                 '49
-  Text           39,  90,  16,   8, ""                                 '50
-  Text           38, 102,  20,  16, ""                                 '51
-  Text           63,  90,  16,   8, ""                                 '52
-  Text           62, 102,  20,  16, ""                                 '53
-  Text           87,  90,  16,   8, ""                                 '54
-  Text           86, 102,  20,  16, ""                                 '55
-  Text          111,  90,  16,   8, ""                                 '56
-  Text          110, 102,  20,  16, ""                                 '57
-  Text          135,  90,  16,   8, ""                                 '58
-  Text          134, 102,  20,  16, ""                                 '59
-  Text          159,  90,  16,   8, ""                                 '60
-  Text          158, 102,  20,  16, ""                                 '61
-  Text          183,  90,  16,   8, ""                                 '62
-  Text          182, 102,  20,  16, ""                                 '63
-  Text          207,  90,  16,   8, ""                                 '64
-  Text          206, 102,  20,  16, ""                                 '65
-  Text          231,  90,  16,   8, ""                                 '66
-  Text          230, 102,  20,  16, ""                                 '67
-  Text          255,  90,  16,   8, ""                                 '68
-  Text          254, 102,  20,  16, ""                                 '69
-  Text          279,  90,  16,   8, ""                                 '70
-  Text          278, 102,  20,  16, ""                                 '71
-  Text          303,  90,  16,   8, ""                                 '72
-  Text          302, 102,  20,  16, ""                                 '73
-  Text          327,  90,  16,   8, ""                                 '74
-  Text          326, 102,  20,  16, ""                                 '75
-  Text           15, 124,  16,   8, ""                                 '76  Row 3
-  Text           14, 136,  20,  16, ""                                 '77
-  Text           39, 124,  16,   8, ""                                 '78
-  Text           38, 136,  20,  16, ""                                 '79
-  Text           63, 124,  16,   8, ""                                 '80
-  Text           62, 136,  20,  16, ""                                 '81
-  Text           87, 124,  16,   8, ""                                 '82
-  Text           86, 136,  20,  16, ""                                 '83
-  Text          111, 124,  16,   8, ""                                 '84
-  Text          110, 136,  20,  16, ""                                 '85
-  Text          135, 124,  16,   8, ""                                 '86
-  Text          134, 136,  20,  16, ""                                 '87
-  Text          159, 124,  16,   8, ""                                 '88
-  Text          158, 136,  20,  16, ""                                 '89
-  Text          183, 124,  16,   8, ""                                 '90
-  Text          182, 136,  20,  16, ""                                 '91
-  Text          207, 124,  16,   8, ""                                 '92
-  Text          206, 136,  20,  16, ""                                 '93
-  Text          231, 124,  16,   8, ""                                 '94
-  Text          230, 136,  20,  16, ""                                 '95
-  Text          255, 124,  16,   8, ""                                 '96
-  Text          254, 136,  20,  16, ""                                 '97
-  Text          279, 124,  16,   8, ""                                 '98
-  Text          278, 136,  20,  16, ""                                 '99
-  Text          303, 124,  16,   8, ""                                 '100
-  Text          302, 136,  20,  16, ""                                 '101
-  Text          327, 124,  16,   8, ""                                 '102
-  Text          326, 136,  20,  16, ""                                 '103
-  Text           15, 158,  16,   8, ""                                 '104 Row 4
-  Text           14, 170,  20,  16, ""                                 '105
-  Text           39, 158,  16,   8, ""                                 '106
-  Text           38, 170,  20,  16, ""                                 '107
-  Text           63, 158,  16,   8, ""                                 '108
-  Text           62, 170,  20,  16, ""                                 '109
-  Text           87, 158,  16,   8, ""                                 '110
-  Text           86, 170,  20,  16, ""                                 '111
-  Text          111, 158,  16,   8, ""                                 '112
-  Text          110, 170,  20,  16, ""                                 '113
-  Text          135, 158,  16,   8, ""                                 '114
-  Text          134, 170,  20,  16, ""                                 '115
-  Text          159, 158,  16,   8, ""                                 '116
-  Text          158, 170,  20,  16, ""                                 '117
-  Text          183, 158,  16,   8, ""                                 '118
-  Text          182, 170,  20,  16, ""                                 '119
-  Text          207, 158,  16,   8, ""                                 '120
-  Text          206, 170,  20,  16, ""                                 '121
-  Text          231, 158,  16,   8, ""                                 '122
-  Text          230, 170,  20,  16, ""                                 '123
-  Text          255, 158,  16,   8, ""                                 '124
-  Text          254, 170,  20,  16, ""                                 '125
-  Text          279, 158,  16,   8, ""                                 '126
-  Text          278, 170,  20,  16, ""                                 '127
-  Text          303, 158,  16,   8, ""                                 '128
-  Text          302, 170,  20,  16, ""                                 '129
-  Text          327, 158,  16,   8, ""                                 '130
-  Text          326, 170,  20,  16, ""                                 '131
-  Text           15, 192,  16,   8, ""                                 '132 Row 5
-  Text           14, 204,  20,  16, ""                                 '133
-  Text           39, 192,  16,   8, ""                                 '134
-  Text           38, 204,  20,  16, ""                                 '135
-  Text           63, 192,  16,   8, ""                                 '136
-  Text           62, 204,  20,  16, ""                                 '137
-  Text           87, 192,  16,   8, ""                                 '138
-  Text           86, 204,  20,  16, ""                                 '139
-  Text          111, 192,  16,   8, ""                                 '140
-  Text          110, 204,  20,  16, ""                                 '141
-  Text          135, 192,  16,   8, ""                                 '142
-  Text          134, 204,  20,  16, ""                                 '143
-  Text          159, 192,  16,   8, ""                                 '144
-  Text          158, 204,  20,  16, ""                                 '145
-  Text          183, 192,  16,   8, ""                                 '146
-  Text          182, 204,  20,  16, ""                                 '147
-  Text          207, 192,  16,   8, ""                                 '148
-  Text          206, 204,  20,  16, ""                                 '149
-  Text          231, 192,  16,   8, ""                                 '150
-  Text          230, 204,  20,  16, ""                                 '151
-  Text          255, 192,  16,   8, ""                                 '152
-  Text          254, 204,  20,  16, ""                                 '153
-  Text          279, 192,  16,   8, ""                                 '154
-  Text          278, 204,  20,  16, ""                                 '155
-  Text          303, 192,  16,   8, ""                                 '156
-  Text          302, 204,  20,  16, ""                                 '157
-  Text          327, 192,  16,   8, ""                                 '158
-  Text          326, 204,  20,  16, ""                                 '159
-  Text           15, 226,  16,   8, ""                                 '160 Row 6
-  Text           14, 240,  20,  16, ""                                 '161
-  Text           39, 226,  16,   8, ""                                 '162
-  Text           38, 240,  20,  16, ""                                 '163
-  Text           63, 226,  16,   8, ""                                 '164
-  Text           62, 240,  20,  16, ""                                 '165
-  Text           87, 226,  16,   8, ""                                 '166
-  Text           86, 240,  20,  16, ""                                 '167
-  Text          111, 226,  16,   8, ""                                 '168
-  Text          110, 240,  20,  16, ""                                 '169
-  Text          135, 226,  16,   8, ""                                 '170
-  Text          134, 240,  20,  16, ""                                 '171
-  Text          159, 226,  16,   8, ""                                 '172
-  Text          158, 240,  20,  16, ""                                 '173
-  Text          183, 226,  16,   8, ""                                 '174
-  Text          182, 240,  20,  16, ""                                 '175
-  Text          207, 226,  16,   8, ""                                 '176
-  Text          206, 240,  20,  16, ""                                 '177
-  Text          231, 226,  16,   8, ""                                 '178
-  Text          230, 240,  20,  16, ""                                 '179
-  Text          255, 226,  16,   8, ""                                 '180
-  Text          254, 240,  20,  16, ""                                 '181
-  Text          279, 226,  16,   8, ""                                 '182
-  Text          278, 240,  20,  16, ""                                 '183
-  Text          303, 226,  16,   8, ""                                 '184
-  Text          302, 240,  20,  16, ""                                 '185
-  Text          327, 226,  16,   8, ""                                 '186
-  Text          326, 240,  20,  16, ""                                 '187
+  OKButton      256, 284,  80,  16                                            '0
+  CancelButton    1,   1,   1,   1                                            '1
+  PushButton    110, 275,  52,  14, "&Previous page",           .Prev         '2
+  PushButton    168, 275,  52,  14, "&Next page",               .Next         '3
+  PushButton     76,  24,  56,  14, "&Switch",                  .Switch       '4
+  PushButton    318,  24,  16,  12, "&?",                       .SearchHelp   '5
+  DropListBox    48, 276,  56,  64, Pages(),                    .Pages        '6
+  TextBox        76,   8,  56,  12,                             .CharSet      '7
+  Text          146,  12, 140,  24, SearchLegend$,              .Instructions '8
+  TextBox       274,  24,  32,  12,                             .SearchBox    '9
+  Text           10,  10,  64,   8, "Show encoding as:"                       '10
+  Text           18, 278,  24,   8, "&Range:",                  .Range        '11
+  CheckBox      246, 260,  96,  12, "Copy Unicode code points", .CopyCheckBox '12
+  Text          266, 270,  64,   8, "string to Clipboard"                     '13
+  GroupBox      140,   4, 208,  40, ""                                        '14
+  GroupBox       10, 262, 220,  38, CharByteCount$                            '15
+  GroupBox       10,  50, 338,  17, "",                         .Row1GroupBox '16
+  GroupBox       10,  84, 338,  17, "",                         .Row2GroupBox '17
+  GroupBox       10, 118, 338,  17, "",                         .Row3GroupBox '18
+  GroupBox       10, 152, 338,  17, "",                         .Row4GroupBox '19
+  GroupBox       10, 186, 338,  17, "",                         .Row5GroupBox '20
+  GroupBox       10, 220, 338,  17, "",                         .Row6GroupBox '21
+  Text           15,  56,  16,   8, ""                                        '22   Row 1
+  Text           14,  68,  20,  16, ""                                        '23
+  Text           39,  56,  16,   8, ""                                        '24
+  Text           38,  68,  20,  16, ""                                        '25
+  Text           63,  56,  16,   8, ""                                        '26
+  Text           62,  68,  20,  16, ""                                        '27
+  Text           87,  56,  16,   8, ""                                        '28
+  Text           86,  68,  20,  16, ""                                        '29
+  Text          111,  56,  16,   8, ""                                        '30
+  Text          110,  68,  20,  16, ""                                        '31
+  Text          135,  56,  16,   8, ""                                        '32
+  Text          134,  68,  20,  16, ""                                        '33
+  Text          159,  56,  16,   8, ""                                        '34
+  Text          158,  68,  20,  16, ""                                        '35
+  Text          183,  56,  16,   8, ""                                        '36
+  Text          182,  68,  20,  16, ""                                        '37
+  Text          207,  56,  16,   8, ""                                        '38
+  Text          206,  68,  20,  16, ""                                        '39
+  Text          231,  56,  16,   8, ""                                        '40
+  Text          230,  68,  20,  16, ""                                        '41
+  Text          255,  56,  16,   8, ""                                        '42
+  Text          254,  68,  20,  16, ""                                        '43
+  Text          279,  56,  16,   8, ""                                        '44
+  Text          278,  68,  20,  16, ""                                        '45
+  Text          303,  56,  16,   8, ""                                        '46
+  Text          302,  68,  20,  16, ""                                        '47
+  Text          327,  56,  16,   8, ""                                        '48
+  Text          326,  68,  20,  16, ""                                        '49
+  Text           15,  90,  16,   8, ""                                        '50   Row 2
+  Text           14, 102,  20,  16, ""                                        '51
+  Text           39,  90,  16,   8, ""                                        '52
+  Text           38, 102,  20,  16, ""                                        '53
+  Text           63,  90,  16,   8, ""                                        '54
+  Text           62, 102,  20,  16, ""                                        '55
+  Text           87,  90,  16,   8, ""                                        '56
+  Text           86, 102,  20,  16, ""                                        '57
+  Text          111,  90,  16,   8, ""                                        '58
+  Text          110, 102,  20,  16, ""                                        '59
+  Text          135,  90,  16,   8, ""                                        '60
+  Text          134, 102,  20,  16, ""                                        '61
+  Text          159,  90,  16,   8, ""                                        '62
+  Text          158, 102,  20,  16, ""                                        '63
+  Text          183,  90,  16,   8, ""                                        '64
+  Text          182, 102,  20,  16, ""                                        '65
+  Text          207,  90,  16,   8, ""                                        '66
+  Text          206, 102,  20,  16, ""                                        '67
+  Text          231,  90,  16,   8, ""                                        '68
+  Text          230, 102,  20,  16, ""                                        '69
+  Text          255,  90,  16,   8, ""                                        '70
+  Text          254, 102,  20,  16, ""                                        '71
+  Text          279,  90,  16,   8, ""                                        '72
+  Text          278, 102,  20,  16, ""                                        '73
+  Text          303,  90,  16,   8, ""                                        '74
+  Text          302, 102,  20,  16, ""                                        '75
+  Text          327,  90,  16,   8, ""                                        '76
+  Text          326, 102,  20,  16, ""                                        '77
+  Text           15, 124,  16,   8, ""                                        '78   Row 3
+  Text           14, 136,  20,  16, ""                                        '79
+  Text           39, 124,  16,   8, ""                                        '80
+  Text           38, 136,  20,  16, ""                                        '81
+  Text           63, 124,  16,   8, ""                                        '82
+  Text           62, 136,  20,  16, ""                                        '83
+  Text           87, 124,  16,   8, ""                                        '84
+  Text           86, 136,  20,  16, ""                                        '85
+  Text          111, 124,  16,   8, ""                                        '86
+  Text          110, 136,  20,  16, ""                                        '87
+  Text          135, 124,  16,   8, ""                                        '88
+  Text          134, 136,  20,  16, ""                                        '89
+  Text          159, 124,  16,   8, ""                                        '90
+  Text          158, 136,  20,  16, ""                                        '91
+  Text          183, 124,  16,   8, ""                                        '92
+  Text          182, 136,  20,  16, ""                                        '93
+  Text          207, 124,  16,   8, ""                                        '94
+  Text          206, 136,  20,  16, ""                                        '95
+  Text          231, 124,  16,   8, ""                                        '96
+  Text          230, 136,  20,  16, ""                                        '97
+  Text          255, 124,  16,   8, ""                                        '98
+  Text          254, 136,  20,  16, ""                                        '99
+  Text          279, 124,  16,   8, ""                                        '100
+  Text          278, 136,  20,  16, ""                                        '101
+  Text          303, 124,  16,   8, ""                                        '102
+  Text          302, 136,  20,  16, ""                                        '103
+  Text          327, 124,  16,   8, ""                                        '104
+  Text          326, 136,  20,  16, ""                                        '105
+  Text           15, 158,  16,   8, ""                                        '106  Row 4
+  Text           14, 170,  20,  16, ""                                        '107
+  Text           39, 158,  16,   8, ""                                        '108
+  Text           38, 170,  20,  16, ""                                        '109
+  Text           63, 158,  16,   8, ""                                        '110
+  Text           62, 170,  20,  16, ""                                        '111
+  Text           87, 158,  16,   8, ""                                        '112
+  Text           86, 170,  20,  16, ""                                        '113
+  Text          111, 158,  16,   8, ""                                        '114
+  Text          110, 170,  20,  16, ""                                        '115
+  Text          135, 158,  16,   8, ""                                        '116
+  Text          134, 170,  20,  16, ""                                        '117
+  Text          159, 158,  16,   8, ""                                        '118
+  Text          158, 170,  20,  16, ""                                        '119
+  Text          183, 158,  16,   8, ""                                        '120
+  Text          182, 170,  20,  16, ""                                        '121
+  Text          207, 158,  16,   8, ""                                        '122
+  Text          206, 170,  20,  16, ""                                        '123
+  Text          231, 158,  16,   8, ""                                        '124
+  Text          230, 170,  20,  16, ""                                        '125
+  Text          255, 158,  16,   8, ""                                        '126
+  Text          254, 170,  20,  16, ""                                        '127
+  Text          279, 158,  16,   8, ""                                        '128
+  Text          278, 170,  20,  16, ""                                        '129
+  Text          303, 158,  16,   8, ""                                        '130
+  Text          302, 170,  20,  16, ""                                        '131
+  Text          327, 158,  16,   8, ""                                        '132
+  Text          326, 170,  20,  16, ""                                        '133
+  Text           15, 192,  16,   8, ""                                        '134  Row 5
+  Text           14, 204,  20,  16, ""                                        '135
+  Text           39, 192,  16,   8, ""                                        '136
+  Text           38, 204,  20,  16, ""                                        '137
+  Text           63, 192,  16,   8, ""                                        '138
+  Text           62, 204,  20,  16, ""                                        '139
+  Text           87, 192,  16,   8, ""                                        '140
+  Text           86, 204,  20,  16, ""                                        '141
+  Text          111, 192,  16,   8, ""                                        '142
+  Text          110, 204,  20,  16, ""                                        '143
+  Text          135, 192,  16,   8, ""                                        '144
+  Text          134, 204,  20,  16, ""                                        '145
+  Text          159, 192,  16,   8, ""                                        '146
+  Text          158, 204,  20,  16, ""                                        '147
+  Text          183, 192,  16,   8, ""                                        '148
+  Text          182, 204,  20,  16, ""                                        '149
+  Text          207, 192,  16,   8, ""                                        '150
+  Text          206, 204,  20,  16, ""                                        '151
+  Text          231, 192,  16,   8, ""                                        '152
+  Text          230, 204,  20,  16, ""                                        '153
+  Text          255, 192,  16,   8, ""                                        '154
+  Text          254, 204,  20,  16, ""                                        '155
+  Text          279, 192,  16,   8, ""                                        '156
+  Text          278, 204,  20,  16, ""                                        '157
+  Text          303, 192,  16,   8, ""                                        '158
+  Text          302, 204,  20,  16, ""                                        '159
+  Text          327, 192,  16,   8, ""                                        '160
+  Text          326, 204,  20,  16, ""                                        '161
+  Text           15, 226,  16,   8, ""                                        '162  Row 6
+  Text           14, 240,  20,  16, ""                                        '163
+  Text           39, 226,  16,   8, ""                                        '164
+  Text           38, 240,  20,  16, ""                                        '165
+  Text           63, 226,  16,   8, ""                                        '166
+  Text           62, 240,  20,  16, ""                                        '167
+  Text           87, 226,  16,   8, ""                                        '168
+  Text           86, 240,  20,  16, ""                                        '169
+  Text          111, 226,  16,   8, ""                                        '170
+  Text          110, 240,  20,  16, ""                                        '171
+  Text          135, 226,  16,   8, ""                                        '172
+  Text          134, 240,  20,  16, ""                                        '173
+  Text          159, 226,  16,   8, ""                                        '174
+  Text          158, 240,  20,  16, ""                                        '175
+  Text          183, 226,  16,   8, ""                                        '176
+  Text          182, 240,  20,  16, ""                                        '177
+  Text          207, 226,  16,   8, ""                                        '178
+  Text          206, 240,  20,  16, ""                                        '179
+  Text          231, 226,  16,   8, ""                                        '180
+  Text          230, 240,  20,  16, ""                                        '181
+  Text          255, 226,  16,   8, ""                                        '182
+  Text          254, 240,  20,  16, ""                                        '183
+  Text          279, 226,  16,   8, ""                                        '184
+  Text          278, 240,  20,  16, ""                                        '185
+  Text          303, 226,  16,   8, ""                                        '186
+  Text          302, 240,  20,  16, ""                                        '187
+  Text          327, 226,  16,   8, ""                                        '188
+  Text          326, 240,  20,  16, ""                                        '189
 End Dialog
 
 Dim Dialog1 As Dialog1Definition
@@ -1714,7 +1729,7 @@ End If
 ' Set the code points first.
 
 For i = 1 To MAX_CHARS_PER_PAGE
-  CharControl% = ( i * 2 ) + 19
+  CharControl% = ( i * 2 ) + 21
   If NoData Then
       CharDec$ = ""
       CharUni$ = ""
@@ -1729,7 +1744,9 @@ For i = 1 To MAX_CHARS_PER_PAGE
         Else
           CharA& = Val( CharDec$ )
       End If
-      If CharA& < 128 Then
+      If CharA& < 32 Then
+          CharUni$ = String$( 4 - Len( CharDec$ ), "0" ) & CharDec$
+        ElseIf CharA& < 128 Then
           CharUni$ = "00" & Hex( CharA& )
         ElseIf CharA& = 223 Then
           CharUni$ = "01C2"
@@ -1743,6 +1760,7 @@ For i = 1 To MAX_CHARS_PER_PAGE
           CharUni$ = CharDec$
       End If
   End If
+  CopyString$ = CopyString$ & CharUni$ & " "
   If CharDec$ = CharUni$ Then
       CharDec$ = "   "
   End If
@@ -1763,7 +1781,7 @@ Next i
 
 NoData = FALSE
 For i = 1 To MAX_CHARS_PER_PAGE
-  CharControl% = ( i * 2 ) + 18
+  CharControl% = ( i * 2 ) + 20
   If NoData Then
       DlgText    CharControl%,   ""
     Else
@@ -1779,6 +1797,8 @@ For i = 1 To MAX_CHARS_PER_PAGE
 
       If CharA& = 38 Then
           DlgText    CharControl%,   "&&"
+        ElseIf CharA& < 32 Then
+          DlgText    CharControl%,   "[?]"
         ElseIf CharA& < 128 Then
           DlgText    CharControl%,   Chr$( CharA& )
         Else
@@ -1841,6 +1861,7 @@ Static MARCInstruction$
 
 Dim Byte1$
 Dim Byte2$
+Dim CharacterCode$
 Dim CharacterName$
 Dim CharacterSet$
 Dim Compare%
@@ -1949,6 +1970,13 @@ Select Case Action%
         DlgText    "CharSet",      Encoding$
         Call SetDialogBox( CurrentPage%, SWITCHED )
         Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "OK"
+        If DlgValue( "CopyCheckBox" ) = 1 Then
+            CopyString$ = Trim$( CopyString$ )
+            ClipBoard.Clear
+            ClipBoard.SetText CopyString$
+        End If
 
       Case "SearchHelp"
 
@@ -2120,8 +2148,4 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'2124109548
-'
-'Macro name: ShowCharacterCodes
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:05:18 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2152112186

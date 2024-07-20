@@ -1,4 +1,4 @@
-'MacroName:SearchFrom670.2022.05
+'MacroName:SearchFrom670.2024.01
 'MacroDescription:Searches for a bibliographic record from an authority record, using the
 ' authorized heading as the name portion of the search and selected text in the 670 field
 ' as the title portion and date qualifier.
@@ -6,14 +6,15 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 1 July 2022.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run this macro while viewing an authority record for a personal or
@@ -176,7 +177,7 @@ If CS.GetSelectedText( SelectedText$ ) Then
         SelectedText$ = Trim$( SelectedText$ )
         Selection     = TRUE
       Else
-        If CS.GetFieldLine( Row%, FieldData$ ) Then
+        If CS.GetField( "...", Row%, FieldData$ ) Then
             Selection = FALSE
             Col%      = 6
           Else
@@ -190,7 +191,7 @@ End If
 ' base string.
 
 If Selection = FALSE Then
-    If CS.GetFieldLine( Row%, FieldData$ ) Then
+    If CS.GetField( "...", Row%, FieldData$ ) Then
         If Left$( FieldData$, 3 ) = "670" Then
             SelectedText$ = Mid$( FieldData$, 6 )
           Else
@@ -532,8 +533,4 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'53620216
-'
-'Macro name: SearchFrom670
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:02:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'53720261

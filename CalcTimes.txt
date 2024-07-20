@@ -1,15 +1,16 @@
-'MacroName:CalcTimes.2023.02
+'MacroName:CalcTimes.2024.01
 'MacroDescription:Adds and converts times.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' Thanks to Harvey Hahn for initial help with dialog boxes. Thanks to Terry Simpkins for
 ' some great ideas in the early days. All responsibility for this macro's appearance and
 ' functionality are mine alone.
 '
-' Last updated: 3 August 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -180,7 +181,16 @@ Select Case CS.ItemType
 ' not offer to add a 500 "Duration:" note at the end.
 
     Row% = CS.CursorRow
-    If CS.GetFieldLine( Row%, FieldData$ ) Then
+    If CS.GetField( "...", Row%, FieldData$ ) Then
+        If FieldData$ = "Data contains non-latin script" Then
+            MsgBox "The data is not searchable because it contains non-Latin script. This macro works only with characters in Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+          Else
+            If InStr( FieldData$, "&#x" ) > 0 Then
+                MsgBox "The data in this field is not searchable because it contains Unicode-encoded characters.", CRITICAL_MESSAGE, WaltsMacros$
+                Exit Sub
+            End If
+        End If
         Tag$ = Left$( FieldData$, 3 )
         If Tag$ = "505" Then
             ContentsField$ = Mid$( FieldData$, 6 )
@@ -1140,8 +1150,4 @@ InputProb:
 End Select
 
 End Function
-'114446938
-'
-'Macro name: CalcTimes
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:00:59 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'115447521

@@ -1,0 +1,1577 @@
+'MacroName:FormatSubjectDashes.2024.48
+'MacroDescription:Helps to format a subject heading that has dashes in place of
+' delimiters, and no subfield codes.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
+'
+' Last updated: 17 July 2024.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: This macro is designed to help quickly format a subject field in which
+' subdivisions are separated by dashes. (I wrote the macro because I often copy subject
+' headings from LC's online catalog in this form.) It changes each dash to the OCLC
+' delimiter symbol, automatically adds many subfield codes, and provides a single dialog
+' box for input of other subfield codes. It makes it easy to change a field like this:
+'
+'   Computers--Circuits--Design and construction--Security measures--Periodicals.
+'
+' To this:
+'
+'   Computers $x Circuits $x Design and construction $x Security measures $v Periodicals.
+'
+' Run the macro with the cursor positioned in such a field. Tag and indicators are
+' ignored. The macro shows a dialog box that displays the field as it will be formatted,
+' with the subfield codes it is able to supply automatically, and an input box for adding
+' the codes it is not. If it can add every appropriate subfield code, it changes the
+' field immediately, without showing the dialog box. Otherwise, you can simply type the
+' appropriate code (the letters "v", "x", "y", and "z") for each subfield in the input
+' box, without having to move the cursor.
+
+' These are the kinds of subdivisions for which the macro can automatically supply codes:
+'
+'  + Chronological (subfield $y): Subfields that contain only dates, such as "1753-1850,"
+'    "19th century," and "To 500".
+'
+'  + Geographical (subfield $z): Subfields that contain a heading for one of the
+'    countries or regions listed in LC's Classification and Shelflisting Manual, section
+'    G300, "Regions and countries Table," as well as a few others. The array that
+'    contains those headings can be customized or extended to accommodate other places
+'    that come up frequently in any particular workflow.
+'
+'  + Form (subfield $v): Subfields that contain a frequently occurring form subdivision.
+'    Most of the entries in the array that holds those subdivisions come from a table
+'    listing the "100 most used form subdivisions" that appeared in "Form subdivisions"
+'    by E.T. O'Neill, L.M. Chan, E. Childress, R. Dean, L.M. El-Hoshy, and D. Vizine-
+'    Goetz, in Library Resources & Technical Services, v. 45, no. 4 (October 2001), pages
+'    187-197 (available at https://journals.ala.org/index.php/lrts/article/view/5163/
+'    6268). Some other headings are drawn from "Form Subdivision in 6XX MARC Tags,"
+'    available at the Follett Community website, https://www.follettcommunity.com/s/
+'    article/ms-marc-form-subdivision-in-6xx-marc-tags.
+'
+'  + Topical (subfield $x): Subfields that contain a frequently occurring topical
+'    subdivision; the terms in the array were somewhat arbitrarily chosen by me.
+'
+' Some subdivisions can be either form or topical, such as "Biography." For these
+' subdivisions, the macro offers the default code "v", as (in my experience) they are
+' much more likely to be used as form subdivisions than they are as topical. When the
+' macro runs, this default offering can be accepted by typing the letter "v", pressing
+' the [ENTER] key or space bar, or clicking the "OK" button. The alternative, of course,
+' is simply to type the letter "x". A single array holds both form and topical
+' subdivisions, and can also be expanded as needed for different cataloging environments.
+'
+' Pressing [ENTER] or clicking "OK" after all subfield codes have been entered replaces
+' the field and and closes the macro.
+'
+' The macro can provide codes only for established LC subdivision headings, of course,
+' but by reducing mouse movements and keystrokes, it is still helpful for formatting any
+' subject heading field that uses dashes.
+'
+' This is a simple macro, and can't deal with all the complexities of subject headings.
+' If it recognizes a subdivision, it will assign it a code, even though in some
+' situations the appropriate code differs according to context. For example, the
+' subdivision "Apologetic works" by itself is a form subdivision, but when followed by
+' "History and criticism," it becomes topical. Because the macro considers subdivisions
+' only in their entirety, it can, for example, deal with "Translations" but not
+' "Translations into ..." (to include all the different languages possible in this
+' particular construction would be impractical). Review of the macro's output is
+' essential for accuracy!
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillArrays
+
+Declare Function ConvertToISO88591 ( InputString$ ) As String
+Declare Function GetSubfield       ( CursorPos% )   As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global Const GEOG_SUBS_COUNT  = 379
+Global Const OTHER_SUBS_COUNT = 255
+
+Global DASH             As String
+Global DELIMITER_DOLLAR As String
+
+Global AmbigSubfCount%
+Global ChangeCount%
+Global WorkString$
+
+Global AmbiguousSubfields()         As String
+Global GeogSub( GEOG_SUBS_COUNT )   As String
+Global OtherSub( OTHER_SUBS_COUNT ) As String
+Global StepStore()                  As String
+Global SubfieldStore()              As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Const CODE                 AS Integer = 2
+Const NORM                 As Integer = 1
+Const ORIG                 As Integer = 0
+
+Dim ACUTE          As String*1 : ACUTE          = Chr$( 226 )
+Dim CEDILLA        As String*1 : CEDILLA        = Chr$( 240 )
+Dim CIRCUMFLEX     As String*1 : CIRCUMFLEX     = Chr$( 227 )
+Dim DELIMITER_OCLC As String*1 : DELIMITER_OCLC = Chr$( 223 )
+
+Dim DashCount%
+Dim FieldData$
+Dim Instructions$
+Dim NewField$
+Dim OriginalField$
+Dim Row%
+Dim Start%
+Dim Subfield$
+Dim SubfieldCode$
+Dim SubfieldCount%
+Dim TypeOfWindow%
+Dim UBSubfieldStore%
+Dim WaltsMacros$               : WaltsMacros$   = "[Walt's macros] Extras2:FormatSubjectDashes"
+
+Dim i As Integer, p As Integer, q As Integer
+
+DASH             = "--"
+DELIMITER_DOLLAR = "$"
+Instructions$    = "Enter subfield code (v, x, y, or z):"
+
+Row% = CS.CursorRow%
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then get the contents of the field in which the cursor is placed. For ease of reading
+' in the dialog box display, add a space on each side of the dash.
+
+If CS.GetField( "...", Row%, FieldData$ ) Then
+
+    If InStr( FieldData$, DASH ) = 0 Then
+        MsgBox "This field contains no subfields to format or codes to add!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+    FillArrays
+
+    OriginalField$ = FieldData$
+    Start%         = 1
+    Do
+      p = InStr( Start%, FieldData$, DASH )
+      If p > 0 Then
+          If Start% = 1 Then
+              Subfield$     = Trim$( Mid$( FieldData$, 6, p - 6 ) )
+              SubfieldCode$ = "a"
+            Else
+              q = InStr( p + 4, FieldData$, DASH )
+              If q > 0 Then
+                  Subfield$ = Trim$( Mid$( FieldData$, p + 2, q - p - 2 ) )
+                Else
+                  Subfield$ = Trim$( Mid$( FieldData$, p + 2 ) )
+                  If Right$( Subfield$, 1 ) = "." Then
+                      Subfield$ = Left$( Subfield$, Len( Subfield$ ) - 1 )
+                  End If
+              End If
+          End If
+      End If
+
+      If Right$( Subfield$, 1 ) = "." Then
+          Subfield$ = Left$( Subfield$, Len( Subfield$ ) - 1 )
+      End If
+
+' Chronological subfields are easy to format because they are identified by patterns, not
+' depending upon string matching, and so are dealt with first to get them out of the way.
+' These subfields contain only digits (plus a hyphen), or consist of digits preceded by
+' the word "To", or begin with the word form of an ordinal number and end with the word
+' "century".
+
+      If Subfield$ Like "[1-9][0-9][0-9][0-9]" Or _
+         Left$( Subfield$, 4 ) Like "To [1-9]" Or _
+         Left$( Subfield$, 5 ) Like "[1-9][0-9][0-9][0-9]-" Then
+          SubfieldCode$ = "y"
+        ElseIf Left$( Subfield$, 2 ) Like "[1-9][0-9]" Then
+          If Mid$( Subfield$, 3, 10 ) Like "[nrst][dht] century" Then
+              SubfieldCode$ = "y"
+          End If
+        Else
+
+' The non-geographic subdivisions the macro is programmed to recognize have their
+' subfield codes added as a prefix in their entries in the array. Subdivisions that are
+' only form or topical are identified by "v" and "x", respectively, and subdivisions that
+' could be either are identifed by "q". The ambiguous subdivisions get a provisional
+' subfield code of "v" (as being the most probable code) and an entry in an intermediate
+' array, to let the dialog box know that for that term, the default value is to be
+' displayed.
+
+          For i = 0 To OTHER_SUBS_COUNT
+            If Subfield$ = Mid$( OtherSub( i ), 2 ) Then
+                SubfieldCode$ = Left$( OtherSub( i ), 1 )
+                If SubfieldCode$ = "q" Then
+                    ReDim Preserve AmbiguousSubfields( AmbigSubfCount% )
+                    AmbiguousSubfields( AmbigSubfCount% ) = Subfield$
+                    AmbigSubfCount%                       = AmbigSubfCount% + 1
+                End If
+                Exit For
+            End If
+          Next i
+      End If
+
+' Finally, to identify geographic subdivisions, simply run through the array to find a
+' match.
+
+      If SubfieldCode$ = "" Then
+          For i = 0 To GEOG_SUBS_COUNT
+            If Subfield$ = GeogSub( i ) Then
+              SubfieldCode$ = "z"
+              Exit For
+            End If
+          Next i
+
+' Unfortunately, there are four names in SCM table G300 that have diacritical marks, and
+' because character coding in a copied string is unknown,  the match may be made on a
+' Unicode (or MARC-8) string or on a Windows 1252-string.
+
+          If SubfieldCode$ = "" Then
+              If Subfield$ = "Co" & CIRCUMFLEX & "te d'Ivoire" Or _
+                 Subfield$ = "Côte d'Ivoire" Then
+                  SubfieldCode$ = "z"
+                ElseIf Subfield$ = "Curac" & CEDILLA & "ao" Or _
+                       Subfield$ = "Curaçao" Then
+                  SubfieldCode$ = "z"
+                ElseIf Subfield$ = "Re" & ACUTE & "union" Or _
+                       Subfield$ = "Réunion" Then
+                  SubfieldCode$ = "z"
+                ElseIf Subfield$ = "Terres australes et antarctiques franc" & CEDILLA & "aises" Or _
+                       Subfield$ = "Terres australes et antarctiques françaises" Then
+                  SubfieldCode$ = "z"
+              End If
+          End If
+      End If
+
+' Fill the array that contains the field's subdivisions. The first dimension of the array
+' includes the term as copied, and the subfield code, if it has been included. If no
+' subfield code has been included, add the normalized version of the term, as it may be a
+' heading with diacritical marks, and they need to be fixed in order to display legibly
+' in the dialog box.
+
+      ReDim Preserve SubfieldStore( 2, SubfieldCount% )
+      SubfieldStore( ORIG, SubfieldCount% ) = Subfield$
+      If SubfieldCode$ = "" Or SubfieldCode$ = "a" Then
+          SubfieldStore( NORM, SubfieldCount% ) = ConvertToISO88591( Subfield$ )
+        Else
+          SubfieldStore( NORM, SubfieldCount% ) = Subfield$
+      End If
+      SubfieldStore( CODE, SubfieldCount% ) = SubfieldCode$
+      If Start% = 1 Then
+          Start% = p - 1
+        Else
+          Start% = p + 1
+      End If
+      SubfieldCode$  = ""
+      Subfield$      = ""
+      SubfieldCount% = SubfieldCount% + 1
+
+    Loop Until p = 0
+
+' Construct the field's string to display in the dialog box. If a subfield code is
+' available, it shows following the dollar sign as the delimiter symbol. If no code is
+' available, or if the code can be either "v" or "x" (that is, it has been given the
+' provisional value "q") keep the dash, with a space on each side for easier reading.
+
+    UBSubfieldStore% = UBound( SubfieldStore, 2 ) - 1
+    ReDim Preserve SubfieldStore( 2, UBSubfieldStore% )
+    For i = 0 To UBSubfieldStore%
+      If SubfieldStore( CODE, i ) = "" Or SubfieldStore( CODE, i ) = "q" Then
+          WorkString$ = WorkString$ & " -- " & SubfieldStore( NORM, i )
+          DashCount%  = DashCount% + 1
+        Else
+          WorkString$ = WorkString$ & " $" & SubfieldStore( CODE, i ) & " " & SubfieldStore( NORM, i )
+      End If
+    Next i
+    WorkString$ = Trim$( Mid$( WorkString$, 4 ) )
+
+' If the macro has been able to find subfield codes for all subfields, change the field
+' immediately. Otherwise, display the dialog box for user input of the unknown codes.
+
+    If DashCount% > 0 Then
+
+        ReDim StepStore( 0 )
+
+        Begin Dialog Dialog1Definition  320,  80, WaltsMacros$, .Dialog1ControlFunction
+          OkButton      198,  56,  52,  14
+          CancelButton  258,  56,  52,  14
+          PushButton    100,  56,  52,  14, "&Undo",       .Undo
+          TextBox       122,  32,  10,  12,                .SubfieldCode
+          Text           10,   6, 300,  16, "",            .WholeField
+          Text           16,  33, 106,   8, Instructions$, .Instructions
+          Text          134,  33, 170,   8, "",            .Subfield
+          GroupBox       10,  24, 300,  25, ""
+        End Dialog
+
+        Dim Dialog1 As Dialog1Definition
+        On Error Resume Next
+        Dialog Dialog1
+        If Err = DLG_STATEMENT_CANCEL Or ChangeCount% = 0 Then Exit Sub
+
+    End If
+
+' If the dimension of the array that holds the subfield codes was not completely filled--
+' because some subfield codes couldn't be automatically supplied--fill the empty rows
+' from the data entered in the dialog box. These data are the first character after each
+' dollar sign.
+
+    i      = 1
+    Start% = 1
+    Do
+      p = InStr( Start%, WorkString$, DELIMITER_DOLLAR )
+      If p > 0 Then
+          SubfieldStore( CODE, i ) = Mid$( WorkString$, p + 1, 1 )
+      End If
+      i      = i + 1
+      Start% = p + 1
+    Loop Until p = 0
+
+' Start to assemble the new field by combining the tag and indicators with the original
+' main heading.
+
+    NewField$ = Left$( OriginalField$, 5 ) & SubfieldStore( ORIG, 0 )
+
+' Then replace each dollar sign with the OCLC delimiter symbol (the "Latin letter
+' alveolar click" (U+01C2)) and add the subfield code from the array of subfields.
+
+    i      = 1
+    Start% = 1
+    Do
+      p = InStr( Start%, WorkString$, DELIMITER_DOLLAR )
+      If p > 0 Then
+          NewField$ = NewField$ & " " & DELIMITER_OCLC & SubfieldStore( CODE, i ) & " " & SubfieldStore( ORIG, i )
+      End If
+      i      = i + 1
+      Start% = p + 1
+    Loop Until p = 0
+
+' Set the new field and move the cursor to its end.
+
+    If Right$( NewField$, 1 ) Like "[!-.)]" Then
+        NewField$ = NewField$ & "."
+    End If
+    If CS.SetFieldLine( Row%, NewField$ ) Then
+        CS.CursorColumn = 6
+        CS.EndCell
+      Else
+        MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrays
+
+' Four of the names that might be thought to appear in this list don't, because they
+' contain diacritical marks; and because it can't be known beforehand how the diacritical
+' marks are encoded, they can't participate in a simple ASCII match. Therefore, they have
+' to be dealt with specially, and so are absent here. These places are: Côte d'Ivoire,
+' Curaçao, Réunion, and Terres australes et antarctiques françaises.
+
+GeogSub( 0   ) = "Afghanistan"
+GeogSub( 1   ) = "Africa"
+GeogSub( 2   ) = "Africa, Central"
+GeogSub( 3   ) = "Africa, East"
+GeogSub( 4   ) = "Africa, Eastern"
+GeogSub( 5   ) = "Africa, French-speaking West"
+GeogSub( 6   ) = "Africa, North"
+GeogSub( 7   ) = "Africa, Northeast"
+GeogSub( 8   ) = "Africa, Northwest"
+GeogSub( 9   ) = "Africa, Southern"
+GeogSub( 10  ) = "Africa, Sub-Saharan"
+GeogSub( 11  ) = "Africa, West"
+GeogSub( 12  ) = "Alabama"
+GeogSub( 13  ) = "Alaska"
+GeogSub( 14  ) = "Albania"
+GeogSub( 15  ) = "Alberta"
+GeogSub( 16  ) = "Algeria"
+GeogSub( 17  ) = "Alps"
+GeogSub( 18  ) = "America"
+GeogSub( 19  ) = "American Samoa"
+GeogSub( 20  ) = "Andorra"
+GeogSub( 21  ) = "Angola"
+GeogSub( 22  ) = "Anguilla"
+GeogSub( 23  ) = "Antarctica"
+GeogSub( 24  ) = "Arab countries"
+GeogSub( 25  ) = "Arctic regions"
+GeogSub( 26  ) = "Argentina"
+GeogSub( 27  ) = "Arizona"
+GeogSub( 28  ) = "Arkansas"
+GeogSub( 29  ) = "Armenia (Republic)"
+GeogSub( 30  ) = "Armenia"
+GeogSub( 31  ) = "Aruba"
+GeogSub( 32  ) = "Asia"
+GeogSub( 33  ) = "Asia, Central"
+GeogSub( 34  ) = "Austral Islands"
+GeogSub( 35  ) = "Australasia"
+GeogSub( 36  ) = "Australia"
+GeogSub( 37  ) = "Austria"
+GeogSub( 38  ) = "Azerbaijan"
+GeogSub( 39  ) = "Bahamas"
+GeogSub( 40  ) = "Bahrain"
+GeogSub( 41  ) = "Balkan Peninsula"
+GeogSub( 42  ) = "Baltic States"
+GeogSub( 43  ) = "Bangladesh"
+GeogSub( 44  ) = "Barbados"
+GeogSub( 45  ) = "Barbuda"
+GeogSub( 46  ) = "Belarus"
+GeogSub( 47  ) = "Belgium"
+GeogSub( 48  ) = "Belize"
+GeogSub( 49  ) = "Benelux countries"
+GeogSub( 50  ) = "Bengal"
+GeogSub( 51  ) = "Benin"
+GeogSub( 52  ) = "Bermuda"
+GeogSub( 53  ) = "Bhutan"
+GeogSub( 54  ) = "Bolivia"
+GeogSub( 55  ) = "Bonaire"
+GeogSub( 56  ) = "Bosnia and Herzegovina"
+GeogSub( 57  ) = "Botswana"
+GeogSub( 58  ) = "Brazil"
+GeogSub( 59  ) = "British Columbia"
+GeogSub( 60  ) = "British Isles"
+GeogSub( 61  ) = "British Virgin Islands"
+GeogSub( 62  ) = "Brunei"
+GeogSub( 63  ) = "Bulgaria"
+GeogSub( 64  ) = "Burkina Faso"
+GeogSub( 65  ) = "Burma"
+GeogSub( 66  ) = "Burundi"
+GeogSub( 67  ) = "Byzantine Empire"
+GeogSub( 68  ) = "Cabo Verde"
+GeogSub( 69  ) = "California"
+GeogSub( 70  ) = "Cambodia"
+GeogSub( 71  ) = "Cameroon"
+GeogSub( 72  ) = "Canada"
+GeogSub( 73  ) = "Canary Islands"
+GeogSub( 74  ) = "Caribbean Area"
+GeogSub( 75  ) = "Caroline Islands"
+GeogSub( 76  ) = "Caucasus"
+GeogSub( 77  ) = "Cayman Islands"
+GeogSub( 78  ) = "Central African Republic"
+GeogSub( 79  ) = "Central America"
+GeogSub( 80  ) = "Chad"
+GeogSub( 81  ) = "Channel Islands"
+GeogSub( 82  ) = "Chile"
+GeogSub( 83  ) = "China"
+GeogSub( 84  ) = "Colombia"
+GeogSub( 85  ) = "Colorado"
+GeogSub( 86  ) = "Commonwealth countries"
+GeogSub( 87  ) = "Communist countries"
+GeogSub( 88  ) = "Comoros"
+GeogSub( 89  ) = "Congo (Brazzaville)"
+GeogSub( 90  ) = "Congo (Democratic Republic)"
+GeogSub( 91  ) = "Connecticut"
+GeogSub( 92  ) = "Cook Islands"
+GeogSub( 93  ) = "Costa Rica"
+GeogSub( 94  ) = "Croatia"
+GeogSub( 95  ) = "Cuba"
+GeogSub( 96  ) = "Cyprus"
+GeogSub( 97  ) = "Czech Republic"
+GeogSub( 98  ) = "Czechoslovakia"
+GeogSub( 99  ) = "Delaware"
+GeogSub( 100 ) = "Denmark"
+GeogSub( 101 ) = "Developing countries"
+GeogSub( 102 ) = "Djibouti"
+GeogSub( 103 ) = "Dominica"
+GeogSub( 104 ) = "Dominican Republic"
+GeogSub( 105 ) = "East Asia"
+GeogSub( 106 ) = "Ecuador"
+GeogSub( 107 ) = "Egypt"
+GeogSub( 108 ) = "El Salvador"
+GeogSub( 109 ) = "England"
+GeogSub( 110 ) = "Equatorial Guinea"
+GeogSub( 111 ) = "Eritrea"
+GeogSub( 112 ) = "Estonia"
+GeogSub( 113 ) = "Eswatini"
+GeogSub( 114 ) = "Ethiopia"
+GeogSub( 115 ) = "Eurasia"
+GeogSub( 116 ) = "Europe"
+GeogSub( 117 ) = "Europe, Central"
+GeogSub( 118 ) = "Europe, Eastern"
+GeogSub( 119 ) = "Europe, Northern"
+GeogSub( 120 ) = "Europe, Southern"
+GeogSub( 121 ) = "European Economic Community countries"
+GeogSub( 122 ) = "European Free Trade Association countries"
+GeogSub( 123 ) = "Falkland Islands"
+GeogSub( 124 ) = "Faroe Islands"
+GeogSub( 125 ) = "Fiji"
+GeogSub( 126 ) = "Finland"
+GeogSub( 127 ) = "Florida"
+GeogSub( 128 ) = "Former communist countries"
+GeogSub( 129 ) = "Former Soviet republics"
+GeogSub( 130 ) = "France"
+GeogSub( 131 ) = "French Guiana"
+GeogSub( 132 ) = "French Polynesia"
+GeogSub( 133 ) = "Gabon"
+GeogSub( 134 ) = "Galapagos Islands"
+GeogSub( 135 ) = "Gambia"
+GeogSub( 136 ) = "Georgia (Republic)"
+GeogSub( 137 ) = "Georgia"
+GeogSub( 138 ) = "Germany"
+GeogSub( 139 ) = "Ghana"
+GeogSub( 140 ) = "Gibraltar"
+GeogSub( 141 ) = "Great Britain"
+GeogSub( 142 ) = "Greece"
+GeogSub( 143 ) = "Greenland"
+GeogSub( 144 ) = "Grenada"
+GeogSub( 145 ) = "Guadeloupe"
+GeogSub( 146 ) = "Guam"
+GeogSub( 147 ) = "Guatemala"
+GeogSub( 148 ) = "Guiana"
+GeogSub( 149 ) = "Guinea"
+GeogSub( 150 ) = "Guinea-Bissau"
+GeogSub( 151 ) = "Guyana"
+GeogSub( 152 ) = "Haiti"
+GeogSub( 153 ) = "Hawaii"
+GeogSub( 154 ) = "Hispaniola"
+GeogSub( 155 ) = "Honduras"
+GeogSub( 156 ) = "Hungary"
+GeogSub( 157 ) = "Iceland"
+GeogSub( 158 ) = "Idaho"
+GeogSub( 159 ) = "Illinois"
+GeogSub( 160 ) = "India"
+GeogSub( 161 ) = "Indiana"
+GeogSub( 162 ) = "Indochina"
+GeogSub( 163 ) = "Indonesia"
+GeogSub( 164 ) = "Iowa"
+GeogSub( 165 ) = "Iran"
+GeogSub( 166 ) = "Iraq"
+GeogSub( 167 ) = "Ireland"
+GeogSub( 168 ) = "Islamic countries"
+GeogSub( 169 ) = "Islamic Empire"
+GeogSub( 170 ) = "Islands of the Indian Ocean"
+GeogSub( 171 ) = "Israel"
+GeogSub( 172 ) = "Italy"
+GeogSub( 173 ) = "Jamaica"
+GeogSub( 174 ) = "Japan"
+GeogSub( 175 ) = "Jerusalem"
+GeogSub( 176 ) = "Jordan"
+GeogSub( 177 ) = "Kansas"
+GeogSub( 178 ) = "Kazakhstan"
+GeogSub( 179 ) = "Kentucky"
+GeogSub( 180 ) = "Kenya"
+GeogSub( 181 ) = "Kerguelen Islands"
+GeogSub( 182 ) = "Kiribati"
+GeogSub( 183 ) = "Korea (North)"
+GeogSub( 184 ) = "Korea"
+GeogSub( 185 ) = "Kosovo"
+GeogSub( 186 ) = "Kuwait"
+GeogSub( 187 ) = "Kyrgyzstan"
+GeogSub( 188 ) = "Laos"
+GeogSub( 189 ) = "Latin America"
+GeogSub( 190 ) = "Latvia"
+GeogSub( 191 ) = "Lebanon"
+GeogSub( 192 ) = "Lesotho"
+GeogSub( 193 ) = "Liberia"
+GeogSub( 194 ) = "Libya"
+GeogSub( 195 ) = "Liechtenstein"
+GeogSub( 196 ) = "Lithuania"
+GeogSub( 197 ) = "Louisiana"
+GeogSub( 198 ) = "Luxembourg"
+GeogSub( 199 ) = "Macaronesia"
+GeogSub( 200 ) = "Macedonia"
+GeogSub( 201 ) = "Madagascar"
+GeogSub( 202 ) = "Maine"
+GeogSub( 203 ) = "Malawi"
+GeogSub( 204 ) = "Malay Archipelago"
+GeogSub( 205 ) = "Malaysia"
+GeogSub( 206 ) = "Maldives"
+GeogSub( 207 ) = "Mali"
+GeogSub( 208 ) = "Malta"
+GeogSub( 209 ) = "Manitoba"
+GeogSub( 210 ) = "Marshall Islands"
+GeogSub( 211 ) = "Martinique"
+GeogSub( 212 ) = "Maryland"
+GeogSub( 213 ) = "Massachusetts"
+GeogSub( 214 ) = "Mauritania"
+GeogSub( 215 ) = "Mauritius"
+GeogSub( 216 ) = "Melanesia"
+GeogSub( 217 ) = "Mexican-American Border Region"
+GeogSub( 218 ) = "Mexico"
+GeogSub( 219 ) = "Michigan"
+GeogSub( 220 ) = "Micronesia (Federated States)"
+GeogSub( 221 ) = "Micronesia"
+GeogSub( 222 ) = "Middle East"
+GeogSub( 223 ) = "Minnesota"
+GeogSub( 224 ) = "Mississippi"
+GeogSub( 225 ) = "Missouri"
+GeogSub( 226 ) = "Moldova"
+GeogSub( 227 ) = "Monaco"
+GeogSub( 228 ) = "Mongolia"
+GeogSub( 229 ) = "Montana"
+GeogSub( 230 ) = "Montenegro"
+GeogSub( 231 ) = "Montserrat"
+GeogSub( 232 ) = "Morocco"
+GeogSub( 233 ) = "Mozambique"
+GeogSub( 234 ) = "Namibia"
+GeogSub( 235 ) = "Nauru"
+GeogSub( 236 ) = "Nebraska"
+GeogSub( 237 ) = "Nepal"
+GeogSub( 238 ) = "Netherlands Antilles"
+GeogSub( 239 ) = "Netherlands"
+GeogSub( 240 ) = "Nevada"
+GeogSub( 241 ) = "New Brunswick"
+GeogSub( 242 ) = "New Caledonia"
+GeogSub( 243 ) = "New Guinea"
+GeogSub( 244 ) = "New Hampshire"
+GeogSub( 245 ) = "New Jersey"
+GeogSub( 246 ) = "New Mexico"
+GeogSub( 247 ) = "New York"
+GeogSub( 248 ) = "New Zealand"
+GeogSub( 249 ) = "Newfoundland and Labrador"
+GeogSub( 250 ) = "Nicaragua"
+GeogSub( 251 ) = "Niger"
+GeogSub( 252 ) = "Nigeria"
+GeogSub( 253 ) = "North America"
+GeogSub( 254 ) = "North Carolina"
+GeogSub( 255 ) = "North Dakota"
+GeogSub( 256 ) = "North Macedonia"
+GeogSub( 257 ) = "Northern Ireland"
+GeogSub( 258 ) = "Northwest Territories"
+GeogSub( 259 ) = "Norway"
+GeogSub( 260 ) = "Nova Scotia"
+GeogSub( 261 ) = "Nunavut"
+GeogSub( 262 ) = "Oceania"
+GeogSub( 263 ) = "Ohio"
+GeogSub( 264 ) = "Oklahoma"
+GeogSub( 265 ) = "Oman"
+GeogSub( 266 ) = "Ontario"
+GeogSub( 267 ) = "Oregon"
+GeogSub( 268 ) = "Pacific Area"
+GeogSub( 269 ) = "Pakistan"
+GeogSub( 270 ) = "Palau"
+GeogSub( 271 ) = "Palestine"
+GeogSub( 272 ) = "Panama"
+GeogSub( 273 ) = "Papua New Guinea"
+GeogSub( 274 ) = "Paraguay"
+GeogSub( 275 ) = "Pennsylvania"
+GeogSub( 276 ) = "Persian Gulf Region"
+GeogSub( 277 ) = "Peru"
+GeogSub( 278 ) = "Philippines"
+GeogSub( 279 ) = "Poland"
+GeogSub( 280 ) = "Polynesia"
+GeogSub( 281 ) = "Portugal"
+GeogSub( 282 ) = "Prince Edward Island"
+GeogSub( 283 ) = "Prussia"
+GeogSub( 284 ) = "Prussia, East (Poland and Russia)"
+GeogSub( 285 ) = "Puerto Rico"
+GeogSub( 286 ) = "Qatar"
+GeogSub( 287 ) = "Quebec (Province)"
+GeogSub( 288 ) = "Rhode Island"
+GeogSub( 289 ) = "Romania"
+GeogSub( 290 ) = "Rome"
+GeogSub( 291 ) = "Russia"
+GeogSub( 292 ) = "Rwanda"
+GeogSub( 293 ) = "Sahel"
+GeogSub( 294 ) = "Saint Kitts and Nevis"
+GeogSub( 295 ) = "Saint Lucia"
+GeogSub( 296 ) = "Saint Vincent and the Grenadines"
+GeogSub( 297 ) = "Samoa"
+GeogSub( 298 ) = "Samoan Islands"
+GeogSub( 299 ) = "San Marino"
+GeogSub( 300 ) = "Sao Tome and Principe"
+GeogSub( 301 ) = "Saskatchewan"
+GeogSub( 302 ) = "Saudi Arabia"
+GeogSub( 303 ) = "Scandinavia"
+GeogSub( 304 ) = "Scotland"
+GeogSub( 305 ) = "Senegal"
+GeogSub( 306 ) = "Serbia"
+GeogSub( 307 ) = "Seychelles"
+GeogSub( 308 ) = "Sierra Leone"
+GeogSub( 309 ) = "Singapore"
+GeogSub( 310 ) = "Slovakia"
+GeogSub( 311 ) = "Slovenia"
+GeogSub( 312 ) = "Solomon Islands"
+GeogSub( 313 ) = "Somalia"
+GeogSub( 314 ) = "South Africa"
+GeogSub( 315 ) = "South America"
+GeogSub( 316 ) = "South Asia"
+GeogSub( 317 ) = "South Carolina"
+GeogSub( 318 ) = "South Dakota"
+GeogSub( 319 ) = "South Sudan"
+GeogSub( 320 ) = "Southeast Asia"
+GeogSub( 321 ) = "Southern Cone of South America"
+GeogSub( 322 ) = "Soviet Union"
+GeogSub( 323 ) = "Spain"
+GeogSub( 324 ) = "Sri Lanka"
+GeogSub( 325 ) = "Sudan (Region)"
+GeogSub( 326 ) = "Sudan"
+GeogSub( 327 ) = "Suriname"
+GeogSub( 328 ) = "Sweden"
+GeogSub( 329 ) = "Switzerland"
+GeogSub( 330 ) = "Syria"
+GeogSub( 331 ) = "Taiwan"
+GeogSub( 332 ) = "Tajikistan"
+GeogSub( 333 ) = "Tanzania"
+GeogSub( 334 ) = "Tasmania"
+GeogSub( 335 ) = "Tennessee"
+GeogSub( 336 ) = "Texas"
+GeogSub( 337 ) = "Thailand"
+GeogSub( 338 ) = "Timor-Leste"
+GeogSub( 339 ) = "Tobago (Trinidad and Tobago)"
+GeogSub( 340 ) = "Togo"
+GeogSub( 341 ) = "Tonga"
+GeogSub( 342 ) = "Trinidad and Tobago"
+GeogSub( 343 ) = "Trinidad"
+GeogSub( 344 ) = "Tropics"
+GeogSub( 345 ) = "Tunisia"
+GeogSub( 346 ) = "Turkey"
+GeogSub( 347 ) = "Turkmenistan"
+GeogSub( 348 ) = "Turks and Caicos Islands"
+GeogSub( 349 ) = "Tuvalu"
+GeogSub( 350 ) = "Uganda"
+GeogSub( 351 ) = "Ukraine"
+GeogSub( 352 ) = "United Arab Emirates"
+GeogSub( 353 ) = "United States Virgin Islands"
+GeogSub( 354 ) = "United States"
+GeogSub( 355 ) = "Uruguay"
+GeogSub( 356 ) = "Utah"
+GeogSub( 357 ) = "Uzbekistan"
+GeogSub( 358 ) = "Vanuatu"
+GeogSub( 359 ) = "Vatican City"
+GeogSub( 360 ) = "Venezuela"
+GeogSub( 361 ) = "Vermont"
+GeogSub( 362 ) = "Vietnam"
+GeogSub( 363 ) = "Virgin Islands"
+GeogSub( 364 ) = "Virginia"
+GeogSub( 365 ) = "Wales"
+GeogSub( 366 ) = "Washington (D.C.)"
+GeogSub( 367 ) = "Washington (State)"
+GeogSub( 368 ) = "West Indies, British"
+GeogSub( 369 ) = "West Indies, French"
+GeogSub( 370 ) = "West Virginia"
+GeogSub( 371 ) = "Western Australia"
+GeogSub( 372 ) = "Wisconsin"
+GeogSub( 373 ) = "Wyoming"
+GeogSub( 374 ) = "Yemen"
+GeogSub( 375 ) = "Yugoslavia"
+GeogSub( 376 ) = "Yukon"
+GeogSub( 377 ) = "Zambezi River"
+GeogSub( 378 ) = "Zambia"
+GeogSub( 379 ) = "Zimbabwe"
+
+' This array contains the form and topical subdivisons most likely to be found in subject
+' headings. The terms are prefixed by the subfield codes "v" and "x", respectively. When
+' the macro runs, those subfield codes are automatically placed in the field's string.
+' Terms that may be either form or topical have the prefix "q". This is a signal that the
+' default value of "v" is to be offered in the dialog box, requiring confirmation or
+' rejection by the user.
+
+OtherSub( 0   ) = "qAbstracts"
+OtherSub( 1   ) = "qAdaptations"
+OtherSub( 2   ) = "xAesthetics"
+OtherSub( 3   ) = "vAlmanacs"
+OtherSub( 4   ) = "xAlumni and alumnae"
+OtherSub( 5   ) = "vAmateurs' manuals"
+OtherSub( 6   ) = "vAnecdotes"
+OtherSub( 7   ) = "xAnniversaries, etc."
+OtherSub( 8   ) = "xAntiquities"
+OtherSub( 9   ) = "vApologetic works"
+OtherSub( 10  ) = "xAppreciation"
+OtherSub( 11  ) = "xAppropriations and expenditures"
+OtherSub( 12  ) = "qArchives"
+OtherSub( 13  ) = "qArt"
+OtherSub( 14  ) = "vAtlases"
+OtherSub( 15  ) = "qAudio adaptations"
+OtherSub( 16  ) = "xAuthorship"
+OtherSub( 17  ) = "xAwards"
+OtherSub( 18  ) = "qBibliography"
+OtherSub( 19  ) = "vBio-bibliography"
+OtherSub( 20  ) = "qBiography"
+OtherSub( 21  ) = "qBlogs"
+OtherSub( 22  ) = "vBook reviews"
+OtherSub( 23  ) = "xBuildings, structures, etc."
+OtherSub( 24  ) = "xCare and hygiene"
+OtherSub( 25  ) = "qCaricatures and cartoons"
+OtherSub( 26  ) = "qCase studies"
+OtherSub( 27  ) = "qCases"
+OtherSub( 28  ) = "qCatalogs"
+OtherSub( 29  ) = "xCauses"
+OtherSub( 30  ) = "xCentennial celebrations, etc."
+OtherSub( 31  ) = "vCharts, diagrams, etc."
+OtherSub( 32  ) = "qChronology"
+OtherSub( 33  ) = "xChurch history"
+OtherSub( 34  ) = "xCivilization"
+OtherSub( 35  ) = "qClassification"
+OtherSub( 36  ) = "vCollections"
+OtherSub( 37  ) = "vComic books, strips, etc."
+OtherSub( 38  ) = "xCommittees"
+OtherSub( 39  ) = "qComputer games"
+OtherSub( 40  ) = "vConcordances"
+OtherSub( 41  ) = "xConduct of life"
+OtherSub( 42  ) = "qCongresses"
+OtherSub( 43  ) = "qControversial literature"
+OtherSub( 44  ) = "vConversation and phrase books"
+OtherSub( 45  ) = "qCorrespondence"
+OtherSub( 46  ) = "xCriticism and interpretation"
+OtherSub( 47  ) = "xCriticism, Textual"
+OtherSub( 48  ) = "qCross-cultural studies"
+OtherSub( 49  ) = "xCurricula"
+OtherSub( 50  ) = "qDatabases"
+OtherSub( 51  ) = "xDescription and travel"
+OtherSub( 52  ) = "xDesign and construction"
+OtherSub( 53  ) = "xDesign"
+OtherSub( 54  ) = "vDesigns and plans"
+OtherSub( 55  ) = "xDialects"
+OtherSub( 56  ) = "qDiaries"
+OtherSub( 57  ) = "qDictionaries"
+OtherSub( 58  ) = "vDigests"
+OtherSub( 59  ) = "vDirectories"
+OtherSub( 60  ) = "vDrama"
+OtherSub( 61  ) = "qDrawings"
+OtherSub( 62  ) = "qEarly works to 1800"
+OtherSub( 63  ) = "xEconometric models"
+OtherSub( 64  ) = "xEconomic aspects"
+OtherSub( 65  ) = "xEconomic conditions"
+OtherSub( 66  ) = "xEconomic policy"
+OtherSub( 67  ) = "xEducation (Higher)"
+OtherSub( 68  ) = "xEducation"
+OtherSub( 69  ) = "xElections"
+OtherSub( 70  ) = "xEmployees"
+OtherSub( 71  ) = "xEmployment"
+OtherSub( 72  ) = "vEncyclopedias"
+OtherSub( 73  ) = "xEnvironmental aspects"
+OtherSub( 74  ) = "xEnvironmental conditions"
+OtherSub( 75  ) = "xEquipment and supplies"
+OtherSub( 76  ) = "xEthics"
+OtherSub( 77  ) = "xEtymology"
+OtherSub( 78  ) = "xEvaluation"
+OtherSub( 79  ) = "vExaminations, questions, etc."
+OtherSub( 80  ) = "vExcerpts"
+OtherSub( 81  ) = "vExcerpts, arranged"
+OtherSub( 82  ) = "qExhibitions"
+OtherSub( 83  ) = "vFacsimiles"
+OtherSub( 84  ) = "xFaculty"
+OtherSub( 85  ) = "xFamily"
+OtherSub( 86  ) = "vFiction"
+OtherSub( 87  ) = "vFilm adaptations"
+OtherSub( 88  ) = "vFilms for foreign speakers"
+OtherSub( 89  ) = "xFinance"
+OtherSub( 90  ) = "qFolklore"
+OtherSub( 91  ) = "xForeign countries"
+OtherSub( 92  ) = "xForeign economic relations"
+OtherSub( 93  ) = "xForeign influences"
+OtherSub( 94  ) = "xForeign public opinion"
+OtherSub( 95  ) = "xForeign relations"
+OtherSub( 96  ) = "vForms"
+OtherSub( 97  ) = "qGenealogy"
+OtherSub( 98  ) = "xGeography"
+OtherSub( 99  ) = "vGlossaries, vocabularies, etc."
+OtherSub( 100 ) = "xGovernment policy"
+OtherSub( 101 ) = "xGovernment relations"
+OtherSub( 102 ) = "xGrammar"
+OtherSub( 103 ) = "vGuidebooks"
+OtherSub( 104 ) = "vHandbooks, manuals, etc."
+OtherSub( 105 ) = "xHealth aspects"
+OtherSub( 106 ) = "xHistorical geography"
+OtherSub( 107 ) = "xHistoriography"
+OtherSub( 108 ) = "xHistory and criticism"
+OtherSub( 109 ) = "xHistory"
+OtherSub( 110 ) = "qHumor"
+OtherSub( 111 ) = "qHymns"
+OtherSub( 112 ) = "qIdentification"
+OtherSub( 113 ) = "qIllustrations"
+OtherSub( 114 ) = "qIn art"
+OtherSub( 115 ) = "xIn literature"
+OtherSub( 116 ) = "xIn mass media"
+OtherSub( 117 ) = "xIn motion pictures"
+OtherSub( 118 ) = "xIn popular culture"
+OtherSub( 119 ) = "vIndexes"
+OtherSub( 120 ) = "xInfluence"
+OtherSub( 121 ) = "xInformation resources"
+OtherSub( 122 ) = "vInstrumental settings"
+OtherSub( 123 ) = "xIntellectual life"
+OtherSub( 124 ) = "qInteractive multimedia"
+OtherSub( 125 ) = "xInternational cooperation"
+OtherSub( 126 ) = "qInterviews"
+OtherSub( 127 ) = "vJuvenile drama"
+OtherSub( 128 ) = "vJuvenile fiction"
+OtherSub( 129 ) = "vJuvenile films"
+OtherSub( 130 ) = "vJuvenile humor"
+OtherSub( 131 ) = "vJuvenile literature"
+OtherSub( 132 ) = "vJuvenile poetry"
+OtherSub( 133 ) = "vJuvenile software"
+OtherSub( 134 ) = "vJuvenile sound recordings"
+OtherSub( 135 ) = "vJuvenile"
+OtherSub( 136 ) = "vLaboratory manuals"
+OtherSub( 137 ) = "xLanguage"
+OtherSub( 138 ) = "xLaw and legislation"
+OtherSub( 139 ) = "xLeadership"
+OtherSub( 140 ) = "qLegends"
+OtherSub( 141 ) = "qLibrettos"
+OtherSub( 142 ) = "vLiterary collections"
+OtherSub( 143 ) = "qLongitudinal studies"
+OtherSub( 144 ) = "xManagement"
+OtherSub( 145 ) = "xManuscripts"
+OtherSub( 146 ) = "qMaps"
+OtherSub( 147 ) = "xMarketing"
+OtherSub( 148 ) = "xMaterials"
+OtherSub( 149 ) = "xMathematical models"
+OtherSub( 150 ) = "xMethodology"
+OtherSub( 151 ) = "qMethods"
+OtherSub( 152 ) = "qMiscellanea"
+OtherSub( 153 ) = "xMoral and ethical aspects"
+OtherSub( 154 ) = "qMusic"
+OtherSub( 155 ) = "vMusical settings"
+OtherSub( 156 ) = "xMythology"
+OtherSub( 157 ) = "vNewspapers"
+OtherSub( 158 ) = "xNomenclature"
+OtherSub( 159 ) = "qNotation"
+OtherSub( 160 ) = "qNotebooks, sketchbooks, etc."
+OtherSub( 161 ) = "qObservations"
+OtherSub( 162 ) = "xOfficials and employees"
+OtherSub( 163 ) = "xOrigin"
+OtherSub( 164 ) = "vOutlines, syllabi, etc."
+OtherSub( 165 ) = "vPamphlets"
+OtherSub( 166 ) = "qParodies, imitations, etc."
+OtherSub( 167 ) = "qParts"
+OtherSub( 168 ) = "qPatents"
+OtherSub( 169 ) = "vPatterns"
+OtherSub( 170 ) = "qPeriodicals"
+OtherSub( 171 ) = "vPersonal narratives"
+OtherSub( 172 ) = "xPhilosophy"
+OtherSub( 173 ) = "vPhotographs"
+OtherSub( 174 ) = "xPhysiological aspects"
+OtherSub( 175 ) = "xPhysiological effect"
+OtherSub( 176 ) = "vPictorial works"
+OtherSub( 177 ) = "xPlanning"
+OtherSub( 178 ) = "vPoetry"
+OtherSub( 179 ) = "xPolitical activity"
+OtherSub( 180 ) = "xPolitical and social views"
+OtherSub( 181 ) = "xPolitical aspects"
+OtherSub( 182 ) = "xPolitics and government"
+OtherSub( 183 ) = "vPopular works"
+OtherSub( 184 ) = "qPortraits"
+OtherSub( 185 ) = "qPosters"
+OtherSub( 186 ) = "qPrayers and devotions"
+OtherSub( 187 ) = "qPrayers"
+OtherSub( 188 ) = "xPresidents"
+OtherSub( 189 ) = "vProblems, exercises, etc."
+OtherSub( 190 ) = "vProgrammed instruction"
+OtherSub( 191 ) = "xProtest movements"
+OtherSub( 192 ) = "xPsychological aspects"
+OtherSub( 193 ) = "xPsychology"
+OtherSub( 194 ) = "xPublic opinion"
+OtherSub( 195 ) = "qQuotations"
+OtherSub( 196 ) = "qQuotations, maxims, etc."
+OtherSub( 197 ) = "vReaders"
+OtherSub( 198 ) = "vRegisters"
+OtherSub( 199 ) = "xRelations"
+OtherSub( 200 ) = "vRelief models"
+OtherSub( 201 ) = "xReligion"
+OtherSub( 202 ) = "xReligious aspects"
+OtherSub( 203 ) = "xReligious life and customs"
+OtherSub( 204 ) = "xReligious life"
+OtherSub( 205 ) = "xResearch"
+OtherSub( 206 ) = "vReviews"
+OtherSub( 207 ) = "qRomances"
+OtherSub( 208 ) = "xRural conditions"
+OtherSub( 209 ) = "qSacred books"
+OtherSub( 210 ) = "xSafety measures"
+OtherSub( 211 ) = "xScholarships, fellowships, etc."
+OtherSub( 212 ) = "xScience"
+OtherSub( 213 ) = "vScores and parts"
+OtherSub( 214 ) = "vScores"
+OtherSub( 215 ) = "qSelf-instruction"
+OtherSub( 216 ) = "qSermons"
+OtherSub( 217 ) = "xServices for"
+OtherSub( 218 ) = "vSlides"
+OtherSub( 219 ) = "xSocial aspects"
+OtherSub( 220 ) = "xSocial conditions"
+OtherSub( 221 ) = "xSocial life and customs"
+OtherSub( 222 ) = "xSocial policy"
+OtherSub( 223 ) = "xSocieties, etc."
+OtherSub( 224 ) = "xSociological aspects"
+OtherSub( 225 ) = "vSoftware"
+OtherSub( 226 ) = "vSolo with piano"
+OtherSub( 227 ) = "qSongs and music"
+OtherSub( 228 ) = "qSources"
+OtherSub( 229 ) = "vSpecimens"
+OtherSub( 230 ) = "xStandards"
+OtherSub( 231 ) = "xStates"
+OtherSub( 232 ) = "qStatistics"
+OtherSub( 233 ) = "qStories, plots, etc."
+OtherSub( 234 ) = "vStudies and exercises"
+OtherSub( 235 ) = "xStudy and teaching"
+OtherSub( 236 ) = "vStudy guides"
+OtherSub( 237 ) = "vTables"
+OtherSub( 238 ) = "xTechnique"
+OtherSub( 239 ) = "xTechnological innovations"
+OtherSub( 240 ) = "vTelevision adaptations"
+OtherSub( 241 ) = "qTerminology"
+OtherSub( 242 ) = "qTerms and phrases"
+OtherSub( 243 ) = "vTextbooks for foreign speakers"
+OtherSub( 244 ) = "qTextbooks"
+OtherSub( 245 ) = "qTexts"
+OtherSub( 246 ) = "xThemes, motives"
+OtherSub( 247 ) = "vTours"
+OtherSub( 248 ) = "qTranslations"
+OtherSub( 249 ) = "xTransliteration"
+OtherSub( 250 ) = "xTravel"
+OtherSub( 251 ) = "qTrials, litigation, etc."
+OtherSub( 252 ) = "xVocabulary"
+OtherSub( 253 ) = "vVocal scores with piano"
+OtherSub( 254 ) = "xVocational guidance"
+OtherSub( 255 ) = "qYearbooks"
+
+End Sub
+
+'****************************************************************************************
+
+Function ConvertToISO88591( InputString$ ) As String
+
+' This function converts the MARC21 string to characters encoded in ISO/IEC 8859-1:1998,
+' the character set used in OCLC macro language dialog boxes, making appropriate
+' conversions where possible, and substituting the vertical bar "|" where an appropriate
+' conversion is not possible. This process is called "normalization."
+
+Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The differences between OCLC-MARC encodings of subscript and
+Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  ' superscript numbers and ISO-8859-1 encodings of those numbers.
+
+Dim CURRENCY_SIGN As String*1 : CURRENCY_SIGN = "¤"
+Dim VERTICAL_BAR  As String*1 : VERTICAL_BAR  = "|"
+
+Dim Character$                : Character$    = " "
+Dim CharNext%
+Dim CharRead%
+Dim TempString$
+
+Dim i As Integer
+
+InputString$ = InputString$ & Character$
+
+' Read the current character in the string, but also the next one, because diacritics
+' follow their base characters; if the next character is a diacritic there may be a
+' precomposed equivalent for the base + combining character in the character set. (Only
+' the first combining character following a base character can be considered, as there
+' are no precomposed characters incorporating two or more diacritics.)
+
+For i = 1 To Len( InputString$ ) - 1
+
+  CharRead% = Asc( Mid$( InputString$, i, 1 ) )
+  CharNext% = Asc( Mid$( InputString$, i + 1, 1 ) )
+
+  Select Case CharRead%
+
+    Case 0 To 31   'Should never be encountered?
+      Character$ = CURRENCY_SIGN
+
+    Case 32 To 37, 39 To 64   'Numbers and symbols
+      Character$ = Chr$( CharRead% )
+
+    Case 38   '&: This must be doubled for display.
+      Character$ = "&&"
+
+    Case 66, 68, 70 To 72, 74 To 77, 80 To 82, 84, 86 To 88, 91 To 96   'Uppercase letters and punctuation.
+      Character$ = Chr$( CharRead% )
+
+    Case 98, 100, 102 To 104, 106 To 109, 112 To 114, 116, 118 To 120, 123 To 128   'Lowercase letters and punctuation.
+      Character$ = Chr$( CharRead% )
+
+' OCLC-MARC modified letters are turned into precomposed characters, when possible.
+
+    Case 65, 97   'A, a
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 127 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 128 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 129 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 130 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 234  'ring
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224, 229 To 231, 233, 235 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 67, 99   'C, c
+      Select Case CharNext%
+        Case 240  'cedilla
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 224 To 239, 241 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 69, 101  'E, e
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 73, 105  'I, i
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 78, 110  'N, n
+      Select Case CharNext%
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 224 To 227, 229 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 79, 111  'O, o
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 131 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 228  'tilde
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 229 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 83, 115  'S, s
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 85, 117  'U, u
+      Select Case CharNext%
+        Case 225  'grave
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 133 ) : i = i + 1
+        Case 227  'circumflex
+          Character$ = Chr$( CharRead% + 134 ) : i = i + 1
+        Case 232  'diaeresis
+          Character$ = Chr$( CharRead% + 135 ) : i = i + 1
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 89, 121  'Y, y
+      Select Case CharNext%
+        Case 226  'acute
+          Character$ = Chr$( CharRead% + 132 ) : i = i + 1
+        Case 232  'diaeresis
+          If CharRead% = 121 Then
+              Character$ = Chr$( 255 )
+            Else
+              Character$ = Chr$( CharRead% )
+          End If
+          i = i + 1
+        Case 224 To 225, 227 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 90, 122  'Z, z
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + 1
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 128 To 157  'subscript and superscript numbers
+      Select Case CharRead%
+        Case 128 to 137  'superscript numbers
+          Character$ = Chr$( CharRead% - ASCII_DIFF_SUPERSCRIPT )
+        Case 144 to 153  'subscript numbers
+          Character$ = Chr$( CharRead% - ASCII_DIFF_SUBSCRIPT )
+        Case 138 To 139  'superscript parentheses
+          Character$ = Chr$( CharRead% - 98 )
+        Case 154 To 155  'subscript parentheses
+          Character$ = Chr$( CharRead% - 114 )
+        Case 140, 156    'superscript, subscript plus
+          Character$ = Chr$( 43 )
+        Case 141, 157    'superscript, subscript minus
+          Character$ = Chr$( 45 )
+      End Select
+
+    Case 158   'degree sign
+      Character$ = Chr$( 176 )
+    Case 159   'eszett
+      Character$ = Chr$( 223 )
+    Case 160   'euro
+      Character$ = Chr$( 128 )
+    Case 161   'crossed L
+      Character$ = "L"
+    Case 162   'crossed O
+      Character$ = Chr$( 216 )
+    Case 163   'Eth
+      Character$ = Chr$( 208 )
+    Case 164   'Thorn
+      Character$ = Chr$( 222 )
+    Case 165   'AE Ligature
+      Character$ = Chr$( 198 )
+    Case 166   'OE Ligature
+      Character$ = "Oe"
+    Case 167   'prime
+      Character$ = Chr$( 039 )
+    Case 168   'middle dot
+      Character$ = Chr$( 183 )
+    Case 169   'musical flat
+      Character$ = "[flat]"
+    Case 170   'registered trade mark sign
+      Character$ = Chr$( 174 )
+    Case 171   'plus-or-minus
+      Character$ = Chr$( 177 )
+    Case 172   'O with hook
+      Character$ = "O"
+    Case 173   'U with hook
+      Character$ = "O"
+    Case 174   'alif
+      Character$ = Chr$( 039 )
+    Case 176   'ayn
+      Character$ = Chr$( 039 )
+    Case 177   'crossed l
+      Character$ = "l"
+    Case 178   'crossed o
+      Character$ = Chr$( 248 )
+    Case 179   'd with crossbar
+      Character$ = Chr$( 240 )
+    Case 180   'thorn
+      Character$ = Chr$( 254 )
+    Case 181   'ae ligature
+      Character$ = Chr$( 230 )
+    Case 182   'oe ligature
+      Character$ = "oe"
+    Case 183   'double prime
+      Character$ = Chr$( 034 )
+    Case 184   'Turkish i
+      Character$ = "i"
+    Case 185   'pound
+      Character$ = Chr$( 163 )
+    Case 186   'eth
+      Character$ = Chr$( 240 )
+    Case 188   'o with hook
+      Character$ = "o"
+    Case 189   'u with hook
+      Character$ = "u"
+    Case 190   'script l
+      Character$ = "l"
+    Case 200   'inverted question mark
+      Character$ = Chr$( 191 )
+    Case 201   'inverted exclamation mark
+      Character$ = Chr$( 161 )
+    Case 202   'copyright
+      Character$ = Chr$( 169 )
+    Case 203   'sound recording copyright
+      Character$ = "p"
+    Case 204   'musical sharp
+      Character$ = "#"
+    Case 223   'delimiter
+      Character$ = Chr$( 223 )
+    Case 252   'fill character
+      Character$ = "*"
+    Case 224 To 234, 237 To 251, 245 To 255  'diacritical marks
+      If CharNext% < 223 Then
+          Character$ = Chr$( CharNext% ) : i = i + 1
+      End If
+    Case Else   'everything not already accounted for
+      If CharNext% > 223 Then
+          Character$ = VERTICAL_BAR : i = i + 1
+        Else
+          Character$ = Chr$( CharRead% )
+      End If
+
+  End Select
+
+  TempString$ = TempString$ & Character$
+
+Next i
+
+ConvertToISO88591 = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function GetSubfield( CursorPos% ) As String
+
+' Given the position of a dash or a dollar sign in the string, this routine extracts the
+' subfield following that position (that is, the substring between that position and the
+' next dash or dollar sign, or the end of the field, whichever comes first).
+
+Dim NextDash%
+Dim NextDelimiter%
+Dim NextSubfieldPos%
+
+NextDash%      = InStr( CursorPos% + 2, WorkString$, DASH )
+NextDelimiter% = InStr( CursorPos% + 2, WorkString$, DELIMITER_DOLLAR )
+If NextDelimiter% = 0 Then
+    NextDelimiter% = Len( WorkString$ ) + 1
+End If
+
+If NextDash% > 0 Then
+    If NextDash% < NextDelimiter% Then
+        NextSubfieldPos% = NextDash%
+      Else
+        NextSubfieldPos% = NextDelimiter%
+    End If
+  Else
+    NextSubfieldPos% = NextDelimiter%
+End If
+If NextSubfieldPos% > 0 Then
+    GetSubfield = Trim$( Mid$( WorkString$, CursorPos% + 3, NextSubfieldPos% - CursorPos% - 3 ) )
+  Else
+    GetSubfield = Trim$( Mid$( WorkString$, CursorPos% + 3 ) )
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const DISABLED       As Integer = 0
+Const ENABLED        As Integer = 1
+Const IDLE_STATE     As Integer = 5
+Const INITIALIZE     As Integer = 1
+Const KEEP_DLG_OPEN  As Integer = -1
+
+Static CodeAdded
+Static Finished
+Static PrevDashPos%
+Static PrevSubfield$
+Static ShowDefault_V
+
+Dim InputCode$
+Dim Subfield$
+
+Dim i As Integer, p As Integer, q As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText    "WholeField",   WorkString$
+    StepStore( ChangeCount% ) = WorkString$
+    p                         = InStr( WorkString$, DASH )
+    Subfield$                 = GetSubfield( p )
+    ShowDefault_V             = FALSE
+    Finished                  = FALSE
+    DlgText    "Subfield",     Subfield$
+    DlgEnable  "Undo",         DISABLED
+    DlgFocus   "SubfieldCode"
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "Undo"
+
+        WorkString$  = StepStore( ChangeCount% - 1 )
+        If ShowDefault_V Then ShowDefault_V = FALSE
+        If Finished Then Finished = FALSE
+        ChangeCount% = ChangeCount% - 1
+        ReDim Preserve StepStore( ChangeCount% )
+        DlgText    "WholeField",   WorkString$
+        p = InStr( WorkString$, DASH )
+        If p > 0 Then
+            Subfield$ = GetSubfield( p )
+        End If
+        DlgText    "Subfield",     Subfield$
+        If AmbigSubfCount% > 0 Then
+            For i = 0 To UBound( AmbiguousSubfields )
+              If Subfield$ = AmbiguousSubfields( i ) Then
+                  DlgText    "SubfieldCode", "v"
+                  ShowDefault_V = TRUE
+                  Exit For
+              End If
+            Next i
+        End If
+        DlgFocus   "SubfieldCode"
+        If ChangeCount% = 0 Then
+            DlgEnable  "Undo",         DISABLED
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "OK"
+
+' Pressing [ENTER] or clicking the "OK" button will confirm the default suggestion
+' of "v" for a form subdivision (as does pressing the space bar or typing the
+' letter "v"), or if all subdivisions have been coded, it will replace the subject
+' field and close the macro.
+
+        If Finished = FALSE Then
+            If ShowDefault_V = TRUE Then
+                p              = InStr( WorkString$, DASH )
+                WorkString$ = Left$( WorkString$, p - 1 ) & "$v" & Mid$( WorkString$, p + 2 )
+                ChangeCount%   = ChangeCount% + 1
+                CodeAdded      = TRUE
+                ReDim Preserve StepStore( ChangeCount% )
+                StepStore( ChangeCount% ) = WorkString$
+                If DlgEnable( "Undo" ) = DISABLED Then
+                    DlgEnable  "Undo",         ENABLED
+                End If
+            End If
+            ShowDefault_V = FALSE
+            Dialog1ControlFunction = KEEP_DLG_OPEN
+        End If
+
+    End Select
+
+
+  Case IDLE_STATE
+
+    InputCode$ = DlgText( "SubfieldCode" )
+    If Finished = FALSE Then
+        If InputCode$ Like "[VXYZvxyz]" Then  'Disregard case of input.
+            If ShowDefault_V = FALSE Then
+                p = InStr( WorkString$, DASH )
+                If p > 0 Then
+                    WorkString$ = Left$( WorkString$, p - 1 ) & "$" & LCase$( InputCode$ ) & Mid$( WorkString$, p + 2 )
+                    ChangeCount%   = ChangeCount% + 1
+                    CodeAdded      = TRUE
+                    ReDim Preserve StepStore( ChangeCount% )
+                    StepStore( ChangeCount% ) = WorkString$
+                    If DlgEnable( "Undo" ) = DISABLED Then
+                        DlgEnable  "Undo",         ENABLED
+                    End If
+                End If
+            End If
+          ElseIf InputCode$ Like "[ Vv]v" Or InputCode$ Like "[Xx]v" Then  'New input precedes existing data in text box.
+            If ShowDefault_V = TRUE Then
+                p = InStr( WorkString$, DASH )
+                If p > 0 Then
+                    If InputCode$ Like "[ Vv]v" Then
+                        WorkString$  = Left$( WorkString$, p - 1 ) & "$v" & Mid$( WorkString$, p + 2 )
+                      Else
+                        WorkString$  = Left$( WorkString$, p - 1 ) & "$x" & Mid$( WorkString$, p + 2 )
+                    End If
+                    ChangeCount% = ChangeCount% + 1
+                    CodeAdded    = TRUE
+                    ReDim Preserve StepStore( ChangeCount% )
+                    StepStore( ChangeCount% ) = WorkString$
+                    If DlgEnable( "Undo" ) = DISABLED Then
+                        DlgEnable  "Undo",         ENABLED
+                    End If
+                End If
+                ShowDefault_V = FALSE
+              Else
+                DlgText    "SubfieldCode", ""
+            End If
+          ElseIf Len( InputCode$ ) > 1 Then
+            DlgText    "SubfieldCode", ""
+        End If
+        If CodeAdded Then
+            DlgText    "WholeField",   WorkString$
+            DlgText    "SubfieldCode", ""
+            CodeAdded = FALSE
+        End If
+        p = InStr( WorkString$, DASH )
+        If p <> PrevDashPos% Then
+            If p > 0 Then
+                Subfield$ = GetSubfield( p )
+                DlgText    "Subfield",     Subfield$
+                If Subfield$ <> PrevSubfield$ Then
+                    DlgText    "Subfield",     Subfield$
+                End If
+                If AmbigSubfCount% > 0 Then
+                    For i = 0 To UBound( AmbiguousSubfields )
+                      If Subfield$ = AmbiguousSubfields( i ) Then
+                          If ShowDefault_V = FALSE Then
+                              DlgText    "SubfieldCode", "v"
+                          End If
+                          ShowDefault_V = TRUE
+                          Exit For
+                      End If
+                    Next i
+                End If
+                If ChangeCount% > 0 Then
+                    If DlgEnable( "Undo" ) = DISABLED Then
+                        DlgEnable  "Undo",         ENABLED
+                    End If
+                End If
+                PrevSubfield$ = Subfield$
+              Else
+                DlgText    "Subfield", ""
+                DlgEnable  "Instructions", DISABLED
+                Finished = TRUE
+            End If
+            PrevDashPos% = p
+        End If
+      Else
+        If DlgText( "SubfieldCode" ) <> "" Then
+            DlgText "SubfieldCode", ""
+        End If
+    End If
+
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'157857311

@@ -1,4 +1,4 @@
-'MacroName:Show006.2023.01
+'MacroName:Show006.2024.01
 'MacroDescription:Displays in user-friendly form existing 006 fields in a bibliographic
 ' record for confirmation or editing, and helps in adding new 006 fields for all types of
 ' material.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -286,7 +287,7 @@ Indx( 2 )  = "| - No attempt to code"
 ' is the one to display in the dialog box.
 
 Row% = CS.CursorRow
-If CS.GetFieldLine( Row%, FieldData$ ) Then
+If CS.GetField( "...", Row%, FieldData$ ) Then
     If Left$( FieldData$, 3 ) = "006" Then
         CursorField$ = Mid$( FieldData$, 6, 1 )
     End If
@@ -3250,8 +3251,4 @@ Select Case Action%
 End Select
 
 End Function
-'3254112223
-'
-'Macro name: Show006
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:51 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'3255112270

@@ -1,14 +1,15 @@
-'MacroName:PasteUnformattedPlus.2023.04
+'MacroName:PasteUnformattedPlus.2024.04
 'MacroDescription:Removes formatting from text placed on the Windows Clipboard for
 ' pasting into a bibliographic record. Clears typographical formatting and converts many
-' Windows-1252 characters to OCLC-MARC. Allows adding a multi-line selection to the
+' Windows-1252 characters to OCLC-MARC. Allows adding a multi-line copied string to the
 ' record as a simple string or as one or more new fields.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 18 July 2023.
+' Last updated: 4 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -109,11 +110,10 @@
 ' Client's built-in copying features. To copy multiple fields between records, use my
 ' macro "CopyFields." The Client has a built-in "Paste Unformatted" menu command which
 ' simply removes white space but does nothing more. To convert characters with diacritics
-' within a single line of a record, if pasting hasn't worked properly, use Joel Hahn's
-' macro "CvtDiacritics," which replaces, a field at a time, all Latin-1/Unicode single-
-' character letter + diacritic combinations with the proper MARC21 separate letters and
-' diacritic characters. Joel's macro is available at
-' <http://www.hahnlibrary.net/libraries/oml/macros/CvtDiacritics.txt>.
+' within a single line of a record, if pasting hasn't worked properly, use my macro
+' "Decompose," which replaces, a field at a time, all Latin-1/Unicode single-character
+' letter + diacritic combinations with the proper MARC21 separate letters and diacritic
+' characters.
 '****************************************************************************************
 
 Option Explicit
@@ -272,11 +272,11 @@ Select Case TypeOfWindow%
 End Select
 
 ' If there is text on the Clipboard and a record to paste it into, begin by getting the
-' cursor position.
+' cursor position, and then the data from the field the cursor is in.
 
 Row%            = CS.CursorRow
 CursorPosition% = CS.CursorColumn
-If CS.GetFieldLine( Row%, CurrentField$ ) Then
+If CS.GetField( "...", Row%, CurrentField$ ) Then
     CurrentFieldLength% = Len( CurrentField$ )
 End If
 
@@ -869,7 +869,9 @@ Sub InitialDialogSetup( DefaultAddFieldOption% )
 ' single new field is also available. If at least one carriage return has been found, the
 ' default option is to add the copied lines as new fields; but of course the choice of
 ' adding the copied text as a string or a single new field, converting line breaks, is
-' always available.
+' always available. Note that one or more new fields can be added no matter where the
+' cursor is placed, but a simple string can't be added if the cursor is not in a field
+' with space to put it.
 
 Dim TempString$
 
@@ -884,7 +886,6 @@ DlgText    "TB3_Indicator2",          ""
 If CursorPosition% = 0 Then
     DlgText    "OB1_PasteAsString",       "S&tring, at cursor position"
     DlgEnable  "OB1_PasteAsString",       DISABLED
-    DefaultAddFieldOption% = SINGLE_FIELD
   ElseIf CursorPosition% < 6 Then
     DlgText    "OB1_PasteAsString",       "S&tring, at end of field"
   Else
@@ -1606,8 +1607,4 @@ Select Case Action%
 End Select
 
 End Function
-'161060361
-'
-'Macro name: PasteUnformattedPlus
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:56:11 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'161160480

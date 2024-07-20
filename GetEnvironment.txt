@@ -1,14 +1,15 @@
-'MacroName:GetEnvironment.2023.03
+'MacroName:GetEnvironment.2024.01
 'MacroDescription:Displays some environment variables.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' Freely adapted from OCLC's example of use of the BASIC function "Environ" in old
 ' documentation, no longer available.
 '
-' Last updated: 29 July 2023.
+' Last updated: 12 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -254,8 +255,4 @@ Select Case Action%
 End Select
 
 End Function
-'2589436
-'
-'Macro name: GetEnvironment
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:04:43 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2599481

@@ -1,4 +1,4 @@
-'MacroName:RDAHelper(PrintedMaterial).2023.03
+'MacroName:RDAHelper(PrintedMaterial).2024.03
 'MacroDescription:Makes changes to a bibliographic record for printed material (resources
 ' whose carrier type is "volume" or "sheet"--including books, maps, music scores,
 ' posters, etc.), to help convert it to RDA (ISBD) form.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 18 July 2023.
+' Last updated: 12 April 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -207,7 +208,7 @@ Dim FFPosition%
 Dim FFTypeOfRecord$
 Dim FieldData$
 Dim Lang$
-Dim LineNumber%              : LineNumber% = 1
+Dim LineNumber%
 Dim MsgBoxAnswer%
 Dim OriginalData$
 Dim ProcessedData$
@@ -514,29 +515,39 @@ End If
 
 ' Now start the work of processing the record. Go through the record, line by line,
 ' examining fields 245-300, all 5XX fields, and series fields, for general and specific
-' changes to be made to give them the appearance of conforming to RDA conventions. Data
-' is retrieved with the "GetFieldLine" command to ensure a processed field is returned to
-' the record in the same place it was taken from.
+' changes to be made to give them the appearance of conforming to RDA conventions.
 
+LineNumber% = 1
 Do While FoundField = TRUE And LineNumber% < 100
-  FoundField = CS.GetFieldLine( LineNumber%, FieldData$ )
+  FoundField = CS.GetField( "...", LineNumber%, FieldData$ )
   If FoundField Then
       Tag$ = Left$( FieldData$, 3 )
       Select Case Tag$
 
 ' For what was formerly called the personal name main entry, add the appropriate relator
-' term. Add it before a subfield $4 code. Hope that the code (if present) matches the
-' term. If it doesn't, my macro "RelatorHelper" can fix things up.
+' term. Add it before a subfield $4 code and before control subfields $0-$3 and $5. Hope
+' that the code (if present) matches the term. If it doesn't, my macro "RelatorHelper"
+' can fix things up.
 
         Case "100"
 
-          If InStr( FieldData$, DELIMITER & "e" ) = 0 Then
-              p = InStr( FieldData$, DELIMITER & "4" )
-              If p = 0 Then
-                  EndOfData% = Len( FieldData$ )
-                Else
-                  EndOfData% = p - 1
-              End If
+          EndOfData% = Len( FieldData$ )
+          Start%     = 1
+          Do
+            p = InStr( Start%, FieldData$, DELIMITER )
+            If p > 0 Then
+                SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+            End If
+            If SubfieldCode$ = "e" Then
+                EndOfData% = 0
+                Exit Do
+              ElseIf SubfieldCode$ Like "[0-5]" Then
+                EndOfData% = p - 1
+                Exit Do
+            End If
+            Start% = p + 1
+          Loop Until p = 0
+          If EndOfData% > 0 Then
               TempString$ = Trim$( Left$( FieldData$, EndOfData% ) )
               If Right$( TempString$, 1 ) = "." Then
                   TempString$ = Left$( TempString$, Len( TempString$ ) - 1 ) & ","
@@ -1371,6 +1382,9 @@ Original250$ = Mid$( Field250$, 6 )
 ' edition statement comes from outside the resource itself. This action will incorrectly
 ' delete a small number of legitimate brackets.
 
+If Right$( Original250$, 1 ) = "." And Mid$( Original250$, Len( Original250$ ) - 3, 3 ) <> " ed" Then
+    Original250$ = Left$( Original250$, Len( Original250$ ) - 1 )
+End If
 If Left$( Original250$, 1 ) = "[" And Right$( Original250$, 1 ) = "]" Then
     Original250$ = Mid$( Original250$, 2, Len( Original250$ ) - 2 )
 End If
@@ -3128,8 +3142,4 @@ If Action% = 1 Then
 End If
 
 End Function
-'3132114288
-'
-'Macro name: RDAHelper(PrintedMaterial)
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:56:17 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'3146114688

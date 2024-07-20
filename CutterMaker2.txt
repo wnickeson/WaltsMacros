@@ -1,14 +1,18 @@
-'MacroName:CutterMaker2.2023.32
+'MacroName:CutterMaker2.2024.42
 'MacroDescription:Creates an alphanumeric Cutter, or a numeric Cutter to fit into a
 ' specified range, for selected or copied text, with an option to paste the output
-' directly into a call number field. Supplies a Cutter from LC's tables for U.S. states,
-' Canadian provinces, and certain other governments and geographic areas.
+' directly into a call number field. Supplies a Cutter from LC's tables for regions,
+' countries, U.S. states, and Canadian provinces.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 18 July 2023.
+' Thanks to Zhuo Pan at Duke University Libraries for helpful comments, although all
+' responsibility for this macro is mine alone.
+'
+' Last updated: 12 May 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -18,76 +22,89 @@
 '
 '****************************************************************************************
 ' How it works: Select a text string in a Connexion record and run the macro to generate
-' a Cutter number derived from that string. Or, place the cursor in a heading field in a
-' bibliographic record that contains a geographic entity or jurisdiction and run the
-' macro to retrieve the standard LC Cutter number (if established) for that entity. Or,
-' copy some text from any source to the Clipboard and run the macro to generate a Cutter
-' from it. (Whatever its origin, all copied text must be in Latin script.) This macro is
-' designed to help quickly add information to a call number field, but it doesn't need to
-' run in a bibliographic record, as the Cutter it creates can be copied to any
-' destination. If the macro is run in a bibliographic record, it offers to add the Cutter
-' it creates at the end of a call number field, or it can put that string on the
-' Clipboard for pasting.
+' a Cutter number derived from that string. Or, copy some text from any source to the
+' Clipboard and run the macro to generate a Cutter from it. (Whatever its origin, all
+' selected or copied text must be in the Latin alphabet.) Or, place the cursor in a
+' subject heading field in a bibliographic record that contains a geographic entity or
+' jurisdiction, and run the macro to retrieve LC's Cutter number for that entity. This
+' feature of the macro works in a 651 field, and a 650 field that contains a subfield $z,
+' but only for valid LC subjects (with second indicator "0") and only if that entity has
+' had a Cutter established for it.
 '
-' For any selected text, the macro calculates, following LC's published guidelines, a
-' two- to four-character Cutter. The macro ignores case, punctuation, and diacritics in
-' its calculation, and uses only the the first four alphanumeric characters. A space or a
-' period will be considered by the macro to be the end of the selection. Some special
-' characters are converted to their nearest Latin alphabet equivalents; for example, the
-' letter "o" with slash ("ø") is considered to be a simple "o" by the macro. Text copied
-' from outside Connexion--that is, that uses the Windows character set rather than MARC-
-' OCLC--that contains diacritical marks or special characters may produce strange
-' results. The default output of the macro is a Cutter consisting of the first letter of
-' the selection, followed by one to four digits representing the succeeding characters.
-' If the selection begins with a digit, or is composed of only digits, the macro creates
-' a Cutter beginning with the letter "A" which will place it in the span A12-A19.
+' This macro is designed to help quickly add information to a call number field, but it
+' doesn't need to run with a bibliographic record open, as the Cutter it creates is put
+' on the Clipboard for copying to any destination. However, if the macro is run in a
+' bibliographic record, the macro offers to add the Cutter it creates to the end of one
+' of the call number fields.
+'
+' For any selected text, the macro follows the guidelines in Classification and
+' Shelflisting Manual (CSM) section G63, "Cutter Numbers" (July 2013) to generate a two-
+' to four-character Cutter. It ignores case, punctuation, and diacritics in its
+' calculation, and uses only the the first four alphanumeric characters of the selection.
+' A space or a period will be considered by the macro to be the end of the selection.
+' Some special characters are converted to their nearest Latin alphabet equivalents; for
+' example, the letter "o" with slash ("ø") is considered to be a simple "o" by the macro.
+' Text copied from outside Connexion--that is, text encoded in the Windows character set
+' rather than in OCLC-MARC---that contains diacritical marks or special characters may
+' produce wrong results. The default output of the macro is a Cutter consisting of the
+' first letter of the selection, followed by one to four digits representing the
+' succeeding characters. If the selection begins with a digit, or is composed of only
+' digits, the macro creates a Cutter beginning with the letter "A" which will place it in
+' the span A12-A19.
 
 ' The macro can also calculate a Cutter to fit into any range. Usually this will be a
 ' string of digits, rather than an alphanumeric string. For example, if the text selected
 ' is the word "general," the macro's default result is "G46", but it also offers the
-' numeric string "4137." The macro offers shortcuts for the specific ranges used in Table
-' P-PZ40. For example, Cuttering the word "apple" produces not only "A67", but for a
-' literature call number that uses that table, the other Cutters generated are "A882" (to
-' fit into the range A61-A9999) and "Z552" (to fit into the range Z4581-Z9999).
-' Similarly, Cuttering the string "zither" results in the options "Z58," "Z271," and
-' "Z99." But it can also generate a Cutter beginning with a letter to fit into any range.
+' numeric string "4137." The macro offers shortcuts to fit Cutters into the specific
+' ranges used in Table P-PZ40. For example, the Cutter for the word "apple" is "A67", but
+' for a literature call number that uses that table, the other Cutters generated are
+' "A882" (to fit into the range A61-A9999) and "Z552" (to fit into the range Z4581-
+' Z9999). Similarly, the Cutter for the string "zither" may be "Z58," "Z271," and "Z99."
+' But the macro can also generate a Cutter beginning with a letter to fit into any range.
 '
-' To fit a number into a range: Enter in each of the macro's two text input boxes up to
-' four digits, for the lower and upper limits of the range. If fewer than four digits are
-' entered, the macro pads the number for the lower end of the range with 0 (zero), and
-' the number for the upper end with 9. For example, entering the range limits of "1" and
-' "4" in the dialog box will generate a Cutter falling between 1000 and 4999 (see
-' Classification and Shelflisting Manual (July 2013) section G58, "Interpreting the
-' Classification Schedules"). To force the number generated to be only up to, but not
-' including, 4, enter "4000" or "3999" as the upper limit. For example, to fit the word
-' "Life" into the range allotted by LC Classification Table P-PZ38 for "Autobiography,
-' journals, memoirs. By title", enter as the upper and lower limits of the range "8" and
-' "829" and run the macro to receive the suggestion "8152".
+' To fit a number into a range, enter up to four digits in each of the dialog box's two
+' text input boxes, for the lower and upper limits of the range. If fewer than four
+' digits are entered, the macro pads the number for the lower end of the range with
+' zeros, and the number for the upper end with nines. For example, entering the range
+' limits of "1" and "4" in the dialog box will generate a Cutter falling between 1000 and
+' 4999 (see CSM section G58 (July 2013), "Interpreting the Classification Schedules"). To
+' force the number generated to be only up to, but not including, "4", enter "4000" or
+' "3999" as the upper limit. For example, to fit the word "Life" into the range allotted
+' by LC Classification Table P-PZ38 for "Autobiography, journals, memoirs. By title",
+' enter "8" and "829", as given in the table, as the upper and lower limits of the range,
+' and run the macro to receive the suggestion "8152".
 '
-' If a bibliographic record is open but no text is selected, and the cursor is in any
-' 110, 610, 650, 651, or 710 field that contains a geographic area or jurisdiction for
-' which a Cutter has been established in either the "Regions and Countries Table" (CSM
-' section G300) or the "U.S. States and Canadian Provinces" table (CSM section G302),
-' the macro will offer that Cutter for use. For a geographic heading followed by a
-' smaller or contained geographic area (for example, "Minnesota $z Mesabi Range"), the
-' macro takes only the first entity from which to generate a Cutter. It can also extract
-' a geographic Cutter from some qualifiers, such as "Cambridge (England)", and "Cuyuna
-' (Minn.)". (Abbreviations are only recognized for U.S. states and Canadian provinces.)
-' Non-LC subject fields may not contain authorized headings, so the macro may not be able
-' to find a Cutter for a heading in such a field.
+' The macro can also supply standard Cutters for many geographic areas and jurisdictions,
+' as found in LC's "Regions and Countries Table" (CSM section G300, June 2019) or "U.S.
+' States and Canadian Provinces" table (CSM section G302, July 2013). To retrieve one of
+' these Cutters, run the macro in a bibliographic record with the cursor in a 650 or 651
+' field that contains the place to be Cuttered. The field must be an LC subject heading;
+' there is no need to select text. Besides providing Cutters for the 50 U.S. states and
+' 13 Canadian provinces and territories, the tables also establish Cutters for "all 195
+' independent countries as of 2019, 26 major dependencies and areas of special
+' sovereignty, some historical jurisdictions or entities, and some islands." Three
+' country names are ambiguous when they are used as qualifiers in field 651 and require
+' user input to resolve; these names are Armenia, Congo, Korea, and Macedonia. The same
+' qualifier is used for "Armenia" and "Armenia (Republic)," "Congo (Brazzaville)" and
+' "Congo (Democratic Republic)," and "Korea" and "Korea (North)." For example, the
+' established headings Anak-kun (Korea) and Anap Pond (Korea) refer to entities in North
+' and South Korea, respectively--but of course the macro can't know which is which. So it
+' displays a dialog box in order that the correct country can be chosen and the
+' appropriate Cutter supplied. Similar examples can be found for the other three
+' countries.
 '
-' If no text is selected, and the cursor is not in a heading field, or a bibliographic
-' record is not displayed, the macro will try to use whatever it finds on the Clipboard
-' to create a Cutter.
+' If no text is selected, and the cursor is not in a subject heading field with a
+' geographic entity or jurisdiction, or if a bibliographic record is not displayed, the
+' macro will try to use whatever it finds on the Clipboard to create a Cutter.
 '
-' Regular Cutters are generated following LC's published guidelines (see CSM G63, "Cutter
-' Numbers"). Cutters that must fit into a range are generated using a table of frequency
-' of occurence for letters in the English language. To get the range into which to fit
-' the Cutter, the limits are padded to four digits as explained above, and then shrunk
-' slightly to allow for modification at each end. Thus, although the limits of a range
-' might be entered as 1-4, the range in which the macro does its calculation is actually
-' 1200-4919, or a span of 3719. The process by which the macro does this is explained
-' more fully below in the comments introducing the function "CalculateBaseCutter."
+' The macro uses a table of frequency of occurrence for letters in the English language
+' to calculate a Cutter that must fit into a range. To set the range into which to fit
+' the Cutter, the limits are padded to four digits as explained above, with zeros and
+' nines, and then shrunk slightly to allow for modification at each end. Thus, although
+' the limits of a range might be entered as 1-4, the range in which the macro does its
+' calculation is actually 1200-4919, or a span of 3719. The process by which this happens
+' is explained more fully below in the comments introducing the function
+' "CalculateBaseCutter."
 '
 ' It should go without saying that the Cutters produced by the macro are suggestions
 ' only, and should be rounded up or down, or shortened or lengthened, as appropriate, to
@@ -97,12 +114,13 @@
 ' with zero.
 '
 ' After creating a Cutter, if a bibliographic record is open the macro shows a list of
-' all the call number fields (050, 055, 060, 070, 090, and 099) in the record, to paste
-' the Cutter at the end of one of them. If there are several such fields, the macro tries
-' to present as the default selection a field which doesn't already have a Cutter; but
-' any call number field in the record may be selected. If the call number field ends with
-' a blank subfield $b, the macro prefixes the Cutter with a decimal point; if there is no
-' delimiter "$b", the macro provides one; otherwise, it does not try to format the call
+' all the call number fields (050, 055, 060, 070, 090, and 099) in the record, in case
+' you want to paste the Cutter at the end of one of them. If there are several such
+' fields, the macro tries to present as the default selection a field which doesn't
+' already have a Cutter; but this default suggestion may be ignored, and any call number
+' field in the record may be selected. If the call number field ends with an empty
+' subfield $b, the macro prefixes the Cutter with a decimal point; if there is no
+' delimiter "b", the macro provides one; otherwise, it does not try to format the call
 ' number. Use my macro "FormatCallNumber" to quickly format the call number
 ' appropriately. Or, the Cutter may be copied to the Clipboard, for pasting into a field
 ' at a specific position, or into another application.
@@ -114,12 +132,21 @@ Declare Sub FillArray1
 Declare Sub FillArray2
 Declare Sub FillArray3
 
-Declare Function CalculateBaseCutter     ( SelectionString$, RangeSpan% ) As Integer
-Declare Function CalculateCutterWithRange( LowerEndOfRange%, UpperEndOfRange%, StringIn$, OutputLength% ) As String
-Declare Function CheckTerminalZero       ( InString$ )                    As String
-Declare Function CuttersForDigits        ( ASCIIValues% )                 As String
-Declare Function RankFields              ( InString$ )                    As Integer
+Declare Function CalculateBaseCutter     ( SelectionString$, _
+                                           RangeSpan% )        As Integer
+Declare Function CalculateCutterWithRange( LowerEndOfRange%, _
+                                           UpperEndOfRange%, _
+                                           StringIn$, _
+                                           OutputLength% )     As String
+Declare Function CheckTerminalZero       ( InString$ )         As String
+Declare Function CuttersForDigits        ( ASCIIValues% )      As String
+Declare Function MakeUpperCase           ( InString$ )         As String
+Declare Function RankFields              ( InString$ )         As Integer
+Declare Function ShowCutterSource        ( GeogName$, _
+                                           ArrayIndex%, _
+                                           WhichArray% )       As String
 
+Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
 Type FieldInfo
@@ -128,12 +155,22 @@ Type FieldInfo
  tRank       As Integer
 End Type
 
-Global Const RANK_1 As Integer = 3   'Numeric values to rank call number fields so as to try to present a preferred default
-Global Const RANK_2 As Integer = 2   'field for addition of the Cutter.
-Global Const RANK_3 As Integer = 1
+Global Const CONTROL_CHANGE       As Integer = 2
+Global Const DLG_STATEMENT_CANCEL As Integer = 102
+Global Const INITIALIZE           As Integer = 1
+Global Const INVISIBLE            As Integer = 0
 
-Global DELIMITER As String*1
+Global Const RANK_1               As Integer = 3   'Numeric values to rank call number fields so as to try to present a
+Global Const RANK_2               As Integer = 2   'preferred default field for addition of the Cutter.
+Global Const RANK_3               As Integer = 1
 
+Global Const ABBREVS_LIST         As Integer = 58
+Global Const REGIONS_LIST         As Integer = 383
+
+Global DELIMITER    As String*1
+Global DOUBLE_QUOTE As String*1
+
+Global AmbigHdgIndex%
 Global CountOfTopRank%
 Global Cutter$
 Global CutterSource$
@@ -147,13 +184,16 @@ Global WaltsMacros$
 Global SelectionFound
 Global StartsWithDigit
 
-Global Abbrevs( 1, 55 )   As String
-Global Areas  ( 2, 455 )  As String
-Global CallNumberFields() As FieldInfo
+Global Abbrevs         ( 2, ABBREVS_LIST ) As String
+Global AmbigRegions    ( 2 )               As String
+Global CallNumberFields()                  As FieldInfo
+Global Regions         ( 2, REGIONS_LIST ) As String
 
 '****************************************************************************************
 
 Sub Main
+AmbigHdgIndex% = 0
+Cutter$ = ""
 
 Dim CS as Object
 On Error Resume Next
@@ -163,6 +203,7 @@ If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
 Const CRITICAL_MESSAGE            As Integer = 16
 Const DLG_FUNCTION_CANCEL         As Integer = 0
+Const FIXED_FIELD_COLUMN          As Integer = 0
 Const INFORMATION_MESSAGE         As Integer = 64
 Const MAX_SELECTION_LENGTH        As Integer = 4
 Const MSGBOX_RETURN_CANCEL        As Integer = 2
@@ -171,12 +212,13 @@ Const PUSHBUTTON_ADD              As Integer = 1
 Const PUSHBUTTON_CLOSE            As Integer = 2
 Const WARNING_QUERY               As Integer = 32
 
-Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE  = Chr$( 034 )
-
-Dim Candidate$
+Dim Abbreviation$
+Dim AmbigHdgInfo$
+Dim BibHeading$
 Dim CharA%
 Dim CharT$
 Dim ClipboardError$
+Dim CurrentCol%
 Dim CurrentField As FieldInfo
 Dim CurrentRow%
 Dim DialogResult%
@@ -185,7 +227,12 @@ Dim FieldRank%
 Dim LineToChange%
 Dim ListSelection%
 Dim ModifiedSelection$
+Dim QualifierString$
+Dim QualifierTerm$
+Dim QualifierTermMatch%
 Dim RawSelection$
+Dim Region$
+Dim SearchString$
 Dim SelectionLength%
 Dim SelectionStringChar1$
 Dim SelectionStringChar2%
@@ -193,42 +240,57 @@ Dim SelectionStringChar3%
 Dim SelectionStringChar4%
 Dim Tag$
 Dim TempString$
+Dim TestString$
 Dim TypeOfWindow%
 Dim UBCallNumberFields%
 
 Dim BibRecord
+Dim CursorInGeogHdg          : CursorInGeogHdg = FALSE
 Dim FoundField
+Dim MatchingEntry            : MatchingEntry   = FALSE
 
-Dim i As Integer, j As Integer, p As Integer
+Dim i As Integer, j As Integer, p As Integer, x As Integer
 
 Dim DisplayFields() As String
 
-DELIMITER       = Chr$( 223 )
-StartsWithDigit = FALSE
-WaltsMacros$    = "[Walt's macros] Essentials:CutterMaker2"
+' The entries in the "AmbigRegions" array are strings of "fields." Each string consists
+' of the ambiguous heading followed by the indexes in the "Regions" array of the two
+' headings that share that term. Some headings that appear more than once in that array
+' are really only different forms of the same name, and so have the same established
+' Cutter.
 
-HelpSelection$  = "To fit a Cutter into a range, enter one to four digits in each of the two input boxes, from the lower end "
-HelpSelection$  = HelpSelection$ & "of the range to the upper. If either number string contains fewer than four digits, the "
-HelpSelection$  = HelpSelection$ & "macro will automatically pad it: A short number string in the input box for the lower end "
-HelpSelection$  = HelpSelection$ & "of the range will be padded with zeros; for the upper end of the range, it will be padded "
-HelpSelection$  = HelpSelection$ & "with nines. For example, entering " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE & " and "
-HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & "3" & DOUBLE_QUOTE & " as the bounds of the range is automatically "
-HelpSelection$  = HelpSelection$ & "considered by the macro to define a range from " & DOUBLE_QUOTE & "2000" & DOUBLE_QUOTE
-HelpSelection$  = HelpSelection$ & " to " & DOUBLE_QUOTE & "3999" & DOUBLE_QUOTE & ", or a span of 1999. To make the macro "
-HelpSelection$  = HelpSelection$ & "consider the upper end number to be an exclusive limit, either add zeros or enter a "
-HelpSelection$  = HelpSelection$ & "number one lower than the limit. For example, to find a Cutter between 2 and 3, but not "
-HelpSelection$  = HelpSelection$ & "greater than 3, enter " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE & " for the lower end of the "
-HelpSelection$  = HelpSelection$ & "range, and either " & DOUBLE_QUOTE & "3000" & DOUBLE_QUOTE & " or " & DOUBLE_QUOTE & "2999"
-HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & " as the upper limit. Note that you can enter the same number in both "
-HelpSelection$  = HelpSelection$ & "boxes. For example, a range from " & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " to "
-HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " is considered by the macro to be actually "
-HelpSelection$  = HelpSelection$ & DOUBLE_QUOTE & "5000" & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "5999" & DOUBLE_QUOTE & "."
+AmbigRegions( 0 ) = "ARMENIA,36,239"
+AmbigRegions( 1 ) = "CONGO,12,33"
+AmbigRegions( 2 ) = "KOREA,95,348"
 
-HelpHeading$    = "Because no text was selected, the macro looked for a geographic area in the heading in which the cursor is "
-HelpHeading$    = HelpHeading$ & "placed, and found an established Cutter for that geographic area from LC's tables. For a "
-HelpHeading$    = HelpHeading$ & "string of areas, the macro takes for the source of the Cutter the first area, assuming it "
-HelpHeading$    = HelpHeading$ & "is the top jurisdiction in the hierarchy. Because this is an established Cutter, it cannot "
-HelpHeading$    = HelpHeading$ & "be modified."
+DELIMITER         = Chr$( 223 )
+DOUBLE_QUOTE      = Chr$( 034 )
+StartsWithDigit   = FALSE
+WaltsMacros$      = "[Walt's macros] Essentials:CutterMaker2"
+
+HelpSelection$    = "To fit a Cutter into a range, enter one to four digits in each of the two input boxes, from the lower "
+HelpSelection$    = HelpSelection$ & "end of the range to the upper. If either number string contains fewer than four digits, "
+HelpSelection$    = HelpSelection$ & "the macro will automatically pad it: A short number string in the input box for the "
+HelpSelection$    = HelpSelection$ & "lower end of the range will be padded with zeros; for the upper end of the range, it "
+HelpSelection$    = HelpSelection$ & "will be padded with nines. For example, entering " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE
+HelpSelection$    = HelpSelection$ & " and " & DOUBLE_QUOTE & "3" & DOUBLE_QUOTE & " as the bounds of the range is "
+HelpSelection$    = HelpSelection$ & "automatically considered by the macro to define a range from " & DOUBLE_QUOTE & "2000"
+HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "3999" & DOUBLE_QUOTE & ", or a span of 1999. "
+HelpSelection$    = HelpSelection$ & "To make the macro consider the upper end number to be an exclusive limit, either add "
+HelpSelection$    = HelpSelection$ & "zeros or enter a number one lower than the limit. For example, to find a Cutter between "
+HelpSelection$    = HelpSelection$ & "2 and 3, but not greater than 3, enter " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE & " for "
+HelpSelection$    = HelpSelection$ & "the lower end of the range, and either " & DOUBLE_QUOTE & "3000" & DOUBLE_QUOTE & " or "
+HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & "2999" & DOUBLE_QUOTE & " as the upper limit. Note that you can enter the "
+HelpSelection$    = HelpSelection$ & "same number in both boxes. For example, a range from " & DOUBLE_QUOTE & "5"
+HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " is considered by the macro "
+HelpSelection$    = HelpSelection$ & "to be actually " & DOUBLE_QUOTE & "5000" & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "5999"
+HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & "."
+
+HelpHeading$      = "Because no text was selected, the macro looked for a geographic area in the heading in which the cursor "
+HelpHeading$      = HelpHeading$ & "is placed, and found an established Cutter for that geographic area from LC's tables. For "
+HelpHeading$      = HelpHeading$ & "a string of areas, the macro takes for the source of the Cutter the first area, assuming "
+HelpHeading$      = HelpHeading$ & "it is the top jurisdiction in the hierarchy. Because this is an established Cutter, it "
+HelpHeading$      = HelpHeading$ & "cannot be modified."
 
 ' First, find out if a bibliographic record is displayed, although the macro doesn't need
 ' to run in one.
@@ -245,127 +307,243 @@ If BibRecord Then
 
 ' If the macro is running in a bibliographic record, get the row number of the line the
 ' cursor is in. Follow by checking for selected text in the record. If text is not
-' selected, check if the cursor is in a field that could contain an authorized form of an
-' geographic name or jurisdiction (fields 110, 610, 650, 651, or 710), and if it is, fill
-' the arrays with the predetermined Cutters. If the cursor is not in one of those fields,
-' check if text is on the Clipboard. If nothing is available from which a Cutter may be
-' generated, display a warning and quit the macro. Otherwise, calculate or look up the
-' Cutter.
+' selected (apart from the tag and indicator cells, which are automatically selected if
+' the cursor is positioned in them), and the cursor is not in the fixed field, check if
+' the cursor is in a field that could contain a geographic name or jurisdiction (fields
+' 650 or 651), and if it is, go ahead and fill the arrays with the established Cutters
+' derived from the LC tables. If the cursor is not in one of those fields, check if text
+' is on the Clipboard. If nothing is available from which a Cutter may be generated,
+' display a warning and quit.
 
     CurrentRow% = CS.CursorRow
+    CurrentCol% = CS.CursorColumn
+    If CurrentCol% = FIXED_FIELD_COLUMN Then
+        MsgBox "Please select text or place the cursor in a subject heading field with a geographic heading.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
 
-    If CS.GetSelectedText( RawSelection$ ) = FALSE Then
-        SelectionFound = FALSE
-        If CS.GetFieldLine( CurrentRow%, FieldData$ ) Then
-            Tag$        = Left$( FieldData$, 3 )
-            TempString$ = Trim$( Mid$( FieldData$, 6 ) )
-            Select Case Tag$
-
-' For corporate bodies and geographic headings, all that is needed to create a term to
-' look up in the Cutter table is the contents of subfield $a.
-
-              Case "110", "610", "651", "710"
-                p = InStr( TempString$, DELIMITER )
-                If p = 0 Then
-                    Candidate$ = TempString$
-                  Else
-                    Candidate$ = Trim$( Left$( TempString$, p - 1 ) )
-                End If
-
-' For topical headings, find the first subfield $z.
-
-              Case "650"
-                p = InStr( TempString$, DELIMITER & "z" )
-                If p = 0 Then
-                    GoTo TryClipboard:
-                  Else
-                    TempString$ = Trim$( Mid$( TempString$, p + 2 ) )
-                    p = InStr( TempString$, DELIMITER )
-                      If p = 0 Then
-                          Candidate$ = TempString$
-                        Else
-                          Candidate$ = Trim$( Left$( TempString$, p - 1 ) )
-                      End If
-                End If
-            End Select
-
-            If Right$( Candidate$, 1 ) = "." Then
-                Candidate$ = Left$( Candidate$, Len( Candidate$ ) - 1 )
-            End If
-
-' If the heading contains a parenthetical term, consider that to be the geographic area
-' or government entity. Close up any spaces within it that separate parts of an
-' abbreviation.
-
-            If Right$( Candidate$, 1 ) = ")" Then
-                p = InStr( Candidate$, "(" )
-                If p > 1 Then
-                    Candidate$ = Mid$( Candidate$, p + 1, Len( Candidate$ ) - p - 1 )
-                    p = InStr( Candidate$, "," )
-                    If p > 1 Then
-                        Candidate$ = Trim$( Mid$( Candidate$, p + 1 ) )
-                    End If
-                End If
-                Do
-                  p = InStr( Candidate$, ". " )
-                  If p > 0 Then
-                      Candidate$ = Left$( Candidate$, p ) & Mid$( Candidate$, p + 2 )
-                  End If
-                Loop Until p = 0
-              Else
-
-' Make uppercase headings that aren't qualifiers.
-
-                Candidate$ = UCase$( Candidate$ )
-            End If
-
-' Fill the arrays to begin searching.
-
-            FillArray1
-            FillArray2
-            FillArray3
-
-' Start with the shorter array containing abbreviations.
-
-            For i = 0 To 55
-              If Candidate$ = Abbrevs( 0, i ) Then
-                  Cutter$       = Abbrevs( 1, i )
-                  CutterSource$ = "Cutter for " & DOUBLE_QUOTE & Candidate$ & DOUBLE_QUOTE & " from " & DOUBLE_QUOTE
-                  CutterSource$ = CutterSource$ & "U.S. States and" & " Canadian Provinces" & DOUBLE_QUOTE & " table"
-                  CutterSource$ = CutterSource$ & " (Classification and Shelflisting Manual, section G302)."
-                  GoTo Finish:
-              End If
-            Next i
-
-' If the matching heading isn't found in the array for abbreviations, go to the bigger
-' array to look for a match. A match selects the Cutter and acquires the table source. If
-' no match is found, suggest generating a Cutter from a text selection. If a match is
-' found, the Cutter is presented for copying and the macro quits.
-
-            If Right$( Candidate$, 1 ) = "." Then Candidate$ = Left$( Candidate$, Len( Candidate$ ) - 1 )
-            For i = 0 To 455
-              If Candidate$ = Areas( 0, i ) Then
-                  Cutter$ = Areas( 1, i )
-                  If Areas( 2, i ) = "A" Then
-                      CutterSource$ = "Cutter for " & DOUBLE_QUOTE & Candidate$ & DOUBLE_QUOTE & " from " & DOUBLE_QUOTE
-                      CutterSource$ = CutterSource$ & "Regions and Countries Table" & DOUBLE_QUOTE & " (Classification"
-                      CutterSource$ = CutterSource$ & " and Shelflisting Manual, section G300)."
-                    Else
-                      CutterSource$ = "Cutter for " & DOUBLE_QUOTE & Candidate$ & DOUBLE_QUOTE & " from " & DOUBLE_QUOTE
-                      CutterSource$ = CutterSource$ & "U.S. States and" & " Canadian Provinces" & DOUBLE_QUOTE & " table"
-                      CutterSource$ = CutterSource$ & " (Classification and Shelflisting Manual, section G302)."
-                  End If
-                  Exit For
-              End If
-            Next i
-            If i > 455 Then
-                MsgBox "A geographic heading was found, but no Cutter has been established for it. Please select text to Cutter.", CRITICAL_MESSAGE, WaltsMacros$
-                Exit Sub
-            End If
-            GoTo Finish:
+    If CS.GetSelectedText( RawSelection$ ) Then
+        If CurrentCol% < 6 Then
+            SelectionFound = FALSE
+          Else
+            SelectionFound = TRUE
         End If
-      Else
-        SelectionFound = TRUE
+    End If
+
+    If SelectionFound = FALSE Then
+        If CS.GetField( "...", CurrentRow%, FieldData$ ) Then
+            If FieldData$ = "Data contains non-latin script" Then
+                MsgBox "Sorry, this macro doesn't work in a field containing non-Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+                Exit Sub
+              Else
+                Tag$ = Left$( FieldData$, 3 )
+                If Mid$( FieldData$, 5, 1 ) = "0" Then
+                    TempString$ = Trim$( Mid$( FieldData$, 6 ) )
+                    Select Case Tag$
+
+' For geographic headings, all that is needed to create a term to look for in the Cutter
+' tables is the contents of subfield $a.
+
+                      Case "651"
+
+                        CursorInGeogHdg = TRUE
+                        p               = InStr( TempString$, DELIMITER )
+                        If p = 0 Then
+                            BibHeading$ = TempString$
+                          Else
+                            BibHeading$ = Trim$( Left$( TempString$, p - 1 ) )
+                        End If
+
+' For topical headings, find the contents of the first subfield $z.
+
+                      Case "650"
+
+                        p = InStr( TempString$, DELIMITER & "z" )
+                        If p = 0 Then
+                            GoTo TryClipboard:
+                          Else
+                            CursorInGeogHdg = TRUE
+                            TempString$     = Trim$( Mid$( TempString$, p + 2 ) )
+                            p               = InStr( TempString$, DELIMITER )
+                              If p = 0 Then
+                                  BibHeading$ = TempString$
+                                Else
+                                  BibHeading$ = Trim$( Left$( TempString$, p - 1 ) )
+                              End If
+                        End If
+
+                      Case Else
+
+                        MsgBox "Please select text or place the cursor in a subject heading field with a geographic heading.", CRITICAL_MESSAGE, WaltsMacros$
+                        Exit Sub
+
+                    End Select
+                  Else
+                    MsgBox "Sorry, this macro works only in fields with LC subject headings.", CRITICAL_MESSAGE, WaltsMacros$
+                    Exit Sub
+                End If
+
+                If Right$( BibHeading$, 1 ) = "." Then
+                    BibHeading$ = Left$( BibHeading$, Len( BibHeading$ ) - 1 )
+                End If
+
+' Fill the arrays so the search may begin.
+
+                FillArray1
+                FillArray2
+                FillArray3
+
+' The search varies according to the tag in which the cursor is placed.
+
+                Select Case Tag
+
+                  Case "650"
+
+' For topical subject headings with a geographic subdivision, the only array to search is
+' "Regions"--such a subdivision will never start with a term in the "Abbrevs" array.
+' There are no ambiguous terms in this search. The search string must be in all
+' uppercase.
+
+                    SearchString$ = MakeUpperCase( BibHeading$ )
+                    For i = 0 To REGIONS_LIST
+                      Region$ = Regions( 0, i )
+                      If Left$( SearchString$, Len( Region$ ) ) = Region$ Then
+                          Cutter$       = Regions( 1, i )
+                          CutterSource$ = ShowCutterSource( Region$, i, REGIONS_LIST )
+                          Exit For
+                      End If
+                    Next i
+                    If Cutter$ = "" Then
+                        MsgBox "Sorry, could not find a Cutter for " & DOUBLE_QUOTE & SearchString$ & DOUBLE_QUOTE & _
+                               ". Please select text to Cutter instead.", CRITICAL_MESSAGE, WaltsMacros$
+                        Exit Sub
+                    End If
+
+                  Case "651"
+
+' For geographic headings, both arrays are searched, beginning with "Abbrevs." For this
+' initial search, the abbreviation in the array has to match the string that begins the
+' parenthetical qualifier, if present. Spaces within the abbreviation are closed, and
+' case is mixed. If the qualifier includes a term that indicates the kind of place or
+' jurisdiction, such as "Brighton (Mich. : Township)", the place is what precedes the
+' (first) colon.
+
+                    SearchString$ = BibHeading$
+                    If Right$( SearchString$, 1 ) = ")" Then
+                        p = InStr( SearchString$, "(" )
+                        If p > 1 Then
+                            SearchString$ = Mid$( SearchString$, p + 1, Len( SearchString$ ) - p - 1 )
+
+' "Georgia" is a special case, being the only word that appears in both the "Abbrevs" and
+' "Regions" arrays. However, it won't appear as a qualifier for a place in the U.S., so
+' if it is detected within parentheses, it must be a qualifier for the republic.
+
+                            If Right$( MakeUpperCase( SearchString$ ), 7 ) = "GEORGIA" Then
+                                Cutter$       = "G28"
+                                CutterSource$ = ShowCutterSource( "GEORGIA", 38, REGIONS_LIST )
+                                GoTo ShowDialogBox:
+                            End If
+                            p = InStr( SearchString$, "," )
+                            If p > 1 Then
+                                SearchString$ = Trim$( Mid$( SearchString$, p + 1 ) )
+                            End If
+                        End If
+                        Do
+                          p = InStr( SearchString$, ". " )
+                          If p > 0 Then
+                              SearchString$ = Left$( SearchString$, p ) & Mid$( SearchString$, p + 2 )
+                          End If
+                        Loop Until p = 0
+                    End If
+
+                    For i = 0 To ABBREVS_LIST
+                      Region$ = Abbrevs( 0, i )
+                      x       = Len( Region$ )
+                      If Region$ = Left$( SearchString$, x ) Or Region$ = Right$( SearchString$, x ) Then
+                          Cutter$       = Abbrevs( 1, i )
+                          CutterSource$ = ShowCutterSource( Region$, i, ABBREVS_LIST )
+                          GoTo ShowDialogBox:
+                      End If
+                    Next i
+
+' If the heading matches nothing in the "Abbrevs" array, go to the "Regions" array. Some
+' of the entities have the same name and so are disambiguated by a parenthetical term.
+' Check the headings against this list first. If the name appears on this list, display
+' the choices for the user to choose the correct one. The search string is in uppercase,
+' and the parenthetical qualifier is removed.
+
+                    SearchString$ = MakeUpperCase( BibHeading$ )
+                    p = InStr( SearchString$, "(" )
+                    If p > 1 Then
+                        SearchString$ = Trim$( Left$( SearchString$, p - 1 ) )
+                    End If
+                    For i = 0 To 2
+                      AmbigHdgInfo$ = AmbigRegions( i )
+                      TempString$   = GetField( AmbigHdgInfo$, 1, "," )
+                      If SearchString$ = TempString$ Then
+                          AmbigHdgIndex% = i
+                          Exit For
+                      End If
+                    Next i
+
+                    If AmbigHdgIndex% > 0 Then
+
+                        Begin Dialog Dialog1Definition  184, 74, WaltsMacros$, .Dialog1ControlFunction
+                            OkButton        62,  50,  52,  14
+                            CancelButton   122,  50,  52,  14
+                            Text            10,   6, 160,   8, "Select the appropriate country for this place:"
+                            OptionGroup                            .OptionGroup1
+                             OptionButton    1,  1,    1,   1, "", .OptionButtonDummy
+                             OptionButton   16,  18, 158,  12, "", .OptionButton1
+                             OptionButton   16,  30, 158,  12, "", .OptionButton2
+                          End Dialog
+                        Dim Dialog1 As Dialog1Definition
+                        On Error Resume Next
+                        Dialog Dialog1
+                        If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+                        AmbigHdgIndex% = Dialog1.OptionGroup1
+                        AmbigHdgIndex% = Val( GetField( AmbigHdgInfo$, AmbigHdgIndex% + 1, "," ) )
+                        Cutter$        = Regions( 1, AmbigHdgIndex% )
+                        Region$        = Regions( 0, AmbigHdgIndex% )
+                        CutterSource$  = ShowCutterSource( Region$, AmbigHdgIndex%, REGIONS_LIST )
+
+                      Else
+
+                        SearchString$ = MakeUpperCase( BibHeading$ )
+                        For i = 0 To REGIONS_LIST
+                          Region$ = Regions( 0, i )
+                          If Len( Region$ ) <= Len( SearchString$ ) Then
+                              If InStr( SearchString$, Region$ ) Then
+                                  MatchingEntry = TRUE
+                                  Exit For
+                                Else
+                                  p = InStr( Region$, "(" )
+                                  If p > 0 Then
+                                      Region$ = Trim$( Left$( Region$, p - 1 ) )
+                                  End If
+                                  If Len( Region$ ) <= Len( SearchString$ ) Then
+                                      If InStr( SearchString$, Region$ ) Then
+                                          MatchingEntry = TRUE
+                                          Exit For
+                                      End If
+                                  End If
+                              End If
+                          End If
+                        Next i
+                        If MatchingEntry Then
+                            Cutter$ = Regions( 1, i )
+                            CutterSource$ = ShowCutterSource( Region$, i, REGIONS_LIST )
+                          Else
+                            MsgBox "Sorry, could not find a Cutter for " & DOUBLE_QUOTE & SearchString$ & DOUBLE_QUOTE & _
+                                   ". Please select text to Cutter instead.", CRITICAL_MESSAGE, WaltsMacros$
+                            Exit Sub
+                        End If
+                    End If
+
+                End Select
+                If Cutter$ <> "" Then GoTo ShowDialogBox:
+            End If
+        End If
     End If
 End If
 
@@ -373,7 +551,7 @@ End If
 ' or there is no record displayed at all, offer to generate a Cutter from the content of
 ' the Clipboard.
 
-If BibRecord = FALSE Or SelectionFound = FALSE Then
+If SelectionFound = FALSE And ( BibRecord = FALSE Or CursorInGeogHdg = FALSE ) Then
 
 TryClipboard:
 
@@ -504,7 +682,7 @@ If Len( SelectionString$ ) > 1 Then
 
   Else
     Cutter$ = SelectionString$ & "12"
-    GoTo Finish:
+    GoTo ShowDialogBox:
 End If
 
 If SelectionLength% > 3 Then
@@ -704,7 +882,7 @@ If SelectionLength% > 3 Then
 
 End If
 
-Finish:
+ShowDialogBox:
 
 Cutter$      = Left$( Cutter$, MAX_SELECTION_LENGTH )
 FirstCutter$ = Cutter$
@@ -715,7 +893,7 @@ FirstCutter$ = Cutter$
 
 i = 1
 Do
-  FoundField = CS.GetFieldLine( i, FieldData$ )
+  FoundField = CS.GetField( "...", i, FieldData$ )
   If FoundField Then
       Tag$ = Left$( FieldData$, 3 )
       Select Case Tag$
@@ -782,7 +960,7 @@ Next i
 
 ' Now the dialog box where all the action takes place can be run.
 
-Begin Dialog Dialog1Definition  340, 110, WaltsMacros$, .Dialog1ControlFunction
+Begin Dialog Dialog2Definition  340, 110, WaltsMacros$, .Dialog2ControlFunction
   PushButton      10,  25,  80,  14, "&Add to selected field:",            .ButtonAdd
   PushButton      98,  25,  58,  14, "&Copy && close",                     .ButtonCopyClose
   CancelButton   278,  86,  52,  14
@@ -809,9 +987,9 @@ Begin Dialog Dialog1Definition  340, 110, WaltsMacros$, .Dialog1ControlFunction
   Text           167,  49, 161,  27, "",                                   .WarningArea
 End Dialog
 
-Dim Dialog1 as Dialog1Definition
+Dim Dialog2 as Dialog2Definition
 On Error Resume Next
-DialogResult% = Dialog( Dialog1 )
+DialogResult% = Dialog( Dialog2 )
 
 Select Case DialogResult%
 
@@ -825,7 +1003,7 @@ Select Case DialogResult%
 ' decimal if the Cutter is to appear in subfield $b. If there is no subfield $b present
 ' in the field, add one just to hold the Cutter.
 
-    ListSelection% = Dialog1.ListOfCallNumberFields
+    ListSelection% = Dialog2.ListOfCallNumberFields
     LineToChange%  = CallNumberFields( ListSelection% ).tLineNumber
     FieldData$     = CallNumberFields( ListSelection% ).tContent
     Tag$           = Left$( FieldData$, 3 )
@@ -871,468 +1049,402 @@ Sub FillArray1
 ' Three different procedures to fill the arrays, as trying to do it all in one would
 ' exceed OML's capacity.
 
-'Normalized terms:
-'CURAÇAO
-'CÔTE D'IVOIRE
-'RÉUNION
-'TERRES AUSTRALES ET ANTARCTIQUES FRANÇAISES
+' These arrays contain, with some adaptations, material in LC's "Regions and Countries
+' Table" (Classification & Shelflisting Manual (CSM) section G300, June 2019) and "U.S.
+' States and Canadian Provinces" table (CSM section G302, July 2013). The modifications
+' are chiefly so the terms in the table match established headings in the Authority File,
+' although the following four terms have had diacritical marks removed for ease of
+' processing:
+'
+'   CURAÇAO
+'   CÔTE D'IVOIRE
+'   RÉUNION
+'   TERRES AUSTRALES ET ANTARCTIQUES FRANÇAISES
 
-Areas( 0, 0   ) = "ABYSSINIA"
-Areas( 0, 1   ) = "AFGHANISTAN"
-Areas( 0, 2   ) = "AFRICA"
-Areas( 0, 3   ) = "AFRICA, CENTRAL"
-Areas( 0, 4   ) = "AFRICA, EAST"
-Areas( 0, 5   ) = "AFRICA, EASTERN"
-Areas( 0, 6   ) = "AFRICA, FRENCH-SPEAKING WEST"
-Areas( 0, 7   ) = "AFRICA, NORTH"
-Areas( 0, 8   ) = "AFRICA, NORTHEAST"
-Areas( 0, 9   ) = "AFRICA, NORTHWEST"
-Areas( 0, 10  ) = "AFRICA, SOUTH"
-Areas( 0, 11  ) = "AFRICA, SOUTHERN"
-Areas( 0, 12  ) = "AFRICA, SUB-SAHARAN"
-Areas( 0, 13  ) = "AFRICA, WEST"
-Areas( 0, 14  ) = "ALABAMA"
-Areas( 0, 15  ) = "ALASKA"
-Areas( 0, 16  ) = "ALBANIA"
-Areas( 0, 17  ) = "ALBERTA"
-Areas( 0, 18  ) = "ALGERIA"
-Areas( 0, 19  ) = "ALPS"
-Areas( 0, 20  ) = "AMERICA"
-Areas( 0, 21  ) = "AMERICAN SAMOA"
-Areas( 0, 22  ) = "ANDORRA"
-Areas( 0, 23  ) = "ANGOLA"
-Areas( 0, 24  ) = "ANGUILLA"
-Areas( 0, 25  ) = "ANTARCTICA"
-Areas( 0, 26  ) = "ANTIGUA"
-Areas( 0, 27  ) = "ANTIGUA AND BARBUDA"
-Areas( 0, 28  ) = "ARAB COUNTRIES"
-Areas( 0, 29  ) = "ARCTIC REGIONS"
-Areas( 0, 30  ) = "ARGENTINA"
-Areas( 0, 31  ) = "ARIZONA"
-Areas( 0, 32  ) = "ARKANSAS"
-Areas( 0, 33  ) = "ARMENIA"
-Areas( 0, 34  ) = "ARMENIA (REPUBLIC)"
-Areas( 0, 35  ) = "ARUBA"
-Areas( 0, 36  ) = "ASIA"
-Areas( 0, 37  ) = "ASIA, CENTRAL"
-Areas( 0, 38  ) = "ASIA, EAST"
-Areas( 0, 39  ) = "ASIA, SOUTH"
-Areas( 0, 40  ) = "ASIA, SOUTHEASTERN"
-Areas( 0, 41  ) = "ASIA, SOUTHWESTERN"
-Areas( 0, 42  ) = "AUSTRALASIA"
-Areas( 0, 43  ) = "AUSTRALIA"
-Areas( 0, 44  ) = "AUSTRIA"
-Areas( 0, 45  ) = "AZERBAIJAN"
-Areas( 0, 46  ) = "BAHAMAS"
-Areas( 0, 47  ) = "BAHRAIN"
-Areas( 0, 48  ) = "BALKAN PENINSULA"
-Areas( 0, 49  ) = "BALTIC STATES"
-Areas( 0, 50  ) = "BANGLADESH"
-Areas( 0, 51  ) = "BARBADOS"
-Areas( 0, 52  ) = "BARBUDA"
-Areas( 0, 53  ) = "BELARUS"
-Areas( 0, 54  ) = "BELGIUM"
-Areas( 0, 55  ) = "BELIZE"
-Areas( 0, 56  ) = "BENELUX COUNTRIES"
-Areas( 0, 57  ) = "BENGAL"
-Areas( 0, 58  ) = "BENIN"
-Areas( 0, 59  ) = "BERMUDA"
-Areas( 0, 60  ) = "BHUTAN"
-Areas( 0, 61  ) = "BOLIVIA"
-Areas( 0, 62  ) = "BONAIRE"
-Areas( 0, 63  ) = "BOSNIA AND HERZEGOVINA"
-Areas( 0, 64  ) = "BOTSWANA"
-Areas( 0, 65  ) = "BRAZIL"
-Areas( 0, 66  ) = "BRITISH COLUMBIA"
-Areas( 0, 67  ) = "BRITISH GUIANA"
-Areas( 0, 68  ) = "BRITISH HONDURAS"
-Areas( 0, 69  ) = "BRITISH ISLES"
-Areas( 0, 70  ) = "BRITISH VIRGIN ISLANDS"
-Areas( 0, 71  ) = "BRUNEI"
-Areas( 0, 72  ) = "BULGARIA"
-Areas( 0, 73  ) = "BURKINA FASO"
-Areas( 0, 74  ) = "BURMA"
-Areas( 0, 75  ) = "BURUNDI"
-Areas( 0, 76  ) = "BYZANTINE EMPIRE"
-Areas( 0, 77  ) = "CABO VERDE"
-Areas( 0, 78  ) = "CALIFORNIA"
-Areas( 0, 79  ) = "CAMBODIA"
-Areas( 0, 80  ) = "CAMEROON"
-Areas( 0, 81  ) = "CANADA"
-Areas( 0, 82  ) = "CANARY ISLANDS"
-Areas( 0, 83  ) = "CAPE VERDE"
-Areas( 0, 84  ) = "CARIBBEAN AREA"
-Areas( 0, 85  ) = "CAROLINE ISLANDS"
-Areas( 0, 86  ) = "CAUCASUS"
-Areas( 0, 87  ) = "CAYMAN ISLANDS"
-Areas( 0, 88  ) = "CENTRAL AFRICAN REPUBLIC"
-Areas( 0, 89  ) = "CENTRAL AMERICA"
-Areas( 0, 90  ) = "CENTRAL EUROPE"
-Areas( 0, 91  ) = "CEYLON"
-Areas( 0, 92  ) = "CHAD"
-Areas( 0, 93  ) = "CHANNEL ISLANDS"
-Areas( 0, 94  ) = "CHILE"
-Areas( 0, 95  ) = "CHINA"
-Areas( 0, 96  ) = "COLOMBIA"
-Areas( 0, 97  ) = "COLORADO"
-Areas( 0, 98  ) = "COMMONWEALTH COUNTRIES"
-Areas( 0, 99  ) = "COMMUNIST COUNTRIES"
-Areas( 0, 100 ) = "COMMUNIST COUNTRIES, FORMER"
-Areas( 0, 101 ) = "COMOROS"
-Areas( 0, 102 ) = "CONGO (BRAZZAVILLE)"
-Areas( 0, 103 ) = "CONGO (DEMOCRATIC REPUBLIC)"
-Areas( 0, 104 ) = "CONNECTICUT"
-Areas( 0, 105 ) = "COOK ISLANDS"
-Areas( 0, 106 ) = "COSTA RICA"
-Areas( 0, 107 ) = "COTE D'IVOIRE"
-Areas( 0, 108 ) = "CROATIA"
-Areas( 0, 109 ) = "CUBA"
-Areas( 0, 110 ) = "CURACAO"
-Areas( 0, 111 ) = "CYPRUS"
-Areas( 0, 112 ) = "CZECH REPUBLIC"
-Areas( 0, 113 ) = "CZECHOSLOVAKIA"
-Areas( 0, 114 ) = "DAHOMEY"
-Areas( 0, 115 ) = "DELAWARE"
-Areas( 0, 116 ) = "DENMARK"
-Areas( 0, 117 ) = "DEVELOPING COUNTRIES"
-Areas( 0, 118 ) = "DISTRICT OF COLUMBIA"
-Areas( 0, 119 ) = "DJIBOUTI"
-Areas( 0, 120 ) = "DOMINICA"
-Areas( 0, 121 ) = "DOMINICAN REPUBLIC"
-Areas( 0, 122 ) = "DUTCH EAST INDIES"
-Areas( 0, 123 ) = "DUTCH GUIANA"
-Areas( 0, 124 ) = "EAST ASIA"
-Areas( 0, 125 ) = "EAST TIMOR"
-Areas( 0, 126 ) = "ECUADOR"
-Areas( 0, 127 ) = "EGYPT"
-Areas( 0, 128 ) = "EL SALVADOR"
-Areas( 0, 129 ) = "ELLICE ISLANDS"
-Areas( 0, 130 ) = "ENGLAND"
-Areas( 0, 131 ) = "EQUATORIAL GUINEA"
-Areas( 0, 132 ) = "ERITREA"
-Areas( 0, 133 ) = "ESTONIA"
-Areas( 0, 134 ) = "ESWATINI"
-Areas( 0, 135 ) = "ETHIOPIA"
-Areas( 0, 136 ) = "EURASIA"
-Areas( 0, 137 ) = "EUROPE"
-Areas( 0, 138 ) = "EUROPE, CENTRAL"
-Areas( 0, 139 ) = "EUROPE, EASTERN"
-Areas( 0, 140 ) = "EUROPE, NORTHERN"
-Areas( 0, 141 ) = "EUROPE, SOUTHERN"
-Areas( 0, 142 ) = "EUROPE, WESTERN"
-Areas( 0, 143 ) = "EUROPEAN ECONOMIC COMMUNITY COUNTRIES"
-Areas( 0, 144 ) = "EUROPEAN FREE TRADE ASSOCIATION COUNTRIES"
-Areas( 0, 145 ) = "EUROPEAN UNION COUNTRIES"
-Areas( 0, 146 ) = "FALKLAND ISLANDS"
-Areas( 0, 147 ) = "FAROE ISLANDS"
-Areas( 0, 148 ) = "FIJI"
-Areas( 0, 149 ) = "FINLAND"
-Areas( 0, 150 ) = "FLORIDA"
-Areas( 0, 151 ) = "FORMER COMMUNIST COUNTRIES"
-Areas( 0, 152 ) = "FORMER SOVIET REPUBLICS"
-Areas( 0, 153 ) = "FORMOSA"
-Areas( 0, 154 ) = "FRANCE"
-Areas( 0, 155 ) = "FRENCH GUIANA"
-Areas( 0, 156 ) = "FRENCH POLYNESIA"
-Areas( 0, 157 ) = "GABON"
-Areas( 0, 158 ) = "GALAPAGOS ISLANDS"
-Areas( 0, 159 ) = "GAMBIA"
-Areas( 0, 160 ) = "GEORGIA"
-Areas( 0, 161 ) = "GEORGIA (REPUBLIC)"
-Areas( 0, 162 ) = "GERMANY"
-Areas( 0, 163 ) = "GERMANY (DEMOCRATIC REPUBLIC)"
-Areas( 0, 164 ) = "GERMANY (EAST)"
-Areas( 0, 165 ) = "GERMANY (FEDERAL REPUBLIC)"
-Areas( 0, 166 ) = "GERMANY (WEST)"
-Areas( 0, 167 ) = "GHANA"
-Areas( 0, 168 ) = "GIBRALTAR"
-Areas( 0, 169 ) = "GILBERT ISLANDS"
-Areas( 0, 170 ) = "GREAT BRITAIN"
-Areas( 0, 171 ) = "GREECE"
-Areas( 0, 172 ) = "GREENLAND"
-Areas( 0, 173 ) = "GRENADA"
-Areas( 0, 174 ) = "GUADELOUPE"
-Areas( 0, 175 ) = "GUAM"
-Areas( 0, 176 ) = "GUATEMALA"
-Areas( 0, 177 ) = "GUIANA"
-Areas( 0, 178 ) = "GUINEA"
-Areas( 0, 179 ) = "GUINEA-BISSAU"
-Areas( 0, 180 ) = "GUYANA"
-Areas( 0, 181 ) = "HAITI"
-Areas( 0, 182 ) = "HAWAII"
-Areas( 0, 183 ) = "HISPANIOLA"
-Areas( 0, 184 ) = "HOLLAND"
-Areas( 0, 185 ) = "HONDURAS"
-Areas( 0, 186 ) = "HONG KONG"
-Areas( 0, 187 ) = "HUNGARY"
-Areas( 0, 188 ) = "ICELAND"
-Areas( 0, 189 ) = "IDAHO"
-Areas( 0, 190 ) = "ILLINOIS"
-Areas( 0, 191 ) = "INDIA"
-Areas( 0, 192 ) = "INDIANA"
-Areas( 0, 193 ) = "INDOCHINA"
-Areas( 0, 194 ) = "INDONESIA"
-Areas( 0, 195 ) = "INNER MONGOLIA"
-Areas( 0, 196 ) = "IOWA"
-Areas( 0, 197 ) = "IRAN"
-Areas( 0, 198 ) = "IRAQ"
-Areas( 0, 199 ) = "IRELAND"
-Areas( 0, 200 ) = "ISLAMIC EMPIRE"
-Areas( 0, 201 ) = "ISLAMIC COUNTRIES"
-Areas( 0, 202 ) = "ISLANDS OF THE INDIAN OCEAN"
-Areas( 0, 203 ) = "ISRAEL"
-Areas( 0, 204 ) = "ITALY"
-Areas( 0, 205 ) = "IVORY COAST"
-Areas( 0, 206 ) = "JAMAICA"
-Areas( 0, 207 ) = "JAPAN"
-Areas( 0, 208 ) = "JAVA"
-Areas( 0, 209 ) = "JERUSALEM"
-Areas( 0, 210 ) = "JORDAN"
-Areas( 0, 211 ) = "JUGOSLAVIA"
-Areas( 0, 212 ) = "JUTLAND"
-Areas( 0, 213 ) = "KAMPUCHEA"
-Areas( 0, 214 ) = "KANSAS"
-Areas( 0, 215 ) = "KAZAKHSTAN"
-Areas( 0, 216 ) = "KENTUCKY"
-Areas( 0, 217 ) = "KENYA"
-Areas( 0, 218 ) = "KERGUELEN ISLANDS"
-Areas( 0, 219 ) = "KIRIBATI"
-Areas( 0, 220 ) = "KOREA"
-Areas( 0, 221 ) = "KOREA (DEMOCRATIC PEOPLE'S REPUBLIC)"
-Areas( 0, 222 ) = "KOREA (NORTH)"
-Areas( 0, 223 ) = "KOREA (REPUBLIC)"
-Areas( 0, 224 ) = "KOREA (SOUTH)"
-Areas( 0, 225 ) = "KOSOVO"
-Areas( 0, 226 ) = "KUWAIT"
-Areas( 0, 227 ) = "KYRGYZSTAN"
-Areas( 0, 228 ) = "LAOS"
-Areas( 0, 229 ) = "LATIN AMERICA"
-Areas( 0, 230 ) = "LATVIA"
-Areas( 0, 231 ) = "LEBANON"
-Areas( 0, 232 ) = "LESOTHO"
-Areas( 0, 233 ) = "LIBERIA"
-Areas( 0, 234 ) = "LIBYA"
-Areas( 0, 235 ) = "LIECHTENSTEIN"
-Areas( 0, 236 ) = "LITHUANIA"
-Areas( 0, 237 ) = "LOUISIANA"
-Areas( 0, 238 ) = "LUXEMBOURG"
-Areas( 0, 239 ) = "MACAO"
-Areas( 0, 240 ) = "MACARONESIA"
-Areas( 0, 241 ) = "MACEDONIA"
-Areas( 0, 242 ) = "MACEDONIA (REPUBLIC)"
-Areas( 0, 243 ) = "MADAGASCAR"
-Areas( 0, 244 ) = "MAINE"
-Areas( 0, 245 ) = "MALAGASY REPUBLIC"
-Areas( 0, 246 ) = "MALAWI"
-Areas( 0, 247 ) = "MALAY ARCHIPELAGO"
-Areas( 0, 248 ) = "MALAYA"
-Areas( 0, 249 ) = "MALAYSIA"
-Areas( 0, 250 ) = "MALDIVES"
-Areas( 0, 251 ) = "MALI"
-Areas( 0, 252 ) = "MALTA"
-Areas( 0, 253 ) = "MANITOBA"
-Areas( 0, 254 ) = "MARSHALL ISLANDS"
-Areas( 0, 255 ) = "MARTINIQUE"
-Areas( 0, 256 ) = "MARYLAND"
-Areas( 0, 257 ) = "MASSACHUSETTS"
-Areas( 0, 258 ) = "MAURITANIA"
-Areas( 0, 259 ) = "MAURITIUS"
-Areas( 0, 260 ) = "MELANESIA"
-Areas( 0, 261 ) = "MEXICAN-AMERICAN BORDER REGION"
-Areas( 0, 262 ) = "MEXICO"
-Areas( 0, 263 ) = "MICHIGAN"
-Areas( 0, 264 ) = "MICRONESIA"
-Areas( 0, 265 ) = "MICRONESIA (FEDERATED STATES)"
-Areas( 0, 266 ) = "MIDDLE EAST"
-Areas( 0, 267 ) = "MINNESOTA"
-Areas( 0, 268 ) = "MISSISSIPPI"
-Areas( 0, 269 ) = "MISSOURI"
-Areas( 0, 270 ) = "MOLDOVA"
-Areas( 0, 271 ) = "MONACO"
-Areas( 0, 272 ) = "MONGOLIA"
-Areas( 0, 273 ) = "MONGOLIA (MONGOLIAN PEOPLE'S REPUBLIC)"
-Areas( 0, 274 ) = "MONTANA"
-Areas( 0, 275 ) = "MONTENEGRO"
-Areas( 0, 276 ) = "MONTSERRAT"
-Areas( 0, 277 ) = "MOROCCO"
-Areas( 0, 278 ) = "MOZAMBIQUE"
-Areas( 0, 279 ) = "MYANMAR"
-Areas( 0, 280 ) = "NAMIBIA"
-Areas( 0, 281 ) = "NAURU"
-Areas( 0, 282 ) = "NEAR EAST"
-Areas( 0, 283 ) = "NEBRASKA"
-Areas( 0, 284 ) = "NEPAL"
-Areas( 0, 285 ) = "NETHERLANDS"
-Areas( 0, 286 ) = "NETHERLANDS ANTILLES"
-Areas( 0, 287 ) = "NEVADA"
-Areas( 0, 288 ) = "NEW BRUNSWICK"
-Areas( 0, 289 ) = "NEW CALEDONIA"
-Areas( 0, 290 ) = "NEW GUINEA"
-Areas( 0, 291 ) = "NEW HAMPSHIRE"
-Areas( 0, 292 ) = "NEW HEBRIDES"
-Areas( 0, 293 ) = "NEW JERSEY"
-Areas( 0, 294 ) = "NEW MEXICO"
-Areas( 0, 295 ) = "NEW YORK"
-Areas( 0, 296 ) = "NEW ZEALAND"
-Areas( 0, 297 ) = "NEWFOUNDLAND AND LABRADOR"
-Areas( 0, 298 ) = "NICARAGUA"
-Areas( 0, 299 ) = "NIGER"
-Areas( 0, 300 ) = "NIGERIA"
-Areas( 0, 301 ) = "NORTH AMERICA"
-Areas( 0, 302 ) = "NORTH CAROLINA"
-Areas( 0, 303 ) = "NORTH DAKOTA"
-Areas( 0, 304 ) = "NORTH MACEDONIA"
-Areas( 0, 305 ) = "NORTHERN IRELAND"
-Areas( 0, 306 ) = "NORTHERN RHODESIA"
-Areas( 0, 307 ) = "NORTHWEST TERRITORIES"
-Areas( 0, 308 ) = "NORWAY"
-Areas( 0, 309 ) = "NOVA SCOTIA"
-Areas( 0, 310 ) = "NUNAVUT"
-Areas( 0, 311 ) = "NYASALAND"
-Areas( 0, 312 ) = "OCEANIA"
-Areas( 0, 313 ) = "OHIO"
-Areas( 0, 314 ) = "OKLAHOMA"
-Areas( 0, 315 ) = "OMAN"
-Areas( 0, 316 ) = "ONTARIO"
-Areas( 0, 317 ) = "OREGON"
-Areas( 0, 318 ) = "OUTER MONGOLIA"
-Areas( 0, 319 ) = "PACIFIC AREA"
-Areas( 0, 320 ) = "PAKISTAN"
-Areas( 0, 321 ) = "PALAU"
-Areas( 0, 322 ) = "PALESTINE"
-Areas( 0, 323 ) = "PANAMA"
-Areas( 0, 324 ) = "PAPUA NEW GUINEA"
-Areas( 0, 325 ) = "PARAGUAY"
-Areas( 0, 326 ) = "PENNSYLVANIA"
-Areas( 0, 327 ) = "PERSIA"
-Areas( 0, 328 ) = "PERSIAN GULF REGION"
-Areas( 0, 329 ) = "PERU"
-Areas( 0, 330 ) = "PHILIPPINES"
-Areas( 0, 331 ) = "POLAND"
-Areas( 0, 332 ) = "POLYNESIA"
-Areas( 0, 333 ) = "PORTUGAL"
-Areas( 0, 334 ) = "PRINCE EDWARD ISLAND"
-Areas( 0, 335 ) = "PRUSSIA"
-Areas( 0, 336 ) = "PRUSSIA, EAST (POLAND AND RUSSIA)"
-Areas( 0, 337 ) = "PUERTO RICO"
-Areas( 0, 338 ) = "QATAR"
-Areas( 0, 339 ) = "QUEBEC (PROVINCE)"
-Areas( 0, 340 ) = "REUNION"
-Areas( 0, 341 ) = "RHODE ISLAND"
-Areas( 0, 342 ) = "RHODESIA, NORTHERN"
-Areas( 0, 343 ) = "RHODESIA, SOUTHERN"
-Areas( 0, 344 ) = "ROMAN EMPIRE"
-Areas( 0, 345 ) = "ROMANIA"
-Areas( 0, 346 ) = "RUMANIA"
-Areas( 0, 347 ) = "RUSSIA"
-Areas( 0, 348 ) = "RUSSIA (FEDERATION)"
-Areas( 0, 349 ) = "RWANDA"
-Areas( 0, 350 ) = "SAHEL"
-Areas( 0, 351 ) = "SAINT KITTS-NEVIS"
-Areas( 0, 352 ) = "SAINT LUCIA"
-Areas( 0, 353 ) = "SAINT VINCENT AND THE GRENADINES"
-Areas( 0, 354 ) = "SALVADOR"
-Areas( 0, 355 ) = "SAMOA"
-Areas( 0, 356 ) = "SAMOA, AMERICAN"
-Areas( 0, 357 ) = "SAMOAN ISLANDS"
-Areas( 0, 358 ) = "SAN MARINO"
-Areas( 0, 359 ) = "SAO TOME AND PRINCIPE"
-Areas( 0, 360 ) = "SASKATCHEWAN"
-Areas( 0, 361 ) = "SAUDI ARABIA"
-Areas( 0, 362 ) = "SCANDINAVIA"
-Areas( 0, 363 ) = "SCOTLAND"
-Areas( 0, 364 ) = "SENEGAL"
-Areas( 0, 365 ) = "SERBIA"
-Areas( 0, 366 ) = "SEYCHELLES"
-Areas( 0, 367 ) = "SIAM"
-Areas( 0, 368 ) = "SIBERIA"
-Areas( 0, 369 ) = "SIERRA LEONE"
-Areas( 0, 370 ) = "SINGAPORE"
-Areas( 0, 371 ) = "SLOVAKIA"
-Areas( 0, 372 ) = "SLOVENIA"
-Areas( 0, 373 ) = "SOLOMON ISLANDS"
-Areas( 0, 374 ) = "SOMALIA"
-Areas( 0, 375 ) = "SOUTH AFRICA"
-Areas( 0, 376 ) = "SOUTH AMERICA"
-Areas( 0, 377 ) = "SOUTH ASIA"
-Areas( 0, 378 ) = "SOUTH CAROLINA"
-Areas( 0, 379 ) = "SOUTH DAKOTA"
-Areas( 0, 380 ) = "SOUTH SUDAN"
-Areas( 0, 381 ) = "SOUTHEAST ASIA"
-Areas( 0, 382 ) = "SOUTHERN CONE OF SOUTH AMERICA"
-Areas( 0, 383 ) = "SOVIET UNION"
-Areas( 0, 384 ) = "SPAIN"
-Areas( 0, 385 ) = "SRI LANKA"
-Areas( 0, 386 ) = "SUDAN"
-Areas( 0, 387 ) = "SUDAN (REGION)"
-Areas( 0, 388 ) = "SURINAME"
-Areas( 0, 389 ) = "SWAZILAND"
-Areas( 0, 390 ) = "SWEDEN"
-Areas( 0, 391 ) = "SWITZERLAND"
-Areas( 0, 392 ) = "SYRIA"
-Areas( 0, 393 ) = "TAIWAN"
-Areas( 0, 394 ) = "TAJIKISTAN"
-Areas( 0, 395 ) = "TAMIL NADU"
-Areas( 0, 396 ) = "TANGANYIKA"
-Areas( 0, 397 ) = "TANZANIA"
-Areas( 0, 398 ) = "TASMANIA"
-Areas( 0, 399 ) = "TENNESSEE"
-Areas( 0, 400 ) = "TERRES AUSTRALES ET ANTARCTIQUES FRANCAISES"
-Areas( 0, 401 ) = "TEXAS"
-Areas( 0, 402 ) = "THAILAND"
-Areas( 0, 403 ) = "TIBET"
-Areas( 0, 404 ) = "TIMOR-LESTE"
-Areas( 0, 405 ) = "TOBAGO"
-Areas( 0, 406 ) = "TOGO"
-Areas( 0, 407 ) = "TONGA"
-Areas( 0, 408 ) = "TRANSVAAL"
-Areas( 0, 409 ) = "TRINIDAD"
-Areas( 0, 410 ) = "TRINIDAD AND TOBAGO"
-Areas( 0, 411 ) = "TROPICS"
-Areas( 0, 412 ) = "TUBUAI ISLANDS"
-Areas( 0, 413 ) = "TUNISIA"
-Areas( 0, 414 ) = "TURKEY"
-Areas( 0, 415 ) = "TURKMENISTAN"
-Areas( 0, 416 ) = "TURKS AND CAICOS ISLANDS"
-Areas( 0, 417 ) = "TUVALU"
-Areas( 0, 418 ) = "UGANDA"
-Areas( 0, 419 ) = "UKRAINE"
-Areas( 0, 420 ) = "UNITED ARAB EMIRATES"
-Areas( 0, 421 ) = "UNITED STATES"
-Areas( 0, 422 ) = "UNITED STATES VIRGIN ISLANDS"
-Areas( 0, 423 ) = "UPPER VOLTA"
-Areas( 0, 424 ) = "URUGUAY"
-Areas( 0, 425 ) = "UTAH"
-Areas( 0, 426 ) = "UZBEKISTAN"
-Areas( 0, 427 ) = "VANUATU"
-Areas( 0, 428 ) = "VATICAN CITY"
-Areas( 0, 429 ) = "VENEZUELA"
-Areas( 0, 430 ) = "VERMONT"
-Areas( 0, 431 ) = "VIETNAM"
-Areas( 0, 432 ) = "VIETNAM (DEMOCRATIC REPUBLIC)"
-Areas( 0, 433 ) = "VIRGIN ISLANDS"
-Areas( 0, 434 ) = "VIRGIN ISLANDS OF THE UNITED STATES"
-Areas( 0, 435 ) = "VIRGIN ISLANDS, BRITISH"
-Areas( 0, 436 ) = "VIRGINIA"
-Areas( 0, 437 ) = "WALES"
-Areas( 0, 438 ) = "WASHINGTON (D.C.)"
-Areas( 0, 439 ) = "WASHINGTON (STATE)"
-Areas( 0, 440 ) = "WEST INDIES, BRITISH"
-Areas( 0, 441 ) = "WEST INDIES, FRENCH"
-Areas( 0, 442 ) = "WEST VIRGINIA"
-Areas( 0, 443 ) = "WESTERN AUSTRALIA"
-Areas( 0, 444 ) = "WESTERN SAMOA"
-Areas( 0, 445 ) = "WISCONSIN"
-Areas( 0, 446 ) = "WYOMING"
-Areas( 0, 447 ) = "XIANGGANG"
-Areas( 0, 448 ) = "YEMEN"
-Areas( 0, 449 ) = "YEMEN (PEOPLE'S DEMOCRATIC REPUBLIC)"
-Areas( 0, 450 ) = "YUGOSLAVIA"
-Areas( 0, 451 ) = "YUKON"
-Areas( 0, 452 ) = "ZAIRE"
-Areas( 0, 453 ) = "ZAMBEZI RIVER REGION"
-Areas( 0, 454 ) = "ZAMBIA"
-Areas( 0, 455 ) = "ZIMBABWE"
+Regions( 0, 0   ) = "TERRES AUSTRALES ET ANTARCTIQUES FRANCAISES"
+Regions( 0, 1   ) = "EUROPEAN FREE TRADE ASSOCIATION COUNTRIES"
+Regions( 0, 2   ) = "EUROPEAN ECONOMIC COMMUNITY COUNTRIES"
+Regions( 0, 3   ) = "AUSTRAL ISLANDS (FRENCH POLYNESIA)"
+Regions( 0, 4   ) = "PRUSSIA, EAST (POLAND AND RUSSIA)"
+Regions( 0, 5   ) = "SAINT VINCENT AND THE GRENADINES"
+Regions( 0, 6   ) = "MEXICAN-AMERICAN BORDER REGION"
+Regions( 0, 7   ) = "SOUTHERN CONE OF SOUTH AMERICA"
+Regions( 0, 8   ) = "MICRONESIA (FEDERATED STATES)"
+Regions( 0, 9   ) = "AFRICA, FRENCH-SPEAKING WEST"
+Regions( 0, 10  ) = "TOBAGO (TRINIDAD AND TOBAGO)"
+Regions( 0, 11  ) = "UNITED STATES VIRGIN ISLANDS"
+Regions( 0, 12  ) = "CONGO (DEMOCRATIC REPUBLIC)"
+Regions( 0, 13  ) = "ISLANDS OF THE INDIAN OCEAN"
+Regions( 0, 14  ) = "FORMER COMMUNIST COUNTRIES"
+Regions( 0, 15  ) = "NEWFOUNDLAND AND LABRADOR"
+Regions( 0, 16  ) = "CENTRAL AFRICAN REPUBLIC"
+Regions( 0, 17  ) = "TURKS AND CAICOS ISLANDS"
+Regions( 0, 18  ) = "FORMER SOVIET REPUBLICS"
+Regions( 0, 19  ) = "BOSNIA AND HERZEGOVINA"
+Regions( 0, 20  ) = "BRITISH VIRGIN ISLANDS"
+Regions( 0, 21  ) = "COMMONWEALTH COUNTRIES"
+Regions( 0, 22  ) = "NORTHWEST TERRITORIES"
+Regions( 0, 23  ) = "SAINT KITTS AND NEVIS"
+Regions( 0, 24  ) = "SAO TOME AND PRINCIPE"
+Regions( 0, 25  ) = "DEVELOPING COUNTRIES"
+Regions( 0, 26  ) = "NETHERLANDS ANTILLES"
+Regions( 0, 27  ) = "PRINCE EDWARD ISLAND"
+Regions( 0, 28  ) = "UNITED ARAB EMIRATES"
+Regions( 0, 29  ) = "WEST INDIES, BRITISH"
+Regions( 0, 30  ) = "AFRICA, SUB-SAHARAN"
+Regions( 0, 31  ) = "ANTIGUA AND BARBUDA"
+Regions( 0, 32  ) = "COMMUNIST COUNTRIES"
+Regions( 0, 33  ) = "CONGO (BRAZZAVILLE)"
+Regions( 0, 34  ) = "PERSIAN GULF REGION"
+Regions( 0, 35  ) = "WEST INDIES, FRENCH"
+Regions( 0, 36  ) = "ARMENIA (REPUBLIC)"
+Regions( 0, 37  ) = "DOMINICAN REPUBLIC"
+Regions( 0, 38  ) = "GEORGIA (REPUBLIC)"
+Regions( 0, 39  ) = "WASHINGTON (STATE)"
+Regions( 0, 40  ) = "AFRICA, NORTHEAST"
+Regions( 0, 41  ) = "AFRICA, NORTHWEST"
+Regions( 0, 42  ) = "BENELUX COUNTRIES"
+Regions( 0, 43  ) = "EQUATORIAL GUINEA"
+Regions( 0, 44  ) = "GALAPAGOS ISLANDS"
+Regions( 0, 45  ) = "ISLAMIC COUNTRIES"
+Regions( 0, 46  ) = "KERGUELEN ISLANDS"
+Regions( 0, 47  ) = "MALAY ARCHIPELAGO"
+Regions( 0, 48  ) = "QUEBEC (PROVINCE)"
+Regions( 0, 49  ) = "WASHINGTON (D.C.)"
+Regions( 0, 50  ) = "WESTERN AUSTRALIA"
+Regions( 0, 51  ) = "AFRICA, SOUTHERN"
+Regions( 0, 52  ) = "BALKAN PENINSULA"
+Regions( 0, 53  ) = "BRITISH COLUMBIA"
+Regions( 0, 54  ) = "BYZANTINE EMPIRE"
+Regions( 0, 55  ) = "CAROLINE ISLANDS"
+Regions( 0, 56  ) = "EUROPE, NORTHERN"
+Regions( 0, 57  ) = "EUROPE, SOUTHERN"
+Regions( 0, 58  ) = "FALKLAND ISLANDS"
+Regions( 0, 59  ) = "FRENCH POLYNESIA"
+Regions( 0, 60  ) = "MARSHALL ISLANDS"
+Regions( 0, 61  ) = "NORTHERN IRELAND"
+Regions( 0, 62  ) = "PAPUA NEW GUINEA"
+Regions( 0, 63  ) = "AFRICA, CENTRAL"
+Regions( 0, 64  ) = "AFRICA, EASTERN"
+Regions( 0, 65  ) = "CENTRAL AMERICA"
+Regions( 0, 66  ) = "CHANNEL ISLANDS"
+Regions( 0, 67  ) = "EUROPE, CENTRAL"
+Regions( 0, 68  ) = "EUROPE, EASTERN"
+Regions( 0, 69  ) = "NORTH MACEDONIA"
+Regions( 0, 70  ) = "SOLOMON ISLANDS"
+Regions( 0, 71  ) = "AMERICAN SAMOA"
+Regions( 0, 72  ) = "ARAB COUNTRIES"
+Regions( 0, 73  ) = "ARCTIC REGIONS"
+Regions( 0, 74  ) = "CANARY ISLANDS"
+Regions( 0, 75  ) = "CARIBBEAN AREA"
+Regions( 0, 76  ) = "CAYMAN ISLANDS"
+Regions( 0, 77  ) = "CZECH REPUBLIC"
+Regions( 0, 78  ) = "CZECHOSLOVAKIA"
+Regions( 0, 79  ) = "ISLAMIC EMPIRE"
+Regions( 0, 80  ) = "NORTH CAROLINA"
+Regions( 0, 81  ) = "SAMOAN ISLANDS"
+Regions( 0, 82  ) = "SOUTH CAROLINA"
+Regions( 0, 83  ) = "SOUTHEAST ASIA"
+Regions( 0, 84  ) = "SUDAN (REGION)"
+Regions( 0, 85  ) = "VIRGIN ISLANDS"
+Regions( 0, 86  ) = "AFRICA, NORTH"
+Regions( 0, 87  ) = "ASIA, CENTRAL"
+Regions( 0, 88  ) = "BALTIC STATES"
+Regions( 0, 89  ) = "BRITISH ISLES"
+Regions( 0, 90  ) = "COTE D'IVOIRE"
+Regions( 0, 91  ) = "FAROE ISLANDS"
+Regions( 0, 92  ) = "FRENCH GUIANA"
+Regions( 0, 93  ) = "GREAT BRITAIN"
+Regions( 0, 94  ) = "GUINEA-BISSAU"
+Regions( 0, 95  ) = "KOREA (NORTH)"
+Regions( 0, 96  ) = "LATIN AMERICA"
+Regions( 0, 97  ) = "LIECHTENSTEIN"
+Regions( 0, 98  ) = "MASSACHUSETTS"
+Regions( 0, 99  ) = "NEW BRUNSWICK"
+Regions( 0, 100 ) = "NEW CALEDONIA"
+Regions( 0, 101 ) = "NEW HAMPSHIRE"
+Regions( 0, 102 ) = "NORTH AMERICA"
+Regions( 0, 103 ) = "SOUTH AMERICA"
+Regions( 0, 104 ) = "UNITED STATES"
+Regions( 0, 105 ) = "WEST VIRGINIA"
+Regions( 0, 106 ) = "ZAMBEZI RIVER"
+Regions( 0, 107 ) = "AFRICA, EAST"
+Regions( 0, 108 ) = "AFRICA, WEST"
+Regions( 0, 109 ) = "BURKINA FASO"
+Regions( 0, 110 ) = "COOK ISLANDS"
+Regions( 0, 111 ) = "NORTH DAKOTA"
+Regions( 0, 112 ) = "PACIFIC AREA"
+Regions( 0, 113 ) = "PENNSYLVANIA"
+Regions( 0, 114 ) = "RHODE ISLAND"
+Regions( 0, 115 ) = "SASKATCHEWAN"
+Regions( 0, 116 ) = "SAUDI ARABIA"
+Regions( 0, 117 ) = "SIERRA LEONE"
+Regions( 0, 118 ) = "SOUTH AFRICA"
+Regions( 0, 119 ) = "SOUTH DAKOTA"
+Regions( 0, 120 ) = "SOVIET UNION"
+Regions( 0, 121 ) = "TURKMENISTAN"
+Regions( 0, 122 ) = "VATICAN CITY"
+Regions( 0, 123 ) = "AFGHANISTAN"
+Regions( 0, 124 ) = "AUSTRALASIA"
+Regions( 0, 125 ) = "CONNECTICUT"
+Regions( 0, 126 ) = "EL SALVADOR"
+Regions( 0, 127 ) = "MACARONESIA"
+Regions( 0, 128 ) = "MIDDLE EAST"
+Regions( 0, 129 ) = "MISSISSIPPI"
+Regions( 0, 130 ) = "NETHERLANDS"
+Regions( 0, 131 ) = "NEW ZEALAND"
+Regions( 0, 132 ) = "NOVA SCOTIA"
+Regions( 0, 133 ) = "PHILIPPINES"
+Regions( 0, 134 ) = "PUERTO RICO"
+Regions( 0, 135 ) = "SAINT LUCIA"
+Regions( 0, 136 ) = "SCANDINAVIA"
+Regions( 0, 137 ) = "SOUTH SUDAN"
+Regions( 0, 138 ) = "SWITZERLAND"
+Regions( 0, 139 ) = "TIMOR-LESTE"
+Regions( 0, 140 ) = "ANTARCTICA"
+Regions( 0, 141 ) = "AZERBAIJAN"
+Regions( 0, 142 ) = "BANGLADESH"
+Regions( 0, 143 ) = "CABO VERDE"
+Regions( 0, 144 ) = "CALIFORNIA"
+Regions( 0, 145 ) = "COSTA RICA"
+Regions( 0, 146 ) = "GUADELOUPE"
+Regions( 0, 147 ) = "HISPANIOLA"
+Regions( 0, 148 ) = "KAZAKHSTAN"
+Regions( 0, 149 ) = "KYRGYZSTAN"
+Regions( 0, 150 ) = "LUXEMBOURG"
+Regions( 0, 151 ) = "MADAGASCAR"
+Regions( 0, 152 ) = "MARTINIQUE"
+Regions( 0, 153 ) = "MAURITANIA"
+Regions( 0, 154 ) = "MICRONESIA"
+Regions( 0, 155 ) = "MONTENEGRO"
+Regions( 0, 156 ) = "MONTSERRAT"
+Regions( 0, 157 ) = "MOZAMBIQUE"
+Regions( 0, 158 ) = "NEW GUINEA"
+Regions( 0, 159 ) = "NEW JERSEY"
+Regions( 0, 160 ) = "NEW MEXICO"
+Regions( 0, 161 ) = "SAN MARINO"
+Regions( 0, 162 ) = "SEYCHELLES"
+Regions( 0, 163 ) = "SOUTH ASIA"
+Regions( 0, 164 ) = "TAJIKISTAN"
+Regions( 0, 165 ) = "UZBEKISTAN"
+Regions( 0, 166 ) = "YUGOSLAVIA"
+Regions( 0, 167 ) = "ARGENTINA"
+Regions( 0, 168 ) = "AUSTRALIA"
+Regions( 0, 169 ) = "EAST ASIA"
+Regions( 0, 170 ) = "GIBRALTAR"
+Regions( 0, 171 ) = "GREENLAND"
+Regions( 0, 172 ) = "GUATEMALA"
+Regions( 0, 173 ) = "INDOCHINA"
+Regions( 0, 174 ) = "INDONESIA"
+Regions( 0, 175 ) = "JERUSALEM"
+Regions( 0, 176 ) = "LITHUANIA"
+Regions( 0, 177 ) = "LOUISIANA"
+Regions( 0, 178 ) = "MACEDONIA"
+Regions( 0, 179 ) = "MAURITIUS"
+Regions( 0, 180 ) = "MELANESIA"
+Regions( 0, 181 ) = "MINNESOTA"
+Regions( 0, 182 ) = "NICARAGUA"
+Regions( 0, 183 ) = "PALESTINE"
+Regions( 0, 184 ) = "POLYNESIA"
+Regions( 0, 185 ) = "SINGAPORE"
+Regions( 0, 186 ) = "SRI LANKA"
+Regions( 0, 187 ) = "TENNESSEE"
+Regions( 0, 188 ) = "VENEZUELA"
+Regions( 0, 189 ) = "WISCONSIN"
+Regions( 0, 190 ) = "ANGUILLA"
+Regions( 0, 191 ) = "ARKANSAS"
+Regions( 0, 192 ) = "BARBADOS"
+Regions( 0, 193 ) = "BOTSWANA"
+Regions( 0, 194 ) = "BULGARIA"
+Regions( 0, 195 ) = "CAMBODIA"
+Regions( 0, 196 ) = "CAMEROON"
+Regions( 0, 197 ) = "CAUCASUS"
+Regions( 0, 198 ) = "COLOMBIA"
+Regions( 0, 199 ) = "COLORADO"
+Regions( 0, 200 ) = "DELAWARE"
+Regions( 0, 201 ) = "DJIBOUTI"
+Regions( 0, 202 ) = "DOMINICA"
+Regions( 0, 203 ) = "ESWATINI"
+Regions( 0, 204 ) = "ETHIOPIA"
+Regions( 0, 205 ) = "HONDURAS"
+Regions( 0, 206 ) = "ILLINOIS"
+Regions( 0, 207 ) = "KENTUCKY"
+Regions( 0, 208 ) = "KIRIBATI"
+Regions( 0, 209 ) = "MALAYSIA"
+Regions( 0, 210 ) = "MALDIVES"
+Regions( 0, 211 ) = "MANITOBA"
+Regions( 0, 212 ) = "MARYLAND"
+Regions( 0, 213 ) = "MICHIGAN"
+Regions( 0, 214 ) = "MISSOURI"
+Regions( 0, 215 ) = "MONGOLIA"
+Regions( 0, 216 ) = "NEBRASKA"
+Regions( 0, 217 ) = "NEW YORK"
+Regions( 0, 218 ) = "OKLAHOMA"
+Regions( 0, 219 ) = "PAKISTAN"
+Regions( 0, 220 ) = "PARAGUAY"
+Regions( 0, 221 ) = "PORTUGAL"
+Regions( 0, 222 ) = "SCOTLAND"
+Regions( 0, 223 ) = "SLOVAKIA"
+Regions( 0, 224 ) = "SLOVENIA"
+Regions( 0, 225 ) = "SURINAME"
+Regions( 0, 226 ) = "TANZANIA"
+Regions( 0, 227 ) = "TASMANIA"
+Regions( 0, 228 ) = "THAILAND"
+Regions( 0, 229 ) = "TRINIDAD"
+Regions( 0, 230 ) = "VIRGINIA"
+Regions( 0, 231 ) = "ZIMBABWE"
+Regions( 0, 232 ) = "ALABAMA"
+Regions( 0, 233 ) = "ALBANIA"
+Regions( 0, 234 ) = "ALBERTA"
+Regions( 0, 235 ) = "ALGERIA"
+Regions( 0, 236 ) = "AMERICA"
+Regions( 0, 237 ) = "ANDORRA"
+Regions( 0, 238 ) = "ARIZONA"
+Regions( 0, 239 ) = "ARMENIA"
+Regions( 0, 240 ) = "AUSTRIA"
+Regions( 0, 241 ) = "BAHAMAS"
+Regions( 0, 242 ) = "BAHRAIN"
+Regions( 0, 243 ) = "BARBUDA"
+Regions( 0, 244 ) = "BELARUS"
+Regions( 0, 245 ) = "BELGIUM"
+Regions( 0, 246 ) = "BERMUDA"
+Regions( 0, 247 ) = "BOLIVIA"
+Regions( 0, 248 ) = "BONAIRE"
+Regions( 0, 249 ) = "BURUNDI"
+Regions( 0, 250 ) = "COMOROS"
+Regions( 0, 251 ) = "CROATIA"
+Regions( 0, 252 ) = "CURACAO"
+Regions( 0, 253 ) = "DENMARK"
+Regions( 0, 254 ) = "ECUADOR"
+Regions( 0, 255 ) = "ENGLAND"
+Regions( 0, 256 ) = "ERITREA"
+Regions( 0, 257 ) = "ESTONIA"
+Regions( 0, 258 ) = "EURASIA"
+Regions( 0, 259 ) = "FINLAND"
+Regions( 0, 260 ) = "FLORIDA"
+Regions( 0, 261 ) = "GEORGIA"
+Regions( 0, 262 ) = "GERMANY"
+Regions( 0, 263 ) = "GRENADA"
+Regions( 0, 264 ) = "HUNGARY"
+Regions( 0, 265 ) = "ICELAND"
+Regions( 0, 266 ) = "INDIANA"
+Regions( 0, 267 ) = "IRELAND"
+Regions( 0, 268 ) = "JAMAICA"
+Regions( 0, 269 ) = "LEBANON"
+Regions( 0, 270 ) = "LESOTHO"
+Regions( 0, 271 ) = "LIBERIA"
+Regions( 0, 272 ) = "MOLDOVA"
+Regions( 0, 273 ) = "MONTANA"
+Regions( 0, 274 ) = "MOROCCO"
+Regions( 0, 275 ) = "NAMIBIA"
+Regions( 0, 276 ) = "NIGERIA"
+Regions( 0, 277 ) = "NUNAVUT"
+Regions( 0, 278 ) = "OCEANIA"
+Regions( 0, 279 ) = "ONTARIO"
+Regions( 0, 280 ) = "PRUSSIA"
+Regions( 0, 281 ) = "REUNION"
+Regions( 0, 282 ) = "ROMANIA"
+Regions( 0, 283 ) = "SENEGAL"
+Regions( 0, 284 ) = "SOMALIA"
+Regions( 0, 285 ) = "TROPICS"
+Regions( 0, 286 ) = "TUNISIA"
+Regions( 0, 287 ) = "UKRAINE"
+Regions( 0, 288 ) = "URUGUAY"
+Regions( 0, 289 ) = "VANUATU"
+Regions( 0, 290 ) = "VERMONT"
+Regions( 0, 291 ) = "VIETNAM"
+Regions( 0, 292 ) = "WYOMING"
+Regions( 0, 293 ) = "AFRICA"
+Regions( 0, 294 ) = "ALASKA"
+Regions( 0, 295 ) = "ANGOLA"
+Regions( 0, 296 ) = "BELIZE"
+Regions( 0, 297 ) = "BENGAL"
+Regions( 0, 298 ) = "BHUTAN"
+Regions( 0, 299 ) = "BRAZIL"
+Regions( 0, 300 ) = "BRUNEI"
+Regions( 0, 301 ) = "CANADA"
+Regions( 0, 302 ) = "CYPRUS"
+Regions( 0, 303 ) = "EUROPE"
+Regions( 0, 304 ) = "FRANCE"
+Regions( 0, 305 ) = "GAMBIA"
+Regions( 0, 306 ) = "GREECE"
+Regions( 0, 307 ) = "GUIANA"
+Regions( 0, 308 ) = "GUINEA"
+Regions( 0, 309 ) = "GUYANA"
+Regions( 0, 310 ) = "HAWAII"
+Regions( 0, 311 ) = "ISRAEL"
+Regions( 0, 312 ) = "JORDAN"
+Regions( 0, 313 ) = "KANSAS"
+Regions( 0, 314 ) = "KOSOVO"
+Regions( 0, 315 ) = "KUWAIT"
+Regions( 0, 316 ) = "LATVIA"
+Regions( 0, 317 ) = "MALAWI"
+Regions( 0, 318 ) = "MEXICO"
+Regions( 0, 319 ) = "MONACO"
+Regions( 0, 320 ) = "NEVADA"
+Regions( 0, 321 ) = "NORWAY"
+Regions( 0, 322 ) = "OREGON"
+Regions( 0, 323 ) = "PANAMA"
+Regions( 0, 324 ) = "POLAND"
+Regions( 0, 325 ) = "RUSSIA"
+Regions( 0, 326 ) = "RWANDA"
+Regions( 0, 327 ) = "SERBIA"
+Regions( 0, 328 ) = "SWEDEN"
+Regions( 0, 329 ) = "TAIWAN"
+Regions( 0, 330 ) = "TURKEY"
+Regions( 0, 331 ) = "TUVALU"
+Regions( 0, 332 ) = "UGANDA"
+Regions( 0, 333 ) = "ZAMBIA"
+Regions( 0, 334 ) = "ARUBA"
+Regions( 0, 335 ) = "BENIN"
+Regions( 0, 336 ) = "BURMA"
+Regions( 0, 337 ) = "CHILE"
+Regions( 0, 338 ) = "CHINA"
+Regions( 0, 339 ) = "EGYPT"
+Regions( 0, 340 ) = "GABON"
+Regions( 0, 341 ) = "GHANA"
+Regions( 0, 342 ) = "HAITI"
+Regions( 0, 343 ) = "IDAHO"
+Regions( 0, 344 ) = "INDIA"
+Regions( 0, 345 ) = "ITALY"
+Regions( 0, 346 ) = "JAPAN"
+Regions( 0, 347 ) = "KENYA"
+Regions( 0, 348 ) = "KOREA"
+Regions( 0, 349 ) = "LIBYA"
+Regions( 0, 350 ) = "MAINE"
+Regions( 0, 351 ) = "MALTA"
+Regions( 0, 352 ) = "NAURU"
+Regions( 0, 353 ) = "NEPAL"
+Regions( 0, 354 ) = "NIGER"
+Regions( 0, 355 ) = "PALAU"
+Regions( 0, 356 ) = "QATAR"
+Regions( 0, 357 ) = "SAHEL"
+Regions( 0, 358 ) = "SAMOA"
+Regions( 0, 359 ) = "SPAIN"
+Regions( 0, 360 ) = "SUDAN"
+Regions( 0, 361 ) = "SYRIA"
+Regions( 0, 362 ) = "TEXAS"
+Regions( 0, 363 ) = "TONGA"
+Regions( 0, 364 ) = "WALES"
+Regions( 0, 365 ) = "YEMEN"
+Regions( 0, 366 ) = "YUKON"
+Regions( 0, 367 ) = "ALPS"
+Regions( 0, 368 ) = "ASIA"
+Regions( 0, 369 ) = "CHAD"
+Regions( 0, 370 ) = "CUBA"
+Regions( 0, 371 ) = "FIJI"
+Regions( 0, 372 ) = "GUAM"
+Regions( 0, 373 ) = "IOWA"
+Regions( 0, 374 ) = "IRAN"
+Regions( 0, 375 ) = "IRAQ"
+Regions( 0, 376 ) = "LAOS"
+Regions( 0, 377 ) = "MALI"
+Regions( 0, 378 ) = "OHIO"
+Regions( 0, 379 ) = "OMAN"
+Regions( 0, 380 ) = "PERU"
+Regions( 0, 381 ) = "ROME"
+Regions( 0, 382 ) = "TOGO"
+Regions( 0, 383 ) = "UTAH"
 
 End Sub
 
@@ -1344,462 +1456,390 @@ Sub FillArray2
 ' Cutter. "A" means the "Regions and Countries Table" (CSM G300), "B" means the "U.S.
 ' States and Canadian Provinces" table (CSM G302)
 
-Areas( 1, 0   ) = "E8"    : Areas( 2, 0   ) = "A"
-Areas( 1, 1   ) = "A3"    : Areas( 2, 1   ) = "A"
-Areas( 1, 2   ) = "A35"   : Areas( 2, 2   ) = "A"
-Areas( 1, 3   ) = "A352"  : Areas( 2, 3   ) = "A"
-Areas( 1, 4   ) = "A353"  : Areas( 2, 4   ) = "A"
-Areas( 1, 5   ) = "A354"  : Areas( 2, 5   ) = "A"
-Areas( 1, 6   ) = "A3545" : Areas( 2, 6   ) = "A"
-Areas( 1, 7   ) = "A355"  : Areas( 2, 7   ) = "A"
-Areas( 1, 8   ) = "A3553" : Areas( 2, 8   ) = "A"
-Areas( 1, 9   ) = "A3554" : Areas( 2, 9   ) = "A"
-Areas( 1, 10  ) = "S6"    : Areas( 2, 10  ) = "A"
-Areas( 1, 11  ) = "A356"  : Areas( 2, 11  ) = "A"
-Areas( 1, 12  ) = "A357"  : Areas( 2, 12  ) = "A"
-Areas( 1, 13  ) = "A358"  : Areas( 2, 13  ) = "A"
-Areas( 1, 14  ) = "A2"    : Areas( 2, 14  ) = "B"
-Areas( 1, 15  ) = "A4"    : Areas( 2, 15  ) = "B"
-Areas( 1, 16  ) = "A38"   : Areas( 2, 16  ) = "A"
-Areas( 1, 17  ) = "A3"    : Areas( 2, 17  ) = "B"
-Areas( 1, 18  ) = "A4"    : Areas( 2, 18  ) = "A"
-Areas( 1, 19  ) = "A43"   : Areas( 2, 19  ) = "A"
-Areas( 1, 20  ) = "A45"   : Areas( 2, 20  ) = "A"
-Areas( 1, 21  ) = "A46"   : Areas( 2, 21  ) = "A"
-Areas( 1, 22  ) = "A48"   : Areas( 2, 22  ) = "A"
-Areas( 1, 23  ) = "A5"    : Areas( 2, 23  ) = "A"
-Areas( 1, 24  ) = "A54"   : Areas( 2, 24  ) = "A"
-Areas( 1, 25  ) = "A6"    : Areas( 2, 25  ) = "A"
-Areas( 1, 26  ) = "A63"   : Areas( 2, 26  ) = "A"
-Areas( 1, 27  ) = "A63"   : Areas( 2, 27  ) = "A"
-Areas( 1, 28  ) = "A65"   : Areas( 2, 28  ) = "A"
-Areas( 1, 29  ) = "A68"   : Areas( 2, 29  ) = "A"
-Areas( 1, 30  ) = "A7"    : Areas( 2, 30  ) = "A"
-Areas( 1, 31  ) = "A6"    : Areas( 2, 31  ) = "B"
-Areas( 1, 32  ) = "A8"    : Areas( 2, 32  ) = "B"
-Areas( 1, 33  ) = "A75"   : Areas( 2, 33  ) = "A"
-Areas( 1, 34  ) = "A76"   : Areas( 2, 34  ) = "A"
-Areas( 1, 35  ) = "A77"   : Areas( 2, 35  ) = "A"
-Areas( 1, 36  ) = "A78"   : Areas( 2, 36  ) = "A"
-Areas( 1, 37  ) = "A783"  : Areas( 2, 37  ) = "A"
-Areas( 1, 38  ) = "E18"   : Areas( 2, 38  ) = "A"
-Areas( 1, 39  ) = "S64"   : Areas( 2, 39  ) = "A"
-Areas( 1, 40  ) = "S644"  : Areas( 2, 40  ) = "A"
-Areas( 1, 41  ) = "M628"  : Areas( 2, 41  ) = "A"
-Areas( 1, 42  ) = "A788"  : Areas( 2, 42  ) = "A"
-Areas( 1, 43  ) = "A8"    : Areas( 2, 43  ) = "A"
-Areas( 1, 44  ) = "A9"    : Areas( 2, 44  ) = "A"
-Areas( 1, 45  ) = "A98"   : Areas( 2, 45  ) = "A"
-Areas( 1, 46  ) = "B24"   : Areas( 2, 46  ) = "A"
-Areas( 1, 47  ) = "B26"   : Areas( 2, 47  ) = "A"
-Areas( 1, 48  ) = "B28"   : Areas( 2, 48  ) = "A"
-Areas( 1, 49  ) = "B29"   : Areas( 2, 49  ) = "A"
-Areas( 1, 50  ) = "B3"    : Areas( 2, 50  ) = "A"
-Areas( 1, 51  ) = "B35"   : Areas( 2, 51  ) = "A"
-Areas( 1, 52  ) = "A63"   : Areas( 2, 52  ) = "A"
-Areas( 1, 53  ) = "B38"   : Areas( 2, 53  ) = "A"
-Areas( 1, 54  ) = "B4"    : Areas( 2, 54  ) = "A"
-Areas( 1, 55  ) = "B42"   : Areas( 2, 55  ) = "A"
-Areas( 1, 56  ) = "B425"  : Areas( 2, 56  ) = "A"
-Areas( 1, 57  ) = "B43"   : Areas( 2, 57  ) = "A"
-Areas( 1, 58  ) = "B45"   : Areas( 2, 58  ) = "A"
-Areas( 1, 59  ) = "B46"   : Areas( 2, 59  ) = "A"
-Areas( 1, 60  ) = "B47"   : Areas( 2, 60  ) = "A"
-Areas( 1, 61  ) = "B5"    : Areas( 2, 61  ) = "A"
-Areas( 1, 62  ) = "B52"   : Areas( 2, 62  ) = "A"
-Areas( 1, 63  ) = "B54"   : Areas( 2, 63  ) = "A"
-Areas( 1, 64  ) = "B55"   : Areas( 2, 64  ) = "A"
-Areas( 1, 65  ) = "B6"    : Areas( 2, 65  ) = "A"
-Areas( 1, 66  ) = "B8"    : Areas( 2, 66  ) = "B"
-Areas( 1, 67  ) = "G95"   : Areas( 2, 67  ) = "A"
-Areas( 1, 68  ) = "B42"   : Areas( 2, 68  ) = "A"
-Areas( 1, 69  ) = "B65"   : Areas( 2, 69  ) = "A"
-Areas( 1, 70  ) = "V6"    : Areas( 2, 70  ) = "A"
-Areas( 1, 71  ) = "B7"    : Areas( 2, 71  ) = "A"
-Areas( 1, 72  ) = "B9"    : Areas( 2, 72  ) = "A"
-Areas( 1, 73  ) = "B92"   : Areas( 2, 73  ) = "A"
-Areas( 1, 74  ) = "B93"   : Areas( 2, 74  ) = "A"
-Areas( 1, 75  ) = "B94"   : Areas( 2, 75  ) = "A"
-Areas( 1, 76  ) = "B97"   : Areas( 2, 76  ) = "A"
-Areas( 1, 77  ) = "C15"   : Areas( 2, 77  ) = "A"
-Areas( 1, 78  ) = "C2"    : Areas( 2, 78  ) = "B"
-Areas( 1, 79  ) = "C16"   : Areas( 2, 79  ) = "A"
-Areas( 1, 80  ) = "C17"   : Areas( 2, 80  ) = "A"
-Areas( 1, 81  ) = "C2"    : Areas( 2, 81  ) = "A"
-Areas( 1, 82  ) = "C23"   : Areas( 2, 82  ) = "A"
-Areas( 1, 83  ) = "C15"   : Areas( 2, 83  ) = "A"
-Areas( 1, 84  ) = "C27"   : Areas( 2, 84  ) = "A"
-Areas( 1, 85  ) = "C275"  : Areas( 2, 85  ) = "A"
-Areas( 1, 86  ) = "C28"   : Areas( 2, 86  ) = "A"
-Areas( 1, 87  ) = "C29"   : Areas( 2, 87  ) = "A"
-Areas( 1, 88  ) = "C33"   : Areas( 2, 88  ) = "A"
-Areas( 1, 89  ) = "C35"   : Areas( 2, 89  ) = "A"
-Areas( 1, 90  ) = "E8515" : Areas( 2, 90  ) = "A"
-Areas( 1, 91  ) = "S72"   : Areas( 2, 91  ) = "A"
-Areas( 1, 92  ) = "C45"   : Areas( 2, 92  ) = "A"
-Areas( 1, 93  ) = "C48"   : Areas( 2, 93  ) = "A"
-Areas( 1, 94  ) = "C5"    : Areas( 2, 94  ) = "A"
-Areas( 1, 95  ) = "C6"    : Areas( 2, 95  ) = "A"
-Areas( 1, 96  ) = "C7"    : Areas( 2, 96  ) = "A"
-Areas( 1, 97  ) = "C6"    : Areas( 2, 97  ) = "B"
-Areas( 1, 98  ) = "C723"  : Areas( 2, 98  ) = "A"
-Areas( 1, 99  ) = "C725"  : Areas( 2, 99  ) = "A"
-Areas( 1, 100 ) = "C727"  : Areas( 2, 100 ) = "A"
-Areas( 1, 101 ) = "C73"   : Areas( 2, 101 ) = "A"
-Areas( 1, 102 ) = "C74"   : Areas( 2, 102 ) = "A"
-Areas( 1, 103 ) = "C75"   : Areas( 2, 103 ) = "A"
-Areas( 1, 104 ) = "C8"    : Areas( 2, 104 ) = "B"
-Areas( 1, 105 ) = "C76"   : Areas( 2, 105 ) = "A"
-Areas( 1, 106 ) = "C8"    : Areas( 2, 106 ) = "A"
-Areas( 1, 107)  = "C85"   : Areas( 2, 107 ) = "A"
-Areas( 1, 108 ) = "C87"   : Areas( 2, 108 ) = "A"
-Areas( 1, 109 ) = "C9"    : Areas( 2, 109 ) = "A"
-Areas( 1, 110)  = "C92"   : Areas( 2, 110 ) = "A"
-Areas( 1, 111 ) = "C93"   : Areas( 2, 111 ) = "A"
-Areas( 1, 112 ) = "C94"   : Areas( 2, 112 ) = "A"
-Areas( 1, 113 ) = "C95"   : Areas( 2, 113 ) = "A"
-Areas( 1, 114 ) = "B45"   : Areas( 2, 114 ) = "A"
-Areas( 1, 115 ) = "D3"    : Areas( 2, 115 ) = "B"
-Areas( 1, 116 ) = "D4"    : Areas( 2, 116 ) = "A"
-Areas( 1, 117 ) = "D44"   : Areas( 2, 117 ) = "A"
-Areas( 1, 118 ) = "W18"   : Areas( 2, 118 ) = "B"
-Areas( 1, 119 ) = "D5"    : Areas( 2, 119 ) = "A"
-Areas( 1, 120 ) = "D6"    : Areas( 2, 120 ) = "A"
-Areas( 1, 121 ) = "D65"   : Areas( 2, 121 ) = "A"
-Areas( 1, 122 ) = "I5"    : Areas( 2, 122 ) = "A"
-Areas( 1, 123 ) = "S75"   : Areas( 2, 123 ) = "A"
-Areas( 1, 124 ) = "E18"   : Areas( 2, 124 ) = "A"
-Areas( 1, 125 ) = "T56"   : Areas( 2, 125 ) = "A"
-Areas( 1, 126 ) = "E2"    : Areas( 2, 126 ) = "A"
-Areas( 1, 127 ) = "E3"    : Areas( 2, 127 ) = "A"
-Areas( 1, 128 ) = "S2"    : Areas( 2, 128 ) = "A"
-Areas( 1, 129 ) = "T95"   : Areas( 2, 129 ) = "A"
-Areas( 1, 130 ) = "G7"    : Areas( 2, 130 ) = "A"
-Areas( 1, 131 ) = "E6"    : Areas( 2, 131 ) = "A"
-Areas( 1, 132 ) = "E65"   : Areas( 2, 132 ) = "A"
-Areas( 1, 133 ) = "E75"   : Areas( 2, 133 ) = "A"
-Areas( 1, 134 ) = "E77"   : Areas( 2, 134 ) = "A"
-Areas( 1, 135 ) = "E8"    : Areas( 2, 135 ) = "A"
-Areas( 1, 136 ) = "E83"   : Areas( 2, 136 ) = "A"
-Areas( 1, 137 ) = "E85"   : Areas( 2, 137 ) = "A"
-Areas( 1, 138 ) = "E8515" : Areas( 2, 138 ) = "A"
-Areas( 1, 139 ) = "E852"  : Areas( 2, 139 ) = "A"
-Areas( 1, 140 ) = "E853"  : Areas( 2, 140 ) = "A"
-Areas( 1, 141 ) = "E854"  : Areas( 2, 141 ) = "A"
-Areas( 1, 142 ) = "E85"   : Areas( 2, 142 ) = "A"
-Areas( 1, 143 ) = "E86"   : Areas( 2, 143 ) = "A"
-Areas( 1, 144 ) = "E87"   : Areas( 2, 144 ) = "A"
-Areas( 1, 145 ) = "E85"   : Areas( 2, 145 ) = "A"
-Areas( 1, 146 ) = "F3"    : Areas( 2, 146 ) = "A"
-Areas( 1, 147 ) = "F32"   : Areas( 2, 147 ) = "A"
-Areas( 1, 148 ) = "F4"    : Areas( 2, 148 ) = "A"
-Areas( 1, 149 ) = "F5"    : Areas( 2, 149 ) = "A"
-Areas( 1, 150 ) = "F6"    : Areas( 2, 150 ) = "B"
-Areas( 1, 151 ) = "C727"  : Areas( 2, 151 ) = "A"
-Areas( 1, 152 ) = "F6"    : Areas( 2, 152 ) = "A"
-Areas( 1, 153 ) = "T28"   : Areas( 2, 153 ) = "A"
-Areas( 1, 154 ) = "F8"    : Areas( 2, 154 ) = "A"
-Areas( 1, 155 ) = "F9"    : Areas( 2, 155 ) = "A"
-Areas( 1, 156 ) = "F93"   : Areas( 2, 156 ) = "A"
-Areas( 1, 157 ) = "G2"    : Areas( 2, 157 ) = "A"
-Areas( 1, 158 ) = "G23"   : Areas( 2, 158 ) = "A"
-Areas( 1, 159 ) = "G25"   : Areas( 2, 159 ) = "A"
-Areas( 1, 160 ) = "G4"    : Areas( 2, 160 ) = "B"
-Areas( 1, 161 ) = "G28"   : Areas( 2, 161 ) = "A"
-Areas( 1, 162 ) = "G3"    : Areas( 2, 162 ) = "A"
-Areas( 1, 163 ) = "G3"    : Areas( 2, 163 ) = "A"
-Areas( 1, 164 ) = "G3"    : Areas( 2, 164 ) = "A"
-Areas( 1, 165 ) = "G3"    : Areas( 2, 165 ) = "A"
-Areas( 1, 166 ) = "G3"    : Areas( 2, 166 ) = "A"
-Areas( 1, 167 ) = "G4"    : Areas( 2, 167 ) = "A"
-Areas( 1, 168 ) = "G5"    : Areas( 2, 168 ) = "A"
-Areas( 1, 169 ) = "K5"    : Areas( 2, 169 ) = "A"
-Areas( 1, 170 ) = "G7"    : Areas( 2, 170 ) = "A"
-Areas( 1, 171 ) = "G8"    : Areas( 2, 171 ) = "A"
-Areas( 1, 172 ) = "G83"   : Areas( 2, 172 ) = "A"
-Areas( 1, 173 ) = "G84"   : Areas( 2, 173 ) = "A"
-Areas( 1, 174 ) = "G845"  : Areas( 2, 174 ) = "A"
-Areas( 1, 175 ) = "G85"   : Areas( 2, 175 ) = "A"
-Areas( 1, 176 ) = "G9"    : Areas( 2, 176 ) = "A"
-Areas( 1, 177 ) = "G915"  : Areas( 2, 177 ) = "A"
-Areas( 1, 178 ) = "G92"   : Areas( 2, 178 ) = "A"
-Areas( 1, 179 ) = "G93"   : Areas( 2, 179 ) = "A"
-Areas( 1, 180 ) = "G95"   : Areas( 2, 180 ) = "A"
-Areas( 1, 181 ) = "H2"    : Areas( 2, 181 ) = "A"
-Areas( 1, 182 ) = "H3"    : Areas( 2, 182 ) = "B"
-Areas( 1, 183 ) = "H55"   : Areas( 2, 183 ) = "A"
-Areas( 1, 184 ) = "N4"    : Areas( 2, 184 ) = "A"
-Areas( 1, 185 ) = "H8"    : Areas( 2, 185 ) = "A"
-Areas( 1, 186 ) = "C6"    : Areas( 2, 186 ) = "A"
-Areas( 1, 187 ) = "H9"    : Areas( 2, 187 ) = "A"
-Areas( 1, 188 ) = "I2"    : Areas( 2, 188 ) = "A"
-Areas( 1, 189 ) = "I2"    : Areas( 2, 189 ) = "B"
-Areas( 1, 190 ) = "I3"    : Areas( 2, 190 ) = "B"
-Areas( 1, 191 ) = "I4"    : Areas( 2, 191 ) = "A"
-Areas( 1, 192 ) = "I6"    : Areas( 2, 192 ) = "B"
-Areas( 1, 193 ) = "I48"   : Areas( 2, 193 ) = "A"
-Areas( 1, 194 ) = "I5"    : Areas( 2, 194 ) = "A"
-Areas( 1, 195 ) = "C6"    : Areas( 2, 195 ) = "A"
-Areas( 1, 196 ) = "I8"    : Areas( 2, 196 ) = "B"
-Areas( 1, 197 ) = "I7"    : Areas( 2, 197 ) = "A"
-Areas( 1, 198 ) = "I72"   : Areas( 2, 198 ) = "A"
-Areas( 1, 199 ) = "I73"   : Areas( 2, 199 ) = "A"
-Areas( 1, 200 ) = "I742"  : Areas( 2, 200 ) = "A"
-Areas( 1, 201 ) = "I74"   : Areas( 2, 201 ) = "A"
-Areas( 1, 202 ) = "I743"  : Areas( 2, 202 ) = "A"
-Areas( 1, 203 ) = "I75"   : Areas( 2, 203 ) = "A"
-Areas( 1, 204 ) = "I8"    : Areas( 2, 204 ) = "A"
-Areas( 1, 205 ) = "C85"   : Areas( 2, 205 ) = "A"
-Areas( 1, 206 ) = "J25"   : Areas( 2, 206 ) = "A"
-Areas( 1, 207 ) = "J3"    : Areas( 2, 207 ) = "A"
-Areas( 1, 208 ) = "I5"    : Areas( 2, 208 ) = "A"
-Areas( 1, 209 ) = "J4"    : Areas( 2, 209 ) = "A"
-Areas( 1, 210 ) = "J6"    : Areas( 2, 210 ) = "A"
-Areas( 1, 211 ) = "Y8"    : Areas( 2, 211 ) = "A"
-Areas( 1, 212 ) = "D4"    : Areas( 2, 212 ) = "A"
-Areas( 1, 213 ) = "C16"   : Areas( 2, 213 ) = "A"
-Areas( 1, 214 ) = "K2"    : Areas( 2, 214 ) = "B"
-Areas( 1, 215 ) = "K3"    : Areas( 2, 215 ) = "A"
-Areas( 1, 216 ) = "K4"    : Areas( 2, 216 ) = "B"
-Areas( 1, 217 ) = "K4"    : Areas( 2, 217 ) = "A"
-Areas( 1, 218 ) = "K43"   : Areas( 2, 218 ) = "A"
-Areas( 1, 219 ) = "K5"    : Areas( 2, 219 ) = "A"
-Areas( 1, 220 ) = "K6"    : Areas( 2, 220 ) = "A"
-Areas( 1, 221 ) = "K7"    : Areas( 2, 221 ) = "A"
-Areas( 1, 222 ) = "K7"    : Areas( 2, 222 ) = "A"
-Areas( 1, 223 ) = "K6"    : Areas( 2, 223 ) = "A"
-Areas( 1, 224 ) = "K6"    : Areas( 2, 224 ) = "A"
-Areas( 1, 225 ) = "K8"    : Areas( 2, 225 ) = "A"
-Areas( 1, 226 ) = "K9"    : Areas( 2, 226 ) = "A"
-Areas( 1, 227 ) = "K98"   : Areas( 2, 227 ) = "A"
-Areas( 1, 228 ) = "L28"   : Areas( 2, 228 ) = "A"
-Areas( 1, 229 ) = "L29"   : Areas( 2, 229 ) = "A"
-Areas( 1, 230 ) = "L35"   : Areas( 2, 230 ) = "A"
-Areas( 1, 231 ) = "L4"    : Areas( 2, 231 ) = "A"
-Areas( 1, 232 ) = "L5"    : Areas( 2, 232 ) = "A"
-Areas( 1, 233 ) = "L7"    : Areas( 2, 233 ) = "A"
-Areas( 1, 234 ) = "L75"   : Areas( 2, 234 ) = "A"
-Areas( 1, 235 ) = "L76"   : Areas( 2, 235 ) = "A"
-Areas( 1, 236 ) = "L78"   : Areas( 2, 236 ) = "A"
-Areas( 1, 237 ) = "L8"    : Areas( 2, 237 ) = "B"
-Areas( 1, 238 ) = "L9"    : Areas( 2, 238 ) = "A"
-Areas( 1, 239 ) = "C6"    : Areas( 2, 239 ) = "A"
-Areas( 1, 240 ) = "M26"   : Areas( 2, 240 ) = "A"
-Areas( 1, 241 ) = "M27"   : Areas( 2, 241 ) = "A"
-Areas( 1, 242 ) = "N74"   : Areas( 2, 242 ) = "A"
-Areas( 1, 243 ) = "M28"   : Areas( 2, 243 ) = "A"
-Areas( 1, 244 ) = "M2"    : Areas( 2, 244 ) = "B"
-Areas( 1, 245 ) = "M28"   : Areas( 2, 245 ) = "A"
-Areas( 1, 246 ) = "M3"    : Areas( 2, 246 ) = "A"
-Areas( 1, 247 ) = "M35"   : Areas( 2, 247 ) = "A"
-Areas( 1, 248 ) = "M4"    : Areas( 2, 248 ) = "A"
-Areas( 1, 249 ) = "M4"    : Areas( 2, 249 ) = "A"
-Areas( 1, 250 ) = "M415"  : Areas( 2, 250 ) = "A"
-Areas( 1, 251 ) = "M42"   : Areas( 2, 251 ) = "A"
-Areas( 1, 252 ) = "M43"   : Areas( 2, 252 ) = "A"
-Areas( 1, 253 ) = "M3"    : Areas( 2, 253 ) = "B"
-Areas( 1, 254 ) = "M433"  : Areas( 2, 254 ) = "A"
-Areas( 1, 255 ) = "M435"  : Areas( 2, 255 ) = "A"
-Areas( 1, 256 ) = "M3"    : Areas( 2, 256 ) = "B"
-Areas( 1, 257 ) = "M4"    : Areas( 2, 257 ) = "B"
-Areas( 1, 258 ) = "M44"   : Areas( 2, 258 ) = "A"
-Areas( 1, 259 ) = "M45"   : Areas( 2, 259 ) = "A"
-Areas( 1, 260 ) = "M5"    : Areas( 2, 260 ) = "A"
-Areas( 1, 261 ) = "M58"   : Areas( 2, 261 ) = "A"
-Areas( 1, 262 ) = "M6"    : Areas( 2, 262 ) = "A"
-Areas( 1, 263 ) = "M5"    : Areas( 2, 263 ) = "B"
-Areas( 1, 264 ) = "M625"  : Areas( 2, 264 ) = "A"
-Areas( 1, 265 ) = "M626"  : Areas( 2, 265 ) = "A"
-Areas( 1, 266 ) = "M628"  : Areas( 2, 266 ) = "A"
-Areas( 1, 267 ) = "M6"    : Areas( 2, 267 ) = "B"
-Areas( 1, 268 ) = "M7"    : Areas( 2, 268 ) = "B"
-Areas( 1, 269 ) = "M8"    : Areas( 2, 269 ) = "B"
-Areas( 1, 270 ) = "M629"  : Areas( 2, 270 ) = "A"
-Areas( 1, 271 ) = "M63"   : Areas( 2, 271 ) = "A"
-Areas( 1, 272 ) = "M65"   : Areas( 2, 272 ) = "A"
-Areas( 1, 273 ) = "M65"   : Areas( 2, 273 ) = "A"
-Areas( 1, 274 ) = "M9"    : Areas( 2, 274 ) = "B"
-Areas( 1, 275 ) = "M68"   : Areas( 2, 275 ) = "A"
-Areas( 1, 276 ) = "M7"    : Areas( 2, 276 ) = "A"
-Areas( 1, 277 ) = "M8"    : Areas( 2, 277 ) = "A"
-Areas( 1, 278 ) = "M85"   : Areas( 2, 278 ) = "A"
-Areas( 1, 279 ) = "B93"   : Areas( 2, 279 ) = "A"
-Areas( 1, 280 ) = "N3"    : Areas( 2, 280 ) = "A"
-Areas( 1, 281 ) = "N32"   : Areas( 2, 281 ) = "A"
-Areas( 1, 282 ) = "M628"  : Areas( 2, 282 ) = "A"
-Areas( 1, 283 ) = "N2"    : Areas( 2, 283 ) = "B"
-Areas( 1, 284 ) = "N35"   : Areas( 2, 284 ) = "A"
-Areas( 1, 285 ) = "N4"    : Areas( 2, 285 ) = "A"
-Areas( 1, 286 ) = "N42"   : Areas( 2, 286 ) = "A"
-Areas( 1, 287 ) = "N3"    : Areas( 2, 287 ) = "B"
-Areas( 1, 288 ) = "N5"    : Areas( 2, 288 ) = "B"
-Areas( 1, 289 ) = "N425"  : Areas( 2, 289 ) = "A"
-Areas( 1, 290 ) = "N43"   : Areas( 2, 290 ) = "A"
-Areas( 1, 291 ) = "N4"    : Areas( 2, 291 ) = "B"
-Areas( 1, 292 ) = "V26"   : Areas( 2, 292 ) = "A"
-Areas( 1, 293 ) = "N5"    : Areas( 2, 293 ) = "B"
-Areas( 1, 294 ) = "N6"    : Areas( 2, 294 ) = "B"
-Areas( 1, 295 ) = "N7"    : Areas( 2, 295 ) = "B"
-Areas( 1, 296 ) = "N45"   : Areas( 2, 296 ) = "A"
-Areas( 1, 297 ) = "N6"    : Areas( 2, 297 ) = "B"
-Areas( 1, 298 ) = "N5"    : Areas( 2, 298 ) = "A"
-Areas( 1, 299 ) = "N55"   : Areas( 2, 299 ) = "A"
-Areas( 1, 300 ) = "N6"    : Areas( 2, 300 ) = "A"
-Areas( 1, 301 ) = "N7"    : Areas( 2, 301 ) = "A"
-Areas( 1, 302 ) = "N8"    : Areas( 2, 302 ) = "B"
-Areas( 1, 303 ) = "N9"    : Areas( 2, 303 ) = "B"
-Areas( 1, 304 ) = "N74"   : Areas( 2, 304 ) = "A"
-Areas( 1, 305 ) = "G7"    : Areas( 2, 305 ) = "A"
-Areas( 1, 306 ) = "Z33"   : Areas( 2, 306 ) = "A"
-Areas( 1, 307 ) = "N7"    : Areas( 2, 307 ) = "B"
-Areas( 1, 308 ) = "N8"    : Areas( 2, 308 ) = "A"
-Areas( 1, 309 ) = "N8"    : Areas( 2, 309 ) = "B"
-Areas( 1, 310 ) = "N9"    : Areas( 2, 310 ) = "B"
-Areas( 1, 311 ) = "M3"    : Areas( 2, 311 ) = "A"
-Areas( 1, 312 ) = "O3"    : Areas( 2, 312 ) = "A"
-Areas( 1, 313 ) = "O3"    : Areas( 2, 313 ) = "B"
-Areas( 1, 314 ) = "O5"    : Areas( 2, 314 ) = "B"
-Areas( 1, 315 ) = "O5"    : Areas( 2, 315 ) = "A"
-Areas( 1, 316 ) = "O6"    : Areas( 2, 316 ) = "B"
-Areas( 1, 317 ) = "O7"    : Areas( 2, 317 ) = "B"
-Areas( 1, 318 ) = "M65"   : Areas( 2, 318 ) = "A"
-Areas( 1, 319 ) = "P16"   : Areas( 2, 319 ) = "A"
-Areas( 1, 320 ) = "P18"   : Areas( 2, 320 ) = "A"
-Areas( 1, 321 ) = "P185"  : Areas( 2, 321 ) = "A"
-Areas( 1, 322 ) = "P19"   : Areas( 2, 322 ) = "A"
-Areas( 1, 323 ) = "P2"    : Areas( 2, 323 ) = "A"
-Areas( 1, 324 ) = "P26"   : Areas( 2, 324 ) = "A"
-Areas( 1, 325 ) = "P3"    : Areas( 2, 325 ) = "A"
-Areas( 1, 326 ) = "P4"    : Areas( 2, 326 ) = "B"
-Areas( 1, 327 ) = "I7"    : Areas( 2, 327 ) = "A"
-Areas( 1, 328 ) = "P35"   : Areas( 2, 328 ) = "A"
-Areas( 1, 329 ) = "P4"    : Areas( 2, 329 ) = "A"
-Areas( 1, 330 ) = "P6"    : Areas( 2, 330 ) = "A"
-Areas( 1, 331 ) = "P7"    : Areas( 2, 331 ) = "A"
-Areas( 1, 332 ) = "P75"   : Areas( 2, 332 ) = "A"
-Areas( 1, 333 ) = "P8"    : Areas( 2, 333 ) = "A"
-Areas( 1, 334 ) = "P8"    : Areas( 2, 334 ) = "B"
-Areas( 1, 335 ) = "G3"    : Areas( 2, 335 ) = "A"
-Areas( 1, 336 ) = "P85"   : Areas( 2, 336 ) = "A"
-Areas( 1, 337 ) = "P9"    : Areas( 2, 337 ) = "A"
-Areas( 1, 338 ) = "Q2"    : Areas( 2, 338 ) = "A"
-Areas( 1, 339 ) = "Q3"    : Areas( 2, 339 ) = "B"
-Areas( 1, 340)  = "R4"    : Areas( 2, 340 ) = "A"
-Areas( 1, 341 ) = "R4"    : Areas( 2, 341 ) = "B"
-Areas( 1, 342 ) = "Z33"   : Areas( 2, 342 ) = "A"
-Areas( 1, 343 ) = "Z55"   : Areas( 2, 343 ) = "A"
-Areas( 1, 344 ) = "R57"   : Areas( 2, 344 ) = "A"
-Areas( 1, 345 ) = "R6"    : Areas( 2, 345 ) = "A"
-Areas( 1, 346 ) = "R6"    : Areas( 2, 346 ) = "A"
-Areas( 1, 347 ) = "R8"    : Areas( 2, 347 ) = "A"
-Areas( 1, 348 ) = "R8"    : Areas( 2, 348 ) = "A"
-Areas( 1, 349 ) = "R95"   : Areas( 2, 349 ) = "A"
-Areas( 1, 350 ) = "S15"   : Areas( 2, 350 ) = "A"
-Areas( 1, 351 ) = "S16"   : Areas( 2, 351 ) = "A"
-Areas( 1, 352 ) = "S17"   : Areas( 2, 352 ) = "A"
-Areas( 1, 353 ) = "S18"   : Areas( 2, 353 ) = "A"
-Areas( 1, 354 ) = "S2"    : Areas( 2, 354 ) = "A"
-Areas( 1, 355 ) = "S23"   : Areas( 2, 355 ) = "A"
-Areas( 1, 356 ) = "A46"   : Areas( 2, 356 ) = "A"
-Areas( 1, 357 ) = "S24"   : Areas( 2, 357 ) = "A"
-Areas( 1, 358 ) = "S27"   : Areas( 2, 358 ) = "A"
-Areas( 1, 359 ) = "S3"    : Areas( 2, 359 ) = "A"
-Areas( 1, 360 ) = "S2"    : Areas( 2, 360 ) = "B"
-Areas( 1, 361 ) = "S33"   : Areas( 2, 361 ) = "A"
-Areas( 1, 362 ) = "S34"   : Areas( 2, 362 ) = "A"
-Areas( 1, 363 ) = "G7"    : Areas( 2, 363 ) = "A"
-Areas( 1, 364 ) = "S38"   : Areas( 2, 364 ) = "A"
-Areas( 1, 365 ) = "S4"    : Areas( 2, 365 ) = "A"
-Areas( 1, 366 ) = "S45"   : Areas( 2, 366 ) = "A"
-Areas( 1, 367 ) = "T5"    : Areas( 2, 367 ) = "A"
-Areas( 1, 368 ) = "R8"    : Areas( 2, 368 ) = "A"
-Areas( 1, 369 ) = "S5"    : Areas( 2, 369 ) = "A"
-Areas( 1, 370 ) = "S55"   : Areas( 2, 370 ) = "A"
-Areas( 1, 371 ) = "S56"   : Areas( 2, 371 ) = "A"
-Areas( 1, 372 ) = "S57"   : Areas( 2, 372 ) = "A"
-Areas( 1, 373 ) = "S575"  : Areas( 2, 373 ) = "A"
-Areas( 1, 374 ) = "S58"   : Areas( 2, 374 ) = "A"
-Areas( 1, 375 ) = "S6"    : Areas( 2, 375 ) = "A"
-Areas( 1, 376 ) = "S63"   : Areas( 2, 376 ) = "A"
-Areas( 1, 377 ) = "S64"   : Areas( 2, 377 ) = "A"
-Areas( 1, 378 ) = "S6"    : Areas( 2, 378 ) = "B"
-Areas( 1, 379 ) = "S8"    : Areas( 2, 379 ) = "B"
-Areas( 1, 380 ) = "S643"  : Areas( 2, 380 ) = "A"
-Areas( 1, 381 ) = "S644"  : Areas( 2, 381 ) = "A"
-Areas( 1, 382 ) = "S63"   : Areas( 2, 382 ) = "A"
-Areas( 1, 383 ) = "S65"   : Areas( 2, 383 ) = "A"
-Areas( 1, 384 ) = "S7"    : Areas( 2, 384 ) = "A"
-Areas( 1, 385 ) = "S72"   : Areas( 2, 385 ) = "A"
-Areas( 1, 386 ) = "S73"   : Areas( 2, 386 ) = "A"
-Areas( 1, 387 ) = "S74"   : Areas( 2, 387 ) = "A"
-Areas( 1, 388 ) = "S75"   : Areas( 2, 388 ) = "A"
-Areas( 1, 389 ) = "E77"   : Areas( 2, 389 ) = "A"
-Areas( 1, 390 ) = "S8"    : Areas( 2, 390 ) = "A"
-Areas( 1, 391 ) = "S9"    : Areas( 2, 391 ) = "A"
-Areas( 1, 392 ) = "S95"   : Areas( 2, 392 ) = "A"
-Areas( 1, 393 ) = "T28"   : Areas( 2, 393 ) = "A"
-Areas( 1, 394 ) = "T3"    : Areas( 2, 394 ) = "A"
-Areas( 1, 395 ) = "I4"    : Areas( 2, 395 ) = "A"
-Areas( 1, 396 ) = "T34"   : Areas( 2, 396 ) = "A"
-Areas( 1, 397 ) = "T34"   : Areas( 2, 397 ) = "A"
-Areas( 1, 398 ) = "A8"    : Areas( 2, 398 ) = "A"
-Areas( 1, 399 ) = "T2"    : Areas( 2, 399 ) = "B"
-Areas( 1, 400)  = "T47"   : Areas( 2, 400 ) = "A"
-Areas( 1, 401 ) = "T4"    : Areas( 2, 401 ) = "B"
-Areas( 1, 402 ) = "T5"    : Areas( 2, 402 ) = "A"
-Areas( 1, 403 ) = "C6"    : Areas( 2, 403 ) = "A"
-Areas( 1, 404 ) = "T56"   : Areas( 2, 404 ) = "A"
-Areas( 1, 405 ) = "T7"    : Areas( 2, 405 ) = "A"
-Areas( 1, 406 ) = "T6"    : Areas( 2, 406 ) = "A"
-Areas( 1, 407 ) = "T63"   : Areas( 2, 407 ) = "A"
-Areas( 1, 408 ) = "S6"    : Areas( 2, 408 ) = "A"
-Areas( 1, 409 ) = "T7"    : Areas( 2, 409 ) = "A"
-Areas( 1, 410 ) = "T7"    : Areas( 2, 410 ) = "A"
-Areas( 1, 411 ) = "T73"   : Areas( 2, 411 ) = "A"
-Areas( 1, 412 ) = "T77"   : Areas( 2, 412 ) = "A"
-Areas( 1, 413 ) = "T8"    : Areas( 2, 413 ) = "A"
-Areas( 1, 414 ) = "T9"    : Areas( 2, 414 ) = "A"
-Areas( 1, 415 ) = "T93"   : Areas( 2, 415 ) = "A"
-Areas( 1, 416 ) = "T94"   : Areas( 2, 416 ) = "A"
-Areas( 1, 417 ) = "T95"   : Areas( 2, 417 ) = "A"
-Areas( 1, 418 ) = "U33"   : Areas( 2, 418 ) = "A"
-Areas( 1, 419 ) = "U38"   : Areas( 2, 419 ) = "A"
-Areas( 1, 420 ) = "U5"    : Areas( 2, 420 ) = "A"
-Areas( 1, 421 ) = "U6"    : Areas( 2, 421 ) = "A"
-Areas( 1, 422 ) = "V63"   : Areas( 2, 422 ) = "A"
-Areas( 1, 423 ) = "B92"   : Areas( 2, 423 ) = "A"
-Areas( 1, 424 ) = "U8"    : Areas( 2, 424 ) = "A"
-Areas( 1, 425 ) = "U8"    : Areas( 2, 425 ) = "B"
-Areas( 1, 426 ) = "U9"    : Areas( 2, 426 ) = "A"
-Areas( 1, 427 ) = "V26"   : Areas( 2, 427 ) = "A"
-Areas( 1, 428 ) = "V3"    : Areas( 2, 428 ) = "A"
-Areas( 1, 429 ) = "V4"    : Areas( 2, 429 ) = "A"
-Areas( 1, 430 ) = "V5"    : Areas( 2, 430 ) = "B"
-Areas( 1, 431 ) = "V5"    : Areas( 2, 431 ) = "A"
-Areas( 1, 432 ) = "V5"    : Areas( 2, 432 ) = "A"
-Areas( 1, 433 ) = "V6"    : Areas( 2, 433 ) = "A"
-Areas( 1, 434 ) = "V63"   : Areas( 2, 434 ) = "A"
-Areas( 1, 435 ) = "V6"    : Areas( 2, 435 ) = "A"
-Areas( 1, 436 ) = "V8"    : Areas( 2, 436 ) = "B"
-Areas( 1, 437 ) = "G7"    : Areas( 2, 437 ) = "A"
-Areas( 1, 438 ) = "W18"   : Areas( 2, 438 ) = "B"
-Areas( 1, 439 ) = "W2"    : Areas( 2, 439 ) = "B"
-Areas( 1, 440 ) = "W47"   : Areas( 2, 440 ) = "A"
-Areas( 1, 441 ) = "W48"   : Areas( 2, 441 ) = "A"
-Areas( 1, 442 ) = "W4"    : Areas( 2, 442 ) = "B"
-Areas( 1, 443 ) = "A8"    : Areas( 2, 443 ) = "A"
-Areas( 1, 444 ) = "S23"   : Areas( 2, 444 ) = "A"
-Areas( 1, 445 ) = "W6"    : Areas( 2, 445 ) = "B"
-Areas( 1, 446 ) = "W8"    : Areas( 2, 446 ) = "B"
-Areas( 1, 447 ) = "C6"    : Areas( 2, 447 ) = "A"
-Areas( 1, 448 ) = "Y4"    : Areas( 2, 448 ) = "A"
-Areas( 1, 449 ) = "Y4"    : Areas( 2, 449 ) = "A"
-Areas( 1, 450 ) = "Y8"    : Areas( 2, 450 ) = "A"
-Areas( 1, 451 ) = "Y8"    : Areas( 2, 451 ) = "B"
-Areas( 1, 452 ) = "C75"   : Areas( 2, 452 ) = "A"
-Areas( 1, 453 ) = "Z32"   : Areas( 2, 453 ) = "A"
-Areas( 1, 454 ) = "Z33"   : Areas( 2, 454 ) = "A"
-Areas( 1, 455 ) = "Z55"   : Areas( 2, 455 ) = "A"
+Regions( 1, 0   ) = "T47"   : Regions( 2, 0   ) = "A"
+Regions( 1, 1   ) = "E87"   : Regions( 2, 1   ) = "A"
+Regions( 1, 2   ) = "E86"   : Regions( 2, 2   ) = "A"
+Regions( 1, 3   ) = "T77"   : Regions( 2, 3   ) = "A"
+Regions( 1, 4   ) = "P85"   : Regions( 2, 4   ) = "A"
+Regions( 1, 5   ) = "S18"   : Regions( 2, 5   ) = "A"
+Regions( 1, 6   ) = "M58"   : Regions( 2, 6   ) = "A"
+Regions( 1, 7   ) = "S63"   : Regions( 2, 7   ) = "A"
+Regions( 1, 8   ) = "M626"  : Regions( 2, 8   ) = "A"
+Regions( 1, 9   ) = "A3545" : Regions( 2, 9   ) = "A"
+Regions( 1, 10  ) = "T7"    : Regions( 2, 10  ) = "A"
+Regions( 1, 11  ) = "V63"   : Regions( 2, 11  ) = "A"
+Regions( 1, 12  ) = "C75"   : Regions( 2, 12  ) = "A"
+Regions( 1, 13  ) = "I743"  : Regions( 2, 13  ) = "A"
+Regions( 1, 14  ) = "C727"  : Regions( 2, 14  ) = "A"
+Regions( 1, 15  ) = "N6"    : Regions( 2, 15  ) = "B"
+Regions( 1, 16  ) = "C33"   : Regions( 2, 16  ) = "A"
+Regions( 1, 17  ) = "T94"   : Regions( 2, 17  ) = "A"
+Regions( 1, 18  ) = "F6"    : Regions( 2, 18  ) = "A"
+Regions( 1, 19  ) = "B54"   : Regions( 2, 19  ) = "A"
+Regions( 1, 20  ) = "V6"    : Regions( 2, 20  ) = "A"
+Regions( 1, 21  ) = "C723"  : Regions( 2, 21  ) = "A"
+Regions( 1, 22  ) = "N7"    : Regions( 2, 22  ) = "B"
+Regions( 1, 23  ) = "S16"   : Regions( 2, 23  ) = "A"
+Regions( 1, 24  ) = "S3"    : Regions( 2, 24  ) = "A"
+Regions( 1, 25  ) = "D44"   : Regions( 2, 25  ) = "A"
+Regions( 1, 26  ) = "N42"   : Regions( 2, 26  ) = "A"
+Regions( 1, 27  ) = "P8"    : Regions( 2, 27  ) = "B"
+Regions( 1, 28  ) = "U5"    : Regions( 2, 28  ) = "A"
+Regions( 1, 29  ) = "W47"   : Regions( 2, 29  ) = "A"
+Regions( 1, 30  ) = "A357"  : Regions( 2, 30  ) = "A"
+Regions( 1, 31  ) = "A63"   : Regions( 2, 31  ) = "A"
+Regions( 1, 32  ) = "C725"  : Regions( 2, 32  ) = "A"
+Regions( 1, 33  ) = "C74"   : Regions( 2, 33  ) = "A"
+Regions( 1, 34  ) = "P35"   : Regions( 2, 34  ) = "A"
+Regions( 1, 35  ) = "W48"   : Regions( 2, 35  ) = "A"
+Regions( 1, 36  ) = "A76"   : Regions( 2, 36  ) = "A"
+Regions( 1, 37  ) = "D65"   : Regions( 2, 37  ) = "A"
+Regions( 1, 38  ) = "G28"   : Regions( 2, 38  ) = "A"
+Regions( 1, 39  ) = "W2"    : Regions( 2, 39  ) = "B"
+Regions( 1, 40  ) = "A3553" : Regions( 2, 40  ) = "A"
+Regions( 1, 41  ) = "A3554" : Regions( 2, 41  ) = "A"
+Regions( 1, 42  ) = "B425"  : Regions( 2, 42  ) = "A"
+Regions( 1, 43  ) = "E6"    : Regions( 2, 43  ) = "A"
+Regions( 1, 44  ) = "G23"   : Regions( 2, 44  ) = "A"
+Regions( 1, 45  ) = "I74"   : Regions( 2, 45  ) = "A"
+Regions( 1, 46  ) = "K43"   : Regions( 2, 46  ) = "A"
+Regions( 1, 47  ) = "M35"   : Regions( 2, 47  ) = "A"
+Regions( 1, 48  ) = "Q3"    : Regions( 2, 48  ) = "B"
+Regions( 1, 49  ) = "W18"   : Regions( 2, 49  ) = "B"
+Regions( 1, 50  ) = "A8"    : Regions( 2, 50  ) = "A"
+Regions( 1, 51  ) = "A356"  : Regions( 2, 51  ) = "A"
+Regions( 1, 52  ) = "B28"   : Regions( 2, 52  ) = "A"
+Regions( 1, 53  ) = "B8"    : Regions( 2, 53  ) = "B"
+Regions( 1, 54  ) = "B97"   : Regions( 2, 54  ) = "A"
+Regions( 1, 55  ) = "C275"  : Regions( 2, 55  ) = "A"
+Regions( 1, 56  ) = "E853"  : Regions( 2, 56  ) = "A"
+Regions( 1, 57  ) = "E854"  : Regions( 2, 57  ) = "A"
+Regions( 1, 58  ) = "F3"    : Regions( 2, 58  ) = "A"
+Regions( 1, 59  ) = "F93"   : Regions( 2, 59  ) = "A"
+Regions( 1, 60  ) = "M433"  : Regions( 2, 60  ) = "A"
+Regions( 1, 61  ) = "G7"    : Regions( 2, 61  ) = "A"
+Regions( 1, 62  ) = "P26"   : Regions( 2, 62  ) = "A"
+Regions( 1, 63  ) = "A352"  : Regions( 2, 63  ) = "A"
+Regions( 1, 64  ) = "A354"  : Regions( 2, 64  ) = "A"
+Regions( 1, 65  ) = "C35"   : Regions( 2, 65  ) = "A"
+Regions( 1, 66  ) = "C48"   : Regions( 2, 66  ) = "A"
+Regions( 1, 67  ) = "E8515" : Regions( 2, 67  ) = "A"
+Regions( 1, 68  ) = "E852"  : Regions( 2, 68  ) = "A"
+Regions( 1, 69  ) = "N74"   : Regions( 2, 69  ) = "A"
+Regions( 1, 70  ) = "S575"  : Regions( 2, 70  ) = "A"
+Regions( 1, 71  ) = "A46"   : Regions( 2, 71  ) = "A"
+Regions( 1, 72  ) = "A65"   : Regions( 2, 72  ) = "A"
+Regions( 1, 73  ) = "A68"   : Regions( 2, 73  ) = "A"
+Regions( 1, 74  ) = "C23"   : Regions( 2, 74  ) = "A"
+Regions( 1, 75  ) = "C27"   : Regions( 2, 75  ) = "A"
+Regions( 1, 76  ) = "C29"   : Regions( 2, 76  ) = "A"
+Regions( 1, 77  ) = "C94"   : Regions( 2, 77  ) = "A"
+Regions( 1, 78  ) = "C95"   : Regions( 2, 78  ) = "A"
+Regions( 1, 79  ) = "I742"  : Regions( 2, 79  ) = "A"
+Regions( 1, 80  ) = "N8"    : Regions( 2, 80  ) = "B"
+Regions( 1, 81  ) = "S24"   : Regions( 2, 81  ) = "A"
+Regions( 1, 82  ) = "S6"    : Regions( 2, 82  ) = "B"
+Regions( 1, 83  ) = "S644"  : Regions( 2, 83  ) = "A"
+Regions( 1, 84  ) = "S74"   : Regions( 2, 84  ) = "A"
+Regions( 1, 85  ) = "V6"    : Regions( 2, 85  ) = "A"
+Regions( 1, 86  ) = "A355"  : Regions( 2, 86  ) = "A"
+Regions( 1, 87  ) = "A783"  : Regions( 2, 87  ) = "A"
+Regions( 1, 88  ) = "B29"   : Regions( 2, 88  ) = "A"
+Regions( 1, 89  ) = "B65"   : Regions( 2, 89  ) = "A"
+Regions( 1, 90 )  = "C85"   : Regions( 2, 90  ) = "A"
+Regions( 1, 91  ) = "F32"   : Regions( 2, 91  ) = "A"
+Regions( 1, 92  ) = "F9"    : Regions( 2, 92  ) = "A"
+Regions( 1, 93  ) = "G7"    : Regions( 2, 93  ) = "A"
+Regions( 1, 94  ) = "G93"   : Regions( 2, 94  ) = "A"
+Regions( 1, 95  ) = "K7"    : Regions( 2, 95  ) = "A"
+Regions( 1, 96  ) = "L29"   : Regions( 2, 96  ) = "A"
+Regions( 1, 97  ) = "L76"   : Regions( 2, 97  ) = "A"
+Regions( 1, 98  ) = "M4"    : Regions( 2, 98  ) = "B"
+Regions( 1, 99  ) = "N5"    : Regions( 2, 99  ) = "B"
+Regions( 1, 100 ) = "N425"  : Regions( 2, 100 ) = "A"
+Regions( 1, 101 ) = "N4"    : Regions( 2, 101 ) = "B"
+Regions( 1, 102 ) = "N7"    : Regions( 2, 102 ) = "A"
+Regions( 1, 103 ) = "S63"   : Regions( 2, 103 ) = "A"
+Regions( 1, 104 ) = "U6"    : Regions( 2, 104 ) = "A"
+Regions( 1, 105 ) = "W4"    : Regions( 2, 105 ) = "B"
+Regions( 1, 106 ) = "Z32"   : Regions( 2, 106 ) = "A"
+Regions( 1, 107 ) = "A353"  : Regions( 2, 107 ) = "A"
+Regions( 1, 108 ) = "A358"  : Regions( 2, 108 ) = "A"
+Regions( 1, 109 ) = "B92"   : Regions( 2, 109 ) = "A"
+Regions( 1, 110 ) = "C76"   : Regions( 2, 110 ) = "A"
+Regions( 1, 111 ) = "N9"    : Regions( 2, 111 ) = "B"
+Regions( 1, 112 ) = "P16"   : Regions( 2, 112 ) = "A"
+Regions( 1, 113 ) = "P4"    : Regions( 2, 113 ) = "B"
+Regions( 1, 114 ) = "R4"    : Regions( 2, 114 ) = "B"
+Regions( 1, 115 ) = "S2"    : Regions( 2, 115 ) = "B"
+Regions( 1, 116 ) = "S33"   : Regions( 2, 116 ) = "A"
+Regions( 1, 117 ) = "S5"    : Regions( 2, 117 ) = "A"
+Regions( 1, 118 ) = "S6"    : Regions( 2, 118 ) = "A"
+Regions( 1, 119 ) = "S8"    : Regions( 2, 119 ) = "B"
+Regions( 1, 120 ) = "S65"   : Regions( 2, 120 ) = "A"
+Regions( 1, 121 ) = "T93"   : Regions( 2, 121 ) = "A"
+Regions( 1, 122 ) = "V3"    : Regions( 2, 122 ) = "A"
+Regions( 1, 123 ) = "A3"    : Regions( 2, 123 ) = "A"
+Regions( 1, 124 ) = "A788"  : Regions( 2, 124 ) = "A"
+Regions( 1, 125 ) = "C8"    : Regions( 2, 125 ) = "B"
+Regions( 1, 126 ) = "S2"    : Regions( 2, 126 ) = "A"
+Regions( 1, 127 ) = "M26"   : Regions( 2, 127 ) = "A"
+Regions( 1, 128 ) = "M628"  : Regions( 2, 128 ) = "A"
+Regions( 1, 129 ) = "M7"    : Regions( 2, 129 ) = "B"
+Regions( 1, 130 ) = "N4"    : Regions( 2, 130 ) = "A"
+Regions( 1, 131 ) = "N45"   : Regions( 2, 131 ) = "A"
+Regions( 1, 132 ) = "N8"    : Regions( 2, 132 ) = "B"
+Regions( 1, 133 ) = "P6"    : Regions( 2, 133 ) = "A"
+Regions( 1, 134 ) = "P9"    : Regions( 2, 134 ) = "A"
+Regions( 1, 135 ) = "S17"   : Regions( 2, 135 ) = "A"
+Regions( 1, 136 ) = "S34"   : Regions( 2, 136 ) = "A"
+Regions( 1, 137 ) = "S643"  : Regions( 2, 137 ) = "A"
+Regions( 1, 138 ) = "S9"    : Regions( 2, 138 ) = "A"
+Regions( 1, 139 ) = "T56"   : Regions( 2, 139 ) = "A"
+Regions( 1, 140 ) = "A6"    : Regions( 2, 140 ) = "A"
+Regions( 1, 141 ) = "A98"   : Regions( 2, 141 ) = "A"
+Regions( 1, 142 ) = "B3"    : Regions( 2, 142 ) = "A"
+Regions( 1, 143 ) = "C15"   : Regions( 2, 143 ) = "A"
+Regions( 1, 144 ) = "C2"    : Regions( 2, 144 ) = "B"
+Regions( 1, 145 ) = "C8"    : Regions( 2, 145 ) = "A"
+Regions( 1, 146 ) = "G845"  : Regions( 2, 146 ) = "A"
+Regions( 1, 147 ) = "H55"   : Regions( 2, 147 ) = "A"
+Regions( 1, 148 ) = "K3"    : Regions( 2, 148 ) = "A"
+Regions( 1, 149 ) = "K98"   : Regions( 2, 149 ) = "A"
+Regions( 1, 150 ) = "L9"    : Regions( 2, 150 ) = "A"
+Regions( 1, 151 ) = "M28"   : Regions( 2, 151 ) = "A"
+Regions( 1, 152 ) = "M435"  : Regions( 2, 152 ) = "A"
+Regions( 1, 153 ) = "M44"   : Regions( 2, 153 ) = "A"
+Regions( 1, 154 ) = "M625"  : Regions( 2, 154 ) = "A"
+Regions( 1, 155 ) = "M68"   : Regions( 2, 155 ) = "A"
+Regions( 1, 156 ) = "M7"    : Regions( 2, 156 ) = "A"
+Regions( 1, 157 ) = "M85"   : Regions( 2, 157 ) = "A"
+Regions( 1, 158 ) = "N43"   : Regions( 2, 158 ) = "A"
+Regions( 1, 159 ) = "N5"    : Regions( 2, 159 ) = "B"
+Regions( 1, 160 ) = "N6"    : Regions( 2, 160 ) = "B"
+Regions( 1, 161 ) = "S27"   : Regions( 2, 161 ) = "A"
+Regions( 1, 162 ) = "S45"   : Regions( 2, 162 ) = "A"
+Regions( 1, 163 ) = "S64"   : Regions( 2, 163 ) = "A"
+Regions( 1, 164 ) = "T3"    : Regions( 2, 164 ) = "A"
+Regions( 1, 165 ) = "U9"    : Regions( 2, 165 ) = "A"
+Regions( 1, 166 ) = "Y8"    : Regions( 2, 166 ) = "A"
+Regions( 1, 167 ) = "A7"    : Regions( 2, 167 ) = "A"
+Regions( 1, 168 ) = "A8"    : Regions( 2, 168 ) = "A"
+Regions( 1, 169 ) = "E18"   : Regions( 2, 169 ) = "A"
+Regions( 1, 170 ) = "G5"    : Regions( 2, 170 ) = "A"
+Regions( 1, 171 ) = "G83"   : Regions( 2, 171 ) = "A"
+Regions( 1, 172 ) = "G9"    : Regions( 2, 172 ) = "A"
+Regions( 1, 173 ) = "I48"   : Regions( 2, 173 ) = "A"
+Regions( 1, 174 ) = "I5"    : Regions( 2, 174 ) = "A"
+Regions( 1, 175 ) = "J4"    : Regions( 2, 175 ) = "A"
+Regions( 1, 176 ) = "L78"   : Regions( 2, 176 ) = "A"
+Regions( 1, 177 ) = "L8"    : Regions( 2, 177 ) = "B"
+Regions( 1, 178 ) = "M27"   : Regions( 2, 178 ) = "A"
+Regions( 1, 179 ) = "M45"   : Regions( 2, 179 ) = "A"
+Regions( 1, 180 ) = "M5"    : Regions( 2, 180 ) = "A"
+Regions( 1, 181 ) = "M6"    : Regions( 2, 181 ) = "B"
+Regions( 1, 182 ) = "N5"    : Regions( 2, 182 ) = "A"
+Regions( 1, 183 ) = "P19"   : Regions( 2, 183 ) = "A"
+Regions( 1, 184 ) = "P75"   : Regions( 2, 184 ) = "A"
+Regions( 1, 185 ) = "S55"   : Regions( 2, 185 ) = "A"
+Regions( 1, 186 ) = "S72"   : Regions( 2, 186 ) = "A"
+Regions( 1, 187 ) = "T2"    : Regions( 2, 187 ) = "B"
+Regions( 1, 188 ) = "V4"    : Regions( 2, 188 ) = "A"
+Regions( 1, 189 ) = "W6"    : Regions( 2, 189 ) = "B"
+Regions( 1, 190 ) = "A54"   : Regions( 2, 190 ) = "A"
+Regions( 1, 191 ) = "A8"    : Regions( 2, 191 ) = "B"
+Regions( 1, 192 ) = "B35"   : Regions( 2, 192 ) = "A"
+Regions( 1, 193 ) = "B55"   : Regions( 2, 193 ) = "A"
+Regions( 1, 194 ) = "B9"    : Regions( 2, 194 ) = "A"
+Regions( 1, 195 ) = "C16"   : Regions( 2, 195 ) = "A"
+Regions( 1, 196 ) = "C17"   : Regions( 2, 196 ) = "A"
+Regions( 1, 197 ) = "C28"   : Regions( 2, 197 ) = "A"
+Regions( 1, 198 ) = "C7"    : Regions( 2, 198 ) = "A"
+Regions( 1, 199 ) = "C6"    : Regions( 2, 199 ) = "B"
+Regions( 1, 200 ) = "D3"    : Regions( 2, 200 ) = "B"
+Regions( 1, 201 ) = "D5"    : Regions( 2, 201 ) = "A"
+Regions( 1, 202 ) = "D6"    : Regions( 2, 202 ) = "A"
+Regions( 1, 203 ) = "E77"   : Regions( 2, 203 ) = "A"
+Regions( 1, 204 ) = "E8"    : Regions( 2, 204 ) = "A"
+Regions( 1, 205 ) = "H8"    : Regions( 2, 205 ) = "A"
+Regions( 1, 206 ) = "I3"    : Regions( 2, 206 ) = "B"
+Regions( 1, 207 ) = "K4"    : Regions( 2, 207 ) = "B"
+Regions( 1, 208 ) = "K5"    : Regions( 2, 208 ) = "A"
+Regions( 1, 209 ) = "M4"    : Regions( 2, 209 ) = "A"
+Regions( 1, 210 ) = "M415"  : Regions( 2, 210 ) = "A"
+Regions( 1, 211 ) = "M3"    : Regions( 2, 211 ) = "B"
+Regions( 1, 212 ) = "M3"    : Regions( 2, 212 ) = "B"
+Regions( 1, 213 ) = "M5"    : Regions( 2, 213 ) = "B"
+Regions( 1, 214 ) = "M8"    : Regions( 2, 214 ) = "B"
+Regions( 1, 215 ) = "M65"   : Regions( 2, 215 ) = "A"
+Regions( 1, 216 ) = "N2"    : Regions( 2, 216 ) = "B"
+Regions( 1, 217 ) = "N7"    : Regions( 2, 217 ) = "B"
+Regions( 1, 218 ) = "O5"    : Regions( 2, 218 ) = "B"
+Regions( 1, 219 ) = "P18"   : Regions( 2, 219 ) = "A"
+Regions( 1, 220 ) = "P3"    : Regions( 2, 220 ) = "A"
+Regions( 1, 221 ) = "P8"    : Regions( 2, 221 ) = "A"
+Regions( 1, 222 ) = "G7"    : Regions( 2, 222 ) = "A"
+Regions( 1, 223 ) = "S56"   : Regions( 2, 223 ) = "A"
+Regions( 1, 224 ) = "S57"   : Regions( 2, 224 ) = "A"
+Regions( 1, 225 ) = "S75"   : Regions( 2, 225 ) = "A"
+Regions( 1, 226 ) = "T34"   : Regions( 2, 226 ) = "A"
+Regions( 1, 227 ) = "A8"    : Regions( 2, 227 ) = "A"
+Regions( 1, 228 ) = "T5"    : Regions( 2, 228 ) = "A"
+Regions( 1, 229 ) = "T7"    : Regions( 2, 229 ) = "A"
+Regions( 1, 230 ) = "V8"    : Regions( 2, 230 ) = "B"
+Regions( 1, 231 ) = "Z55"   : Regions( 2, 231 ) = "A"
+Regions( 1, 232 ) = "A2"    : Regions( 2, 232 ) = "B"
+Regions( 1, 233 ) = "A38"   : Regions( 2, 233 ) = "A"
+Regions( 1, 234 ) = "A3"    : Regions( 2, 234 ) = "B"
+Regions( 1, 235 ) = "A4"    : Regions( 2, 235 ) = "A"
+Regions( 1, 236 ) = "A45"   : Regions( 2, 236 ) = "A"
+Regions( 1, 237 ) = "A48"   : Regions( 2, 237 ) = "A"
+Regions( 1, 238 ) = "A6"    : Regions( 2, 238 ) = "B"
+Regions( 1, 239 ) = "A75"   : Regions( 2, 239 ) = "A"
+Regions( 1, 240 ) = "A9"    : Regions( 2, 240 ) = "A"
+Regions( 1, 241 ) = "B24"   : Regions( 2, 241 ) = "A"
+Regions( 1, 242 ) = "B26"   : Regions( 2, 242 ) = "A"
+Regions( 1, 243 ) = "A63"   : Regions( 2, 243 ) = "A"
+Regions( 1, 244 ) = "B38"   : Regions( 2, 244 ) = "A"
+Regions( 1, 245 ) = "B4"    : Regions( 2, 245 ) = "A"
+Regions( 1, 246 ) = "B46"   : Regions( 2, 246 ) = "A"
+Regions( 1, 247 ) = "B5"    : Regions( 2, 247 ) = "A"
+Regions( 1, 248 ) = "B52"   : Regions( 2, 248 ) = "A"
+Regions( 1, 249 ) = "B94"   : Regions( 2, 249 ) = "A"
+Regions( 1, 250 ) = "C73"   : Regions( 2, 250 ) = "A"
+Regions( 1, 251 ) = "C87"   : Regions( 2, 251 ) = "A"
+Regions( 1, 252 ) = "C92"   : Regions( 2, 252 ) = "A"
+Regions( 1, 253 ) = "D4"    : Regions( 2, 253 ) = "A"
+Regions( 1, 254 ) = "E2"    : Regions( 2, 254 ) = "A"
+Regions( 1, 255 ) = "G7"    : Regions( 2, 255 ) = "A"
+Regions( 1, 256 ) = "E65"   : Regions( 2, 256 ) = "A"
+Regions( 1, 257 ) = "E75"   : Regions( 2, 257 ) = "A"
+Regions( 1, 258 ) = "E83"   : Regions( 2, 258 ) = "A"
+Regions( 1, 259 ) = "F5"    : Regions( 2, 259 ) = "A"
+Regions( 1, 260 ) = "F6"    : Regions( 2, 260 ) = "B"
+Regions( 1, 261 ) = "G4"    : Regions( 2, 261 ) = "B"
+Regions( 1, 262 ) = "G3"    : Regions( 2, 262 ) = "A"
+Regions( 1, 263 ) = "G84"   : Regions( 2, 263 ) = "A"
+Regions( 1, 264 ) = "H9"    : Regions( 2, 264 ) = "A"
+Regions( 1, 265 ) = "I2"    : Regions( 2, 265 ) = "A"
+Regions( 1, 266 ) = "I6"    : Regions( 2, 266 ) = "B"
+Regions( 1, 267 ) = "I73"   : Regions( 2, 267 ) = "A"
+Regions( 1, 268 ) = "J25"   : Regions( 2, 268 ) = "A"
+Regions( 1, 269 ) = "L4"    : Regions( 2, 269 ) = "A"
+Regions( 1, 270 ) = "L5"    : Regions( 2, 270 ) = "A"
+Regions( 1, 271 ) = "L7"    : Regions( 2, 271 ) = "A"
+Regions( 1, 272 ) = "M629"  : Regions( 2, 272 ) = "A"
+Regions( 1, 273 ) = "M9"    : Regions( 2, 273 ) = "B"
+Regions( 1, 274 ) = "M8"    : Regions( 2, 274 ) = "A"
+Regions( 1, 275 ) = "N3"    : Regions( 2, 275 ) = "A"
+Regions( 1, 276 ) = "N6"    : Regions( 2, 276 ) = "A"
+Regions( 1, 277 ) = "N9"    : Regions( 2, 277 ) = "B"
+Regions( 1, 278 ) = "O3"    : Regions( 2, 278 ) = "A"
+Regions( 1, 279 ) = "O6"    : Regions( 2, 279 ) = "B"
+Regions( 1, 280 ) = "G3"    : Regions( 2, 280 ) = "A"
+Regions( 1, 281 ) = "R4"    : Regions( 2, 281 ) = "A"
+Regions( 1, 282 ) = "R6"    : Regions( 2, 282 ) = "A"
+Regions( 1, 283 ) = "S38"   : Regions( 2, 283 ) = "A"
+Regions( 1, 284 ) = "S58"   : Regions( 2, 284 ) = "A"
+Regions( 1, 285 ) = "T73"   : Regions( 2, 285 ) = "A"
+Regions( 1, 286 ) = "T8"    : Regions( 2, 286 ) = "A"
+Regions( 1, 287 ) = "U38"   : Regions( 2, 287 ) = "A"
+Regions( 1, 288 ) = "U8"    : Regions( 2, 288 ) = "A"
+Regions( 1, 289 ) = "V26"   : Regions( 2, 289 ) = "A"
+Regions( 1, 290 ) = "V5"    : Regions( 2, 290 ) = "B"
+Regions( 1, 291 ) = "V5"    : Regions( 2, 291 ) = "A"
+Regions( 1, 292 ) = "W8"    : Regions( 2, 292 ) = "B"
+Regions( 1, 293 ) = "A35"   : Regions( 2, 293 ) = "A"
+Regions( 1, 294 ) = "A4"    : Regions( 2, 294 ) = "B"
+Regions( 1, 295 ) = "A5"    : Regions( 2, 295 ) = "A"
+Regions( 1, 296 ) = "B42"   : Regions( 2, 296 ) = "A"
+Regions( 1, 297 ) = "B43"   : Regions( 2, 297 ) = "A"
+Regions( 1, 298 ) = "B47"   : Regions( 2, 298 ) = "A"
+Regions( 1, 299 ) = "B6"    : Regions( 2, 299 ) = "A"
+Regions( 1, 300 ) = "B7"    : Regions( 2, 300 ) = "A"
+Regions( 1, 301 ) = "C2"    : Regions( 2, 301 ) = "A"
+Regions( 1, 302 ) = "C93"   : Regions( 2, 302 ) = "A"
+Regions( 1, 303 ) = "E85"   : Regions( 2, 303 ) = "A"
+Regions( 1, 304 ) = "F8"    : Regions( 2, 304 ) = "A"
+Regions( 1, 305 ) = "G25"   : Regions( 2, 305 ) = "A"
+Regions( 1, 306 ) = "G8"    : Regions( 2, 306 ) = "A"
+Regions( 1, 307 ) = "G915"  : Regions( 2, 307 ) = "A"
+Regions( 1, 308 ) = "G92"   : Regions( 2, 308 ) = "A"
+Regions( 1, 309 ) = "G95"   : Regions( 2, 309 ) = "A"
+Regions( 1, 310 ) = "H3"    : Regions( 2, 310 ) = "B"
+Regions( 1, 311 ) = "I75"   : Regions( 2, 311 ) = "A"
+Regions( 1, 312 ) = "J6"    : Regions( 2, 312 ) = "A"
+Regions( 1, 313 ) = "K2"    : Regions( 2, 313 ) = "B"
+Regions( 1, 314 ) = "K8"    : Regions( 2, 314 ) = "A"
+Regions( 1, 315 ) = "K9"    : Regions( 2, 315 ) = "A"
+Regions( 1, 316 ) = "L35"   : Regions( 2, 316 ) = "A"
+Regions( 1, 317 ) = "M3"    : Regions( 2, 317 ) = "A"
+Regions( 1, 318 ) = "M6"    : Regions( 2, 318 ) = "A"
+Regions( 1, 319 ) = "M63"   : Regions( 2, 319 ) = "A"
+Regions( 1, 320 ) = "N3"    : Regions( 2, 320 ) = "B"
+Regions( 1, 321 ) = "N8"    : Regions( 2, 321 ) = "A"
+Regions( 1, 322 ) = "O7"    : Regions( 2, 322 ) = "B"
+Regions( 1, 323 ) = "P2"    : Regions( 2, 323 ) = "A"
+Regions( 1, 324 ) = "P7"    : Regions( 2, 324 ) = "A"
+Regions( 1, 325 ) = "R8"    : Regions( 2, 325 ) = "A"
+Regions( 1, 326 ) = "R95"   : Regions( 2, 326 ) = "A"
+Regions( 1, 327 ) = "S4"    : Regions( 2, 327 ) = "A"
+Regions( 1, 328 ) = "S8"    : Regions( 2, 328 ) = "A"
+Regions( 1, 329 ) = "T28"   : Regions( 2, 329 ) = "A"
+Regions( 1, 330 ) = "T9"    : Regions( 2, 330 ) = "A"
+Regions( 1, 331 ) = "T95"   : Regions( 2, 331 ) = "A"
+Regions( 1, 332 ) = "U33"   : Regions( 2, 332 ) = "A"
+Regions( 1, 333 ) = "Z33"   : Regions( 2, 333 ) = "A"
+Regions( 1, 334 ) = "A77"   : Regions( 2, 334 ) = "A"
+Regions( 1, 335 ) = "B45"   : Regions( 2, 335 ) = "A"
+Regions( 1, 336 ) = "B93"   : Regions( 2, 336 ) = "A"
+Regions( 1, 337 ) = "C5"    : Regions( 2, 337 ) = "A"
+Regions( 1, 338 ) = "C6"    : Regions( 2, 338 ) = "A"
+Regions( 1, 339 ) = "E3"    : Regions( 2, 339 ) = "A"
+Regions( 1, 340 ) = "G2"    : Regions( 2, 340 ) = "A"
+Regions( 1, 341 ) = "G4"    : Regions( 2, 341 ) = "A"
+Regions( 1, 342 ) = "H2"    : Regions( 2, 342 ) = "A"
+Regions( 1, 343 ) = "I2"    : Regions( 2, 343 ) = "B"
+Regions( 1, 344 ) = "I4"    : Regions( 2, 344 ) = "A"
+Regions( 1, 345 ) = "I8"    : Regions( 2, 345 ) = "A"
+Regions( 1, 346 ) = "J3"    : Regions( 2, 346 ) = "A"
+Regions( 1, 347 ) = "K4"    : Regions( 2, 347 ) = "A"
+Regions( 1, 348 ) = "K6"    : Regions( 2, 348 ) = "A"
+Regions( 1, 349 ) = "L75"   : Regions( 2, 349 ) = "A"
+Regions( 1, 350 ) = "M2"    : Regions( 2, 350 ) = "B"
+Regions( 1, 351 ) = "M43"   : Regions( 2, 351 ) = "A"
+Regions( 1, 352 ) = "N32"   : Regions( 2, 352 ) = "A"
+Regions( 1, 353 ) = "N35"   : Regions( 2, 353 ) = "A"
+Regions( 1, 354 ) = "N55"   : Regions( 2, 354 ) = "A"
+Regions( 1, 355 ) = "P185"  : Regions( 2, 355 ) = "A"
+Regions( 1, 356 ) = "Q2"    : Regions( 2, 356 ) = "A"
+Regions( 1, 357 ) = "S15"   : Regions( 2, 357 ) = "A"
+Regions( 1, 358 ) = "S23"   : Regions( 2, 358 ) = "A"
+Regions( 1, 359 ) = "S7"    : Regions( 2, 359 ) = "A"
+Regions( 1, 360 ) = "S73"   : Regions( 2, 360 ) = "A"
+Regions( 1, 361 ) = "S95"   : Regions( 2, 361 ) = "A"
+Regions( 1, 362 ) = "T4"    : Regions( 2, 362 ) = "B"
+Regions( 1, 363 ) = "T63"   : Regions( 2, 363 ) = "A"
+Regions( 1, 364 ) = "G7"    : Regions( 2, 364 ) = "A"
+Regions( 1, 365 ) = "Y4"    : Regions( 2, 365 ) = "A"
+Regions( 1, 366 ) = "Y8"    : Regions( 2, 366 ) = "B"
+Regions( 1, 367 ) = "A43"   : Regions( 2, 367 ) = "A"
+Regions( 1, 368 ) = "A78"   : Regions( 2, 368 ) = "A"
+Regions( 1, 369 ) = "C45"   : Regions( 2, 369 ) = "A"
+Regions( 1, 370 ) = "C9"    : Regions( 2, 370 ) = "A"
+Regions( 1, 371 ) = "F4"    : Regions( 2, 371 ) = "A"
+Regions( 1, 372 ) = "G85"   : Regions( 2, 372 ) = "A"
+Regions( 1, 373 ) = "I8"    : Regions( 2, 373 ) = "B"
+Regions( 1, 374 ) = "I7"    : Regions( 2, 374 ) = "A"
+Regions( 1, 375 ) = "I72"   : Regions( 2, 375 ) = "A"
+Regions( 1, 376 ) = "L28"   : Regions( 2, 376 ) = "A"
+Regions( 1, 377 ) = "M42"   : Regions( 2, 377 ) = "A"
+Regions( 1, 378 ) = "O3"    : Regions( 2, 378 ) = "B"
+Regions( 1, 379 ) = "O5"    : Regions( 2, 379 ) = "A"
+Regions( 1, 380 ) = "P4"    : Regions( 2, 380 ) = "A"
+Regions( 1, 381 ) = "R57"   : Regions( 2, 381 ) = "A"
+Regions( 1, 382 ) = "T6"    : Regions( 2, 382 ) = "A"
+Regions( 1, 383 ) = "U8"    : Regions( 2, 383 ) = "B"
 
 End Sub
 
@@ -1807,62 +1847,65 @@ End Sub
 
 Sub FillArray3
 
-Abbrevs( 0, 0  ) = "Ala."   : Abbrevs( 1, 0  ) = "A2"
-Abbrevs( 0, 1  ) = "Alta."  : Abbrevs( 1, 1  ) = "A3"
-Abbrevs( 0, 2  ) = "Ariz."  : Abbrevs( 1, 2  ) = "A6"
-Abbrevs( 0, 3  ) = "Ark."   : Abbrevs( 1, 3  ) = "A8"
-Abbrevs( 0, 4  ) = "B.C."   : Abbrevs( 1, 4  ) = "B8"
-Abbrevs( 0, 5  ) = "Calif." : Abbrevs( 1, 5  ) = "C2"
-Abbrevs( 0, 6  ) = "Colo."  : Abbrevs( 1, 6  ) = "C6"
-Abbrevs( 0, 7  ) = "Conn."  : Abbrevs( 1, 7  ) = "C8"
-Abbrevs( 0, 8  ) = "D.C."   : Abbrevs( 1, 8  ) = "W18"
-Abbrevs( 0, 9  ) = "Del."   : Abbrevs( 1, 9  ) = "D3"
-Abbrevs( 0, 10 ) = "Fla."   : Abbrevs( 1, 10 ) = "F6"
-Abbrevs( 0, 11 ) = "Ga."    : Abbrevs( 1, 11 ) = "G4"
-Abbrevs( 0, 12 ) = "Ill."   : Abbrevs( 1, 12 ) = "I3"
-Abbrevs( 0, 13 ) = "Ind."   : Abbrevs( 1, 13 ) = "I6"
-Abbrevs( 0, 14 ) = "Kan."   : Abbrevs( 1, 14 ) = "K2"
-Abbrevs( 0, 15 ) = "Ky."    : Abbrevs( 1, 15 ) = "K4"
-Abbrevs( 0, 16 ) = "La."    : Abbrevs( 1, 16 ) = "L8"
-Abbrevs( 0, 17 ) = "Man."   : Abbrevs( 1, 17 ) = "M3"
-Abbrevs( 0, 18 ) = "Mass."  : Abbrevs( 1, 18 ) = "M4"
-Abbrevs( 0, 19 ) = "Md."    : Abbrevs( 1, 19 ) = "M3"
-Abbrevs( 0, 20 ) = "Me."    : Abbrevs( 1, 20 ) = "M2"
-Abbrevs( 0, 21 ) = "Mich."  : Abbrevs( 1, 21 ) = "M5"
-Abbrevs( 0, 22 ) = "Minn."  : Abbrevs( 1, 22 ) = "M6"
-Abbrevs( 0, 23 ) = "Miss."  : Abbrevs( 1, 23 ) = "M7"
-Abbrevs( 0, 24 ) = "Mo."    : Abbrevs( 1, 24 ) = "M8"
-Abbrevs( 0, 25 ) = "Mont."  : Abbrevs( 1, 25 ) = "M9"
-Abbrevs( 0, 26 ) = "N.B."   : Abbrevs( 1, 26 ) = "N5"
-Abbrevs( 0, 27 ) = "N.C."   : Abbrevs( 1, 27 ) = "N8"
-Abbrevs( 0, 28 ) = "N.D."   : Abbrevs( 1, 28 ) = "N9"
-Abbrevs( 0, 29 ) = "N.H."   : Abbrevs( 1, 29 ) = "N4"
-Abbrevs( 0, 30 ) = "N.J."   : Abbrevs( 1, 30 ) = "N5"
-Abbrevs( 0, 31 ) = "N.L."   : Abbrevs( 1, 31 ) = "N6"
-Abbrevs( 0, 32 ) = "N.M."   : Abbrevs( 1, 32 ) = "N6"
-Abbrevs( 0, 33 ) = "N.S."   : Abbrevs( 1, 33 ) = "N8"
-Abbrevs( 0, 34 ) = "N.W.T." : Abbrevs( 1, 34 ) = "N7"
-Abbrevs( 0, 35 ) = "N.Y."   : Abbrevs( 1, 35 ) = "N7"
-Abbrevs( 0, 36 ) = "Neb."   : Abbrevs( 1, 36 ) = "N2"
-Abbrevs( 0, 37 ) = "Nev."   : Abbrevs( 1, 37 ) = "N3"
-Abbrevs( 0, 38 ) = "Okla."  : Abbrevs( 1, 38 ) = "O5"
-Abbrevs( 0, 39 ) = "Ont."   : Abbrevs( 1, 39 ) = "O6"
-Abbrevs( 0, 40 ) = "Or."    : Abbrevs( 1, 40 ) = "O7"
-Abbrevs( 0, 41 ) = "P.E.I." : Abbrevs( 1, 41 ) = "P8"
-Abbrevs( 0, 42 ) = "Pa."    : Abbrevs( 1, 42 ) = "P4"
-Abbrevs( 0, 43 ) = "R.I."   : Abbrevs( 1, 43 ) = "R4"
-Abbrevs( 0, 44 ) = "S.C."   : Abbrevs( 1, 44 ) = "S6"
-Abbrevs( 0, 45 ) = "S.D."   : Abbrevs( 1, 45 ) = "S8"
-Abbrevs( 0, 46 ) = "Sask."  : Abbrevs( 1, 46 ) = "S2"
-Abbrevs( 0, 47 ) = "Tenn."  : Abbrevs( 1, 47 ) = "T2"
-Abbrevs( 0, 48 ) = "Tex."   : Abbrevs( 1, 48 ) = "T4"
-Abbrevs( 0, 49 ) = "Va."    : Abbrevs( 1, 49 ) = "V8"
-Abbrevs( 0, 50 ) = "Vt."    : Abbrevs( 1, 50 ) = "V5"
-Abbrevs( 0, 51 ) = "W.Va."  : Abbrevs( 1, 51 ) = "W4"
-Abbrevs( 0, 52 ) = "Wash."  : Abbrevs( 1, 52 ) = "W2"
-Abbrevs( 0, 53 ) = "Wis."   : Abbrevs( 1, 53 ) = "W6"
-Abbrevs( 0, 54 ) = "Wyo."   : Abbrevs( 1, 54 ) = "W8"
-Abbrevs( 0, 55 ) = "Yukon"  : Abbrevs( 1, 55 ) = "Y8"
+Abbrevs( 0, 0  ) = "Calif." : Abbrevs( 1, 0  ) = "C2"  : Abbrevs( 2, 0  ) = "CALIFORNIA"
+Abbrevs( 0, 1  ) = "N.W.T." : Abbrevs( 1, 1  ) = "N7"  : Abbrevs( 2, 1  ) = "NORTHWEST TERRITORIES"
+Abbrevs( 0, 2  ) = "P.E.I." : Abbrevs( 1, 2  ) = "P8"  : Abbrevs( 2, 2  ) = "PRINCE EDWARD ISLAND"
+Abbrevs( 0, 3  ) = "Alta."  : Abbrevs( 1, 3  ) = "A3"  : Abbrevs( 2, 3  ) = "ALBERTA"
+Abbrevs( 0, 4  ) = "Ariz."  : Abbrevs( 1, 4  ) = "A6"  : Abbrevs( 2, 4  ) = "ARIZONA"
+Abbrevs( 0, 5  ) = "Colo."  : Abbrevs( 1, 5  ) = "C6"  : Abbrevs( 2, 5  ) = "COLORADO"
+Abbrevs( 0, 6  ) = "Conn."  : Abbrevs( 1, 6  ) = "C8"  : Abbrevs( 2, 6  ) = "CONNECTICUT"
+Abbrevs( 0, 7  ) = "Mass."  : Abbrevs( 1, 7  ) = "M4"  : Abbrevs( 2, 7  ) = "MASSACHUSETTS"
+Abbrevs( 0, 8  ) = "Mich."  : Abbrevs( 1, 8  ) = "M5"  : Abbrevs( 2, 8  ) = "MICHIGAN"
+Abbrevs( 0, 9  ) = "Minn."  : Abbrevs( 1, 9  ) = "M6"  : Abbrevs( 2, 9  ) = "MINNESOTA"
+Abbrevs( 0, 10 ) = "Miss."  : Abbrevs( 1, 10 ) = "M7"  : Abbrevs( 2, 10 ) = "MISSISSIPPI"
+Abbrevs( 0, 11 ) = "Mont."  : Abbrevs( 1, 11 ) = "M9"  : Abbrevs( 2, 11 ) = "MONTANA"
+Abbrevs( 0, 12 ) = "Okla."  : Abbrevs( 1, 12 ) = "O5"  : Abbrevs( 2, 12 ) = "OKLAHOMA"
+Abbrevs( 0, 13 ) = "Sask."  : Abbrevs( 1, 13 ) = "S2"  : Abbrevs( 2, 13 ) = "SASKATCHEWAN"
+Abbrevs( 0, 14 ) = "Tenn."  : Abbrevs( 1, 14 ) = "T2"  : Abbrevs( 2, 14 ) = "TENNESEE"
+Abbrevs( 0, 15 ) = "W.Va."  : Abbrevs( 1, 15 ) = "W4"  : Abbrevs( 2, 15 ) = "WEST VIRGINIA"
+Abbrevs( 0, 16 ) = "Wash."  : Abbrevs( 1, 16 ) = "W2"  : Abbrevs( 2, 16 ) = "WASHINGTON"
+Abbrevs( 0, 17 ) = "Ala."   : Abbrevs( 1, 17 ) = "A2"  : Abbrevs( 2, 17 ) = "ALABAMA"
+Abbrevs( 0, 18 ) = "Ark."   : Abbrevs( 1, 18 ) = "A8"  : Abbrevs( 2, 18 ) = "ARKANSAS"
+Abbrevs( 0, 19 ) = "B.C."   : Abbrevs( 1, 19 ) = "B8"  : Abbrevs( 2, 19 ) = "BRITISH COLUMBIA"
+Abbrevs( 0, 20 ) = "D.C."   : Abbrevs( 1, 20 ) = "W18" : Abbrevs( 2, 20 ) = "DISTRICT OF COLUMBIA"
+Abbrevs( 0, 21 ) = "Del."   : Abbrevs( 1, 21 ) = "D3"  : Abbrevs( 2, 21 ) = "DELAWARE"
+Abbrevs( 0, 22 ) = "Fla."   : Abbrevs( 1, 22 ) = "F6"  : Abbrevs( 2, 22 ) = "FLORIDA"
+Abbrevs( 0, 23 ) = "Ill."   : Abbrevs( 1, 23 ) = "I3"  : Abbrevs( 2, 23 ) = "ILLINOIS"
+Abbrevs( 0, 24 ) = "Ind."   : Abbrevs( 1, 24 ) = "I6"  : Abbrevs( 2, 24 ) = "INDIANA"
+Abbrevs( 0, 25 ) = "Kan."   : Abbrevs( 1, 25 ) = "K2"  : Abbrevs( 2, 25 ) = "KANSAS"
+Abbrevs( 0, 26 ) = "Man."   : Abbrevs( 1, 26 ) = "M3"  : Abbrevs( 2, 26 ) = "MANITOBA"
+Abbrevs( 0, 27 ) = "N.B."   : Abbrevs( 1, 27 ) = "N5"  : Abbrevs( 2, 27 ) = "NEW BRUNSWICK"
+Abbrevs( 0, 28 ) = "N.C."   : Abbrevs( 1, 28 ) = "N8"  : Abbrevs( 2, 28 ) = "NORTH CAROLINA"
+Abbrevs( 0, 29 ) = "N.D."   : Abbrevs( 1, 29 ) = "N9"  : Abbrevs( 2, 29 ) = "NORTH DAKOTA"
+Abbrevs( 0, 30 ) = "N.H."   : Abbrevs( 1, 30 ) = "N4"  : Abbrevs( 2, 30 ) = "NEW HAMPSHIRE"
+Abbrevs( 0, 31 ) = "N.J."   : Abbrevs( 1, 31 ) = "N5"  : Abbrevs( 2, 31 ) = "NEW JERSEY"
+Abbrevs( 0, 32 ) = "N.L."   : Abbrevs( 1, 32 ) = "N6"  : Abbrevs( 2, 32 ) = "NEWFOUNDLAND AND LABRADOR"
+Abbrevs( 0, 33 ) = "N.M."   : Abbrevs( 1, 33 ) = "N6"  : Abbrevs( 2, 33 ) = "NEW MEXICO"
+Abbrevs( 0, 34 ) = "N.S."   : Abbrevs( 1, 34 ) = "N8"  : Abbrevs( 2, 34 ) = "NOVA SCOTIA"
+Abbrevs( 0, 35 ) = "N.Y."   : Abbrevs( 1, 35 ) = "N7"  : Abbrevs( 2, 35 ) = "NEW YORK"
+Abbrevs( 0, 36 ) = "N.Z."   : Abbrevs( 1, 36 ) = "N45" : Abbrevs( 2, 36 ) = "NEW ZEALAND"
+Abbrevs( 0, 37 ) = "Neb."   : Abbrevs( 1, 37 ) = "N2"  : Abbrevs( 2, 37 ) = "NEBRASKA"
+Abbrevs( 0, 38 ) = "Nev."   : Abbrevs( 1, 38 ) = "N3"  : Abbrevs( 2, 38 ) = "NEVADA"
+Abbrevs( 0, 39 ) = "Ont."   : Abbrevs( 1, 39 ) = "O6"  : Abbrevs( 2, 39 ) = "ONTARIO"
+Abbrevs( 0, 40 ) = "P.R."   : Abbrevs( 1, 40 ) = "P9"  : Abbrevs( 2, 40 ) = "PUERTO RICO"
+Abbrevs( 0, 41 ) = "R.I."   : Abbrevs( 1, 41 ) = "R4"  : Abbrevs( 2, 41 ) = "RHODE ISLAND"
+Abbrevs( 0, 42 ) = "S.C."   : Abbrevs( 1, 42 ) = "S6"  : Abbrevs( 2, 42 ) = "SOUTH CAROLINA"
+Abbrevs( 0, 43 ) = "S.D."   : Abbrevs( 1, 43 ) = "S8"  : Abbrevs( 2, 43 ) = "SOUTH DAKOTA"
+Abbrevs( 0, 44 ) = "Tex."   : Abbrevs( 1, 44 ) = "T4"  : Abbrevs( 2, 44 ) = "TEXAS"
+Abbrevs( 0, 45 ) = "U.S."   : Abbrevs( 1, 45 ) = "U6"  : Abbrevs( 2, 45 ) = "UNITED STATES"
+Abbrevs( 0, 46 ) = "W.A."   : Abbrevs( 1, 46 ) = "A8"  : Abbrevs( 2, 46 ) = "WESTERN AUSTRALIA"
+Abbrevs( 0, 47 ) = "Wis."   : Abbrevs( 1, 47 ) = "W6"  : Abbrevs( 2, 47 ) = "WISCONSIN"
+Abbrevs( 0, 48 ) = "Wyo."   : Abbrevs( 1, 48 ) = "W8"  : Abbrevs( 2, 48 ) = "WYOMING"
+Abbrevs( 0, 49 ) = "Ga."    : Abbrevs( 1, 49 ) = "G4"  : Abbrevs( 2, 49 ) = "GEORGIA"
+Abbrevs( 0, 50 ) = "Ky."    : Abbrevs( 1, 50 ) = "K4"  : Abbrevs( 2, 50 ) = "KENTUCKY"
+Abbrevs( 0, 51 ) = "La."    : Abbrevs( 1, 51 ) = "L8"  : Abbrevs( 2, 51 ) = "LOUISIANA"
+Abbrevs( 0, 52 ) = "Md."    : Abbrevs( 1, 52 ) = "M3"  : Abbrevs( 2, 52 ) = "MARYLAND"
+Abbrevs( 0, 53 ) = "Me."    : Abbrevs( 1, 53 ) = "M2"  : Abbrevs( 2, 53 ) = "MAINE"
+Abbrevs( 0, 54 ) = "Mo."    : Abbrevs( 1, 54 ) = "M8"  : Abbrevs( 2, 54 ) = "MISSOURI"
+Abbrevs( 0, 55 ) = "Or."    : Abbrevs( 1, 55 ) = "O7"  : Abbrevs( 2, 55 ) = "OREGON"
+Abbrevs( 0, 56 ) = "Pa."    : Abbrevs( 1, 56 ) = "P4"  : Abbrevs( 2, 56 ) = "PENNSYLVANIA"
+Abbrevs( 0, 57 ) = "Va."    : Abbrevs( 1, 57 ) = "V8"  : Abbrevs( 2, 57 ) = "VIRGINIA"
+Abbrevs( 0, 58 ) = "Vt."    : Abbrevs( 1, 58 ) = "V5"  : Abbrevs( 2, 58 ) = "VERMONT"
 
 End Sub
 
@@ -2170,6 +2213,29 @@ End Function
 
 '****************************************************************************************
 
+Function MakeUpperCase( InString$ ) As String
+
+' Because the simple OML command "UCase" will fail when confronted with diacritical
+' marks, this function makes a string uppercase and strips out those characters.
+
+Dim CharA%
+Dim TempString$
+
+Dim i
+
+For i = 1 To Len( InString$ )
+  CharA% = Asc( Mid$( InString$, i, 1 ) )
+  If CharA% > 31 And CharA% < 128 Then
+      TempString$ = TempString$ & UCase$( Chr$( CharA% ) )
+  End If
+Next i
+
+MakeUpperCase = TempString$
+
+End Function
+
+'****************************************************************************************
+
 Function RankFields( InString$ )
 
 ' This function assigns a rank to a call number field, in order to offer an appropriate
@@ -2251,33 +2317,90 @@ End Function
 
 '****************************************************************************************
 
-Function Dialog1ControlFunction( Id$, Action%, SValue& )
+Function ShowCutterSource( GeogName$, ArrayIndex%, WhichArray% ) As String
+
+Dim SourceString$
+
+SourceString$ = "Cutter for " & DOUBLE_QUOTE & GeogName$ & DOUBLE_QUOTE
+If WhichArray% = REGIONS_LIST Then
+    If Regions( 2, ArrayIndex% ) = "A" Then
+        SourceString$ = SourceString$ & " from " & DOUBLE_QUOTE & "Regions and Countries Table" & DOUBLE_QUOTE & " (Classification and Shelflisting Manual, section G300)."
+      Else
+        SourceString$ = SourceString$ & " from " & DOUBLE_QUOTE & "U.S. States and Canadian Provinces" & DOUBLE_QUOTE & " table (Classification and Shelflisting Manual, section G302)."
+    End If
+  Else
+    SourceString$ = SourceString$ & " [" & Abbrevs( 2, ArrayIndex% ) & "] from " & DOUBLE_QUOTE
+    If ArrayIndex% = 36 Or ArrayIndex% = 40 Or ArrayIndex% = 46 Then
+        SourceString$ = SourceString$ & "Regions and Countries Table" & DOUBLE_QUOTE & " (Classification and Shelflisting Manual, section G300)."
+      Else
+        SourceString$ = SourceString$ & "U.S. States and Canadian Provinces" & DOUBLE_QUOTE & " table (Classification and Shelflisting Manual, section G302)."
+    End If
+End If
+
+ShowCutterSource = SourceString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Static AmbiguousTerm1%
+Static AmbiguousTerm2%
+
+Dim RegionsString$
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    RegionsString$  = AmbigRegions( AmbigHdgIndex% )
+    AmbiguousTerm1% = Val( GetField( RegionsString$, 2, "," ) )
+    AmbiguousTerm2% = Val( GetField( RegionsString$, 3, "," ) )
+    DlgText    "OptionButton1",                Regions( 0, AmbiguousTerm1% )
+    DlgText    "OptionButton2",                Regions( 0, AmbiguousTerm2% )
+    DlgVisible "OptionButtonDummy",            INVISIBLE
+
+
+  Case CONTROL_CHANGE
+
+    If Id$ = "OK" Then
+        Select Case DlgValue( "OptionGroup1" )
+          Case 0
+            Cutter$ = Regions( 1, AmbiguousTerm1% )
+          Case 1
+            Cutter$ = Regions( 1, AmbiguousTerm2% )
+        End Select
+    End If
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$, Action%, SValue& )
 
 ' This function controls the second dialog box. It displays the Cutter, whether a simple
 ' number already generated in the Main sub, or one calculated to fit into a range
 ' depending on the input received by the dialog box.
 
-Const CONTROL_CHANGE       As Integer = 2
-Const DISABLED             As Integer = 0
-Const DLG_STATEMENT_CANCEL As Integer = 102
-Const DUMMY_BUTTON         As Integer = 0
-Const ENABLED              As Integer = 1
-Const FOCUS_CHANGE         As Integer = 4
-Const IDLE_STATE           As Integer = 5
-Const INITIALIZE           As Integer = 1
-Const INVISIBLE            As Integer = 0
-Const KEEP_DLG_OPEN        As Integer = -1
-Const VISIBLE              As Integer = 1
+Const DISABLED         As Integer = 0
+Const DUMMY_BUTTON     As Integer = 0
+Const ENABLED          As Integer = 1
+Const FOCUS_CHANGE     As Integer = 4
+Const IDLE_STATE       As Integer = 5
+Const KEEP_DLG_OPEN    As Integer = -1
+Const VISIBLE          As Integer = 1
 
-Const ALPHANUMERIC         As Integer = 0
-Const NUMBERS_ONLY         As Integer = 1
-
-Const BACKWARDS_INPUT      As Integer = 4
-Const NON_DIGITS           As Integer = 2
-Const NO_INPUT             As Integer = -1
-Const NO_PROBLEM           As Integer = 0
-Const STARTS_WITH_ZERO     As Integer = 1
-Const TOO_LONG             As Integer = 3
+Const ALPHANUMERIC     As Integer = 0
+Const BACKWARDS_INPUT  As Integer = 4
+Const NON_DIGITS       As Integer = 2
+Const NO_INPUT         As Integer = -1
+Const NO_PROBLEM       As Integer = 0
+Const NUMBERS_ONLY     As Integer = 1
+Const STARTS_WITH_ZERO As Integer = 1
+Const TOO_LONG         As Integer = 3
 
 Dim CheckCurrentInput$
 Dim CheckOtherInput$
@@ -2287,8 +2410,8 @@ Dim TempString$
 
 Dim i As Integer
 
-' Static variables need to retain their values through each call of the dialog box
-' control function.
+' Static variables retain their values through each call of the dialog box control
+' function.
 
 Static ControlWithFocus$
 Static CurrentInput$
@@ -2443,7 +2566,7 @@ Select Case Action%
         DlgEnable  "ButtonGoRange",                DISABLED
         RangeCalc            = FALSE
 
-        Dialog1ControlFunction = KEEP_DLG_OPEN
+        Dialog2ControlFunction = KEEP_DLG_OPEN
 
       Case "ButtonReset"
 
@@ -2459,25 +2582,25 @@ Select Case Action%
         DlgVisible "WarningArea",                  INVISIBLE
         DlgFocus   "ButtonAdd"
 
-        Dialog1ControlFunction = KEEP_DLG_OPEN
+        Dialog2ControlFunction = KEEP_DLG_OPEN
 
       Case "ButtonHelp"
 
 ' The help dialog box is chiefly for guidance on input of a range.
 
-        Begin Dialog Dialog2Definition  256, 150, WaltsMacros$
+        Begin Dialog Dialog1Definition  256, 150, WaltsMacros$
           CancelButton  194, 128,  52,  14
           OkButton      194, 128,  52,  14
           Text           10,   6, 236, 120, HelpText$
         End Dialog
 
-        Dim Dialog2 As Dialog2Definition
+        Dim Dialog1 As Dialog1Definition
         On Error Resume Next
-        Dialog Dialog2
+        Dialog Dialog1
         If Error = DLG_STATEMENT_CANCEL Then DlgEnd 0
         DlgFocus   "Cancel"
 
-        Dialog1ControlFunction = KEEP_DLG_OPEN
+        Dialog2ControlFunction = KEEP_DLG_OPEN
 
     End Select
 
@@ -2581,7 +2704,7 @@ Select Case Action%
             DlgEnable  "ButtonGoRange",                ENABLED
             FitIntoRange = TRUE
             If DlgVisible( "WarningArea" ) Then
-                DlgVisible "WarningArea",  INVISIBLE
+                DlgVisible "WarningArea",                  INVISIBLE
             End If
             If DlgVisible( "OptionPZSeparateWorks" ) = INVISIBLE Then
                 DlgVisible "OptionPZSeparateWorks",        VISIBLE
@@ -2609,15 +2732,11 @@ Select Case Action%
         End If
         WhatIsTheProblem% = NO_PROBLEM
 
-        Dialog1ControlFunction = KEEP_DLG_OPEN
+        Dialog2ControlFunction = KEEP_DLG_OPEN
 
     End If
 
 End Select
 
 End Function
-'2620107005
-'
-'Macro name: CutterMaker2
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:55:36 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2743117665

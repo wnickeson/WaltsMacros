@@ -1,12 +1,13 @@
-'MacroName:CopyToAlma.2023.01
+'MacroName:CopyToAlma.2024.02
 'MacroDescription:Fixes the delimiter and some other character issues when copying text
 ' from a Connexion record to Alma.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 18 July 2023.
+' Last updated: 17 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -52,7 +53,7 @@ Dim Copied$
 Dim CurrentField$
 Dim Row%
 Dim SelectedText$
-Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:CopyToAlma"
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:CopyToAlma"
 Dim WindowType%
 
 Dim Selection                : Selection    = FALSE
@@ -77,7 +78,7 @@ If Selection Then
 ' If the tag or indicator cells are selected (which is the case when first clicked in),
 ' assume that the selection is intended to be the whole row.
 
-        If CS.GetFieldLine( Row%, CurrentField$ ) Then
+        If CS.GetField( "...", Row%, CurrentField$ ) Then
             Copied$ = CurrentField$
         End If
     End If
@@ -93,7 +94,7 @@ If Selection Then
         MsgBox "This macro works only in bibliographic or authority records!", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End Select
-    If CS.GetFieldLine( Row%, CurrentField$ ) Then
+    If CS.GetField( "...", Row%, CurrentField$ ) Then
         Copied$ = CurrentField$
         If Copied$ = "Data contains non-latin script" Then
             MsgBox "Sorry, the selected data contains non-latin script characters and can not be copied.", CRITICAL_MESSAGE, WaltsMacros$
@@ -366,8 +367,4 @@ Next i
 Convert1252 = TempString$
 
 End Function
-'37012616
-'
-'Macro name: CopyToAlma
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:55:31 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'37112660

@@ -1,4 +1,4 @@
-'MacroName:FieldCount.2023.03
+'MacroName:FieldCount.2024.01
 'MacroDescription:Shows all fields in a bibliographic or authority record with their
 ' individual and total count, as well as the subject thesauri used in 6XX fields. Allows
 ' for filtering fields display by tag groups.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 29 July 2023.
+' Last updated: 12 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -132,9 +133,9 @@ DeleteFieldsOnExport
 
 ' Go through the record, making an array of all the fields encountered (sorting the
 ' fields along the way) and the total number of instances of each field. Although the
-' content of each field is irrelevant, the "GetFieldLineUnicode" command is necessary
-' because the plain "GetFieldLine" command fails when non-Latin scripts are encountered,
-' not retrieving even the tag.
+' content of each field is irrelevant, the "GetFieldUnicode" command is necessary because
+' the plain "GetFieldLine" command fails when non-Latin scripts are encountered, not
+' retrieving even the tag.
 
 RecordLine% = 1
 Do
@@ -226,8 +227,9 @@ Sub Build6XXArray( InString$ )
 
 Const SPACES                 As Integer = 10  'A separator to help dialog boxes look OK.
 
-Dim CompareString$
 Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
+
+Dim CompareString$
 Dim Ind2$
 Dim Spacer$
 Dim Tag%
@@ -333,17 +335,16 @@ Sub DeleteFieldsOnExport
 ' If fields have been defined to be deleted when a record is exported, they are marked in
 ' the main array. First that list has to be established.
 
-Const AUTHORITY            As Integer = 1
-Const BIBLIOGRAPHIC        As Integer = 0
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128
-Const NORMAL_FILE          As Integer = 0
-Const NORMAL_FILE_ARCHIVE  As Integer = 32
+Const AUTHORITY           As Integer = 1
+Const BIBLIOGRAPHIC       As Integer = 0
+Const NORMAL_FILE         As Integer = 0
+Const NORMAL_FILE_ARCHIVE As Integer = 32
+
+Dim DOUBLE_QUOTE As String*1        : DOUBLE_QUOTE = Chr$( 034 )
 
 Dim AppData$
 Dim Attributes%
 Dim CountOfDelFields%
-Dim DOUBLE_QUOTE As String*1        : DOUBLE_QUOTE = Chr$( 034 )
-Dim EnvironmentString$
 Dim FieldString$
 Dim FileNum%
 Dim ItemKey$
@@ -359,16 +360,8 @@ Dim UpperEnd$
 
 Dim i As Integer, j As Integer, p As Integer
 
-i = 1
-Do
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppData$ = Mid$( EnvironmentString$, 9 )
-      Exit Do
-  End If
-  i = i + 1
-Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
-If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GoTo NoPath:
+AppData$ = Environ( "APPDATA" )
+If AppData$ = "" Then GoTo NoPath:
 
 ' The complete path to the file is built by adding the information specified in the
 ' Connexion client documentation to the path to the user profile, obtained above.
@@ -775,7 +768,4 @@ KeepOpen:
 End Select
 
 End Function
-'7792557'
-'Macro name: FieldCount
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:04:39 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'77225311

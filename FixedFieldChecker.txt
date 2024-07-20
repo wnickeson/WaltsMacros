@@ -1,12 +1,13 @@
-'MacroName:FixedFieldChecker.2023.01
+'MacroName:FixedFieldChecker.2024.01
 'MacroDescription:Fills in various elements of the fixed field from data in the variable
 ' fields of a bibliographic record. UNDER DEVELOPMENT
 
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -474,8 +475,4 @@ If Replace$ = "" Then
 End If
 
 End Sub
-'47815281
-'
-'Macro name: FixedFieldChecker
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:24 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'47915325

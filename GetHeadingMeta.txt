@@ -1,4 +1,4 @@
-'MacroName:GetHeadingMeta.2023.02
+'MacroName:GetHeadingMeta.2024.01
 'MacroDescription:Gets the authorized heading, the LCCN, and the cataloging agency from
 ' an authority record, and puts it in formatted form on the Windows Clipboard for
 ' pasting.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 23 July 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -138,8 +139,4 @@ Clipboard.SetText Heading$
 MsgBox Heading$, INFORMATION_MESSAGE, WaltsMacros$
 
 End Sub
-'1424486
-'
-'Macro name: GetHeadingMeta
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:03:22 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'1434531

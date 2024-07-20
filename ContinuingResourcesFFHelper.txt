@@ -1,18 +1,19 @@
-'MacroName:ContinuingResourcesFFHelper.2022.06
+'MacroName:ContinuingResourcesFFHelper.2024.01
 'MacroDescription:Helps with confirming or editing fixed field values in a bibliographic
 ' record for continuing resources.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 September 2022.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record for a serial resource. It
@@ -735,8 +736,4 @@ Select Case Action%
   End Select
 
 End Function
-'73931226
-'
-'Macro name: ContinuingResourcesFFHelper
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:12 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'74031259

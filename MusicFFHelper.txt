@@ -1,12 +1,13 @@
-'MacroName:MusicFFHelper.2023.01
+'MacroName:MusicFFHelper.2024.01
 'MacroDescription:Helps fill in elements in the fixed field for music materials: "AccM",
 ' "Comp", "FMus", "LTxt", "Part", and "TrAr". Also helps add or edit field 047.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -1955,8 +1956,4 @@ If AccM$ <> OriginalAccM$ Or FMus$ <> OriginalFMus$ Or LTxt$ <> OriginalLTxt$ Or
 End If
 
 End Function
-'195989024
-'
-'Macro name: MusicFFHelper
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:42 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'196089068

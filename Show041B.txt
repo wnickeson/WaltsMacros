@@ -1,15 +1,16 @@
-'MacroName:Show041B.2023.05
+'MacroName:Show041B.2024.01
 'MacroDescription:Displays the language codes in an 041 field in a bibliographic record
 ' for guided entry or verification.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' Thanks to Terry Simpkins in earlier days for clarifying discussion. However, all
 ' responsibility for this macro's appearance and functionality are mine alone.
 '
-' Last updated: 1 August 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -236,7 +237,7 @@ End Select
 ' second indicator to make sure the macro is going to encounter only MARC language codes.
 
 Row% = CS.CursorRow
-If CS.GetFieldLine( Row%, FieldData$ ) Then
+If CS.GetField( "...", Row%, FieldData$ ) Then
     Tag$ = Left$( FieldData$, 3 )
     If Tag$ = "041" Then
         OriginalField$ = FieldData$
@@ -615,7 +616,7 @@ Do
 
       UBShowCodesNames% = UBound( ShowCodesNames )
       If ArrayIndex% = UBShowCodesNames% Then 'CODES ARE BEING DELETED?
-          If ArrayIndex% = 0 then
+          If ArrayIndex% = 0 Then
               ReDim ShowCodesNames( 0 )
             Else
               ReDim Preserve ShowCodesNames( ArrayIndex% - 1 )
@@ -931,7 +932,7 @@ LanguageCodes( 161 ) = "gre" : LanguageNames( 161 ) = "Greek, Modern (1453- )"
 LanguageCodes( 162 ) = "grn" : LanguageNames( 162 ) = "Guarani"
 LanguageCodes( 163 ) = "guj" : LanguageNames( 163 ) = "Gujarati"
 LanguageCodes( 164 ) = "gwi" : LanguageNames( 164 ) = "Gwich'in"
-LanguageCodes( 165 ) = "gaa" : LanguageNames( 165 ) = "Gã"
+LanguageCodes( 165 ) = "gaa" : LanguageNames( 165 ) = "GÃ£"
 LanguageCodes( 166 ) = "hai" : LanguageNames( 166 ) = "Haida"
 LanguageCodes( 167 ) = "hat" : LanguageNames( 167 ) = "Haitian French Creole"
 LanguageCodes( 168 ) = "hau" : LanguageNames( 168 ) = "Hausa"
@@ -973,7 +974,7 @@ LanguageCodes( 203 ) = "jpr" : LanguageNames( 203 ) = "Judeo-Persian"
 LanguageCodes( 204 ) = "kbd" : LanguageNames( 204 ) = "Kabardian"
 LanguageCodes( 205 ) = "kab" : LanguageNames( 205 ) = "Kabyle"
 LanguageCodes( 206 ) = "kac" : LanguageNames( 206 ) = "Kachin"
-LanguageCodes( 207 ) = "kal" : LanguageNames( 207 ) = "Kalâtdlisut"
+LanguageCodes( 207 ) = "kal" : LanguageNames( 207 ) = "KalÃ¢tdlisut"
 LanguageCodes( 208 ) = "kam" : LanguageNames( 208 ) = "Kamba"
 LanguageCodes( 209 ) = "kan" : LanguageNames( 209 ) = "Kannada"
 LanguageCodes( 210 ) = "kau" : LanguageNames( 210 ) = "Kanuri"
@@ -1022,7 +1023,7 @@ LanguageCodes( 252 ) = "dsb" : LanguageNames( 252 ) = "Lower Sorbian"
 LanguageCodes( 253 ) = "loz" : LanguageNames( 253 ) = "Lozi"
 LanguageCodes( 254 ) = "lub" : LanguageNames( 254 ) = "Luba-Katanga"
 LanguageCodes( 255 ) = "lua" : LanguageNames( 255 ) = "Luba-Lulua"
-LanguageCodes( 256 ) = "lui" : LanguageNames( 256 ) = "Luiseño"
+LanguageCodes( 256 ) = "lui" : LanguageNames( 256 ) = "LuiseÃ±o"
 LanguageCodes( 257 ) = "smj" : LanguageNames( 257 ) = "Lule Sami"
 LanguageCodes( 258 ) = "lun" : LanguageNames( 258 ) = "Lunda"
 LanguageCodes( 259 ) = "luo" : LanguageNames( 259 ) = "Luo (Kenya and Tanzania)"
@@ -1062,7 +1063,7 @@ LanguageCodes( 292 ) = "mkh" : LanguageNames( 292 ) = "Mon-Khmer (Other)"
 LanguageCodes( 293 ) = "lol" : LanguageNames( 293 ) = "Mongo-Nkundu"
 LanguageCodes( 294 ) = "mon" : LanguageNames( 294 ) = "Mongolian"
 LanguageCodes( 295 ) = "cnr" : LanguageNames( 295 ) = "Montenegrin"
-LanguageCodes( 296 ) = "mos" : LanguageNames( 296 ) = "Mooré"
+LanguageCodes( 296 ) = "mos" : LanguageNames( 296 ) = "MoorÃ©"
 LanguageCodes( 297 ) = "mul" : LanguageNames( 297 ) = "Multiple languages"
 LanguageCodes( 298 ) = "mun" : LanguageNames( 298 ) = "Munda (Other)"
 LanguageCodes( 299 ) = "nqo" : LanguageNames( 299 ) = "N'Ko"
@@ -1086,7 +1087,7 @@ LanguageCodes( 316 ) = "nai" : LanguageNames( 316 ) = "North American Indian (Ot
 LanguageCodes( 317 ) = "frr" : LanguageNames( 317 ) = "North Frisian"
 LanguageCodes( 318 ) = "sme" : LanguageNames( 318 ) = "Northern Sami"
 LanguageCodes( 319 ) = "nso" : LanguageNames( 319 ) = "Northern Sotho"
-LanguageCodes( 320 ) = "nob" : LanguageNames( 320 ) = "Norwegian (Bokmål)"
+LanguageCodes( 320 ) = "nob" : LanguageNames( 320 ) = "Norwegian (BokmÃ¥l)"
 LanguageCodes( 321 ) = "nno" : LanguageNames( 321 ) = "Norwegian (Nynorsk)"
 LanguageCodes( 322 ) = "nor" : LanguageNames( 322 ) = "Norwegian"
 LanguageCodes( 323 ) = "nub" : LanguageNames( 323 ) = "Nubian languages"
@@ -1120,7 +1121,7 @@ LanguageCodes( 350 ) = "pon" : LanguageNames( 350 ) = "Pohnpeian"
 LanguageCodes( 351 ) = "pol" : LanguageNames( 351 ) = "Polish"
 LanguageCodes( 352 ) = "por" : LanguageNames( 352 ) = "Portuguese"
 LanguageCodes( 353 ) = "pra" : LanguageNames( 353 ) = "Prakrit languages"
-LanguageCodes( 354 ) = "pro" : LanguageNames( 354 ) = "Provençal (to 1500)"
+LanguageCodes( 354 ) = "pro" : LanguageNames( 354 ) = "ProvenÃ§al (to 1500)"
 LanguageCodes( 355 ) = "pus" : LanguageNames( 355 ) = "Pushto"
 LanguageCodes( 356 ) = "que" : LanguageNames( 356 ) = "Quechua"
 LanguageCodes( 357 ) = "roh" : LanguageNames( 357 ) = "Raeto-Romance"
@@ -1198,7 +1199,7 @@ LanguageCodes( 428 ) = "tet" : LanguageNames( 428 ) = "Tetum"
 LanguageCodes( 429 ) = "tha" : LanguageNames( 429 ) = "Thai"
 LanguageCodes( 430 ) = "tib" : LanguageNames( 430 ) = "Tibetan"
 LanguageCodes( 431 ) = "tir" : LanguageNames( 431 ) = "Tigrinya"
-LanguageCodes( 432 ) = "tig" : LanguageNames( 432 ) = "Tigré"
+LanguageCodes( 432 ) = "tig" : LanguageNames( 432 ) = "TigrÃ©"
 LanguageCodes( 433 ) = "tiv" : LanguageNames( 433 ) = "Tiv"
 LanguageCodes( 434 ) = "tli" : LanguageNames( 434 ) = "Tlingit"
 LanguageCodes( 435 ) = "tpi" : LanguageNames( 435 ) = "Tok Pisin"
@@ -1228,7 +1229,7 @@ LanguageCodes( 458 ) = "uzb" : LanguageNames( 458 ) = "Uzbek"
 LanguageCodes( 459 ) = "vai" : LanguageNames( 459 ) = "Vai"
 LanguageCodes( 460 ) = "ven" : LanguageNames( 460 ) = "Venda"
 LanguageCodes( 461 ) = "vie" : LanguageNames( 461 ) = "Vietnamese"
-LanguageCodes( 462 ) = "vol" : LanguageNames( 462 ) = "Volapük"
+LanguageCodes( 462 ) = "vol" : LanguageNames( 462 ) = "VolapÃ¼k"
 LanguageCodes( 463 ) = "vot" : LanguageNames( 463 ) = "Votic"
 LanguageCodes( 464 ) = "wak" : LanguageNames( 464 ) = "Wakashan languages"
 LanguageCodes( 465 ) = "wln" : LanguageNames( 465 ) = "Walloon"
@@ -2024,8 +2025,4 @@ ReShow:
 End Select
 
 End Function
-'202894312
-'
-'Macro name: Show041B
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 10:00:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'202994360

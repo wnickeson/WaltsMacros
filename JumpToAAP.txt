@@ -1,0 +1,101 @@
+'MacroName:JumpToAAP.2024.04
+'MacroDescription:Moves the cursor in a bibliographic record to the field containing the
+' authorized access point (1XX or 245), and adjusts the display of a lengthy record to
+' put that field at or near the top of the Connexion client main window.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
+'
+' Last updated: 18 February 2024.
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+' Please e-mail me with bug reports or to suggest improvements.
+'
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic record to move the cursor to the 1XX or
+' 245 field (the first field of the authorized access point). The macro runs through all
+' the records in the field, noting which line contains the AAP (the 1XX or 245 field),
+' until it reaches the last line. It moves the cursor there. If the last line is outside,
+' or below, the main window, that cursor movement forces the record up in the display to
+' make it visible. The macro immediately moves the cursor again to the line with the AAP.
+' If that field has been pushed up, outside the main window, the Client moves the record
+' down in the display, in order to make the AAP visible. The end result may be that some
+' or all of the 0XX fields are outside the main window, but the purpose of the macro is
+' to help you see right away as much as possible of the body of the record, that is, the
+' descriptive data.
+'
+' If the whole record already fits in the main window, all the macro does is put the
+' cursor in the 1XX or 245 field.
+'
+' It makes no difference in the functioning of this macro how the fixed field is
+' displayed, whether it is at the top or bottom, or shown as a variable field.
+'****************************************************************************************
+
+Option Explicit
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE As Integer = 16
+
+Dim AAPRow%
+Dim FieldData$
+Dim LastRow%
+Dim Tag$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:JumpToAAP"
+
+Dim FoundField
+
+Dim LineNumber%
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then go through the record, line by line, checking the tag (which is why the
+' "GetFieldUnicode" command must be used--the other "GetField" commands can't handle
+' fields in non-Latin scripts). Keep track of which field contains the 1XX field (if
+' present) or 245 field, as that's where the cursor will end up. When the last row of the
+' record is found, put the cursor there, which will force the record up in the window;
+' then finish the macro by jumping to the field identified earlier that contains the
+' (beginning of) the authorized access point, either the 1XX or 245 field. This may force
+' the display of the record down in the window, with the AAP at or near the top.
+
+LineNumber% = 1
+Do
+  FoundField = CS.GetFieldUnicode( "...", LineNumber%, FieldData$ )
+  If FoundField Then
+      Tag$ = Left$( FieldData$, 3 )
+      If Tag$ Like "1##" Or Tag$ = "245" Then
+          If AAPRow% = 0 Then
+              AAPRow% = LineNumber%
+          End If
+      End If
+      LastRow% = LineNumber%
+  End If
+  LineNumber% = LineNumber% + 1
+Loop Until FoundField = FALSE
+
+' The final movements.
+
+CS.CursorRow = LastRow%
+CS.CursorRow = AAPRow%
+
+End Sub
+'1024112

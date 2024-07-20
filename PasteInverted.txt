@@ -1,18 +1,19 @@
-'MacroName:PasteInverted.2023.01
+'MacroName:PasteInverted.2024.01
 'MacroDescription:Inverts a two- or three-word text selection on the Windows Clipboard
 ' for pasting into a bibliographic record, by simply putting the last word first.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 17 March 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: This macro takes text in a record copied to the Windows Clipboard and
@@ -145,8 +146,4 @@ Const INVISIBLE As Integer = 0
 DlgVisible "Cancel", INVISIBLE
 
 End Function
-'1495368
-'
-'Macro name: PasteInverted
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:58 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'1505405

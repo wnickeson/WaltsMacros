@@ -1,25 +1,26 @@
-'MacroName:ExpandStateNames.2022.02
+'MacroName:ExpandStateNames.2024.02
 'MacroDescription:Expands abbreviations and postal codes of U.S. states to their full
 ' forms.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 31 January 2022.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: In a bibliographic record, put the cursor in, or immediately before or
 ' after, an abbreviation or postal code for a U.S. state. Run the macro. It expands the
-' abbreviation or postal code to the full form. Case is important: an abbreviation
-' without capital letters (that is, a non-standard form) or a postal code in lower case
-' will make the macro fail.
+' abbreviation or postal code to the full form, and puts the cursor at the end of the
+' new, full form. Case is important: an abbreviation without capital letters (that is, a
+' non-standard form) or a postal code in lower case will make the macro fail.
 '****************************************************************************************
 
 Option Explicit
@@ -29,6 +30,7 @@ Declare Sub FillArray
 Global Const ABBREVIATION As Integer = 1
 Global Const FULL_NAME    As Integer = 0
 Global Const POSTAL_CODE  As Integer = 2
+Global Const STATE_LIST   As Integer = 54
 
 Global States() As String
 
@@ -54,6 +56,7 @@ Dim CharactersPreceding$
 Dim FieldData$
 Dim FirstHalf$
 Dim FullStateName$
+Dim RemainderOfField$
 Dim Row%
 Dim SecondHalf$
 Dim TypeOfWindow%
@@ -95,7 +98,7 @@ FillArray
 
 ' Then get the content of the row in which the cursor is placed.
 
-If CS.GetFieldLine( Row%, FieldData$ ) = FALSE Then
+If CS.GetField( "...", Row%, FieldData$ ) = FALSE Then
     MsgBox "Sorry, this macro unexpectedly failed.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End If
@@ -113,12 +116,18 @@ For i = Col% To 1 Step -1
 Next i
 
 ' Look ahead to the next blank space. The text between the two blank spaces will be the
-' string the macro will work on.
+' string the macro will work on. If the abbreviation to be expanded is at the end of the
+' field, the blank space just identified will mark what follows as the last word of the
+' field, and that will be the subject of expansion.
 
 p = i + 1
 q = InStr( p, FieldData$, " " )
 If q > 0 Then
     CandidateName$ = Trim$( Mid$( FieldData$, p, q - p ) )
+    RemainderOfField$ = Mid$( FieldData$, q )
+  Else
+    CandidateName$ = Trim$( Mid$( FieldData$, p ) )
+    RemainderOfField$ = ""
 End If
 
 ' Isolate the alphabetic characters from any other characters (usually punctuation, like
@@ -210,7 +219,7 @@ End Select
 ' With a text string in hand, look up the full form, first by abbreviation, next by
 ' postal code.
 
-For i = 0 To 50
+For i = 0 To STATE_LIST
   If States( ABBREVIATION, i ) = CandidateName$ Then
       Match = TRUE
       Exit For
@@ -237,11 +246,13 @@ End If
 
 FullStateName$ = States( FULL_NAME, i )
 
-FieldData$ = Left$( FieldData$, p - 1 ) & CharactersPreceding$ & FullStateName$ & CharactersFollowing$ & Mid$( FieldData$, q )
+FieldData$ = Left$( FieldData$, p - 1 ) & CharactersPreceding$ & FullStateName$ & CharactersFollowing$ & RemainderOfField$
 
 If CS.SetFieldLine( Row%, FieldData$ ) = FALSE Then
     MsgBox "Sorry, the macro failed to insert the full state name.", CRITICAL_MESSAGE, WaltsMacros$
 End If
+
+CS.CursorColumn = p + Len( CharactersPreceding$ & FullStateName$ & CharactersFollowing$ )
 
 End Sub
 
@@ -249,7 +260,11 @@ End Sub
 
 Sub FillArray
 
-ReDim States( 2, 50 )
+' Sources of abbreviations differ slightly; this list includes abbrevations given in the
+' 1949 Rules for descriptive cataloging in the Library of Congress, and in the 1973 U.S.
+' Government Printing Office Style Manual.
+
+ReDim States( 2, STATE_LIST )
 
 States( FULL_NAME, 0  ) = "Alabama"              : States( ABBREVIATION, 0  ) = "Ala."   : States( POSTAL_CODE, 0  ) = "AL"
 States( FULL_NAME, 1  ) = "Alaska"               : States( ABBREVIATION, 1  ) = "Alaska" : States( POSTAL_CODE, 1  ) = "AK"
@@ -267,45 +282,45 @@ States( FULL_NAME, 12 ) = "Idaho"                : States( ABBREVIATION, 12 ) = 
 States( FULL_NAME, 13 ) = "Illinois"             : States( ABBREVIATION, 13 ) = "Ill."   : States( POSTAL_CODE, 13 ) = "IL"
 States( FULL_NAME, 14 ) = "Indiana"              : States( ABBREVIATION, 14 ) = "Ind."   : States( POSTAL_CODE, 14 ) = "IN"
 States( FULL_NAME, 15 ) = "Iowa"                 : States( ABBREVIATION, 15 ) = "Iowa"   : States( POSTAL_CODE, 15 ) = "IA"
-States( FULL_NAME, 16 ) = "Kansas"               : States( ABBREVIATION, 16 ) = "Kans."  : States( POSTAL_CODE, 16 ) = "KS"
-States( FULL_NAME, 17 ) = "Kentucky"             : States( ABBREVIATION, 17 ) = "Ky."    : States( POSTAL_CODE, 17 ) = "KY"
-States( FULL_NAME, 18 ) = "Louisiana"            : States( ABBREVIATION, 18 ) = "La."    : States( POSTAL_CODE, 18 ) = "LA"
-States( FULL_NAME, 19 ) = "Maine"                : States( ABBREVIATION, 19 ) = "Maine"  : States( POSTAL_CODE, 19 ) = "ME"
-States( FULL_NAME, 20 ) = "Maryland"             : States( ABBREVIATION, 20 ) = "Md."    : States( POSTAL_CODE, 20 ) = "MD"
-States( FULL_NAME, 21 ) = "Massachusetts"        : States( ABBREVIATION, 21 ) = "Mass."  : States( POSTAL_CODE, 21 ) = "MA"
-States( FULL_NAME, 22 ) = "Michigan"             : States( ABBREVIATION, 22 ) = "Mich."  : States( POSTAL_CODE, 22 ) = "MI"
-States( FULL_NAME, 23 ) = "Minnesota"            : States( ABBREVIATION, 23 ) = "Minn."  : States( POSTAL_CODE, 23 ) = "MN"
-States( FULL_NAME, 24 ) = "Mississippi"          : States( ABBREVIATION, 24 ) = "Miss."  : States( POSTAL_CODE, 24 ) = "MS"
-States( FULL_NAME, 25 ) = "Missouri"             : States( ABBREVIATION, 25 ) = "Mo."    : States( POSTAL_CODE, 25 ) = "MO"
-States( FULL_NAME, 26 ) = "Montana"              : States( ABBREVIATION, 26 ) = "Mont."  : States( POSTAL_CODE, 26 ) = "MT"
-States( FULL_NAME, 27 ) = "Nebraska"             : States( ABBREVIATION, 27 ) = "Nebr."  : States( POSTAL_CODE, 27 ) = "NE"
-States( FULL_NAME, 28 ) = "Nevada"               : States( ABBREVIATION, 28 ) = "Nev."   : States( POSTAL_CODE, 28 ) = "NV"
-States( FULL_NAME, 29 ) = "New Hampshire"        : States( ABBREVIATION, 29 ) = "N.H."   : States( POSTAL_CODE, 29 ) = "NH"
-States( FULL_NAME, 30 ) = "New Jersey"           : States( ABBREVIATION, 30 ) = "N.J."   : States( POSTAL_CODE, 30 ) = "NJ"
-States( FULL_NAME, 31 ) = "New Mexico"           : States( ABBREVIATION, 31 ) = "N.M."   : States( POSTAL_CODE, 31 ) = "NM"
-States( FULL_NAME, 32 ) = "New York"             : States( ABBREVIATION, 32 ) = "N.Y."   : States( POSTAL_CODE, 32 ) = "NY"
-States( FULL_NAME, 33 ) = "North Carolina"       : States( ABBREVIATION, 33 ) = "N.C."   : States( POSTAL_CODE, 33 ) = "NC"
-States( FULL_NAME, 34 ) = "North Dakota"         : States( ABBREVIATION, 34 ) = "N.D."   : States( POSTAL_CODE, 34 ) = "ND"
-States( FULL_NAME, 35 ) = "Ohio"                 : States( ABBREVIATION, 35 ) = "Ohio"   : States( POSTAL_CODE, 35 ) = "OH"
-States( FULL_NAME, 36 ) = "Oklahoma"             : States( ABBREVIATION, 36 ) = "Okla."  : States( POSTAL_CODE, 36 ) = "OK"
-States( FULL_NAME, 37 ) = "Oregon"               : States( ABBREVIATION, 37 ) = "Ore."   : States( POSTAL_CODE, 37 ) = "OR"
-States( FULL_NAME, 38 ) = "Pennsylvania"         : States( ABBREVIATION, 38 ) = "Pa."    : States( POSTAL_CODE, 38 ) = "PA"
-States( FULL_NAME, 39 ) = "Rhode Island"         : States( ABBREVIATION, 39 ) = "R.I."   : States( POSTAL_CODE, 39 ) = "RI"
-States( FULL_NAME, 40 ) = "South Carolina"       : States( ABBREVIATION, 40 ) = "S.C."   : States( POSTAL_CODE, 40 ) = "SC"
-States( FULL_NAME, 41 ) = "South Dakota"         : States( ABBREVIATION, 41 ) = "S.D."   : States( POSTAL_CODE, 41 ) = "SD"
-States( FULL_NAME, 42 ) = "Tennessee"            : States( ABBREVIATION, 42 ) = "Tenn."  : States( POSTAL_CODE, 42 ) = "TN"
-States( FULL_NAME, 43 ) = "Texas"                : States( ABBREVIATION, 43 ) = "Tex."   : States( POSTAL_CODE, 43 ) = "TX"
-States( FULL_NAME, 44 ) = "Utah"                 : States( ABBREVIATION, 44 ) = "Utah"   : States( POSTAL_CODE, 44 ) = "UT"
-States( FULL_NAME, 45 ) = "Vermont"              : States( ABBREVIATION, 45 ) = "Vt."    : States( POSTAL_CODE, 45 ) = "VT"
-States( FULL_NAME, 46 ) = "Virginia"             : States( ABBREVIATION, 46 ) = "Va."    : States( POSTAL_CODE, 46 ) = "VA"
-States( FULL_NAME, 47 ) = "Washington"           : States( ABBREVIATION, 47 ) = "Wash."  : States( POSTAL_CODE, 47 ) = "WA"
-States( FULL_NAME, 48 ) = "West Virginia"        : States( ABBREVIATION, 48 ) = "W.Va."  : States( POSTAL_CODE, 48 ) = "WV"
-States( FULL_NAME, 49 ) = "Wisconsin"            : States( ABBREVIATION, 49 ) = "Wis."   : States( POSTAL_CODE, 49 ) = "WI"
-States( FULL_NAME, 50 ) = "Wyoming"              : States( ABBREVIATION, 50 ) = "Wyo."   : States( POSTAL_CODE, 50 ) = "WY"
+States( FULL_NAME, 16 ) = "Kansas"               : States( ABBREVIATION, 16 ) = "Kan."   : States( POSTAL_CODE, 16 ) = "KS"
+States( FULL_NAME, 17 ) = "Kansas"               : States( ABBREVIATION, 17 ) = "Kans."  : States( POSTAL_CODE, 17 ) = "KS"
+States( FULL_NAME, 18 ) = "Kentucky"             : States( ABBREVIATION, 18 ) = "Ky."    : States( POSTAL_CODE, 18 ) = "KY"
+States( FULL_NAME, 19 ) = "Louisiana"            : States( ABBREVIATION, 19 ) = "La."    : States( POSTAL_CODE, 19 ) = "LA"
+States( FULL_NAME, 20 ) = "Maine"                : States( ABBREVIATION, 20 ) = "Maine"  : States( POSTAL_CODE, 20 ) = "ME"
+States( FULL_NAME, 21 ) = "Maine"                : States( ABBREVIATION, 21 ) = "Me."    : States( POSTAL_CODE, 21 ) = "ME"
+States( FULL_NAME, 22 ) = "Maryland"             : States( ABBREVIATION, 22 ) = "Md."    : States( POSTAL_CODE, 22 ) = "MD"
+States( FULL_NAME, 23 ) = "Massachusetts"        : States( ABBREVIATION, 23 ) = "Mass."  : States( POSTAL_CODE, 23 ) = "MA"
+States( FULL_NAME, 24 ) = "Michigan"             : States( ABBREVIATION, 24 ) = "Mich."  : States( POSTAL_CODE, 24 ) = "MI"
+States( FULL_NAME, 25 ) = "Minnesota"            : States( ABBREVIATION, 25 ) = "Minn."  : States( POSTAL_CODE, 25 ) = "MN"
+States( FULL_NAME, 26 ) = "Mississippi"          : States( ABBREVIATION, 26 ) = "Miss."  : States( POSTAL_CODE, 26 ) = "MS"
+States( FULL_NAME, 27 ) = "Missouri"             : States( ABBREVIATION, 27 ) = "Mo."    : States( POSTAL_CODE, 27 ) = "MO"
+States( FULL_NAME, 28 ) = "Montana"              : States( ABBREVIATION, 28 ) = "Mont."  : States( POSTAL_CODE, 28 ) = "MT"
+States( FULL_NAME, 29 ) = "Nebraska"             : States( ABBREVIATION, 29 ) = "Neb."   : States( POSTAL_CODE, 29 ) = "NE"
+States( FULL_NAME, 30 ) = "Nebraska"             : States( ABBREVIATION, 30 ) = "Nebr."  : States( POSTAL_CODE, 30 ) = "NE"
+States( FULL_NAME, 31 ) = "Nevada"               : States( ABBREVIATION, 31 ) = "Nev."   : States( POSTAL_CODE, 31 ) = "NV"
+States( FULL_NAME, 32 ) = "New Hampshire"        : States( ABBREVIATION, 32 ) = "N.H."   : States( POSTAL_CODE, 32 ) = "NH"
+States( FULL_NAME, 33 ) = "New Jersey"           : States( ABBREVIATION, 33 ) = "N.J."   : States( POSTAL_CODE, 33 ) = "NJ"
+States( FULL_NAME, 34 ) = "New Mexico"           : States( ABBREVIATION, 34 ) = "N.M."   : States( POSTAL_CODE, 34 ) = "NM"
+States( FULL_NAME, 35 ) = "New York"             : States( ABBREVIATION, 35 ) = "N.Y."   : States( POSTAL_CODE, 35 ) = "NY"
+States( FULL_NAME, 36 ) = "North Carolina"       : States( ABBREVIATION, 36 ) = "N.C."   : States( POSTAL_CODE, 36 ) = "NC"
+States( FULL_NAME, 37 ) = "North Dakota"         : States( ABBREVIATION, 37 ) = "N.D."   : States( POSTAL_CODE, 37 ) = "ND"
+States( FULL_NAME, 38 ) = "Ohio"                 : States( ABBREVIATION, 38 ) = "Ohio"   : States( POSTAL_CODE, 38 ) = "OH"
+States( FULL_NAME, 39 ) = "Oklahoma"             : States( ABBREVIATION, 39 ) = "Okla."  : States( POSTAL_CODE, 39 ) = "OK"
+States( FULL_NAME, 40 ) = "Oregon"               : States( ABBREVIATION, 40 ) = "Or."    : States( POSTAL_CODE, 40 ) = "OR"
+States( FULL_NAME, 41 ) = "Oregon"               : States( ABBREVIATION, 41 ) = "Ore."   : States( POSTAL_CODE, 41 ) = "OR"
+States( FULL_NAME, 42 ) = "Pennsylvania"         : States( ABBREVIATION, 42 ) = "Pa."    : States( POSTAL_CODE, 42 ) = "PA"
+States( FULL_NAME, 43 ) = "Rhode Island"         : States( ABBREVIATION, 43 ) = "R.I."   : States( POSTAL_CODE, 43 ) = "RI"
+States( FULL_NAME, 44 ) = "South Carolina"       : States( ABBREVIATION, 44 ) = "S.C."   : States( POSTAL_CODE, 44 ) = "SC"
+States( FULL_NAME, 45 ) = "South Dakota"         : States( ABBREVIATION, 45 ) = "S.D."   : States( POSTAL_CODE, 45 ) = "SD"
+States( FULL_NAME, 46 ) = "Tennessee"            : States( ABBREVIATION, 46 ) = "Tenn."  : States( POSTAL_CODE, 46 ) = "TN"
+States( FULL_NAME, 47 ) = "Texas"                : States( ABBREVIATION, 47 ) = "Tex."   : States( POSTAL_CODE, 47 ) = "TX"
+States( FULL_NAME, 48 ) = "Utah"                 : States( ABBREVIATION, 48 ) = "Utah"   : States( POSTAL_CODE, 48 ) = "UT"
+States( FULL_NAME, 49 ) = "Vermont"              : States( ABBREVIATION, 49 ) = "Vt."    : States( POSTAL_CODE, 49 ) = "VT"
+States( FULL_NAME, 50 ) = "Virginia"             : States( ABBREVIATION, 50 ) = "Va."    : States( POSTAL_CODE, 50 ) = "VA"
+States( FULL_NAME, 51 ) = "Washington"           : States( ABBREVIATION, 51 ) = "Wash."  : States( POSTAL_CODE, 51 ) = "WA"
+States( FULL_NAME, 52 ) = "West Virginia"        : States( ABBREVIATION, 52 ) = "W.Va."  : States( POSTAL_CODE, 52 ) = "WV"
+States( FULL_NAME, 53 ) = "Wisconsin"            : States( ABBREVIATION, 53 ) = "Wis."   : States( POSTAL_CODE, 53 ) = "WI"
+States( FULL_NAME, 54 ) = "Wyoming"              : States( ABBREVIATION, 54 ) = "Wyo."   : States( POSTAL_CODE, 54 ) = "WY"
 
 End Sub
-'30814533
-'
-'Macro name: ExpandStateNames
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:29 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'32715856

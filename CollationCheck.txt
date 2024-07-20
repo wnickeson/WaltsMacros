@@ -1,12 +1,13 @@
-'MacroName:CollationCheck.2023.02
+'MacroName:CollationCheck.2024.01
 'MacroDescription:Compares leaf and page counts in the statement of extent (300 subfield
 ' $a) and a standard signature statement.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 3 August 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -998,7 +999,7 @@ For i = 1 To Len( SignatureString$ )
               NotText = TRUE
           End If
       End If
-      If NotText = TRUE then
+      If NotText = TRUE Then
           ReDim Preserve SignaturePieces( SignaturePieceCount% )
           SignaturePieces( SignaturePieceCount% ) = Trim$( TempString$ )
           SignaturePieceCount% = SignaturePieceCount% + 1
@@ -1728,8 +1729,4 @@ Select Case Action%
 End Select
 
 End Function
-'173264449
-'
-'Macro name: CollationCheck
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:07 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'173364487

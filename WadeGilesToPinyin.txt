@@ -1,18 +1,19 @@
-'MacroName:WadeGilesToPinyin.2023.01
+'MacroName:WadeGilesToPinyin.2024.02
 'MacroDescription:Converts a Wade-Giles string to a Pinyin string, following LC
 ' practice.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 31 May 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: Run the macro to convert a string of Chinese syllables in Wade-Giles
@@ -46,8 +47,8 @@
 ' format, may be added to the search string. A checkbox allows for limiting the results
 ' of a search to records cataloged in English. If a browse or search fails, the dialog
 ' box remains open for a revision of the search string. Note that the system returns a
-' count of zero records found both for no records retrieved, but also for too many
-' retrieved. There is no way to distinguish between the two.
+' count of zero records found for no records retrieved, but also for too many retrieved.
+' There is no way the macro can distinguish between the two.
 '
 ' To convert the input string to Pinyin romanization this macro uses, with minor
 ' modifications, the table originally created in October 2000 by the Library of Congress
@@ -58,11 +59,13 @@
 ' This macro is in large part an exercise to see if I could program a macro to respond to
 ' input on the fly, acting upon input as it is entered, character by character. The macro
 ' would be much simpler if it waited until the whole input string were entered and then
-' manipulated the data--typing into an input box and then pressing the Enter key. I
-' wanted to get immediate feedback upon input. The chief problem I have encounted with
-' the macro is that if the input is keyed in too quickly, execution halts, seemingly
-' like on an old manual typewriter when the keys jam up. This is probably related to the
-' Client's issues with macro window slowness.
+' manipulated the data--asking the user to type into an input box and then press the
+' Enter key. I wanted to get immediate feedback upon input. The chief problem I have
+' encounted with the macro is that if the input is keyed in too quickly, execution halts,
+' seemingly like on an old manual typewriter when the keys jam up. An error message may
+' appear about a subscript being out of bounds. This problem is probably related to the
+' Client's issues with macro window slowness, and can be avoided simply by typing a
+' little more slowly.
 '****************************************************************************************
 
 Option Explicit
@@ -1413,8 +1416,4 @@ Select Case Action%
 End Select
 
 End Function
-'141772222
-'
-'Macro name: WadeGilesToPinyin
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:02:23 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'142072391

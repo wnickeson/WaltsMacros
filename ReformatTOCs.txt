@@ -1,17 +1,18 @@
-'MacroName:ReformatTOCs.2022.04
+'MacroName:ReformatTOCs.2024.01
 'MacroDescription:Performs some simple reformatting of contents notes.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 30 June 2022.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
 '
-' This macro works for me with Connexion client 3.1 and 64-bit Windows 10 Enterprise &
-' 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
+' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
 ' How it works: This macro will do some simple, mechanical reformatting of contents notes
@@ -116,7 +117,7 @@ End Select
 ' Get the field in which the cursor is placed.
 
 Row% = CS.CursorRow
-If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
+If CS.GetField( "...", Row%, FieldData$ ) = TRUE Then
     Tag$        = Left$( FieldData$, 3 )
     Indicators$ = Mid$( FieldData$, 4, 2 )
     If Left$( Tag$, 3 ) = "505" Then
@@ -408,8 +409,4 @@ If CS.AddFieldLine( Row% + 1, NewField$ ) = FALSE Then
 End If
 
 End Sub
-'41213590
-'
-'Macro name: ReformatTOCs
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:02:03 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'41313631

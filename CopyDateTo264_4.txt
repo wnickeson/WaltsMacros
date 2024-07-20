@@ -1,4 +1,4 @@
-'MacroName:CopyDateTo264_4.2023.01
+'MacroName:CopyDateTo264_4.2024.01
 'MacroDescription:Copies the date from a 264 #1 field to a 264 #4 field in a
 ' bibliographic RDA record, adding the appropriate symbol for copyright and updating the
 ' fixed field to include both dates.
@@ -6,8 +6,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 9 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -18,7 +19,7 @@
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record cataloged according to RDA to
 ' copy the date in a 264 1 field (publication statement) to a 264 4 field (copyright
-' date). It prefixes this date with the standard copyright symbols "©" for manifestations
+' date). It prefixes this date with the standard copyright symbols "Â©" for manifestations
 ' other than sound recordings and "(p)" (unfortunately not properly displayable here in
 ' the Windows system font) for sound recordings. It also changes "DtSt" in the fixed
 ' field to "t" and adds the extracted date to Date 2.
@@ -78,7 +79,7 @@ End Select
 
 ' Then make sure the record has been cataloged according to RDA. (Previous rules did not
 ' allow use of the copyright symbol, but OCLC has been systematically changing "c" to
-' "©".)
+' "Â©".)
 
 If CS.GetField( "040", 1, FieldData$ ) Then
     If InStr( FieldData$, RDA_TEST ) = 0 Then
@@ -198,8 +199,4 @@ If p <> 0 Then
 End If
 
 End Sub
-'2027741
-'
-'Macro name: CopyDateTo264_4
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:09 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2037785

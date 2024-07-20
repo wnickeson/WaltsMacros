@@ -1,14 +1,15 @@
-'MacroName:Show007Micro.2023.01
+'MacroName:Show007Micro.2024.02
 'MacroDescription:Displays the codes in an 007 field in a bibliographic record for
 ' microforms in a friendly way for verification and/or correction.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' with some ideas from Joel Hahn.
 '
-' Last updated: 19 July 2023.
+' Last updated: 19 March 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -30,9 +31,10 @@ Option Explicit
 Declare Sub FillArrays
 
 Declare Function GetSubfieldValue( InString$, WhichSubfield$ ) As String
+
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Global Const WARNING_MESSAGE As Integer = 48  'The value to display the "Warning message" icon in a message box.
+Global Const WARNING_MESSAGE As Integer = 48
 
 Global AValue$
 Global BValue$
@@ -67,30 +69,30 @@ Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
-Const CRITICAL_MESSAGE     As Integer = 16
-Const INFORMATION_MESSAGE  As Integer = 64
-Const WARNING_QUERY        As Integer = 32
+Const CRITICAL_MESSAGE    As Integer = 16
+Const INFORMATION_MESSAGE As Integer = 64
+Const WARNING_QUERY       As Integer = 32
 
-Const ANSWER_YES           As Integer = 6
-Const YES_NO               As Integer = 4
+Const ANSWER_YES          As Integer = 6
+Const YES_NO              As Integer = 4
 
-Dim DEFAULT_SUBFIELD_B As String*1
-Dim DEFAULT_SUBFIELD_D As String*1
-Dim DEFAULT_SUBFIELD_E As String*1
-Dim DEFAULT_SUBFIELD_F As String*1
+Dim DEFAULT_SUBFIELD_B    As String*1
+Dim DEFAULT_SUBFIELD_D    As String*1
+Dim DEFAULT_SUBFIELD_E    As String*1
+Dim DEFAULT_SUBFIELD_F    As String*1
 Dim DEFAULT_F_RATIO
-Dim DEFAULT_SUBFIELD_G As String*1
-Dim DEFAULT_SUBFIELD_H As String*1
-Dim DEFAULT_SUBFIELD_I As String*1
-Dim DEFAULT_SUBFIELD_J As String*1
-Dim SUBFIELD_B         As String*2 : SUBFIELD_B   = Chr$( 223 ) & "b"
-Dim SUBFIELD_D         As String*2 : SUBFIELD_D   = Chr$( 223 ) & "d"
-Dim SUBFIELD_E         As String*2 : SUBFIELD_E   = Chr$( 223 ) & "e"
-Dim SUBFIELD_F         As String*2 : SUBFIELD_F   = Chr$( 223 ) & "f"
-Dim SUBFIELD_G         As String*2 : SUBFIELD_G   = Chr$( 223 ) & "g"
-Dim SUBFIELD_H         As String*2 : SUBFIELD_H   = Chr$( 223 ) & "h"
-Dim SUBFIELD_I         As String*2 : SUBFIELD_I   = Chr$( 223 ) & "i"
-Dim SUBFIELD_J         As String*2 : SUBFIELD_J   = Chr$( 223 ) & "j"
+Dim DEFAULT_SUBFIELD_G    As String*1
+Dim DEFAULT_SUBFIELD_H    As String*1
+Dim DEFAULT_SUBFIELD_I    As String*1
+Dim DEFAULT_SUBFIELD_J    As String*1
+Dim SUBFIELD_B            As String*2 : SUBFIELD_B   = Chr$( 223 ) & "b"
+Dim SUBFIELD_D            As String*2 : SUBFIELD_D   = Chr$( 223 ) & "d"
+Dim SUBFIELD_E            As String*2 : SUBFIELD_E   = Chr$( 223 ) & "e"
+Dim SUBFIELD_F            As String*2 : SUBFIELD_F   = Chr$( 223 ) & "f"
+Dim SUBFIELD_G            As String*2 : SUBFIELD_G   = Chr$( 223 ) & "g"
+Dim SUBFIELD_H            As String*2 : SUBFIELD_H   = Chr$( 223 ) & "h"
+Dim SUBFIELD_I            As String*2 : SUBFIELD_I   = Chr$( 223 ) & "i"
+Dim SUBFIELD_J            As String*2 : SUBFIELD_J   = Chr$( 223 ) & "j"
 
 Dim Field007String$
 Dim FieldData$
@@ -138,7 +140,7 @@ End Select
 ' the first 10 007 fields in the record looking for a microform 007.
 
 Row% = CS.CursorRow
-If CS.GetFieldLine( Row%, FieldData$ ) = TRUE Then
+If CS.GetField( "...", Row%, FieldData$ ) = TRUE Then
     If Mid$( FieldData$, 1, 3 ) = "007" And Mid$( FieldData$, 6, 1 ) = "h" Then GoTo GetValues:
 End If
 
@@ -283,10 +285,10 @@ EArray( 1 )  = "d - 16 mm"
 EArray( 2 )  = "f - 35 mm"
 EArray( 3 )  = "g - 70 mm"
 EArray( 4 )  = "h - 105 mm"
-EArray( 5 )  = "l - 3 × 5 in. (8 × 13 cm)"
-EArray( 6 )  = "m - 4 × 6 in. (11 × 15 cm)"
-EArray( 7 )  = "o - 6 × 9 in. (16 × 23 cm)"
-EArray( 8 )  = "p - 3 1/4 × 7 3/8 in. (9 × 19 cm)"
+EArray( 5 )  = "l - 3 Ã— 5 in. (8 Ã— 13 cm)"
+EArray( 6 )  = "m - 4 Ã— 6 in. (11 Ã— 15 cm)"
+EArray( 7 )  = "o - 6 Ã— 9 in. (16 Ã— 23 cm)"
+EArray( 8 )  = "p - 3 1/4 Ã— 7 3/8 in. (9 Ã— 19 cm)"
 EArray( 9 )  = "u - Unknown"
 EArray( 10 ) = "z - Other"
 
@@ -396,13 +398,13 @@ End Function
 
 Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Const COMBO_BOX_CHANGE As Integer = 3   'The value for the state of a dialog box when a control changes.
-Const CONTROL_CHANGE   As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
-Const DISABLED         As Integer = 0   'The value to make a dialog box control disabled.
-Const DLG_EXIT_WITH_OK As Integer = -1  'The value to close the dialog box as if the OK button were clicked.
-Const ENABLED          As Integer = 1   'The value to make a dialog box control enabled.
-Const INITIALIZE       As Integer = 1   'The value of the dialog box function parameter "Action%" when the dialog box opens.
-Const KEEP_DLG_OPEN    As Integer = -1  'The value of the dialog box function to keep a dialog box open.
+Const COMBO_BOX_CHANGE As Integer = 3
+Const CONTROL_CHANGE   As Integer = 2
+Const DISABLED         As Integer = 0
+Const DLG_EXIT_WITH_OK As Integer = -1
+Const ENABLED          As Integer = 1
+Const INITIALIZE       As Integer = 1
+Const KEEP_DLG_OPEN    As Integer = -1
 
 Dim QUOTE As String *2       : QUOTE        = Chr$( 034 )
 
@@ -439,6 +441,7 @@ Select Case Action%
         DlgEnable "OK",     DISABLED
         DlgText   "OK",     "Change 007"
     End If
+    DlgFocus  "Cancel"
 
   Case CONTROL_CHANGE
 
@@ -575,8 +578,4 @@ ProblemInput:
 End Select
 
 End Function
-'57921177
-'
-'Macro name: Show007Micro
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:59 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'58220746

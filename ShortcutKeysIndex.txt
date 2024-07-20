@@ -1,4 +1,4 @@
-'MacroName:ShortcutKeysIndex.2023.48
+'MacroName:ShortcutKeysIndex.2024.09
 'MacroDescription:Shows all the keys used for all keyboard shortcuts (macros, menu
 ' commands, characters, and text strings), and lists all the shortcuts that employ a
 ' selected key. Copies lists of shortcuts to the Windows Clipboard. Allows searching for
@@ -7,8 +7,9 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 2 August 2023.
+' Last updated: 24 June 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -57,10 +58,11 @@
 '
 ' Lists of shortcut keys can be copied to the Windows Clipboard. You can produce a list
 ' of all the shortcuts used in the Client, or filter the shortcuts by type of item, and
-' decide whether to include app-assigned shortcuts. The output is a tab-delimited string,
-' able to be pasted into a word processing or spreadsheet program for further
-' manipulation. The list is arranged by key group, and within each group, alphabetically
-' by the base key.
+' decide whether to include app-assigned shortcuts. You can also limit the list to macros
+' in a single macro book. The output is a tab-delimited string, able to be pasted into a
+' word processing or spreadsheet program for further manipulation. A list produced from
+' all the shortcuts (filtered or not) is arranged by key group, and within each group,
+' alphabetically by the base key.
 '
 ' The Client stores user-assigned shortcuts in files in the user's profile folder; the
 ' default location for those files is "X:\Users\[username]\AppData\Roaming\OCLC\Connex\
@@ -131,9 +133,10 @@
 Option Explicit
 
 Declare Sub ClearShortcutDisplay
+Declare Sub CreateList
 Declare Sub DisplayShortcuts
-Declare Sub FillCopyArray
 Declare Sub FillDisplayStores     ( TypeOfKey() As String, SelectedKey$ )
+Declare Sub FillNamesOfKeysArray
 Declare Sub FillPresetArrays
 Declare Sub FillTempSearchArray   ( ArrayID% )
 Declare Sub FillTypeOfKeyArrays   ( AssignedKeys() As String )
@@ -141,7 +144,6 @@ Declare Sub FindKeymapFiles       ( PathName$ )
 Declare Sub FixLineBreaksInArray  ( LineEnd$ )
 Declare Sub GetShortcutsFromFile
 Declare Sub GetTextStringsFromFile
-Declare Sub MakeListForClipboard
 Declare Sub PutFileIntoArrays     ( FilePath$ )
 Declare Sub ReadFileFromDrive     ( FileName$ )
 Declare Sub ReadOptionsFile       ( SelectedProfilePath$ )
@@ -158,16 +160,19 @@ Declare Function SearchDialogs    ( InString$ )                    As String
 Declare Function SetupKeyPage     ( InString$ )                    As String
 Declare Function UnicodeConvert   ( InString$ )                    As String
 
-Declare Function SearchResultsDialogsControlFunction( Id$, Action%, SValue& )
-Declare Function CopyListDialogControlFunction      ( Id$, Action%, SValue& )
+Declare Function CreateListDialogControlFunction    ( Id$, Action%, SValue& )
 Declare Function MainDialogControlFunction          ( Id$, Action%, SValue& )
 Declare Function SearchDialogControlFunction        ( Id$, Action%, SValue& )
+Declare Function SearchResultsDialogsControlFunction( Id$, Action%, SValue& )
 
 Global Const APP_ASSIGNED_COUNT  As Integer = 185    'The number of the Client's built-in shortcuts for menu commands and
                                                      ' characters (actually 187).
 Global Const MAX_LEN_STRING      As Integer = 30000  'The constant for the maximum string size in this macro is based on an
                                                      ' OML memory limit, even though OML claims to be able to handle a string
                                                      ' length of up to 32,767 bytes.
+Global Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9   'The Error value returned when the upper bound of an uninitialized array is
+                                                     ' requested.
+
 Global Const VARIANT_IS_INTEGER  As Integer = 2
 
 Global Const CHECKED             As Integer = 1
@@ -248,16 +253,16 @@ Global [Function keys Count]     As Integer
 Global [Number keypad Count]     As Integer
 Global [Other keys Count]        As Integer
 
-Global CancelCopy
+Global CancelCreate
 Global FirstPass
 Global IncludeAppAssignments
 
 Global AlphaNums      ( 36 )     As String
 Global Characters     ( 1, 102 ) As String
-Global CopyKeys       ( 1, 50 )  As String
 Global Functions      ( 12 )     As String
 Global ItemCategories ( 4 )      As String
 Global KeyGroup       ( 4 )      As String
+Global NamesOfKeys       ( 1, 50 )  As String
 Global NumPadDisplay  ( 28 )     As String
 Global NumPadOCLC     ( 28 )     As String
 Global OthersDisplay  ( 32 )     As String
@@ -289,24 +294,20 @@ Sub Main
 
 Const CRITICAL_MESSAGE     As Integer = 16
 Const DIRECTORY            As Integer = 16   'The attribute indicating the path name is a directory.
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128  'Maximum number of reads of environment strings to try.
 
 Dim AppData$
-Dim EnvironmentString$
 Dim FileAttribute%
 Dim KeyboardInputMsg$
 Dim ProfileName$
 Dim Select3Things$           : Select3Things$ = "Select a category (optional), a key group, and a key:"
 
-Erase CopiedShortcuts
 Dim i As Integer, p As Integer, q As Integer, x As Integer
 
 NULL_CHAR             = Chr$( 0 )
-CancelCopy            = TRUE
+CancelCreate          = TRUE
 CRLF_ASCII            = Chr$( 013 ) & Chr$( 010 )
 CRLF_UNICODE          = Chr$( 013 ) & NULL_CHAR & Chr$( 010 ) & NULL_CHAR
 DOUBLE_QUOTE          = Chr$( 034 )
-FileProblem$          = ""
 FirstPass             = TRUE
 IncludeAppAssignments = TRUE
 IndexOfCustom         = NULL_CHAR
@@ -321,16 +322,10 @@ XML_SUFFIX            = ".xml"
 ' letter of the drive. The first part of this path, which tells what X and the user name
 ' are, is given in the "APPDATA" variable.
 
-i = 1
-Do
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppData$ = Mid$( EnvironmentString$, 9 )
-      Exit Do
-  End If
-  i = i + 1
-Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
-If i = 1 Or i > MAX_ATTEMPTS_ENVIRON Then GoTo FileFailure:
+AppData$ = Environ( "APPDATA" )
+If AppData$ = "" Then
+    GoTo FileFailure:
+End If
 
 ProfilesFolderPath$ = AppData$ & "\OCLC\Connex\Profiles\"
 
@@ -405,7 +400,7 @@ Begin Dialog MainDialogDefinition  348, 196, WaltsMacros, .MainDialogControlFunc
   TextBox       325,  19,   8,  12,                            .KeyboardInputTextBox
   PushButton    286, 172,  52,  14, "Cl&ose",                  .MainDialogCloseButton
   CancelButton   30,  21,   1,   1
-  PushButton    226, 172,  52,  14, "&Copy...",                .CopyButton
+  PushButton    226, 172,  52,  14, "&Create list...",                .CreateListButton
   PushButton    166, 172,  52,  14, "&Search...",              .SearchButton
   Text          126,  37, 136,  12, "",                        .ShortcutKeyCount
   PushButton    267,  35,  56,  12, "&Keyboard input",         .KeyboardInputButton
@@ -475,6 +470,338 @@ DlgText         "Label_CTRL_ALT_SHIFT",   ""
 
 ReDim KeyStore( 0 )
 ReDim ValStore( 0 )
+
+End Sub
+
+'****************************************************************************************
+
+Sub CreateList
+
+' This routine assembles all the character arrays to produce a tab-delimited string to
+' put on the clipboard.
+
+Const WARNING_MESSAGE As Integer = 48
+
+Dim AppDataPath$
+Dim CategoryString$
+Dim CopiedShortcutsString$
+Dim DateString$
+Dim Header$
+Dim MacroBookFile$
+Dim MacroBookName$
+Dim MacroDirectoryFiles$
+Dim MacroDirectoryPath$
+Dim OutputFooter$
+Dim OutputHeader$
+Dim SelectedMacroBook$
+Dim TempKey$
+Dim TempString$
+Dim UBCopiedShortcuts%
+
+Dim Macrobooks() As String
+
+Dim i As Integer, j As Integer, p As Integer, z As Integer
+
+Header$ = "Create a list of shortcut keys and put it on the Clipboard for:"
+
+' Get a list of all the macro books in the "Macros" folder.
+
+AppDataPath$         = Environ( "APPDATA" )
+MacroDirectoryPath$  = AppDataPath$ & "\OCLC\Connex\Macros\"
+MacroDirectoryFiles$ = MacroDirectoryPath$ & "*.mbk"
+MacroBookFile$       = Dir( MacroDirectoryFiles$ )
+Do While MacroBookFile$ <> ""
+  MacroBookName$  = Left$( MacroBookFile$, Len( MacroBookFile$ ) - 4 )
+  ReDim Preserve Macrobooks( i )
+  Macrobooks( i ) = MacroBookName$
+  i               = i + 1
+  MacroBookFile$  = Dir
+Loop
+
+' The dialog box offers two choices: To produce a list of all shortcuts, or those in a
+' single macro book. For the first choice, it is possible to filter the output,
+' restricting the list to certain items. The default filter matches whatever has been set
+' up in the main dialog box. If the main dialog box is showing only macros, for example,
+' this dialog box defaults to including only macros in its output. But this default
+' filtering can be overridden.
+
+Begin Dialog CopyListDialogDefinition  210, 150, WaltsMacros$, .CreateListDialogControlFunction
+  OkButton        88, 126,  52,  14
+  CancelButton   148, 126,  52,  14
+  CheckBox        30,  42,  64,  12, "Macros",                                                .CheckBoxMacro
+  CheckBox        30,  54,  64,  12, "Characters",                                            .CheckBoxCharacter
+  CheckBox        30,  66,  64,  12, "Text strings",                                          .CheckBoxText
+  CheckBox        30,  78,  64,  12, "Menu items",                                            .CheckBoxCommand
+  CheckBox       112,  42,  48,  12, "From app",                                              .CheckBoxIncludeApp
+  OptionGroup                                                                                 .ListSource
+   OptionButton   10,  18,  88,  12, "&All keys",                                             .AllShortcuts
+   OptionButton   10,  96,  90,  12, "&Macros in a macro book:",                              .MacroBook
+  DropListBox    104,  96,  96,  80, Macrobooks(),                                            .MacrobookList
+  Text            10,   6, 190,   8, Header$
+  Text            22,  32, 128,   8, "Include these key assignments in the list:",            .IncludePrompt
+  Text            26,  92,  80,  16, "Please select at least one category!",                  .SelectPrompt
+  Text           124,  54,  82,  24, "(User-assigned keys are always included in the list.)", .AlwaysIncluded
+  GroupBox        10, 116, 192,   2, ""
+  Text             9, 118, 192,   4, ""
+  Text             8, 114,   4,   4, ""
+  Text           199, 114,   6,   4, ""
+End Dialog
+
+Dim CopyListDialog As CopyListDialogDefinition
+If Dialog( CopyListDialog ) <> 0 Then
+    CancelCreate = FALSE
+  Else
+    Exit Sub
+End If
+
+If CopyListDialog.ListSource = 0 Then
+
+    If CopyListDialog.CheckBoxIncludeApp = CHECKED Then
+        IncludeAppAssignments = TRUE
+      Else
+        IncludeAppAssignments = FALSE
+    End If
+
+' The category filter simply assembles a text string of all the categories; if the
+' category of the key assignment is in that string, that assignment will be added.
+
+    If CopyListDialog.CheckBoxMacro = CHECKED Then
+        CategoryString$ = CategoryString$ & "Macro"
+    End If
+
+    If CopyListDialog.CheckBoxCharacter = CHECKED Then
+        CategoryString$ = CategoryString$ & "Character"
+    End If
+
+    If CopyListDialog.CheckBoxText = CHECKED Then
+        CategoryString$ = CategoryString$ & "Text"
+    End If
+
+    If CopyListDialog.CheckBoxCommand = CHECKED Then
+        CategoryString$ = CategoryString$ & "Command"
+    End If
+
+    If [A-Z Count] > 0 Then
+        ReDim CopiedShortcuts( 2 )
+        CopiedShortcuts( 0 ) = "ALPHANUMERIC KEYS"
+        CopiedShortcuts( 1 ) = ""
+        Call SelectShortcutsToCopy( [A-Z](), 2, CategoryString$ )
+    End If
+
+    If [0-9 Count] > 0 Then
+        z = UBound( CopiedShortcuts ) + 1
+        Call SelectShortcutsToCopy( [0-9](), z, CategoryString$ )
+    End If
+
+' If nothing has been added, include a note indicating that.
+
+    If UBound( CopiedShortcuts ) = 2 Then
+        CopiedShortcuts( 2 ) = "None assigned."
+    End If
+
+    If [Function keys Count] > 0 Then
+        z = UBound( CopiedShortcuts ) + 4
+        ReDim Preserve CopiedShortcuts( z )
+        CopiedShortcuts( z - 3 ) = ""
+        CopiedShortcuts( z - 2 ) = "FUNCTION KEYS"
+        CopiedShortcuts( z - 1 ) = ""
+        Call SelectShortcutsToCopy( [Function keys](), z, CategoryString$ )
+    End If
+
+    If UBound( CopiedShortcuts ) = z Then
+        CopiedShortcuts( z ) = "None assigned."
+    End If
+
+    If [Other keys Count] > 0 Then
+        z = UBound( CopiedShortcuts ) + 4
+        ReDim Preserve CopiedShortcuts( z )
+        CopiedShortcuts( z - 3 ) = ""
+        CopiedShortcuts( z - 2 ) = "OTHER KEYS"
+        CopiedShortcuts( z - 1 ) = ""
+        Call SelectShortcutsToCopy( [Other keys](), z, CategoryString$ )
+    End If
+
+    If UBound( CopiedShortcuts ) = z Then
+        CopiedShortcuts( z ) = "None assigned."
+    End If
+
+    If [Number keypad Count] > 0 Then
+        z = UBound( CopiedShortcuts ) + 4
+        ReDim Preserve CopiedShortcuts( z )
+        CopiedShortcuts( z - 3 ) = ""
+        CopiedShortcuts( z - 2 ) = "NUMBER KEYPAD"
+        CopiedShortcuts( z - 1 ) = ""
+        Call SelectShortcutsToCopy( [Number keypad](), z, CategoryString$ )
+    End If
+
+    If UBound( CopiedShortcuts ) = z Then
+        CopiedShortcuts( z ) = "None assigned."
+    End If
+
+    If UBound( CopiedShortcuts ) > 0 Then
+        For i = 0 To UBound( CopiedShortcuts )
+          TempString$ = CopiedShortcuts( i )
+          If Left$( TempString$, 3 ) Like "F[9][0-2]" Then
+              Mid$( CopiedShortcuts( i ), 2, 1 ) = "1"
+          End If
+        Next i
+    End If
+
+' Set some explanatory text in the copied string.
+
+    Select Case CategoryString$
+
+      Case "Character"
+        CategoryString$ = "Selected category: Characters."
+      Case "CharacterCommand"
+        CategoryString$ = "Selected categories: Characters and menu items."
+      Case "CharacterText"
+        CategoryString$ = "Selected categories: Characters and text strings."
+      Case "CharacterTextCommand"
+        CategoryString$ = "Selected categories: Characters, menu items, and text strings."
+      Case "Command"
+        CategoryString$ = "Selected category: Menu items."
+      Case "Macro"
+        CategoryString$ = "Selected category: Macros."
+      Case "MacroCharacter"
+        CategoryString$ = "Selected categories: Characters and macros."
+      Case "MacroCharacterCommand"
+        CategoryString$ = "Selected categories: Characters, macros, and menu items."
+      Case "MacroCharacterText"
+        CategoryString$ = "Selected categories: Characters, macros, and text strings."
+      Case "MacroCharacterTextCommand"
+        CategoryString$ = "All categories shown."
+      Case "MacroCommand"
+        CategoryString$ = "Selected categories: Macros and menu items."
+      Case "MacroText"
+        CategoryString$ = "Selected categories: Macros and text strings."
+      Case "MacroTextCommand"
+        CategoryString$ = "Selected categories: Macros, menu items, and text strings."
+      Case "Text"
+        CategoryString$ = "Selected category: Text strings."
+      Case "TextCommand"
+        CategoryString$ = "Selected categories: Menu items and text strings."
+
+    End Select
+
+    OutputHeader$ = "Shortcut keys in " & FilePath$ & XML_SUFFIX & CRLF_ASCII
+    If IncludeAppAssignments Then
+        OutputHeader$ = OutputHeader$ & "Includes app-assigned shortcut keys. "
+    End If
+    OutputHeader$ = OutputHeader$ & CategoryString$ & CRLF_ASCII & CRLF_ASCII
+
+  Else
+
+    SelectedMacroBook$ = Macrobooks( CopyListDialog.MacrobookList ) & "!"
+    i = 0
+
+    If [A-Z Count] > 0 Then
+        For j = 0 To [A-Z Count] - 1
+          If InStr( [A-Z]( j ), SelectedMacroBook$ ) > 0 Then
+              ReDim Preserve CopiedShortcuts( i )
+              CopiedShortcuts( i ) = [A-Z]( j )
+              i = i + 1
+          End If
+        Next j
+    End If
+
+    If [0-9 Count] > 0 Then
+        For j = 0 To [0-9 Count] - 1
+          If InStr( [0-9]( j ), SelectedMacroBook$ ) > 0 Then
+              ReDim Preserve CopiedShortcuts( i )
+              CopiedShortcuts( i ) = [0-9]( j )
+              i = i + 1
+          End If
+        Next j
+    End If
+
+    If [Function keys Count] > 0 Then
+        For j = 0 To [Function keys Count] - 1
+          If InStr( [Function keys]( j ), SelectedMacroBook$ ) > 0 Then
+              ReDim Preserve CopiedShortcuts( i )
+              CopiedShortcuts( i ) = [Function keys]( j )
+              i = i + 1
+          End If
+        Next j
+    End If
+
+    If [Number keypad Count] > 0 Then
+        For j = 0 To [Number keypad Count] - 1
+          If InStr( [Number keypad]( j ), SelectedMacroBook$ ) > 0 Then
+              ReDim Preserve CopiedShortcuts( i )
+              CopiedShortcuts( i ) = [Number keypad]( j )
+              i = i + 1
+          End If
+        Next j
+    End If
+
+    If [Other keys Count] > 0 Then
+        For j = 0 To [Other keys Count] - 1
+          If InStr( [Other keys]( j ), SelectedMacroBook$ ) > 0 Then
+              ReDim Preserve CopiedShortcuts( i )
+              CopiedShortcuts( i ) = [Other keys]( j )
+              i = i + 1
+          End If
+        Next j
+    End If
+
+' Delete the category of item and name of the macro book, as both of those pieces of
+' information are redundant. Also fix the names of certain keys (this action was done by
+' the "SelectShortcutsToCopy" function, which was called when making a list from all
+' shortcuts).
+
+    SelectedMacroBook$ = Left$( SelectedMacroBook$, Len( SelectedMacroBook$ ) - 1 )
+    On Error Resume Next
+    UBCopiedShortcuts% = UBound( CopiedShortcuts )
+    If Err = SUBSCRIPT_OUT_OF_RANGE Then
+        MsgBox "There are no shortcut keys assigned to any of the macros in the macro book " & DOUBLE_QUOTE & SelectedMacroBook$ & DOUBLE_QUOTE & "!", WARNING_MESSAGE, WaltsMacros$
+        CancelCreate = TRUE
+        Exit Sub
+    End If
+    For i = 0 To UBCopiedShortcuts%
+      TempString$ = CopiedShortcuts( i )
+      p           = InStr( TempString$, SelectedMacroBook$ & "!" )
+      TempString$ = Left$( TempString$, p - 7 ) & Mid$( TempString$, p + Len( SelectedMacroBook$ ) + 1 )
+      For j = 0 To 50
+        TempKey$ = NamesOfKeys( aOCLC, j )
+        If Left$( TempString$, Len( TempKey$ ) ) = TempKey$ Then
+            TempString$ = NamesOfKeys( aCOPY, j ) & Mid$( TempString$, Len( TempKey$ ) + 1 )
+            Exit For
+        End If
+      Next j
+      CopiedShortcuts( i ) = TempString$
+    Next i
+
+    OutputHeader$ = "Shortcut keys in macro book " & DOUBLE_QUOTE & SelectedMacroBook$ & DOUBLE_QUOTE & ":" & CRLF_ASCII & CRLF_ASCII
+
+End If
+
+' Assemble the output string.
+
+DateString$   = Date$ & " " & Time$
+DateString$   = Format( DateString$, "General Date" )
+OutputFooter$ = "This list was created " & DateString$ & " using the " & DOUBLE_QUOTE & "ShortcutKeysIndex" & DOUBLE_QUOTE & " macro by Walter F. Nickeson."
+
+UBCopiedShortcuts% = UBound( CopiedShortcuts )
+For i = 0 To UBCopiedShortcuts%
+  CopiedShortcutsString$ = CopiedShortcutsString$ & CopiedShortcuts( i ) & CRLF_ASCII
+Next i
+
+CopiedShortcutsString$ = OutputHeader$ & CopiedShortcutsString$
+CopiedShortcutsString$ = CopiedShortcutsString$ & CRLF_ASCII
+CopiedShortcutsString$ = CopiedShortcutsString$ & OutputFooter$
+
+On Error GoTo Problem:
+
+Clipboard.Clear
+Clipboard.SetText CopiedShortcutsString$
+MsgBox "List of shortcut keys copied to the Clipboard.", INFORMATION_MESSAGE, WaltsMacros$
+
+Exit Sub
+
+Problem:
+
+MsgBox "Sorry, there was a problem copying the list to the Clipboard.", WARNING_MESSAGE, WaltsMacros$
 
 End Sub
 
@@ -559,6 +886,69 @@ For i = 0 To UBound( TypeOfKey )
       If KeyCount% > 0 Then Exit For
   End If
 Next i
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillNamesOfKeysArray
+
+' This array fixes up display of the OCLC names in a copied list. Non-character keys are
+' capitalized, and other keys are spelled out in full and made consistent. For example,
+' the Client uses the word "Pipe" in the list of keys it has assigned, but "Oem5" for the
+' same character when assigned by the user.
+
+NamesOfKeys( aOCLC, 0  ) = "Add"           : NamesOfKeys( aCOPY, 0  ) = "Add"
+NamesOfKeys( aOCLC, 1  ) = "Apps"          : NamesOfKeys( aCOPY, 1  ) = "MENU"
+NamesOfKeys( aOCLC, 2  ) = "Capital"       : NamesOfKeys( aCOPY, 2  ) = "CAPS LOCK"
+NamesOfKeys( aOCLC, 3  ) = "Clear"         : NamesOfKeys( aCOPY, 3  ) = "CLEAR"
+NamesOfKeys( aOCLC, 4  ) = "CloseBrackets" : NamesOfKeys( aCOPY, 4  ) = "Right bracket"
+NamesOfKeys( aOCLC, 5  ) = "Comma"         : NamesOfKeys( aCOPY, 5  ) = "Comma"
+NamesOfKeys( aOCLC, 6  ) = "Decimal"       : NamesOfKeys( aCOPY, 6  ) = "Period"
+NamesOfKeys( aOCLC, 7  ) = "Del"           : NamesOfKeys( aCOPY, 7  ) = "DELETE"
+NamesOfKeys( aOCLC, 8  ) = "Divide"        : NamesOfKeys( aCOPY, 8  ) = "Divide"
+NamesOfKeys( aOCLC, 9  ) = "Down Arrow"    : NamesOfKeys( aCOPY, 9  ) = "DOWN ARROW"
+NamesOfKeys( aOCLC, 10 ) = "End"           : NamesOfKeys( aCOPY, 10 ) = "END"
+NamesOfKeys( aOCLC, 11 ) = "Enter"         : NamesOfKeys( aCOPY, 11 ) = "ENTER"
+NamesOfKeys( aOCLC, 12 ) = "Equal"         : NamesOfKeys( aCOPY, 12 ) = "Equal"
+NamesOfKeys( aOCLC, 13 ) = "Escape"        : NamesOfKeys( aCOPY, 13 ) = "ESCAPE"
+NamesOfKeys( aOCLC, 14 ) = "Grave"         : NamesOfKeys( aCOPY, 14 ) = "Grave"
+NamesOfKeys( aOCLC, 15 ) = "Home"          : NamesOfKeys( aCOPY, 15 ) = "HOME"
+NamesOfKeys( aOCLC, 16 ) = "Ins"           : NamesOfKeys( aCOPY, 16 ) = "INSERT"
+NamesOfKeys( aOCLC, 17 ) = "Left"          : NamesOfKeys( aCOPY, 17 ) = "LEFT ARROW"
+NamesOfKeys( aOCLC, 18 ) = "LWin"          : NamesOfKeys( aCOPY, 18 ) = "LEFT WINDOWS"
+NamesOfKeys( aOCLC, 19 ) = "Minus"         : NamesOfKeys( aCOPY, 19 ) = "Minus"
+NamesOfKeys( aOCLC, 20 ) = "Multiply"      : NamesOfKeys( aCOPY, 20 ) = "Multiply"
+NamesOfKeys( aOCLC, 21 ) = "NumLock"       : NamesOfKeys( aCOPY, 21 ) = "NUMLOCK"
+NamesOfKeys( aOCLC, 22 ) = "NumPad0"       : NamesOfKeys( aCOPY, 22 ) = "Number pad 0"
+NamesOfKeys( aOCLC, 23 ) = "NumPad1"       : NamesOfKeys( aCOPY, 23 ) = "Number pad 1"
+NamesOfKeys( aOCLC, 24 ) = "NumPad2"       : NamesOfKeys( aCOPY, 24 ) = "Number pad 2"
+NamesOfKeys( aOCLC, 25 ) = "NumPad3"       : NamesOfKeys( aCOPY, 25 ) = "Number pad 3"
+NamesOfKeys( aOCLC, 26 ) = "NumPad4"       : NamesOfKeys( aCOPY, 26 ) = "Number pad 4"
+NamesOfKeys( aOCLC, 27 ) = "NumPad5"       : NamesOfKeys( aCOPY, 27 ) = "Number pad 5"
+NamesOfKeys( aOCLC, 28 ) = "NumPad6"       : NamesOfKeys( aCOPY, 28 ) = "Number pad 6"
+NamesOfKeys( aOCLC, 29 ) = "NumPad7"       : NamesOfKeys( aCOPY, 29 ) = "Number pad 7"
+NamesOfKeys( aOCLC, 30 ) = "NumPad8"       : NamesOfKeys( aCOPY, 30 ) = "Number pad 8"
+NamesOfKeys( aOCLC, 31 ) = "NumPad9"       : NamesOfKeys( aCOPY, 31 ) = "Number pad 9"
+NamesOfKeys( aOCLC, 32 ) = "Oem1"          : NamesOfKeys( aCOPY, 32 ) = "Semicolon"
+NamesOfKeys( aOCLC, 33 ) = "Oem5"          : NamesOfKeys( aCOPY, 33 ) = "Backward slash"
+NamesOfKeys( aOCLC, 34 ) = "Oem6"          : NamesOfKeys( aCOPY, 34 ) = "Right bracket"
+NamesOfKeys( aOCLC, 35 ) = "Oem7"          : NamesOfKeys( aCOPY, 35 ) = "Quotes"
+NamesOfKeys( aOCLC, 36 ) = "OpenBrackets"  : NamesOfKeys( aCOPY, 36 ) = "Left bracket"
+NamesOfKeys( aOCLC, 37 ) = "Pause"         : NamesOfKeys( aCOPY, 37 ) = "PAUSE"
+NamesOfKeys( aOCLC, 38 ) = "Period"        : NamesOfKeys( aCOPY, 38 ) = "Period"
+NamesOfKeys( aOCLC, 39 ) = "PgDn"          : NamesOfKeys( aCOPY, 39 ) = "PAGE DOWN"
+NamesOfKeys( aOCLC, 40 ) = "PgUp Arrow"    : NamesOfKeys( aCOPY, 40 ) = "PAGE UP"
+NamesOfKeys( aOCLC, 41 ) = "Pipe"          : NamesOfKeys( aCOPY, 41 ) = "Backward slash"
+NamesOfKeys( aOCLC, 42 ) = "PrintScreen"   : NamesOfKeys( aCOPY, 42 ) = "PRINTSCREEN"
+NamesOfKeys( aOCLC, 43 ) = "Question"      : NamesOfKeys( aCOPY, 43 ) = "Question"
+NamesOfKeys( aOCLC, 44 ) = "Right"         : NamesOfKeys( aCOPY, 44 ) = "RIGHT ARROW"
+NamesOfKeys( aOCLC, 45 ) = "RWin"          : NamesOfKeys( aCOPY, 45 ) = "RIGHT WINDOWS"
+NamesOfKeys( aOCLC, 46 ) = "Scroll"        : NamesOfKeys( aCOPY, 46 ) = "SCROLL"
+NamesOfKeys( aOCLC, 47 ) = "Space"         : NamesOfKeys( aCOPY, 47 ) = "Space"
+NamesOfKeys( aOCLC, 48 ) = "Subtract"      : NamesOfKeys( aCOPY, 48 ) = "Subtract"
+NamesOfKeys( aOCLC, 49 ) = "Tab"           : NamesOfKeys( aCOPY, 49 ) = "TAB"
+NamesOfKeys( aOCLC, 50 ) = "Up Arrow"      : NamesOfKeys( aCOPY, 50 ) = "UP ARROW"
 
 End Sub
 
@@ -1019,69 +1409,6 @@ End Sub
 
 '****************************************************************************************
 
-Sub FillCopyArray
-
-' This array fixes up display of the OCLC names in a copied list. Non-character keys are
-' capitalized, and other keys are spelled out in full and made consistent. For example,
-' the Client uses the word "Pipe" in the list of keys it has assigned, but "Oem5" for the
-' same character when assigned by the user.
-
-CopyKeys( aOCLC, 0  ) = "Add"           : CopyKeys( aCOPY, 0  ) = "Add"
-CopyKeys( aOCLC, 1  ) = "Apps"          : CopyKeys( aCOPY, 1  ) = "MENU"
-CopyKeys( aOCLC, 2  ) = "Capital"       : CopyKeys( aCOPY, 2  ) = "CAPS LOCK"
-CopyKeys( aOCLC, 3  ) = "Clear"         : CopyKeys( aCOPY, 3  ) = "CLEAR"
-CopyKeys( aOCLC, 4  ) = "CloseBrackets" : CopyKeys( aCOPY, 4  ) = "Right bracket"
-CopyKeys( aOCLC, 5  ) = "Comma"         : CopyKeys( aCOPY, 5  ) = "Comma"
-CopyKeys( aOCLC, 6  ) = "Decimal"       : CopyKeys( aCOPY, 6  ) = "Period"
-CopyKeys( aOCLC, 7  ) = "Del"           : CopyKeys( aCOPY, 7  ) = "DELETE"
-CopyKeys( aOCLC, 8  ) = "Divide"        : CopyKeys( aCOPY, 8  ) = "Divide"
-CopyKeys( aOCLC, 9  ) = "Down Arrow"    : CopyKeys( aCOPY, 9  ) = "DOWN ARROW"
-CopyKeys( aOCLC, 10 ) = "End"           : CopyKeys( aCOPY, 10 ) = "END"
-CopyKeys( aOCLC, 11 ) = "Enter"         : CopyKeys( aCOPY, 11 ) = "ENTER"
-CopyKeys( aOCLC, 12 ) = "Equal"         : CopyKeys( aCOPY, 12 ) = "Equal"
-CopyKeys( aOCLC, 13 ) = "Escape"        : CopyKeys( aCOPY, 13 ) = "ESCAPE"
-CopyKeys( aOCLC, 14 ) = "Grave"         : CopyKeys( aCOPY, 14 ) = "Grave"
-CopyKeys( aOCLC, 15 ) = "Home"          : CopyKeys( aCOPY, 15 ) = "HOME"
-CopyKeys( aOCLC, 16 ) = "Ins"           : CopyKeys( aCOPY, 16 ) = "INSERT"
-CopyKeys( aOCLC, 17 ) = "Left"          : CopyKeys( aCOPY, 17 ) = "LEFT ARROW"
-CopyKeys( aOCLC, 18 ) = "LWin"          : CopyKeys( aCOPY, 18 ) = "LEFT WINDOWS"
-CopyKeys( aOCLC, 19 ) = "Minus"         : CopyKeys( aCOPY, 19 ) = "Minus"
-CopyKeys( aOCLC, 20 ) = "Multiply"      : CopyKeys( aCOPY, 20 ) = "Multiply"
-CopyKeys( aOCLC, 21 ) = "NumLock"       : CopyKeys( aCOPY, 21 ) = "NUMLOCK"
-CopyKeys( aOCLC, 22 ) = "NumPad0"       : CopyKeys( aCOPY, 22 ) = "Number pad 0"
-CopyKeys( aOCLC, 23 ) = "NumPad1"       : CopyKeys( aCOPY, 23 ) = "Number pad 1"
-CopyKeys( aOCLC, 24 ) = "NumPad2"       : CopyKeys( aCOPY, 24 ) = "Number pad 2"
-CopyKeys( aOCLC, 25 ) = "NumPad3"       : CopyKeys( aCOPY, 25 ) = "Number pad 3"
-CopyKeys( aOCLC, 26 ) = "NumPad4"       : CopyKeys( aCOPY, 26 ) = "Number pad 4"
-CopyKeys( aOCLC, 27 ) = "NumPad5"       : CopyKeys( aCOPY, 27 ) = "Number pad 5"
-CopyKeys( aOCLC, 28 ) = "NumPad6"       : CopyKeys( aCOPY, 28 ) = "Number pad 6"
-CopyKeys( aOCLC, 29 ) = "NumPad7"       : CopyKeys( aCOPY, 29 ) = "Number pad 7"
-CopyKeys( aOCLC, 30 ) = "NumPad8"       : CopyKeys( aCOPY, 30 ) = "Number pad 8"
-CopyKeys( aOCLC, 31 ) = "NumPad9"       : CopyKeys( aCOPY, 31 ) = "Number pad 9"
-CopyKeys( aOCLC, 32 ) = "Oem1"          : CopyKeys( aCOPY, 32 ) = "Semicolon"
-CopyKeys( aOCLC, 33 ) = "Oem5"          : CopyKeys( aCOPY, 33 ) = "Backward slash"
-CopyKeys( aOCLC, 34 ) = "Oem6"          : CopyKeys( aCOPY, 34 ) = "Right bracket"
-CopyKeys( aOCLC, 35 ) = "Oem7"          : CopyKeys( aCOPY, 35 ) = "Quotes"
-CopyKeys( aOCLC, 36 ) = "OpenBrackets"  : CopyKeys( aCOPY, 36 ) = "Left bracket"
-CopyKeys( aOCLC, 37 ) = "Pause"         : CopyKeys( aCOPY, 37 ) = "PAUSE"
-CopyKeys( aOCLC, 38 ) = "Period"        : CopyKeys( aCOPY, 38 ) = "Period"
-CopyKeys( aOCLC, 39 ) = "PgDn"          : CopyKeys( aCOPY, 39 ) = "PAGE DOWN"
-CopyKeys( aOCLC, 40 ) = "PgUp Arrow"    : CopyKeys( aCOPY, 40 ) = "PAGE UP"
-CopyKeys( aOCLC, 41 ) = "Pipe"          : CopyKeys( aCOPY, 41 ) = "Backward slash"
-CopyKeys( aOCLC, 42 ) = "PrintScreen"   : CopyKeys( aCOPY, 42 ) = "PRINTSCREEN"
-CopyKeys( aOCLC, 43 ) = "Question"      : CopyKeys( aCOPY, 43 ) = "Question"
-CopyKeys( aOCLC, 44 ) = "Right"         : CopyKeys( aCOPY, 44 ) = "RIGHT ARROW"
-CopyKeys( aOCLC, 45 ) = "RWin"          : CopyKeys( aCOPY, 45 ) = "RIGHT WINDOWS"
-CopyKeys( aOCLC, 46 ) = "Scroll"        : CopyKeys( aCOPY, 46 ) = "SCROLL"
-CopyKeys( aOCLC, 47 ) = "Space"         : CopyKeys( aCOPY, 47 ) = "Space"
-CopyKeys( aOCLC, 48 ) = "Subtract"      : CopyKeys( aCOPY, 48 ) = "Subtract"
-CopyKeys( aOCLC, 49 ) = "Tab"           : CopyKeys( aCOPY, 49 ) = "TAB"
-CopyKeys( aOCLC, 50 ) = "Up Arrow"      : CopyKeys( aCOPY, 50 ) = "UP ARROW"
-
-End Sub
-
-'****************************************************************************************
-
 Sub FillTempSearchArray( WhichArray% )
 
 ' This is a temporary array used in the search function. Because the shortcut information
@@ -1093,36 +1420,42 @@ Dim UBArray%
 Dim i As Integer
 
 Select Case WhichArray%
+
   Case 0
     UBArray% = UBound( [0-9] )
     ReDim TempSearchArray( UBArray% )
     For i = 0 To UBArray%
       TempSearchArray( i ) = [0-9]( i )
     Next i
+
   Case 1
     UBArray% = UBound( [A-Z] )
     ReDim TempSearchArray( UBArray% )
     For i = 0 To UBound( [A-Z] )
       TempSearchArray( i ) = [A-Z]( i )
     Next i
+
   Case 2
     UBArray% = UBound( [Function keys] )
     ReDim TempSearchArray( UBArray% )
     For i = 0 To UBound( [Function keys] )
       TempSearchArray( i ) = [Function keys]( i )
     Next i
+
   Case 3
     UBArray% = UBound( [Number keypad] )
     ReDim TempSearchArray( UBArray% )
     For i = 0 To UBound( [Number keypad] )
       TempSearchArray( i ) = [Number keypad]( i )
     Next i
+
   Case 4
     UBArray% = UBound( [Other keys] )
     ReDim TempSearchArray( UBArray% )
     For i = 0 To UBound( [Other keys] )
       TempSearchArray( i ) = [Other keys]( i )
     Next i
+
 End Select
 
 End Sub
@@ -1165,18 +1498,23 @@ For i = 0 To UBInArray%
       End If
   End If
   TempString$ = BaseKey$ & ModifyingKeys$ & TAB_CHAR & AssignedKeys( aCATEGORY, i ) & TAB_CHAR & ActionString$
+
   If BaseKey$ Like "[A-Z]" Then
       Call SetRowInTypeOfKeyArray( [A-Z], TempString$, AddToTotalCount%, AddToCategoryCount$ )
       [A-Z Count]     = [A-Z Count] + AddToTotalCount%
+
     ElseIf BaseKey$ Like "[0-9]" Then
       Call SetRowInTypeOfKeyArray( [0-9], TempString$, AddToTotalCount%, AddToCategoryCount$ )
       [0-9 Count]     = [0-9 Count] + AddToTotalCount%
+
     ElseIf BaseKey$ Like "F[1-9]" Then
       Call SetRowInTypeOfKeyArray( [F1-F9], TempString$, AddToTotalCount%, AddToCategoryCount$ )
       [F1-F9 Count]   = [F1-F9 Count] + AddToTotalCount%
+
     ElseIf BaseKey$ Like "F1[0-9]" Then
       Call SetRowInTypeOfKeyArray( [F10-F12], TempString$, AddToTotalCount%, AddToCategoryCount$ )
       [F10-F12 Count] = [F10-F12 Count] + AddToTotalCount%
+
     Else
       KeyFound = FALSE
       For j = 0 To UBound( OthersOCLC )
@@ -1203,6 +1541,7 @@ For i = 0 To UBInArray%
               [Other keys Count] = [Other keys Count] + AddToTotalCount%
           End If
       End If
+
   End If
 
   If Left$( ActionString$, 4 ) = "(App" Then
@@ -1212,24 +1551,28 @@ For i = 0 To UBInArray%
   End If
 
   Select Case AddToCategoryCount$
+
     Case "Macro"
       If AssignedByApp Then
           AppMacroKeyCount% = AppMacroKeyCount% + 1
         Else
           UserMacroKeyCount% = UserMacroKeyCount% + 1
       End If
+
     Case "Character"
       If AssignedByApp Then
           AppCharacterKeyCount% = AppCharacterKeyCount% + 1
         Else
           UserCharacterKeyCount% = UserCharacterKeyCount% + 1
       End If
+
     Case "Command"
       If AssignedByApp Then
           AppCommandKeyCount% = AppCommandKeyCount% + 1
         Else
           UserCommandKeyCount% = UserCommandKeyCount% + 1
       End If
+
     Case "Text"
       If AssignedByApp Then
           AppTextKeyCount% = AppTextKeyCount% + 1
@@ -1259,11 +1602,13 @@ End If
 If [F1-F9 Count] > 0 Or [F10-F12 Count] > 0 Then
     ReDim [Function keys]( UBound( [F1-F9] ) )
 End If
+
 If [F1-F9 Count] > 0 Then
     For i = 0 To UBound( [F1-F9] )
     [Function keys]( i ) = [F1-F9]( i )
     Next i
 End If
+
 If [F10-F12 Count] > 0 Then
     z = UBound( [Function keys] ) + 1
     ReDim Preserve [Function keys]( z + UBound( [F10-F12] ) )
@@ -1271,6 +1616,7 @@ If [F10-F12 Count] > 0 Then
       [Function keys]( i ) = [F10-F12]( i - z )
     Next i
 End If
+
 [Function keys Count] = UBound( [Function keys] ) + 1
 
 TotalShortcutKeyCount% = [Alphanumeric key Count] + [Function keys Count] + [Number keypad Count] + [Other keys Count]
@@ -1368,7 +1714,7 @@ Sub GetShortcutsFromFile
 ' array.
 
 Dim CHECK_STRING_BEGINNING As String*18
-Dim CHECK_STRING_END As String*18
+Dim CHECK_STRING_END       As String*18
 
 Dim KeyType$
 Dim NextCRLF%
@@ -1528,204 +1874,16 @@ End Sub
 
 '****************************************************************************************
 
-Sub MakeListForClipboard
+Sub PutFileIntoArrays( FilePath$ )
 
-' This routine assembles all the character arrays to produce a tab-delimited string to
-' put on the clipboard.
-
-Const WARNING_MESSAGE As Integer = 48
-
-Dim CategoryString$
-Dim CopiedShortcutsString$
-Dim DateString$
-Dim Footer$
-Dim Header$
-Dim TempString$
-Dim UBCopiedShortcuts%
-
-Dim i As Integer, j As Integer, p As Integer, z As Integer
-
-' Offer the option to filter the output. The default filter matches whatever has been set
-' up in the main dialog box.
-
-Begin Dialog CopyListDialogDefinition  190, 124, WaltsMacros$, .CopyListDialogControlFunction
-  OkButton       68, 100,  52,  14
-  CancelButton  128, 100,  52,  14
-  CheckBox       16,  20,  64,  12, "Macros",                                                .CheckBoxMacro
-  CheckBox       16,  34,  64,  12, "Characters",                                            .CheckBoxCharacter
-  CheckBox       16,  48,  64,  12, "Text strings",                                          .CheckBoxText
-  CheckBox       16,  62,  64,  12, "Menu items",                                            .CheckBoxCommand
-  CheckBox      102,  20,  48,  12, "From app",                                              .CheckBoxIncludeApp
-  Text           10,   6, 128,   8, "Include these key assignments in the list:"
-  Text           16,  76,  80,  16, "Please select at least one category!",                  .IncludeCategories
-  Text          102,  34,  72,  24, "(User-assigned keys are always included in the list.)"
-End Dialog
-
-Dim CopyListDialog As CopyListDialogDefinition
-If Dialog( CopyListDialog ) <> 0 Then
-    CancelCopy = FALSE
+Call ReadFileFromDrive( FilePath$ & XML_SUFFIX )
+If FileProblem <> "" Then Exit Sub
+Call FixLineBreaksInArray( CRLF_UNICODE )
+If InStr( FilePath, "Keymap" ) Then
+    GetShortcutsFromFile
   Else
-    Exit Sub
+    GetTextStringsFromFile
 End If
-
-If CopyListDialog.CheckBoxIncludeApp = CHECKED Then
-    IncludeAppAssignments = TRUE
-  Else
-    IncludeAppAssignments = FALSE
-End If
-
-' The category filter simply assembles a text string of all the categories; if the
-' category of the key assignment is in that string, that assignment will be added.
-
-If CopyListDialog.CheckBoxMacro = CHECKED Then
-    CategoryString$ = CategoryString$ & "Macro"
-End If
-
-If CopyListDialog.CheckBoxCharacter = CHECKED Then
-    CategoryString$ = CategoryString$ & "Character"
-End If
-
-If CopyListDialog.CheckBoxText = CHECKED Then
-    CategoryString$ = CategoryString$ & "Text"
-End If
-
-If CopyListDialog.CheckBoxCommand = CHECKED Then
-    CategoryString$ = CategoryString$ & "Command"
-End If
-
-If [A-Z Count] > 0 Then
-    ReDim CopiedShortcuts( 2 )
-    CopiedShortcuts( 0 ) = "ALPHANUMERIC KEYS"
-    CopiedShortcuts( 1 ) = ""
-    Call SelectShortcutsToCopy( [A-Z](), 2, CategoryString$ )
-End If
-
-If [0-9 Count] > 0 Then
-    z = UBound( CopiedShortcuts ) + 1
-    Call SelectShortcutsToCopy( [0-9](), z, CategoryString$ )
-End If
-
-' If nothing has been added, include a note indicating that.
-
-If UBound( CopiedShortcuts ) = 2 Then
-    CopiedShortcuts( 2 ) = "None assigned."
-End If
-
-If [Function keys Count] > 0 Then
-    z = UBound( CopiedShortcuts ) + 4
-    ReDim Preserve CopiedShortcuts( z )
-    CopiedShortcuts( z - 3 ) = ""
-    CopiedShortcuts( z - 2 ) = "FUNCTION KEYS"
-    CopiedShortcuts( z - 1 ) = ""
-    Call SelectShortcutsToCopy( [Function keys](), z, CategoryString$ )
-End If
-
-If UBound( CopiedShortcuts ) = z Then
-    CopiedShortcuts( z ) = "None assigned."
-End If
-
-If [Other keys Count] > 0 Then
-    z = UBound( CopiedShortcuts ) + 4
-    ReDim Preserve CopiedShortcuts( z )
-    CopiedShortcuts( z - 3 ) = ""
-    CopiedShortcuts( z - 2 ) = "OTHER KEYS"
-    CopiedShortcuts( z - 1 ) = ""
-    Call SelectShortcutsToCopy( [Other keys](), z, CategoryString$ )
-End If
-
-If UBound( CopiedShortcuts ) = z Then
-    CopiedShortcuts( z ) = "None assigned."
-End If
-
-If [Number keypad Count] > 0 Then
-    z = UBound( CopiedShortcuts ) + 4
-    ReDim Preserve CopiedShortcuts( z )
-    CopiedShortcuts( z - 3 ) = ""
-    CopiedShortcuts( z - 2 ) = "NUMBER KEYPAD"
-    CopiedShortcuts( z - 1 ) = ""
-    Call SelectShortcutsToCopy( [Number keypad](), z, CategoryString$ )
-End If
-
-If UBound( CopiedShortcuts ) = z Then
-    CopiedShortcuts( z ) = "None assigned."
-End If
-
-If UBound( CopiedShortcuts ) > 0 Then
-    For i = 0 To UBound( CopiedShortcuts )
-      TempString$ = CopiedShortcuts( i )
-      If Left$( TempString$, 3 ) Like "F[9][0-2]" Then
-          Mid$( CopiedShortcuts( i ), 2, 1 ) = "1"
-      End If
-    Next i
-End If
-
-' Set some explanatory text in the copied string.
-
-Select Case CategoryString$
-
-  Case "Character"
-    CategoryString$ = "Selected category: Characters."
-  Case "CharacterCommand"
-    CategoryString$ = "Selected categories: Characters and menu items."
-  Case "CharacterText"
-    CategoryString$ = "Selected categories: Characters and text strings."
-  Case "CharacterTextCommand"
-    CategoryString$ = "Selected categories: Characters, menu items, and text strings."
-  Case "Command"
-    CategoryString$ = "Selected category: Menu items."
-  Case "Macro"
-    CategoryString$ = "Selected category: Macros."
-  Case "MacroCharacter"
-    CategoryString$ = "Selected categories: Characters and macros."
-  Case "MacroCharacterCommand"
-    CategoryString$ = "Selected categories: Characters, macros, and menu items."
-  Case "MacroCharacterText"
-    CategoryString$ = "Selected categories: Characters, macros, and text strings."
-  Case "MacroCharacterTextCommand"
-    CategoryString$ = "All categories shown."
-  Case "MacroCommand"
-    CategoryString$ = "Selected categories: Macros and menu items."
-  Case "MacroText"
-    CategoryString$ = "Selected categories: Macros and text strings."
-  Case "MacroTextCommand"
-    CategoryString$ = "Selected categories: Macros, menu items, and text strings."
-  Case "Text"
-    CategoryString$ = "Selected category: Text strings."
-  Case "TextCommand"
-    CategoryString$ = "Selected categories: Menu items and text strings."
-
-End Select
-
-Header$ = "Shortcut keys in " & FilePath$ & XML_SUFFIX & CRLF_ASCII
-If IncludeAppAssignments Then
-    Header$ = Header$ & "Includes app-assigned shortcut keys. "
-End If
-Header$ = Header$ & CategoryString$ & CRLF_ASCII & CRLF_ASCII
-
-DateString$ = Date$ & " " & Time$
-DateString$ = Format( DateString$, "General Date" )
-Footer$     = "This list was created " & DateString$ & " using the " & DOUBLE_QUOTE & "ShortcutKeysIndex" & DOUBLE_QUOTE & " macro by Walter F. Nickeson."
-
-UBCopiedShortcuts% = UBound( CopiedShortcuts )
-For i = 0 To UBCopiedShortcuts%
-  CopiedShortcutsString$ = CopiedShortcutsString$ & CopiedShortcuts( i ) & CRLF_ASCII
-Next i
-
-CopiedShortcutsString$ = Header$ & CopiedShortcutsString$
-CopiedShortcutsString$ = CopiedShortcutsString$ & CRLF_ASCII
-CopiedShortcutsString$ = CopiedShortcutsString$ & Footer$
-
-On Error GoTo Problem:
-
-Clipboard.Clear
-Clipboard.SetText CopiedShortcutsString$
-MsgBox "List of shortcut keys copied to the Clipboard.", INFORMATION_MESSAGE, WaltsMacros$
-
-Exit Sub
-
-Problem:
-
-MsgBox "Sorry, there was a problem copying the list to the Clipboard.", WARNING_MESSAGE, WaltsMacros$
 
 End Sub
 
@@ -1781,21 +1939,6 @@ Exit Sub
 ErrorHandler:
 
 FileProblem$ = "Sorry, could not read the file " & FileName$ & "."
-
-End Sub
-
-'****************************************************************************************
-
-Sub PutFileIntoArrays( FilePath$ )
-
-Call ReadFileFromDrive( FilePath$ & XML_SUFFIX )
-If FileProblem <> "" Then Exit Sub
-Call FixLineBreaksInArray( CRLF_UNICODE )
-If InStr( FilePath, "Keymap" ) Then
-    GetShortcutsFromFile
-  Else
-    GetTextStringsFromFile
-End If
 
 End Sub
 
@@ -2072,8 +2215,8 @@ For i = 0 To UBound( TypeOfKey )
                   p = 4
                 Else
                   For j = 0 To 50
-                    If KeyName$ = CopyKeys( aOCLC, j ) Then
-                        KeyName$ = CopyKeys( aCOPY, j )
+                    If KeyName$ = NamesOfKeys( aOCLC, j ) Then
+                        KeyName$ = NamesOfKeys( aCOPY, j )
                     End If
                   Next j
                 End If
@@ -2138,9 +2281,6 @@ Sub SetRowInTypeOfKeyArray( TypeOfKey() As String, KeymapString$, AddToTotalCoun
 
 ' This sub fills the array for the type of key selected with the lines from the keymap
 ' files, sorting the array as it fills it.
-
-Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9  'The Error value returned when the upper bound of an uninitialized array is
-                                             ' requested.
 
 Dim Candidate$
 Dim Incumbent$
@@ -2706,45 +2846,7 @@ End Function
 
 '****************************************************************************************
 
-Function SearchResultsDialogsControlFunction( Id$, Action%, SValue& )
-
-' This function synchronizes the list boxes when making selections in those boxes after a
-' search has been run.
-
-Dim ListSelection%
-
-Select Case Action%
-
-  Case CONTROL_CHANGE
-
-    Select Case Id$
-
-      Case "ListBoxNames"
-        ListSelection% = DlgValue( "ListBoxNames" )
-        DlgValue        "ListBoxKeys",            ListSelection%
-        On Error Resume Next
-        DlgValue        "ListBoxOther",           ListSelection%
-
-      Case "ListBoxKeys"
-        ListSelection% = DlgValue( "ListBoxKeys" )
-        DlgValue        "ListBoxNames",           ListSelection%
-        On Error Resume Next
-        DlgValue        "ListBoxOther",           ListSelection%
-
-      Case "ListBoxOther"
-        ListSelection% = DlgValue( "ListBoxOther" )
-        DlgValue        "ListBoxNames",           ListSelection%
-        DlgValue        "ListBoxKeys",            ListSelection%
-
-    End Select
-
-End Select
-
-End Function
-
-'****************************************************************************************
-
-Function CopyListDialogControlFunction( Id$, Action%, SValue& )
+Function CreateListDialogControlFunction( Id$, Action%, SValue& )
 
 ' This is the dialog box that controls what gets written to the clipboard. If filters are
 ' applied in the main dialog box, they are carried over to this box as a default set, but
@@ -2763,7 +2865,8 @@ Select Case Action%
     DlgValue        "CheckBoxCharacter",      UNCHECKED
     DlgValue        "CheckBoxText",           UNCHECKED
     DlgValue        "CheckBoxCommand",        UNCHECKED
-    DlgVisible      "IncludeCategories",      INVISIBLE
+    DlgVisible      "SelectPrompt",      INVISIBLE
+    DlgEnable       "MacrobookList",          DISABLED
 
     Select Case SelectedCategory$
 
@@ -2811,10 +2914,10 @@ Select Case Action%
 
         If DlgValue( "CheckBoxMacro" ) = UNCHECKED And DlgValue( "CheckBoxCharacter" ) = UNCHECKED And _
            DlgValue( "CheckBoxText" ) = UNCHECKED And DlgValue( "CheckBoxCommand" ) = UNCHECKED Then
-            DlgVisible      "IncludeCategories",      VISIBLE
+            DlgVisible      "SelectPrompt",      VISIBLE
             DlgEnable       "OK",                     DISABLED
           Else
-            DlgVisible      "IncludeCategories",      INVISIBLE
+            DlgVisible      "SelectPrompt",      INVISIBLE
             DlgEnable       "OK",                     ENABLED
             If ( DlgValue( "CheckBoxMacro" ) = CHECKED Or DlgValue( "CheckBoxText" ) = CHECKED ) And _
                ( DlgValue( "CheckBoxCharacter" ) = UNCHECKED And DlgValue( "CheckBoxCommand" ) = UNCHECKED ) Then
@@ -2823,6 +2926,28 @@ Select Case Action%
                 DlgValue        "CheckBoxIncludeApp",     CHECKED
             End If
         End If
+
+      Case "AllShortcuts"
+
+        DlgEnable       "MacrobookList",          DISABLED
+        DlgEnable       "CheckBoxMacro",          ENABLED
+        DlgEnable       "CheckBoxCharacter",      ENABLED
+        DlgEnable       "CheckBoxText",           ENABLED
+        DlgEnable       "CheckBoxCommand",        ENABLED
+        DlgEnable       "CheckBoxIncludeApp",     ENABLED
+        DlgEnable       "IncludePrompt",          ENABLED
+        DlgEnable       "AlwaysIncluded",           ENABLED
+
+      Case "MacroBook"
+
+        DlgEnable       "MacrobookList",          ENABLED
+        DlgEnable       "CheckBoxMacro",          DISABLED
+        DlgEnable       "CheckBoxCharacter",      DISABLED
+        DlgEnable       "CheckBoxText",           DISABLED
+        DlgEnable       "CheckBoxCommand",        DISABLED
+        DlgEnable       "CheckBoxIncludeApp",     DISABLED
+        DlgEnable       "IncludePrompt",          DISABLED
+        DlgEnable       "AlwaysIncluded",           DISABLED
 
     End Select
 
@@ -2946,11 +3071,11 @@ Select Case Action%
 
         DlgEnd 0
 
-      Case "CopyButton"
+      Case "CreateListButton"
 
-        FillCopyArray
-        MakeListForClipboard
-        If CancelCopy Then MainDialogControlFunction = KEEP_DLG_OPEN
+        FillNamesOfKeysArray
+        CreateList
+        If CancelCreate Then MainDialogControlFunction = KEEP_DLG_OPEN
 
       Case "DropListBoxProfiles", "DropListBoxKeymapFiles"
 
@@ -3337,8 +3462,42 @@ Select Case Action%
 End Select
 
 End Function
-'3341160559
-'
-'Macro name: ShortcutKeysIndex
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:05:13 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+
+'****************************************************************************************
+
+Function SearchResultsDialogsControlFunction( Id$, Action%, SValue& )
+
+' This function synchronizes the list boxes when making selections in those boxes after a
+' search has been run.
+
+Dim ListSelection%
+
+Select Case Action%
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "ListBoxNames"
+        ListSelection% = DlgValue( "ListBoxNames" )
+        DlgValue        "ListBoxKeys",            ListSelection%
+        On Error Resume Next
+        DlgValue        "ListBoxOther",           ListSelection%
+
+      Case "ListBoxKeys"
+        ListSelection% = DlgValue( "ListBoxKeys" )
+        DlgValue        "ListBoxNames",           ListSelection%
+        On Error Resume Next
+        DlgValue        "ListBoxOther",           ListSelection%
+
+      Case "ListBoxOther"
+        ListSelection% = DlgValue( "ListBoxOther" )
+        DlgValue        "ListBoxNames",           ListSelection%
+        DlgValue        "ListBoxKeys",            ListSelection%
+
+    End Select
+
+End Select
+
+End Function
+'3504167321

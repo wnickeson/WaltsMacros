@@ -1,4 +1,4 @@
-'MacroName:CopyFields.2023.03
+'MacroName:CopyFields.2024.01
 'MacroDescription:Copies multiple fields from one bibliographic record and returns to
 ' another to paste them in. The copied fields can be a block of contiguous fields or a
 ' collection of separate, non-contiguous fields.
@@ -6,12 +6,13 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' The dialog box interface was inspired by the macro "CopyMultiple" by Joel Hahn, Niles
 ' Public Library District, 2007, but all responsibility for the functionality of this
 ' macro is mine alone.
 '
-' Last updated: 27 July 2023.
+' Last updated: 6 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -1055,8 +1056,4 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'105940079
-'
-'Macro name: CopyFields
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Essentials.mbk
-'Saved: 8/22/2023 9:55:27 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'106040123

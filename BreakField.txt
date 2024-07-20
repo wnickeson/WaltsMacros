@@ -1,12 +1,13 @@
-'MacroName:BreakField.2023.07
+'MacroName:BreakField.2024.01
 'MacroDescription:Breaks a field at the cursor position, moving all subsequent text in
 ' that field to a new field, with a blank tag, immediately following.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 23 July 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -132,8 +133,4 @@ If CS.GetFieldUnicode( "...", CurrentRow%, FieldData$ ) = FALSE Then
 End If
 
 End Sub
-'1365373
-'
-'Macro name: BreakField
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:02:36 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'1375418

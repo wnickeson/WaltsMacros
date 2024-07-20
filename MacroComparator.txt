@@ -1,12 +1,13 @@
-'MacroName:MacroComparator.2023.01
+'MacroName:MacroComparator.2024.01
 'MacroDescription:Displays two macro books, and selected macros from each, side by side
 ' for some simple metadata comparison.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 24 July 2023.
+' Last updated: 12 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -37,7 +38,6 @@ Declare Sub BuildMiniFAT       ( TotalSectorsInMiniFAT%, FirstSectorOfMiniFAT% )
 Declare Sub BuildMinistream    ( MinistreamStart& )
 Declare Sub CopyArrays         ( WhichSide$, WhichDirection% )
 Declare Sub GetDirectoryEntries( FirstSectorOfDirectory& )
-Declare Sub GetEnviroVars
 Declare Sub GetFileInfo        ( SelectedMbkFile$ )
 Declare Sub GetMacroBookFiles
 Declare Sub GetMacroInfo       ( MacroDirectoryInfo$ )
@@ -643,31 +643,6 @@ End Sub
 
 '****************************************************************************************
 
-Sub GetEnviroVars
-
-' This subprogram finds the path of the user's AppData directory, as found in the
-' environment table, in order to get to the macro book files.
-
-Const MAX_ATTEMPTS_ENVIRON As Integer = 128
-
-Dim EnvironmentString$
-
-Dim i As Integer
-
-For i = 0 To MAX_ATTEMPTS_ENVIRON
-  EnvironmentString$ = Environ( i )
-  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
-      AppDataPath$ = Mid$( EnvironmentString$, 9 )
-      Exit Sub
-  End If
-Next i
-
-AppDataPath$ = ""
-
-End Sub
-
-'****************************************************************************************
-
 Sub GetFileInfo( SelectedMbkFile$ )
 
 ' This subprogram gets important information about the selected macro book file.
@@ -722,7 +697,7 @@ HeaderSignature$ = Chr$( 208 ) & Chr$( 207 ) & Chr$( 017 ) & Chr$( 224 ) & Chr$(
 ReDim MacroBooks( FileCounter% )
 MacroBooks( FileCounter% ) = "Select a macro book:"
 FileCounter%               = FileCounter% + 1
-Call GetEnviroVars
+AppDataPath$               = Environ( "APPDATA" )
 If AppDataPath$ = "" Then
     Exit Sub
   Else
@@ -1537,8 +1512,4 @@ Select Case Action%
   End Select
 
 End Function
-'154158932
-'
-'Macro name: MacroComparator
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:04:58 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'151658379

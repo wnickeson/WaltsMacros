@@ -1,4 +1,4 @@
-'MacroName:DeriveBookFromAnyFormat.2023.01
+'MacroName:DeriveBookFromAnyFormat.2024.03
 'MacroDescription:Derives a new record in books format from a bibliographic record of any
 ' format, or changes the format of a bibliographic record to "books." Fields not
 ' appropriate in books format are deleted, and default books format workform values are
@@ -7,11 +7,12 @@
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
 ' Thanks to Christine Riggle and her colleagues at Harvard Business School for helpful
 ' suggestions and comments.
 '
-' Last updated: 21 July 2023.
+' Last updated: 12 June 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -349,6 +350,8 @@ Do
       Tag% = Val( Left$( FieldData$, 3 ) )
       If InStr( FieldData$, DELIMITER & "5" ) Then
           InstitutionSpecific = TRUE
+        Else
+          InstitutionSpecific = FALSE
       End If
 
       Select Case Tag%
@@ -826,7 +829,7 @@ End If
 ' This macro assumes a full-level, member input record in RDA (ISBD).
 
 FFSet = CS.SetFixedField( "Desc", "i" )
-FFSet = CS.SetFixedField( "Elvl", "I" )
+FFSet = CS.SetFixedField( "Elvl", " " )
 FFSet = CS.SetFixedField( "Srce", "d" )
 
 If NewRecord Then
@@ -1118,7 +1121,7 @@ Sub FillArrays
 
 ' These two arrays contain terms used in modifying or deleting fields. "Subdivisions"
 ' contains form/genre subject heading subdivisions that will be discarded. "RelatorTerms"
-' contains relator terms that indicate a type of relationship to the resource that
+' contains MARC relator terms that indicate a type of relationship to the resource that
 ' doesn't apply to printed language material.
 
 Subdivisions( 0  ) = "aerial photographs"
@@ -1209,8 +1212,4 @@ RelatorTerms( 61 ) = "videographer"
 RelatorTerms( 62 ) = "voice actor"
 
 End Sub
-'121347312
-'
-'Macro name: DeriveBookFromAnyFormat
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:01:21 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'121647411

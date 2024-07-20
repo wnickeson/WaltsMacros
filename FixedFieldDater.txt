@@ -1,12 +1,13 @@
-'MacroName:FixedFieldDater.2023.01
+'MacroName:FixedFieldDater.2024.06
 'MacroDescription:Fills in the fixed field date elements from a bibliographic record's
 ' 26X fields.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 19 July 2023.
+' Last updated: 25 June 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -18,19 +19,29 @@
 ' How it works: Enter dates in a 260 or 264 field in a bibliographic record, and run the
 ' macro to appropriately copy those dates into the fixed field, as well as correctly code
 ' "DtSt" (Type of date). Or, run the macro in an existing record to help verify that the
-' fixed field correctly reflects the dates in the 26X fields. The macro takes into
-' account only dates in 264 1 (publication) and 264 4 (copyright) fields. Dates in other
-' 264 fields, and dates in field 245 (as for archival materials) or 3XX fields (for
-' serials), are ignored. This macro is designed to work with RDA but can generally
-' accommodate pre-RDA records. It can't get a date from a field in a non-Latin script,
-' and may not work well with records cataloging in a language other than English.
+' fixed field correctly reflects the dates in the 26X fields. In the 264 fields, the
+' macro takes into account only those containing publication (second indicator "1") and
+' copyright (second indicator "4") information. Dates in other 264 fields, and dates in
+' field 245 (as for archival materials) or 3XX fields (for serials), are ignored.
+'
+' The 26X fields alone don't carry enough information for the macro to decide whether
+' something is a reprint, so if it finds DtSt "r" in the fixed field it accepts that code
+' and quits. The macro can code DtSt "e" for a detailed publication date (year and month
+' or year, month, and day) only if the month name is in English, whether it is the whole
+' word or the standard abbreviation. Month names in other languages, or months recorded
+' as numbers, are simply ignored. The macro can handle ordinal number suffixes, as in
+' "July 4th, 1776," which produces "1776,0704" as "Dates" in the fixed field. ("4 July
+' 1776" in the 264 field produces the same result.)
+'
+' This macro is designed to work with RDA but can generally accommodate pre-RDA records.
+' It can't get a date from a field in a non-Latin script, and may not work well with
+' records cataloged in a language other than English.
 '****************************************************************************************
 
 Option Explicit
 
-Declare Function GetDate( InString$, NextPos% ) As String
-
-Global Relation$
+Declare Function ChangeHyphenTo_u( InString$ ) As String
+Declare Function GetMonthDay     ( InString$ ) As String
 
 '****************************************************************************************
 
@@ -43,6 +54,8 @@ On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
 Const CRITICAL_MESSAGE     As Integer = 16
+Const DATE_1               As Integer = 1
+Const DATE_2               As Integer = 2
 Const DISPLAY_AT_TOP       As Integer = 1
 Const INFORMATION_MESSAGE  As Integer = 64
 Const MSGBOX_RETURN_CANCEL As Integer = 2
@@ -50,7 +63,6 @@ Const MSGBOX_RETURN_NO     As Integer = 7
 Const WARNING_MESSAGE      As Integer = 48
 
 Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
-Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE  = Chr$( 034 )
 
 Dim BibLevel$
 Dim CopyrightStatement$
@@ -59,13 +71,18 @@ Dim Date1_FF$
 Dim Date2_26X$
 Dim Date2_FF$
 Dim FieldData$
+Dim FindYear%
+Dim LenC%
+Dim MonthAndDay$
 Dim MsgBoxAnswer%
-Dim NextPos%
 Dim PosFF%
+Dim PotentialDate$
+Dim PrecChar$
 Dim PublicationStatement$
-Dim Remainder$
+Dim Relation$
+Dim Start%
 Dim SubfieldC$
-Dim Truncate%
+Dim Tag$
 Dim TypeOfDate$
 Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$  = "[Walt's macros] Extras1:FixedFieldDater"
@@ -75,9 +92,8 @@ Dim ChangedFFView            : ChangedFFView = FALSE
 Dim FoundField               : FoundField    = FALSE
 Dim NonLatin                 : NonLatin      = FALSE
 Dim Serial
-Dim SetFF
 
-Dim i As Integer, j As Integer, p As Integer, q As Integer
+Dim i As Integer, p As Integer
 
 ' First, make sure that a bibliographic record is open.
 
@@ -96,15 +112,20 @@ If PosFF% <> DISPLAY_AT_TOP Then
     ChangedFFView         = TRUE
 End If
 
-If CS.GetFixedField( "DtSt", TypeOfDate$ ) Then
-    If TypeOfDate$ = "e" Then
-        MsgBox "Sorry, this macro can't handle DtSt " & DOUBLE_QUOTE & "e" & DOUBLE_QUOTE & " for Detailed Date.", CRITICAL_MESSAGE, WaltsMacros$
-    End If
-  Else
+If CS.GetFixedField( "DtSt", TypeOfDate$ ) = FALSE Or _
+   CS.GetFixedField( "Dates", Date1_FF$ )  = FALSE Or _
+   CS.GetFixedField( ",", Date2_FF$ )      = FALSE Then
     GoTo Failure:
 End If
-If CS.GetFixedField( "Dates", Date1_FF$ ) = FALSE Then GoTo Failure:
-If CS.GetFixedField( ",", Date2_FF$ )     = FALSE Then GoTo Failure:
+
+' Whether or not something is a reprint is beyond the pay grade of this macro to
+' determine, so if "r" is found in "DtSt," exit.
+
+If TypeOfDate$ = "r" Then
+    MsgBox "Sorry, this macro can't confirm that the record represents a reprint.", WARNING_MESSAGE, WaltsMacros$
+    Exit Sub
+End IF
+
 If CS.GetFixedField( "BLvl", BibLevel$ ) Then
     If BibLevel$ = "s" Then
         Serial = TRUE
@@ -117,7 +138,7 @@ End If
 
 If ChangedFFView Then CS.FixedFieldPosition = PosFF%
 
-' Go through all the 264 fields on the record, looking for a publication statement in
+' Go through all the 26X fields on the record, looking for a publication statement in
 ' 264 1 and an existing notice of copyright in 264 4. Only keep the first one found in
 ' either case.
 
@@ -126,6 +147,7 @@ Do
   FoundField = CS.GetField( "26.", i, FieldData$ )
   If FoundField Then
       If Left$( FieldData$, 3 ) = "264" Then
+          Tag$ = "264"
           Select Case Mid$( FieldData$, 3, 1 )
             Case "0"
               If PublicationStatement$ = "" Then
@@ -144,6 +166,7 @@ Do
               End Select
           End Select
         ElseIf Left$( FieldData$, 3 ) = "260" Then
+          Tag$ = "260"
           If InStr( FieldData$, DELIMITER & "c" ) Then
               If PublicationStatement$ = "" Then
                   PublicationStatement$ = FieldData$
@@ -157,78 +180,156 @@ Do
 Loop Until FoundField = FALSE
 
 ' If neither a 260 nor a 264 field are found, or if either field contains non-Latin
-' scripts (and there is no Latin script 26X field), the macro can't proceed.
+' scripts or lacks a date, the macro can't proceed.
 
 If PublicationStatement$ = "" And CopyrightStatement$ = "" Then
     If NonLatin Then
         MsgBox "This macro can't extract a publication date from the 26X field.", CRITICAL_MESSAGE, WaltsMacros$
       Else
-        MsgBox "This record doesn't contain a publication date.", CRITICAL_MESSAGE, WaltsMacros$
+        If Tag$ = "" Then
+            MsgBox "This record doesn't contain a publication date.", CRITICAL_MESSAGE, WaltsMacros$
+          Else
+            MsgBox "This record doesn't contain a publication date in field " & Tag$ & ".", CRITICAL_MESSAGE, WaltsMacros$
+        End If
     End If
     Exit Sub
 End If
 
-' Get the first 4-digit date from subfield $c of the publication statement, and collect
-' information to determine the relation of that date to any others present.
+' Get one or two 4-digit date(s) from subfield $c of the publication statement, and
+' collect information to determine the relationship between those dates and any other
+' dates present.
 
 p = InStr( PublicationStatement$, DELIMITER & "c" )
-If p <> 0 Then
+If p > 0 Then
     SubfieldC$ = Trim$( Mid$( PublicationStatement$, p + 2 ) )
+    If Right$( SubfieldC$, 1 ) = "." Then
+        SubfieldC$ = Left$( SubfieldC$, Len( SubfieldC$ ) - 1 )
+    End If
+    If StrComp( SubfieldC$, "[date of publication not identified]", 1 ) = 0 Then
+        Date1_26X$ = "nnnn"
+        Date2_26X$ = "nnnn"
+      Else
 
 ' There may be subfields following subfield $c (e.g., in AACR2, production information in
 ' subfields $e, $f, or $g). Trim them.
 
-    p = InStr( SubfieldC$, DELIMITER )
-    If p > 0 Then
-        SubfieldC$ = Left$( SubfieldC$, p - 1 )
-    End If
-    If Left$( SubfieldC$, 1 ) = "-" Then
-        NextPos% = 1
-      Else
-        Date1_26X$ = GetDate( SubfieldC$, NextPos% )
-        If Date1_26X$ = "" Then
-            MsgBox "No date could be extracted from the record's " & Left$( PublicationStatement$, 3 ) & " field.", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
+        p = InStr( SubfieldC$, DELIMITER )
+        If p > 0 Then
+            SubfieldC$ = Left$( SubfieldC$, p - 1 )
         End If
-        Truncate% = NextPos%
+        LenC%  = Len( SubfieldC$ )
+        Start% = 1
+        For FindYear% = DATE_1 To DATE_2
+          For i = Start% To LenC% - 3
+            PotentialDate$ = Mid$( SubfieldC$, i, 4 )
+            If PotentialDate$ Like "[12][0-9][0-9][0-9]" Or _
+               PotentialDate$ Like "[12][0-9][0-9][-]" Or _
+               PotentialDate$ Like "[12][0-9][-][-]" Then
+                If FindYear% = DATE_1 Then
+
+' What precedes the first date? Check for copyright and hyphen, then check for month and
+' day.
+
+                    Date1_26X$ = PotentialDate$
+                    If i > 1 Then
+                        PrecChar$ = Mid$( SubfieldC$, i - 1, 1 )
+                        Select Case PrecChar$
+                          Case "c", Chr$( 202 )
+                            Relation$ = "t"
+                          Case "-"
+                            Relation$ = "q" 'Or possibly pre-RDA m, says BF&S
+                        End Select
+                    End If
+                    If i > 3 Then
+                        MonthAndDay$ = GetMonthDay( Left$( SubfieldC$, i - 1 ) )
+                    End If
+
+' What follows the first date? A hyphen always means multiple dates. Detailed date
+' information could also follow a year.
+
+                    If i + 4 <= LenC% Then
+                        If Mid$( SubfieldC$, i + 4, 1 ) = "-" Then
+                            If Not Serial Then
+                                Relation$ = "m"
+                            End If
+                        End If
+                        If i + 8 < LenC% Then
+                            MonthAndDay$ = GetMonthDay( Mid$( SubfieldC$, i + 4 ) )
+                        End If
+                    End If
+                    Start% = i + 4
+                    If MonthAndDay$ <> "" Then
+                        Date2_26X$ = MonthAndDay$
+                        Relation$ = "e"
+                    End If
+                    Date1_26X$ = ChangeHyphenTo_u( Date1_26X$ )
+                    Exit For
+
+                  Else
+                    Date2_26X$ = PotentialDate$
+                    PrecChar$ = Mid$( SubfieldC$, i - 1, 1 )
+                    Select Case PrecChar$
+                      Case "c", Chr$( 202 )
+                        Relation$ = "t"
+                      Case "["
+                      Case "-"
+                        If i = Start% + 1 Then
+                            i = i
+                        End If
+                    End Select
+                    Date2_26X$ = ChangeHyphenTo_u( Date2_26X$ )
+                End If
+                If i + 3 < Len( SubfieldC$ ) And Right$( PotentialDate$, 1 ) Like "[0-9]" Then
+                    If Mid$( SubfieldC$, i + 4, 1 ) Like "[0-9]" Then
+'                        GetDate = ""
+                    End If
+                End If
+            End If
+          Next i
+          If Start% + 4 > Len( SubfieldC$ ) Then
+              Exit For
+          End If
+        Next FindYear%
     End If
 
-' A hyphen after the first date always means multiple dates.
-
-    If Mid$( SubfieldC$, NextPos%, 1 ) = "-" Then
-        If Not Serial Then
-            Relation$ = "m"
-        End If
+    If Date1_26X$ = "" Then
+        MsgBox "No date could be extracted from the record's " & Left$( PublicationStatement$, 3 ) & " field.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
     End If
 
-' If the remainder of the string in subfield $c is long enough to contain a 4-digit date,
-' extract it.
-
-    If Len( SubfieldC$ ) > NextPos% + 4 Then
-        Remainder$ = Mid$( SubfieldC$, NextPos% )
-        Date2_26X$ = GetDate( Remainder$, NextPos% )
-      Else
-        If Relation$ = "m" Then
-            Date2_26X$ = "9999"
-        End If
+    If Date2_26X$ = "" And Relation$ = "m" Then
+        Date2_26X$ = "9999"
     End If
+
   Else
     MsgBox "This record doesn't contain a publication date.", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
 End If
 
-' Now get the first 4-digit date from the copyright statement.
+' Get the first 4-digit date from the copyright statement, unless the type of date is
+' detailed or multiple--codes for both of which take precedence over coding for a
+' copyright type of date.
 
-If CopyrightStatement$ <> "" Then
-    p = InStr( CopyrightStatement$, DELIMITER & "c" )
-    If p <> 0 Then
-        SubfieldC$ = Trim$( Mid$( CopyrightStatement$, p + 2 ) )
-        p = InStr( SubfieldC$, DELIMITER )
+If Relation$ = "" Or Relation$ Like "[!em]" Then
+    If CopyrightStatement$ <> "" Then
+        p = InStr( CopyrightStatement$, DELIMITER & "c" )
         If p > 0 Then
-            SubfieldC$ = Left$( SubfieldC$, p - 1 )
+            SubfieldC$ = Trim$( Mid$( CopyrightStatement$, p + 2 ) )
+            p = InStr( SubfieldC$, DELIMITER )
+            If p > 0 Then
+                SubfieldC$ = Left$( SubfieldC$, p - 1 )
+            End If
+            For i = 1 To Len( SubfieldC$ ) - 3
+              PotentialDate$ = Mid$( SubfieldC$, i, 4 )
+              If PotentialDate$ Like "[12][0-9][0-9][0-9]" Or _
+                 PotentialDate$ Like "[12][0-9][0-9][-]" Or _
+                 PotentialDate$ Like "[12][0-9][-][-]" Then
+                  Date2_26X$ = PotentialDate$
+                  Relation$  = "t"
+                  Exit For
+              End If
+            Next i
         End If
-        NextPos%   = 0
-        Date2_26X$ = GetDate( SubfieldC$, NextPos% )
     End If
 End If
 
@@ -287,17 +388,12 @@ End If
 ' Otherwise, continue by setting the elements of the fixed field.
 
 If Date1_26X$ <> Date1_FF$ Or Date2_26X$ <> Date2_FF$ Or Relation$ <> TypeOfDate$ Then
-    If TypeOfDate$ = "r" Then
-        MsgBox "This macro can't confirm that the record represents a reprint.", WARNING_MESSAGE, WaltsMacros$
-        Exit Sub
-      Else
-        PosFF% = CS.FixedFieldPosition
-        If PosFF% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
-        If CS.SetFixedField( "DtSt", Relation$ ) Then Changed = TRUE
-        If CS.SetFixedField( "Dates", Date1_26X$ ) Then Changed = TRUE
-        If Date2_26X$ = "" Then Date2_26X$ = "    "
-        If CS.SetFixedField( ",", Date2_26X$ ) Then Changed = TRUE
-    End If
+    PosFF% = CS.FixedFieldPosition
+    If PosFF% <> DISPLAY_AT_TOP Then CS.FixedFieldPosition = DISPLAY_AT_TOP
+    If CS.SetFixedField( "DtSt", Relation$ ) Then Changed = TRUE
+    If CS.SetFixedField( "Dates", Date1_26X$ ) Then Changed = TRUE
+    If Date2_26X$ = "" Then Date2_26X$ = "    "
+    If CS.SetFixedField( ",", Date2_26X$ ) Then Changed = TRUE
 End If
 CS.FixedFieldPosition = PosFF%
 If Changed = FALSE Then
@@ -310,63 +406,126 @@ End Sub
 
 '****************************************************************************************
 
-Function GetDate( InString$, NextPos% ) As String
+Function ChangeHyphenTo_u( InString$ ) As String
 
-Dim Copyright$
-Dim LBracketPos%
 Dim TempString$
-Dim TestString$
 
-Dim i As Integer, p As Integer
+Dim p As Integer
 
 TempString$ = InString$
 
-'First, check bracketed information, as that may be the information to work with.
-
-LBracketPos% = Instr( InString$, "[" )
-If LBracketPos% > 0 Then
-    TempString$ = Mid$( InString$, LBracketPos% + 1 )
-End If
-
-For i = 1 To Len( TempString$ )
-  TestString$ = Mid$( TempString$, i, 4 )
-  If TestString$ Like "[12][0-9][0-9][0-9]" Or _
-     TestString$ Like "[12][0-9][0-9][-]" Or _
-     TestString$ Like "[12][0-9][-][-]" Then
-      If i > 1 Then
-          Copyright$ = Mid$( TempString$, i - 1, 1 )
-          If Copyright$ = "c" Or Copyright$ = Chr$( 202 ) Then
-              Relation$ = "t"
-          End If
-'          Or Copyright$ = "p" Or Copyright$ = Chr$( 203 )
-      End If
-      If i + 3 < Len( TempString$ ) And Right$( TestString$, 1 ) Like "[0-9]" Then
-          If Mid$( TempString$, i + 4, 1 ) Like "[0-9]" Then
-              GetDate = ""
-              Exit Function
-          End If
-      End If
-      Do
-        p = InStr( TestString$, "-" )
-        If p > 0 Then
-            TestString$ = Left$( TestString$, p - 1 ) & "u" & Mid$( TestString$, p + 1 )
-        End If
-      Loop Until p = 0
-      GetDate$ = TestString$
-      If i < Len( TempString$ ) Then
-          If LBracketPos% > 0 Then
-              NextPos% = LBracketPos% + i + 4
-            Else
-              NextPos% = i + 4
-          End If
-      End If
-      Exit Function
+Do
+  p = InStr( TempString$, "-" )
+  If p > 0 Then
+      Mid$( TempString$, p, 1 ) = "u"
   End If
-Next i
+Loop Until p = 0
+
+ChangeHyphenTo_u = TempString$
 
 End Function
-'36912701
-'
-'Macro name: FixedFieldDater
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras1.mbk
-'Saved: 8/22/2023 9:59:28 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+
+'****************************************************************************************
+
+Function GetMonthDay( InString$ ) As String
+
+' This function looks for the English names or abbreviations of months to try to get a
+' numeric string for a detailed type of date. The abbreviations are the standard ones,
+' with both "Sep." and "Sept." acceptable for the ninth month of the year.
+
+Dim CharT$
+Dim DayString$
+Dim MonthString$
+Dim TempString$
+Dim TestMonth$
+
+Dim i As Integer, j As Integer, p As Integer, z As Integer
+
+Dim Months( 35 ) As String
+Months( 0  ) = "January"
+Months( 1  ) = "Jan."
+Months( 2  ) = ""
+Months( 3  ) = "February"
+Months( 4  ) = "Feb."
+Months( 5  ) = ""
+Months( 6  ) = "March"
+Months( 7  ) = "Mar."
+Months( 8  ) = ""
+Months( 9  ) = "April"
+Months( 10 ) = "Apr."
+Months( 11 ) = ""
+Months( 12 ) = "May"
+Months( 13 ) = "May"
+Months( 14 ) = ""
+Months( 15 ) = "June"
+Months( 16 ) = "Jun."
+Months( 17 ) = ""
+Months( 18 ) = "July"
+Months( 19 ) = "Jul."
+Months( 20 ) = ""
+Months( 21 ) = "August"
+Months( 22 ) = "Aug."
+Months( 23 ) = ""
+Months( 24 ) = "September"
+Months( 25 ) = "Sep."
+Months( 26 ) = "Sept."
+Months( 27 ) = "October"
+Months( 28 ) = "Oct."
+Months( 29 ) = ""
+Months( 30 ) = "November"
+Months( 31 ) = "Nov."
+Months( 32 ) = ""
+Months( 33 ) = "December"
+Months( 34 ) = "Dec."
+Months( 35 ) = ""
+
+TempString$ = Trim( InString$ )
+z           = Len( TempString$ )
+For i = 0 To 35
+  TestMonth$ = Months( i )
+  If TestMonth$ <> "" Then
+      p = InStr( TempString$, TestMonth$ )
+      If p > 0 Then
+          If p > 1 Then
+              For j = 1 To p
+                CharT$ = Mid$( TempString$, j, 1 )
+                If CharT$ Like "[0-9]" Then
+                    DayString$ = DayString$ & CharT$
+                End If
+              Next j
+            Else
+              If p + Len( TestMonth$ ) < z Then
+                  If p < z Then
+                      For j = ( p + Len( TestMonth$ ) ) To z
+                        CharT$ = Mid$( TempString$, j, 1 )
+                        If CharT$ Like "[0-9]" Then
+                            DayString$ = DayString$ & CharT$
+                        End If
+                      Next j
+                  End If
+              End If
+          End If
+          Exit For
+      End If
+  End If
+Next i
+If i = 36 Then
+    GetMonthDay = ""
+    Exit Function
+End If
+MonthString$ = Trim$( Str$( Int( i / 3 ) + 1 ) )
+If Len( MonthString$ ) = 1 Then
+    MonthString$ = "0" & MonthString$
+End If
+If DayString$ <> "" Then
+    If Len( DayString$ ) = 1 Then
+        DayString$ = "0" & DayString$
+    End If
+  Else
+    DayString$ = "  "
+End If
+
+GetMonthDay = MonthString$ & DayString$
+
+End Function
+'53218381

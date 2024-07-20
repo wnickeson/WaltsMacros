@@ -1,11 +1,12 @@
-'MacroName:ChangeCase2.2023.39
+'MacroName:ChangeCase2.2024.03
 'MacroDescription:Changes the case of selected text within a field or of an entire field.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 18 July 2023.
+' Last updated: 17 July 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -85,7 +86,7 @@
 ' Two characters are treated specially, following Unicode practice as described in
 ' section 5.18 of the Unicode Standard, "Case mappings":
 '
-'  + Small letter sharp s "ß", or esszet, is uppercased to "SS", and capital sharp s is
+'  + Small letter sharp s "ÃŸ", or esszet, is uppercased to "SS", and capital sharp s is
 '    lowercased to small sharp s.
 '
 '  + Letter i: If the language of the resource is Turkish, according to the fixed field
@@ -295,7 +296,7 @@ DLG_STATEMENT_CANCEL = 102
 FailureMessage$      = "Sorry, could not change case of "
 FIRST_LETTER         = 1
 NO_CASE              = 0
-WaltsMacros$         = "[Walt's macros] Extras3:ChangeCase"
+WaltsMacros$         = "[Walt's macros] Extras3:ChangeCase2"
 WHOLE_STRING         = 0
 
 ' First, make sure a record is displayed, as opposed to a list.
@@ -822,9 +823,9 @@ Sub FillArrayASCIIUniPairs
 ' nicely separated by either 16 or 32, a simple mathematical operation won't work to
 ' convert one case to the other. These characters are stored in Connexion by their
 ' decimal code points, and OCLC-MARC encoding is quite different from ASCII encoding. For
-' example, the decimal code point for lowercase "Å" (A with ring above) is 229, which in
+' example, the decimal code point for lowercase "Ã…" (A with ring above) is 229, which in
 ' OCLC-MARC is the code point for the combining macron. To make the Client add the
-' correct character "å" this macro inserts the Unicode encoding.
+' correct character "Ã¥" this macro inserts the Unicode encoding.
 
 ASCIIUniPairs( 0  ) = "162&#x00F8;"
 ASCIIUniPairs( 1  ) = "164&#x00FE;"
@@ -1026,7 +1027,7 @@ DoNotCapitalize( 109 ) = "Upon"
 DoNotCapitalize( 110 ) = "Versus"
 DoNotCapitalize( 111 ) = "Via"
 DoNotCapitalize( 112 ) = "Vice"
-DoNotCapitalize( 113 ) = "Vis-à-vis"
+DoNotCapitalize( 113 ) = "Vis-Ã -vis"
 DoNotCapitalize( 114 ) = "Wanting"
 DoNotCapitalize( 115 ) = "With"
 DoNotCapitalize( 116 ) = "Within"
@@ -2222,10 +2223,10 @@ If Enhanced Then
                   If Left$( TempString$, 3 ) = "By " Then
                       Mid$( TempString$, 1, 3 ) = "by "
                     Else
-                      p = InStr( TempString$, " " )
-                      If p > 0 Then
-                          If Mid$( TempString$, p + 1, 3 ) = "By " Then
-                              TempString$ = MakeLowercase( Left$( TempString$, p + 3 ) ) & Mid$( TempString$, p + 4 )
+                      x = InStr( TempString$, " " )
+                      If x > 0 Then
+                          If Mid$( TempString$, x + 1, 3 ) = "By " Then
+                              TempString$ = MakeLowercase( Left$( TempString$, x + 3 ) ) & Mid$( TempString$, x + 4 )
                           End If
                       End If
                   End If
@@ -2641,8 +2642,4 @@ Select Case Action%
 End Select
 
 End Function
-'2645102820
-'
-'Macro name: ChangeCase2
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras3.mbk
-'Saved: 8/22/2023 10:02:42 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'2646102862

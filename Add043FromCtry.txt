@@ -1,12 +1,13 @@
-'MacroName:Add043FromCtry.2023.12
+'MacroName:Add043FromCtry.2024.01
 'MacroDescription:Adds a 043 field from the place of publication in the fixed field
 ' element "Ctry".
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 3 August 2023.
+' Last updated: 11 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -561,8 +562,4 @@ End If
 CS.HomeRecord
 
 End Sub
-'56537985
-'
-'Macro name: Add043FromCtry
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\Extras2.mbk
-'Saved: 8/22/2023 10:00:43 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'56638029
