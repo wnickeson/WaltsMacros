@@ -25,10 +25,10 @@
 ' character is also called a "decomposable" character, and is defined in the Unicode
 ' standard as "a character that is equivalent to a sequence of one or more other
 ' characters." The Connexion client doesn't seem to care much if precomposed characters
-' are used in a record, as it converts characters upon export, if necessary, but this
-' macro may help other macros execute properly. If a macro is designed to work on
-' decomposed characters, it may fail if it comes across precomposed characters. Run this
-' macro to make the change.
+' are used in a record while it's being edited, because it converts characters upon
+' export, if necessary, but this macro may help other macros execute properly. If a macro
+' is designed to work on decomposed characters, it may fail if it comes across
+' precomposed characters. Run this macro to make the change.
 '
 ' This macro performs only canonical decompositions--that is, the sequence of characters
 ' produced by the macro when it decomposes a character is exactly equivalent to that
@@ -1095,4 +1095,4 @@ MARC_Latin( 65 ) = "266D"
 MARC_Latin( 66 ) = "266F"
 
 End Sub
-'109961538
+'109961567
