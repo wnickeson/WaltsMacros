@@ -47,7 +47,7 @@
 ' removed, leaving the base subject heading intact. The macro discards all 7XX linking
 ' fields except 776. Any field containing a subfield $5, denoting information applicable
 ' to a specific institution, is deleted. All series fields are removed. The complete list
-' of fields to be retained is found below starting on line 358.
+' of fields to be retained is found below starting on line 361.
 
 ' Subfield $e "rda" is added to the 040 field, as well as subfield $b "eng". In a record
 ' that is to be edited, any other codes for description conventions are retained.

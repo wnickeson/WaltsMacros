@@ -63,7 +63,7 @@
 '    - converting copyright date to supplied (i.e., bracketed) publication date and
 '      moving copyright date, if different, to 264 #4. >>>>>OPTION: Choose to always move
 '      the copyright date to 264 #4 by changing the value of the variable
-'      "AlwaysShowCopyright%" on line 191 below
+'      "AlwaysShowCopyright%" on line 192 below
 '    - converting dates recorded as decades or centuries, whether certain or probable, to
 '      "between" ranges (e.g., "[191-]" becomes "[between 1910 and 1919?]")
 '    - converting a "ca." date to a probable date (e.g., "[ca. 1970]" becomes "[1970?]")

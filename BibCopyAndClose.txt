@@ -19,7 +19,7 @@
 ' copy of (cursor position is irrelevant). The macro makes a copy of the record, using
 ' the "DeriveNewRecord" command. By default, it transfers the fixed field values to the
 ' copy, but that action can be changed by changing the variable "CopyFixedField" on line
-' 41 below to "FALSE". The macro then closes the window of the original record. If other
+' 42 below to "FALSE". The macro then closes the window of the original record. If other
 ' windows are present, the macro finishes by making the window with the copied record the
 ' topmost window.
 '

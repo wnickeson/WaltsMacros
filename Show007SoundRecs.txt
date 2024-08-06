@@ -22,7 +22,7 @@
 ' How it works: Run the macro in a bibliographic record. If no 007 field for a sound
 ' recording is found, the macro offers to add one, the default values being those for
 ' compact discs. (All default values can be set in the "SetDefaults" subroutine, starting
-' on line 644.) If sound recordings 007 fields are found, the macro shows their
+' on line 645.) If sound recordings 007 fields are found, the macro shows their
 ' codes with explanations in a dialog box with drop-down lists, so the values can easily
 ' be verified and changed if necessary. Additional 007 fields can be added with the
 ' default values defined at the end of the macro. The macro does no error-checking,

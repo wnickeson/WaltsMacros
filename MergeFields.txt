@@ -1,4 +1,4 @@
-'MacroName:MergeFields.2024.05
+'MacroName:MergeFields.2024.07
 'MacroDescription:Merges two consecutive fields in a bibliographic record.
 '
 ' This macro was written by Walter F. Nickeson,
@@ -6,7 +6,7 @@
 ' wnickeson@library.rochester.edu
 ' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 26 June 2024.
+' Last updated: 2 August 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -137,7 +137,7 @@ If CS.GetField( "...", Field1Row%, Field1$ ) Then
             Field2$ = Mid$( Field2$, 6 )
         End If
         If Field1Tag$ = Field2Tag$ Then
-            MergeQuery$ = "Merge these two " & Field1Tag$ & " fields?"
+            MergeQuery$ = "Merge this " & Field1Tag$ & " field with the following " & Field2Tag$ & " field?"
             ButtonSet%  = 1 + 32        'OK, Cancel + Warning Query
           Else
             MergeQuery$ = "Do you really want to merge this " & Field1Tag$ & " with the next " & Field2Tag$ & " field?"
@@ -148,11 +148,10 @@ If CS.GetField( "...", Field1Row%, Field1$ ) Then
           Else
             If Field1Tag$ = "505" and Field2Tag$ = "505" Then
                 If Right$( Trim$( Field1$ ), 3 ) <> " --" Then
-                    MergedFields$ = Field1$ & " -- " & Field2$
+                    Field1$ = Field1$ & " -- "
                 End If
-              Else
-                MergedFields$ = Field1$ & " " & Field2$
-            End If
+             End If
+             MergedFields$ = Field1$ & " " & Field2$
         End If
     End If
 End If
@@ -161,15 +160,16 @@ End If
 
 If CS.SetFieldLine( Field1Row%, MergedFields$ ) = FALSE Then
     MsgBox "Sorry, something went wrong when trying to set the new field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
 End If
 
 ' Delete the second field.
 
 If CS.DeleteFieldLine( Field1Row% + 1 ) = FALSE Then
-    MsgBox "Sorry, something went wrong when trying to delete the first merged field.", CRITICAL_MESSAGE, WaltsMacros$
+    MsgBox "Sorry, something went wrong when trying to delete the merged field.", CRITICAL_MESSAGE, WaltsMacros$
 End If
 
 CS.CursorRow = Field1Row%
 
 End Sub
-'1767239
+'1767248

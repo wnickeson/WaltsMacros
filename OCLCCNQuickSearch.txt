@@ -1,4 +1,4 @@
-'MacroName:OCLCCNQuickSearch.2024.01
+'MacroName:OCLCCNQuickSearch.2024.15
 'MacroDescription:Searches WorldCat for the number string selected in a Connexion window
 ' or copied to the Windows Clipboard.
 '
@@ -7,7 +7,7 @@
 ' wnickeson@library.rochester.edu
 ' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 6 February 2024.
+' Last updated: 5 August 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -16,13 +16,22 @@
 ' Windows 10 Pro, but no guarantees are promised or implied.
 '
 '****************************************************************************************
-' How it works: Select an OCLC number in a Connexion window, or copy an OCLC number from
-' any source onto the Windows Clipboard, and run the macro to search WorldCat for that
-' control number. A little extra text following or preceding the number won't affect the
-' search as long as a valid number appears within the first 32 characters of the string.
+' How it works: Select an OCLC control number in a Connexion window, or copy such a
+' number from any source (such as an email or a website) onto the Windows Clipboard, and
+' run the macro to search WorldCat for that control number. The number must appear within
+' the first 32 characters of the selection or the content of the Clipboard. Leading zeros
+' and other characters preceding the number are deleted, as are all characters following
+' the last digit. A string of digits whose length is greater than 10, or whose numeric
+' value is greater than 2,147,483,647, is not a valid search string.
 '****************************************************************************************
 
 Option Explicit
+
+Declare Function StringCheck( InString$ ) As Long
+
+Global Const NO_NUMBER As Integer = -1
+Global Const NO_TEXT   As Integer = -2
+Global Const TOO_LONG  As Integer = -3
 
 '****************************************************************************************
 
@@ -34,134 +43,33 @@ Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
-Const CRITICAL_MESSAGE        As Integer = 16
-Const DIALOG_BUTTON_CANCEL    As Integer = 102
-Const INFORMATION_MESSAGE     As Integer = 64
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DIALOG_BUTTON_CANCEL As Integer = 102
+Const INFORMATION_MESSAGE  As Integer = 64
 
-Const MAX_LENGTH_OCLCCN       As Integer = 10
-Const MAX_LENGTH_INPUT_STRING As Integer = 32
+Const CLIPBORD             As Integer = 0  'Misspelled to avoid conflict.
+Const SELECTION            As Integer = 1
 
-Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE       = Chr$( 034 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
 
-Dim Message$
-Dim NonSearchableOffline$
-Dim NonSearchableOnline$
-Dim NonSearchableReason$
-Dim RawString$
-Dim Results%
+Dim ClipboardCheck&
+Dim ClipboardOption$
+Dim ClipboardString$
+Dim ErrorMessage$
+Dim FieldData$
+Dim Row%
 Dim SearchString$
 Dim SelectedText$
-Dim Source$
-Dim TestChar$
-Dim WaltsMacros$             : WaltsMacros$       = "[Walt's macros] Essentials:OCLCCNQuickSearch"
+Dim SelectionCheck&
+Dim SelectionOption$
+Dim SelectionString$
+Dim Source%
+Dim Tag$
+Dim WaltsMacros$
 
-Dim DigitsFound              : DigitsFound        = FALSE
-Dim NonDigitsFollowing       : NonDigitsFollowing = FALSE
-Dim SelectionMade            : SelectionMade      = FALSE
+WaltsMacros$ = "[Walt's macros] Essentials:OCLCCNQuickSearch"
 
-Dim i As Integer
-
-' First, see if any text has been selected.
-
-If CS.GetSelectedText( SelectedText$ ) Then
-    RawString$ = Trim$( SelectedText$ )
-End If
-
-' Disregard a selection made in the tag or indicator cells, which can be identified by
-' the cursor position; consider such a selection an accident.
-
-If CS.CursorColumn < 6 Then RawString$ = ""
-
-' If nothing in the Connexion window has been selected, see if the Clipboard has anything on it,
-' and if so, test it for valid input.
-
-If RawString$ = "" Then
-    RawString$ = Trim$( Clipboard.GetText )
-    If RawString$ = "" Then
-        If CS.IsOnline Then
-            MsgBox "There is no number to search! Select or copy a number to search.", CRITICAL_MESSAGE, WaltsMacros$
-          Else
-            MsgBox "There is no number copied to the Clipboard to search, and you are not logged on to Connexion!", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
-        End If
-    End If
-  Else
-    SelectionMade = TRUE
-End If
-
-If SelectionMade = TRUE Then
-    Source$ = "Selection: "
-  Else
-    Source$ = "Text on Clipboard: "
-End If
-
-If Len( RawString$ ) > MAX_LENGTH_INPUT_STRING Then
-    RawString$ = Left$( RawString$, MAX_LENGTH_INPUT_STRING ) & " ..."
-End If
-
-NonSearchableOffline$ = "The copied string, " & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE & ", is not a searchable number, and"
-NonSearchableOffline$ = NonSearchableOffline$ & " you are not logged on to Connexion!"
-
-' Strip all non-digits from the string. Extra characters can be ignored except if they
-' come between digits, in which case they make the string invalid.
-
-For i = 1 To Len( RawString$ )
-  TestChar$ = Mid$( RawString$, i, 1 )
-  If TestChar$ Like "[0-9]" Then
-      If NonDigitsFollowing = TRUE And DigitsFound = TRUE Then
-          If CS.IsOnline Then
-              NonSearchableReason$ = "The string mixes digits and other characters!" & Chr$( 013 )
-              NonSearchableOnline$ = NonSearchableReason$ & Source$ & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE
-              MsgBox NonSearchableOnline$, CRITICAL_MESSAGE, WaltsMacros$
-            Else
-              MsgBox NonSearchableOffline$, CRITICAL_MESSAGE, WaltsMacros$
-          End If
-          Exit Sub
-        Else
-          DigitsFound   = TRUE
-          SearchString$ = SearchString$ & TestChar$
-      End If
-    Else
-      If DigitsFound = TRUE Then NonDigitsFollowing = TRUE
-  End If
-Next i
-
-' Strip leading zeroes (just to make sure the string doesn't exceed the maximum length).
-
-For i = 1 To Len( SearchString$ )
-  TestChar$ = Mid$( SearchString$, i, 1 )
-  If TestChar$ = "0" Then
-      SearchString$ = Mid$( SearchString$, 2 )
-      i = i - 1
-    Else
-      Exit For
-  End If
-Next i
-
-' Test the edited string for length.
-
-If Len( SearchString$ ) > MAX_LENGTH_OCLCCN Then
-    If CS.IsOnline Then
-        NonSearchableReason$ = "The number string is too long!" & Chr$( 013 )
-        NonSearchableOnline$ = NonSearchableReason$ & Source$ & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE
-        MsgBox NonSearchableOnline$, CRITICAL_MESSAGE, WaltsMacros$
-      Else
-        MsgBox NonSearchableOffline$, CRITICAL_MESSAGE, WaltsMacros$
-    End If
-    Exit Sub
-  ElseIf SearchString$ = "" Then
-    If CS.IsOnline Then
-        NonSearchableReason$ = "There is no number to search!" & Chr$( 013 )
-        NonSearchableOnline$ = NonSearchableReason$ & Source$ & DOUBLE_QUOTE & RawString$ & DOUBLE_QUOTE
-        MsgBox NonSearchableOnline$, CRITICAL_MESSAGE, WaltsMacros$
-      Else
-        MsgBox NonSearchableOffline$, CRITICAL_MESSAGE, WaltsMacros$
-    End If
-    Exit Sub
-End If
-
-' If the string passes the input checks, search WorldCat for the record with that control
-' number. But make sure the Client is logged on first!
+' First, check the online status, and offer to logon if necessary.
 
 If CS.IsOnline = FALSE Then
 
@@ -169,7 +77,7 @@ If CS.IsOnline = FALSE Then
       OkButton        70,  50,  52,  14
       CancelButton   130,  50,  52,  14
       Text            10,   4, 137,  12, "You are not logged on! What now?"
-      OptionGroup                                                                           .OptionGroup1
+      OptionGroup                                                                           .OptionGroup
        OptionButton   16,  16, 160,  12, "&Log on with default authorization and continue"
        OptionButton   16,  30, 108,  12, "Log on &only"
     End Dialog
@@ -180,19 +88,246 @@ If CS.IsOnline = FALSE Then
     If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
 
     If CS.Logon( "", "", "" ) Then
-        If Dialog1.OptionGroup1 = 1 Then
+        If Dialog1.OptionGroup = 1 Then
             Exit Sub
         End If
       Else
         MsgBox "Sorry, the macro could not log you on.", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
-
 End If
 
-If CS.Search( "WC", "#" & SearchString$ ) = 0 Then
+' Then see if any text has been selected. Because the "GetSelectedText" command works
+' only in records, there is no need to test for the kind of the current window. Disregard
+' a selection made in the tag or indicator cells, which can be identified by the cursor
+' position; consider such a selection an accident (although it's normal behavior for the
+' Client to select the cell when clicking or tabbing into it). Note in which field the
+' selection was made, to display later if necessary.
+
+If CS.GetSelectedText( SelectedText$ ) Then
+    SelectionString$ = Trim$( SelectedText$ )
+    If CS.CursorColumn < 6 Then
+        SelectionString$ = ""
+      Else
+        Row%             = CS.CursorRow
+        If CS.GetFieldLineUnicode( Row%, FieldData$ ) Then
+            Tag$ = Left$( FieldData$, 3 )
+        End If
+    End If
+End If
+
+' Check for the presence of text on the Clipboard.
+
+ClipboardString$ = Trim$( Clipboard.GetText )
+
+' Try to extract a valid number from each source.
+
+ClipboardCheck& = StringCheck( ClipboardString$ )
+SelectionCheck& = StringCheck( SelectionString$ )
+
+' If a number from the Clipboard is not valid, check the number selected in the Connexion
+' window. Invalid numbers there generate error messages; a valid number becomes the
+' search string.
+
+Select Case ClipboardCheck&
+
+  Case NO_TEXT
+
+    Select Case SelectionCheck&
+      Case NO_TEXT
+        ErrorMessage$ = "Nothing is on the Clipboard and no text is selected in the record."
+      Case NO_NUMBER
+        ErrorMessage$ = "Nothing is on the Clipboard and no number is available in the selected text."
+      Case TOO_LONG
+        ErrorMessage$ = "Nothing is on the Clipboard and the number in the selected text is too long or too big."
+      Case Else
+        SearchString$ = Trim$( Str$( SelectionCheck& ) )
+        Source%       = SELECTION
+    End Select
+
+  Case NO_NUMBER
+
+    Select Case SelectionCheck&
+      Case NO_TEXT
+        ErrorMessage$ = "No number is available on the Clipboard and no text is selected in the record."
+      Case NO_NUMBER
+        ErrorMessage$ = "No number is available on the Clipboard or in the selected text."
+      Case TOO_LONG
+        ErrorMessage$ = "No number is available on the Clipboard and the number in the selected text is too long or too big."
+      Case Else
+        SearchString$ = Trim$( Str$( SelectionCheck& ) )
+        Source%       = SELECTION
+    End Select
+
+  Case TOO_LONG
+
+    Select Case SelectionCheck&
+      Case NO_TEXT
+        ErrorMessage$ = "The number on the Clipboard is too long or too big and no text is selected in the record."
+      Case NO_NUMBER
+        ErrorMessage$ = "The number on the Clipboard is too long or too big and no number is available in the selected text."
+      Case TOO_LONG
+        ErrorMessage$ = "The numbers on the Clipboard and available in the selected text are too long or too big."
+      Case Else
+        SearchString$ = Trim$( Str$( SelectionCheck& ) )
+        Source%       = SELECTION
+    End Select
+
+End Select
+
+' The presence of an error message means that no valid number is available to search, and
+' the macro must quit.
+
+If ErrorMessage$ <> "" Then
+    MsgBox ErrorMessage$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+' If no error message was created, the number on the Clipboard is valid. It will be the
+' search string if the number in the selection is invalid. If the two numbers are the
+' same, consider the Clipboard number to be the source, so the Clipboard can be emptied
+' at the end. If there are two valid numbers, ask which to use.
+
+  Else
+
+    If SelectionCheck& < 0 Then
+        SearchString$ = Trim$( Str$( ClipboardCheck& ) )
+        Source%       = CLIPBORD
+
+      ElseIf SelectionCheck& = ClipboardCheck& Then
+        SearchString$ = Trim$( Str$( ClipboardCheck& ) )
+        Source%       = CLIPBORD
+
+      ElseIf SearchString$ = "" Then
+
+        ClipboardOption$ = DOUBLE_QUOTE & Trim$( Str$( ClipboardCheck& ) ) & DOUBLE_QUOTE & " (from Clipboard)"
+        SelectionOption$ = DOUBLE_QUOTE & Trim$( Str$( SelectionCheck& ) ) & DOUBLE_QUOTE & " (selection from field " & Tag$ & ")"
+
+        Begin Dialog Dialog2Definition  200,  74, WaltsMacros$
+          OkButton        78,  50,  52,  14
+          CancelButton   138,  50,  52,  14
+          Text            10,   6, 180,  16, "Choose a number to search:"
+          OptionGroup                                                      .OptionGroup
+           OptionButton   16,  18, 166,  12, "&1  " & ClipboardOption$
+           OptionButton   16,  30, 166,  12, "&2  " & SelectionOption$
+        End Dialog
+
+        Dim Dialog2 As Dialog2Definition
+        On Error Resume Next
+        Dialog Dialog2
+        If Err = DIALOG_BUTTON_CANCEL Then Exit Sub
+
+        If Dialog2.OptionGroup = 0 Then
+            SearchString$ = Trim$( Str$( ClipboardCheck& ) )
+            Source%       = CLIPBORD
+          Else
+            SearchString$ = Trim$( Str$( SelectionCheck& ) )
+            Source%       = SELECTION
+        End If
+
+    End If
+End If
+
+' Execute the search.
+
+If CS.Search( "WC", "no:" & SearchString$ ) = 0 Then
     MsgBox "No record was found for this control number: #" & SearchString$, INFORMATION_MESSAGE, WaltsMacros$
 End If
 
+' If the search string came from the Clipboard, empty the Clipboard, so the old number
+' doesn't get in the way of the next search.
+
+If Source% = CLIPBORD Then Clipboard.Clear
+
 End Sub
-'1997240
+
+'****************************************************************************************
+
+Function StringCheck( InString$ ) As Long
+
+' The function returns the number found in the string sent to it, if there is one. In
+' order to deal with a 10-digit number it must be of type Long. The largest integer OML
+' can handle is 32,767, and the next larger type is Long, which can accommodate a number
+' up to 2,147,483,647. If Connexion hangs around long enough this macro will have to
+' change the data type of this function's output to Single, whose upper limit is
+' 3.402823466e+38, or 340,282,346,600,000,000,000,000,000,000,000,000,000. (In words: 340
+' undecillion, 282 decillion, 346 nonillion, 600 octillion, according to WolframAlpha.)
+' An invalid number is represented by a negative return value.
+
+Const MAX_LENGTH_INPUT_STRING As Integer = 32
+Const MAX_LENGTH_OCLCCN       As Integer = 10
+
+Dim TempString$
+Dim TestChar$
+Dim TString$
+
+Dim DigitsFound              : DigitsFound        = FALSE
+Dim NonDigitsFollowing       : NonDigitsFollowing = FALSE
+
+Dim i As Integer
+
+If InString$ = "" Then
+    StringCheck = NO_TEXT
+    Exit Function
+  Else
+    TempString$ = InString$
+End If
+
+If Len( TempString$ ) > MAX_LENGTH_INPUT_STRING Then
+    TempString$ = Left$( TempString$, MAX_LENGTH_INPUT_STRING ) & " ..."
+End If
+
+' Strip all non-digits from the string. Extra characters can be ignored except if they
+' come between digits, in which case they make the string invalid.
+
+For i = 1 To Len( TempString$ )
+  TestChar$ = Mid$( TempString$, i, 1 )
+  If TestChar$ Like "[0-9]" Then
+      If NonDigitsFollowing = TRUE And DigitsFound = TRUE Then
+          StringCheck = NO_NUMBER
+          Exit Function
+        Else
+          DigitsFound = TRUE
+          TString$    = TString$ & TestChar$
+      End If
+    Else
+      If DigitsFound = TRUE Then NonDigitsFollowing = TRUE
+  End If
+Next i
+
+If DigitsFound = FALSE Then
+    StringCheck = NO_NUMBER
+    Exit Function
+  Else
+    TempString$ = TString$
+End If
+
+' Strip leading zeros (just to make sure the string doesn't exceed the maximum length).
+
+For i = 1 To Len( TempString$ )
+  TestChar$ = Mid$( TempString$, i, 1 )
+  If TestChar$ = "0" Then
+      TempString$ = Mid$( TempString$, 2 )
+      i           = i - 1
+    Else
+      Exit For
+  End If
+Next i
+
+' Test the edited string for length.
+
+If Len( TempString$ ) > MAX_LENGTH_OCLCCN Then
+    StringCheck = TOO_LONG
+    Exit Function
+  ElseIf TempString$ = "" Then
+    StringCheck = NO_NUMBER
+    Exit Function
+End If
+
+On Error Resume Next
+StringCheck = Val( TempString$ )
+If Err = 6 Then
+    StringCheck = TOO_LONG  'Here, "too long" means "too big" (Err 6 is "overflow").
+End If
+
+End Function
+'33411895

@@ -23,7 +23,7 @@
 ' can be verified and changed if necessary. If the cursor is placed in a map 007, that
 ' field is used in the macro (i.e., the macro will not search for another 007 field). If
 ' there is no 007, use the dialog box to enter correct values in a new field. Default
-' values for new fields can be set in the section below that starts on line 97.
+' values for new fields can be set in the section below that starts on line 103.
 '****************************************************************************************
 
 Option Explicit
@@ -388,4 +388,4 @@ Select Case Action%
 End Select
 
 End Function
-'39213037
+'39213038

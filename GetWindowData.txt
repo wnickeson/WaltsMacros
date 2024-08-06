@@ -1,11 +1,12 @@
-'MacroName:GetWindowData.2023.01
+'MacroName:GetWindowData.2024.01
 'MacroDescription:Gets data about the current window.
 '
 ' This macro was written by Walter F. Nickeson,
 ' University of Rochester, Rochester, NY
 ' wnickeson@library.rochester.edu
+' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 24 July 2023.
+' Last updated: 12 February 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -131,8 +132,4 @@ If CS.GetWindowTitle( -1, WindowTitle$ ) Then
 End If
 
 End Sub
-'1354862
-'
-'Macro name: GetWindowData
-'Macro book: C:\Users\wnickeson.UR\AppData\Roaming\OCLC\Connex\Macros\MacroTools.mbk
-'Saved: 8/22/2023 10:04:48 AM using "MacroBookInspector" macro by Walter F. Nickeson.
+'1364907

@@ -23,7 +23,7 @@
 ' so the values can be verified and changed if necessary. If the cursor is placed in a
 ' microform 007, that field is used in the macro. If there is no 007, use the dialog box
 ' to enter correct values in a new field. Default values for new fields can be set in the
-' section below that starts on line 111.
+' section below that starts on line 118.
 '****************************************************************************************
 
 Option Explicit

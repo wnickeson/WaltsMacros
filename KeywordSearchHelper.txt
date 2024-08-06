@@ -1,4 +1,4 @@
-'MacroName:KeywordSearchHelper.2024.02
+'MacroName:KeywordSearchHelper.2024.01
 'MacroDescription:Helps construct a keyword search, including using a displayed
 ' record as a basis for the search terms.
 '
@@ -206,7 +206,7 @@
 ' Clipboard, and so may be copied into the standard Connexion search box for editing to
 ' construct a search with greater flexibility and control than that offered by this
 ' macro. To always view the search string before it's sent, change the global variable
-' VIEW_SEARCH_BEFORE_SENDING on line 239 below.
+' VIEW_SEARCH_BEFORE_SENDING on line 238 below.
 '
 ' Please also note when running the macro from an authority record for a name, the macro
 ' executes a whole phrase search using the name. Bibliographic records that contain a
@@ -225,7 +225,7 @@
 ' previous search clears those text boxes, but information from the displayed record (if
 ' one is displayed) is still available to be added; or data can be entered directly in
 ' the text boxes. The actual number of saved searches can be changed by editing the value
-' of the variable MAX_SAVED_SEARCHES on line 235, below.
+' of the variable MAX_SAVED_SEARCHES on line 234, below.
 '****************************************************************************************
 
 '###### EDIT THESE VARIABLES TO CHANGE THE MACRO'S BEHAVIOR #############################
@@ -847,8 +847,8 @@ If BibliographicRecordDisplayed Or AuthorityRecordDisplayed Then
 
                 Case "245"
 
-                  FilingIndicator%    = Val( Indicator2$ )
-                  TempString$         = Tag$ & DELIMITER & "a " & Mid$( FieldData$, FilingIndicator% + 3 )
+                  FilingIndicator% = Val( Indicator2$ )
+                  TempString$      = Tag$ & DELIMITER & "a " & Mid$( FieldData$, FilingIndicator% + 3 )
                   p = InStr( TempString$, DELIMITER & "c" )
                   If p > 0 Then
                       SORString$ = Trim$( Mid$( TempString$, p ) )
@@ -890,7 +890,7 @@ If BibliographicRecordDisplayed Or AuthorityRecordDisplayed Then
                 Case "500", "501", "502", "504", "505", "506", "508", "511", "518", "520", _
                      "521", "530", "533", "534", "536", "538", "545", "546", "550", "586"
 
-                  TempString$        = Tag$ & FieldData$
+                  TempString$    = Tag$ & FieldData$
                   NoteStringDisplay$ = MakeSearchElement( TempString$, "", NOTE_checkbox )
                   If NoteStringDisplay$ <> "" Then
                       ReDim Preserve NotesRaw    ( NotesCount% )
@@ -971,7 +971,7 @@ If BibliographicRecordDisplayed Or AuthorityRecordDisplayed Then
 
 ' If a name has just been put in the Subjects array, a title is added to it. Otherwise a title gets its own entry.
 
-                          SubjectsRaw( SubjectCount% - 1 )     = NameStringRaw$ & " " & Mid$( TitleStringRaw$, 4 )
+                          SubjectsRaw( SubjectCount% - 1 ) = NameStringRaw$ & " " & Mid$( TitleStringRaw$, 4 )
                           SubjectsDisplay( SubjectCount% - 1 ) = NameStringDisplay & " " & TitleStringDisplay$
 
                       End If
@@ -1076,7 +1076,7 @@ ThisIsSeries:
           End If
       End If
       DuplicateHeading = FALSE
-      NameStringRaw$   = ""
+      NameStringRaw$      = ""
       NotSearchable    = FALSE
       TempString$      = ""
       TitleString$     = ""
@@ -1277,7 +1277,6 @@ Dim UserLogonInfo$
 Dim p As Integer
 
 SearchTermInst$ = DOUBLE_QUOTE & "InstCode" & DOUBLE_QUOTE
-
 ' The complete path to the file is built by adding the information specified in the
 ' Connexion client documentation to the path to the user profile, obtained above.
 
@@ -3664,4 +3663,4 @@ KeepDialogOpen:
 End Select
 
 End Function
-'3668144322
+'3667144309
