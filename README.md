@@ -2,7 +2,7 @@
 Macros for the OCLC Connexion client written by Walter F. Nickeson, University of Rochester, Rochester, NY, 14627.
 wnickeson@library.rochester.edu
 
-These macros work for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit Windows 10 Pro, but no guarantees are promised or implied.
+These macros work for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit Windows 10 Pro, but no guarantees are promised or implied. IMPORTANT NOTE: Macros with dialog boxes (also called "popups") often (but not consistently) run slowly and may even cause the Client to crash. Re-starting the computer may help somewhat. A solution that always works, but is inconvenient, is to run the macro while having it open in the Macro Editor. Although this solution makes the macro execute at normal speed, the ability to invoke the macro with a shortcut key is lost, and therefore is far from ideal. This is a long-known problem with the Client.
 
 The five macrobook files are: Essentials.mbk, Extras1.mbk, Extras2.mbk, Extras3.mbk, and MacroTools.mbk. See the PDF file "Walt's Macros" for a list of which macros are in each macrobook. To get all the macros, simply download the macrobook files into [X]:\Users\\[your user name]\AppData\Roaming\OCLC\Connex\Macros\. Then, in Connexion, assign keystrokes to the macros.
 
