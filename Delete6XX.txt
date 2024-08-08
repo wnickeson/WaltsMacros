@@ -1,4 +1,4 @@
-'MacroName:Delete6XX.2024.79
+'MacroName:Delete6XX.2024.80
 'MacroDescription:Helps delete 6XX fields in a bibliographic record, in groups by
 ' thesaurus/source, and all such groups at one time.
 '
@@ -7,7 +7,7 @@
 ' wnickeson@library.rochester.edu
 ' https://orcid.org/0000-0003-0484-6938
 '
-' Last updated: 2 July 2024.
+' Last updated: 8 August 2024.
 ' Check for the latest versions of this and my other macros at
 ' https://github.com/wnickeson/WaltsMacros
 ' Please e-mail me with bug reports or to suggest improvements.
@@ -175,9 +175,9 @@ Const GREATER_THAN           As Integer = 1
 Const LESS_THAN              As Integer = -1
 Const SUBSCRIPT_OUT_OF_RANGE As Integer = 9
 
-Dim SORT_TO_END  As String*1
 Dim DELIMITER    As String*1
 Dim SINGLE_QUOTE As String*1
+Dim SORT_TO_END  As String*1
 
 Dim ArrayIndex%
 Dim Attributes%
@@ -231,8 +231,8 @@ ReDim CodeArray1( 0 )
 ReDim FieldCount( 0 )
 
 DOUBLE_QUOTE  = Chr$( 034 )
-LENGTH_MARKER = Len( MARKER )
 MARKER        = "==> "
+LENGTH_MARKER = Len( MARKER )
 SINGLE_QUOTE  = Chr$( 039 )
 SORT_TO_END   = Chr$( 255 )
 WaltsMacros$  = "[Walt's macros] Extras1:Delete6XX"
@@ -498,8 +498,8 @@ Next i
 For i = UBCodeArrays% To 0 Step -1
   If Left$( CodeArray2( i ), 1 ) = SORT_TO_END Then
       CodeArray2( i ) = Mid$( CodeArray2( i ), 2 )
-	Else
-	  Exit For
+   Else
+     Exit For
   End If
 Next i
 
@@ -1546,4 +1546,4 @@ Select Case Action%
 End Select
 
 End Function
-'155098758
+'155098764
