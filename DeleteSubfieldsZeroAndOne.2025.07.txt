@@ -1,0 +1,127 @@
+'MacroName:DeleteSubfieldsZeroAndOne.2025.07
+'MacroDescription:Deletes all occurrences of subfields $0 and $1 in bibliographic
+' records, except in field 758.
+' Last updated: 29 April 2025.
+'
+' This macro was written by Walter F. Nickeson,
+' University of Rochester, Rochester, NY
+' wnickeson@library.rochester.edu
+'
+' Check for the latest versions of this and my other macros at
+' https://github.com/wnickeson/WaltsMacros
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro while viewing a bibliographic record (cursor position is
+' irrelevant) to delete all occurrences of subfields $0 and $1 in the record in heading
+' fields (1XX, 6XX-8XX). It does not delete subfield $1 in field 758. Its only feedback
+' is if no subfields were deleted. It probably won't work in fields containing non-Latin
+' script.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const INFORMATION_MESSAGE As Integer = 64
+
+Dim DELIMITER As String*1
+
+Dim [758Present] As Variant
+Dim FieldChanged%
+Dim FieldData$
+Dim NoChangeMsg$
+Dim Row%
+Dim Start%
+Dim SubfieldCode$
+Dim Tag$
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros]DeleteSubfieldsZeroAndOne"
+
+Dim FoundField
+Dim SubfieldDeleted
+
+Dim p As Integer, q As Integer
+
+[758Present]    = FALSE
+DELIMITER       = Chr$( 223 )
+NoChangeMsg$    = "There are no subfields $0 or $1 in this record to be deleted."
+SubfieldDeleted = FALSE
+
+Row% = 1
+Do
+  FoundField = CS.GetFieldUnicode( "...", Row%, FieldData$ )
+  If FoundField Then
+      Tag$ = Left$( FieldData$, 3 )
+      If Tag$ Like "1[01][01]" Or Tag$ Like "[678][0145][012578]" Then
+          If Tag$ <> "758" Then
+              Start% = 1
+              Do
+                p = InStr( Start%, FieldData$, DELIMITER )
+                If p > 0 Then
+                    SubfieldCode$ = Mid$( FieldData$, p + 1, 1 )
+                    If SubfieldCode$ Like "[01]" Then
+                        q = InStr( p + 1, FieldData$, DELIMITER )
+                        If q = 0 Then
+                            FieldData$      = Trim$( Left$( FieldData$, p - 1 ) )
+                            SubfieldDeleted = TRUE
+                            Exit Do
+                          Else
+                            FieldData$ = Trim$( Left$( FieldData$, p - 1 ) ) & " " & Trim$( Mid$( FieldData$, q ) )
+                        End If
+                        SubfieldDeleted = TRUE
+                      Else
+                        Start%          = p + 1
+                    End If
+                End If
+              Loop Until p = 0
+              If SubfieldDeleted Then
+                  If CS.SetFieldLine( Row%, FieldData$ ) = FALSE Then
+                      MsgBox "Sorry, the macro failed to change field " & Tag$ & " on line " & Trim$( Str$( Row% ) ) & "."
+                      Exit Sub
+                  End If
+                  SubfieldDeleted = FALSE
+                  FieldChanged%   = FieldChanged% + 1
+              End If
+            Else
+              [758Present] = TRUE
+          End If
+      End If
+  End If
+  Row% = Row% + 1
+Loop Until FoundField = FALSE
+
+If FieldChanged% = 0 Then
+    If [758Present] Then
+        NoChangeMsg$ = NoChangeMsg$ & " (This macro does not delete subfield $1 from field 758.)"
+    End If
+    MsgBox NoChangeMsg$, INFORMATION_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'1284903
