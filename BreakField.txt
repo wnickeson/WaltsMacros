@@ -1,33 +1,62 @@
-'MacroName:BreakField.2024.01
-'MacroDescription:Breaks a field at the cursor position, moving all subsequent text in
+' MacroName:BreakField.2025.01
+' MacroDescription:Breaks a field at the cursor position, moving all subsequent text in
 ' that field to a new field, with a blank tag, immediately following.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 11 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Put the cursor in a variable field at the point where you want to divide
 ' it and run the macro. The macro cuts the field at the cursor position, adding the cut
-' portion as the next field but with a blank tag.
+' portion as the next field but with a blank tag. the opposite is true in a field with
+' right-to-left script, such as Hebrew: In this case, the part to the left of the cursor
+' position is what gets added as a new field.
 '
-' The macro uses the "GetFieldUnicode" command to retrieve the field in which the cursor
-' is placed. The data preceding the cursor position becomes a replacement field, and is
-' put in place with the "SetField" command. The rest of the data becomes a new field, and
-' is added with the "AddFieldLine" command at the next line. The new field has a blank
-' tag so the appropriate tag can be simply typed in.
+' The macro uses the "CopyField" command to retrieve the field in which the cursor is
+' placed. The data preceding the cursor position becomes a replacement field, and is put
+' in place with the "SetField" command. The rest of the data becomes a new field, and is
+' added with the "AddFieldLine" command at the next line. The new field has a blank tag
+' so the appropriate tag can be simply typed in.
 '****************************************************************************************
 
 Option Explicit
+
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal ClipboardFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal StringLength As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal WindowHandle As Long ) As Long
 
 '****************************************************************************************
 
@@ -42,6 +71,7 @@ If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 Const CRITICAL_MESSAGE As Integer = 16
 
 Dim BreakColumn%
+Dim CharToAdd$
 Dim ChoppedField$
 Dim CurrentColumn%
 Dim CurrentRow%
@@ -53,6 +83,22 @@ Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras3:BreakField"
 
 Dim i As Integer, p As Integer, q As Integer
+
+'----------------------------------------------------------------------------------------
+Const INTEGER_RANGE       As Long = 65536 '-32,768 to 32,767
+Const UNICODE_TEXT        As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim ClipboardCharsDim%
+Dim ClipboardClose
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim LengthOfField%
+Dim UniCodePoint$
+
+Dim ClipboardChars() As Integer
+'----------------------------------------------------------------------------------------
 
 ' Before going any further, make sure the current window is not a list: The macro works
 ' only in bibliographic or authority records.
@@ -67,9 +113,9 @@ End Select
 CurrentRow%    = CS.CursorRow
 CurrentColumn% = CS.CursorColumn
 
-' First check for cursor position: If the column position is less than 6, the cursor is
+' Then check for cursor position. If the column position is less than 6, the cursor is
 ' not in a variable field; it's either in the fixed field or it's in the tag + indicator
-' cells. Either way, there is no string to divide.
+' cells. No matter which, there is no string to divide.
 
 If CurrentColumn% < 6 Then
     MsgBox "Please place the cursor in a variable data field cell to split the field.", CRITICAL_MESSAGE, WaltsMacros$
@@ -79,58 +125,119 @@ End If
 ' If the cursor position is OK, retrieve the data for the row the cursor is in and begin
 ' processing.
 
-If CS.GetFieldUnicode( "...", CurrentRow%, FieldData$ ) = FALSE Then
-    MsgBox "Sorry, this macro couldn't get the data in the field to analyze.", CRITICAL_MESSAGE, WaltsMacros$
+CS.CopyField
+
+' Use Windows API to access the Clipboard.
+
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    MsgBox "Sorry, the contents of the Clipboard could not be accessed.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
     Exit Sub
+End If
+
+ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+If ClipboardDataHandle = 0& Then
+    MsgBox "Sorry, the macro failed to get Clipboard data.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
   Else
-    If CurrentColumn% >= Len( FieldData$ ) Or CurrentColumn% = 6 Then
-        MsgBox "Please place the cursor within the field to split it.", CRITICAL_MESSAGE, WaltsMacros$
-        Exit Sub
-    End If
+    Exit Sub
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", they
+' range from -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters, which are
+' added to the string as themselves. All other numbers are converted to hexadecimal by
+' means of the BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly
+' converted to hexadecimal 0080 to 7FFF. Negative decimal numbers are made positive by
+' adding them to 65,536, so the range -32,768 to -1 becomes the range 32,768 to 65,535.
+' The "Hex" function converts those numbers to the hexadecimal range 8000 to FFFF.
+' Finally, the hexadecimal numbers are transformed into Numeric Character References,
+' with strings of two or three digits padded with leading zeros to make each string four
+' characters in length; then that NCR is added to the character string.
+
+For i = 0 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+  If CodePoint% = 0 Then
+      CharToAdd$ = ""
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$ = Chr$( CodePoint% )
+    Else
+      If CodePoint% > 127 Then
+          UniCodePoint$ = Hex( ClipboardChars( i ) )
+          If Len( UniCodePoint$ ) < 4 Then
+             UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+          End If
+        Else
+          UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+      End If
+      CharToAdd$ = "&#x" & UniCodePoint$ & ";"
+  End If
+  FieldData$ = FieldData$ & CharToAdd$
+  CharToAdd$ = ""
+Next i
+
+If CurrentColumn% >= Len( FieldData$ ) Or CurrentColumn% = 6 Then
+    MsgBox "Please place the cursor within the field to split it.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
 
 ' If the field does not contain Unicode characters, then the position in the string at
 ' which to break the field will be the same as the cursor column position. Otherwise, the
-' string's split position will be greater than that position, as each Unicode character
-' is encoded as seven or more ASCII characters. So every Unicode character counts as one
-' toward the cursor column position, but is measured as seven or more characters in the
-' string.
+' string's split position will be greater than the apparent position, as each Unicode
+' character is encoded as eight or nine ASCII characters. So every Unicode character
+' counts as one toward the cursor column position, but is measured as eight or nine
+' characters in the string.
 
-    BreakColumn% = CurrentColumn%
-    Start%       = 6
-    Do
-      p = InStr( Start%, FieldData$, "&#x" )
-      If p > 0 Then
-          If p < BreakColumn% Then
-              q            = InStr( p, FieldData$, ";" )
-              BreakColumn% = BreakColumn% + (q - p )
-              Start%       = q + 1
-            Else
-              Exit Do
-          End If
+BreakColumn% = CurrentColumn%
+Start%       = 6
+Do
+  p = InStr( Start%, FieldData$, "&#x" )
+  If p > 0 Then
+      If p < BreakColumn% Then
+          q            = InStr( p, FieldData$, ";" )
+          BreakColumn% = BreakColumn% + (q - p )
+          Start%       = q + 1
+        Else
+          Exit Do
       End If
-    Loop Until p = 0 Or p > BreakColumn%
+  End If
+Loop Until p = 0 Or p > BreakColumn%
 
-' To add the new field (the second or latter part of the field the cursor is in), the
-' macro command requires a tag. But because that tag will disappear to leave a blank
-' space ready for typing in the new tag, whatever we label the field is irrelevant.
+' To add the new field (for left-to-right scripts, the second or latter part of the field
+' the cursor is in; for right-to-left scripts, the first or former part), the macro
+' command requires a tag. But because that tag will disappear to leave a blank space
+' ready for typing in the new tag, whatever the field is labeled is irrelevant.
 
-    NewField$     = "000  " & Trim$( Mid$( FieldData$, BreakColumn% ) )
-    ChoppedField$ = Trim$( Left$( FieldData$, BreakColumn% - 1 ) )
+NewField$     = "000  " & Trim$( Mid$( FieldData$, BreakColumn% ) )
+ChoppedField$ = Trim$( Left$( FieldData$, BreakColumn% - 1 ) )
 
 ' The "SetFieldLine" command replaces the existing field with a new one.
 
-    If CS.SetFieldLine( CurrentRow%, ChoppedField$ ) Then
-        If CS.AddFieldLine( CurrentRow% + 1, NewField$ ) = FALSE Then
-            MsgBox "Sorry, this macro couldn't break field " & Tag$ & ".", CRITICAL_MESSAGE, WaltsMacros$
-            Exit Sub
-          Else
-            CS.DeleteCurrentWord
-        End If
-      Else
+If CS.SetFieldLine( CurrentRow%, ChoppedField$ ) Then
+    If CS.AddFieldLine( CurrentRow% + 1, NewField$ ) = FALSE Then
         MsgBox "Sorry, this macro couldn't break field " & Tag$ & ".", CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
+      Else
+        CS.DeleteCurrentWord
     End If
+  Else
+    MsgBox "Sorry, this macro couldn't break field " & Tag$ & ".", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
 End If
 
 End Sub
-'1375418
+'24410546

@@ -1,0 +1,1085 @@
+' MacroName:CtryFrom264.2025.01
+' MacroDescription:Attempts to code the fixed field element "Ctry" from information in
+' subfield $a of field 264.
+'
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: In a bibliographic record, put the cursor in, or immediately before or
+' after, an abbreviation or postal code for a U.S. state. Run the macro. It expands the
+' abbreviation or postal code to the full form, and puts the cursor at the end of the
+' new, full form. Case is important: an abbreviation without capital letters (that is, a
+' non-standard form) or a postal code in lower case will make the macro fail.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Binary
+
+Declare Sub FillArrays1
+Declare Sub FillArrays2
+
+Global Const ABBREVIATION     As Integer = 0
+Global Const AUS_STATES_CODE  As Integer = 1
+Global Const AUS_STATES_COUNT As Integer = 9
+Global Const CAN_CODE         As Integer = 2
+Global Const CAN_STATE_COUNT  As Integer = 24
+Global Const CITIES_CODE      As Integer = 1
+Global Const CITIES_COUNT     As Integer = 129
+Global Const COUNTRIES_CODE   As Integer = 1
+Global Const COUNTRIES_COUNT  As Integer = 280
+Global Const FULL_NAME        As Integer = 0
+Global Const POSTAL_CODE      As Integer = 1
+Global Const US_STATE_COUNT   As Integer = 54
+
+Global AusStates()            As String
+Global CanStates()            As String
+Global Countries()            As String
+Global US_Cities()            As String
+Global US_States()            As String
+Global WorldCities()          As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CASE_INSENSITIVE     As Integer = 1
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const INFORMATION_MESSAGE  As Integer = 64
+
+Dim DELIMITER    As String*1 : DELIMITER    = Chr$( 223 )
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
+
+Dim AmbigTerm1$
+Dim AmbigTerm2$
+Dim Candidate$
+Dim CharT$
+Dim CurrCtryCode$
+Dim FieldData$
+Dim Language$
+Dim NewCtryCode$
+Dim PrevChar$
+Dim Subfield_A$
+Dim Tag$
+Dim TypeOfWindow%
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras2:CtryFrom264"
+
+Dim Match                    : Match        = FALSE
+
+Dim i As Integer, j As Integer, p As Integer
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 36
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' See what's already in the "Ctry" element of the fixed field.
+
+If CS.GetFixedField( "Ctry", CurrCtryCode$ ) Then
+End If
+
+' Check the language of the resource; this value will help differentiate between Georgia
+' the U.S. state and Georgia the European/Asian country.
+
+If CS.GetFixedField( "Lang", Language$ ) Then
+End If
+
+' Then get the content of the first 264 or 260 field.
+
+If CS.GetField( "264", 1, FieldData$ ) = FALSE Then
+    If CS.GetField( "260", 1, FieldData$ ) = FALSE Then
+        MsgBox "Sorry, this macro couldn't get data from a 26X field.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        If FieldData$ = "Data contains non-latin script" Then
+            MsgBox "Sorry, this macro can't work with non-Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+          ElseIf InStr( 1, FieldData$, "place of publication not identified", CASE_INSENSITIVE ) > 0 Or _
+                 InStr( 1, FieldData$, "s.l.", CASE_INSENSITIVE ) > 0 Then
+            MsgBox "The place of publication was not identified for this resource.", CRITICAL_MESSAGE, WaltsMacros$
+            Exit Sub
+        End If
+    End If
+  Else
+    If FieldData$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro can't work with non-Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+Tag$ = Left$( FieldData$, 3 )
+
+' Look for a place name, abbreviation, or postal code at the end of subfield $a, after
+' stripping away all punctuation except a terminal period.
+
+p = InStr( FieldData$, DELIMITER )
+If p = 6 Then
+    If Mid$( FieldData$, p + 1, 1 ) <> "a" Then
+        MsgBox "Field " & Tag$ & " does not seem to have a subfield $a.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        p = InStr( 7, FieldData$, DELIMITER )
+    End If
+  ElseIf p > 0 Then
+    Subfield_A$ = Trim$( Mid$( FieldData$, 6, p - 7 ) )
+    For i = Len( Subfield_A$ ) To 1 Step -1
+      CharT$ = Mid$( Subfield_A$, i, 1 )
+      If CharT$ Like "[A-Za-z]" Then
+          If PrevChar$ = "." Then
+              Subfield_A$ = Left$( Subfield_A$, i + 1 )
+            Else
+              Subfield_A$ = Left$( Subfield_A$, i )
+          End If
+          Exit For
+        Else
+          PrevChar$ = CharT$
+      End If
+    Next i
+  Else
+    Subfield_A$ = Trim$( Mid$( FieldData$, 6 ) )
+End If
+
+' With a text string in hand, look for a match in the arrays, starting with abbreviations
+' and postal codes. Begin with U.S. states. Except for Nebraska, the country code for
+' states is the postal code plus "u".
+
+FillArrays1
+FillArrays2
+
+For i = FULL_NAME To POSTAL_CODE
+  For j = 0 To US_STATE_COUNT
+    Candidate$ = US_States( i, j )
+    If Right$( Subfield_A$, Len( Candidate$ ) ) = Candidate$ Then
+        Match = TRUE
+        If j = 29 Or j = 30 Then 'Watch out for Nebraska! It doesn't follow the pattern.
+            NewCtryCode$ = "nbu"
+          Else
+            NewCtryCode$ = LCase$( US_States( POSTAL_CODE, j ) ) & "u"
+        End If
+        Exit For
+      Else
+        Match = FALSE
+    End If
+  Next j
+  If Match = TRUE Then Exit For
+Next i
+
+' Then go on to Canadian provinces. The presence of diacritical marks complicates
+' matching, as it can't be known if the characters are MARC-8 or precomposed Windows
+' characters. The array provides for both forms.
+
+If Match = FALSE Then
+  For i = FULL_NAME To POSTAL_CODE
+    For j = 0 To CAN_STATE_COUNT
+      Candidate$ = CanStates( i, j )
+      If Right$( Subfield_A$, Len( Candidate$ ) ) = Candidate$ Then
+          Match        = TRUE
+          NewCtryCode$ = CanStates( CAN_CODE, j )
+          Exit For
+        Else
+          Match = FALSE
+      End If
+    Next j
+    If Match = TRUE Then Exit For
+  Next i
+End If
+
+' Next up: Australian states.
+
+If Match = FALSE Then
+  For i = FULL_NAME To AUS_STATES_CODE
+    For j = 0 To AUS_STATES_COUNT
+      Candidate$ = AusStates( i, j )
+      If Right$( Subfield_A$, Len( Candidate$ ) ) = Candidate$ Then
+          Match        = TRUE
+          NewCtryCode$ = AusStates( AUS_STATES_CODE, j )
+          Exit For
+        Else
+          Match = FALSE
+      End If
+    Next j
+  Next i
+End If
+
+' Now check countries. First take care of identical names and offer disambiguation.
+
+If Match = FALSE Then
+  Select Case Right$( Subfield_A$, 5 )
+    Case "China"
+      If Len( Subfield_A$ ) >= 17 Then
+          If Right$( Subfield_A$, 17 ) = "Republic of China" Then
+              NewCtryCode$ = "ch"
+              Match        = TRUE
+          End If
+      End If
+      If Match = FALSE Then
+          AmbigTerm1$ = "China"
+          AmbigTerm2$ = "China (Republic : 1949- )"
+      End If
+    Case "Congo"
+      AmbigTerm1$ = "Congo (Brazzaville)"
+      AmbigTerm2$ = "Congo (Democratic Republic)"
+    Case "Korea"
+      If Len( Subfield_A$ ) >= 11 Then
+          If Right$( Subfield_A$, 11 ) = "North Korea" Then
+              NewCtryCode$ = "kn"
+              Match        = TRUE
+            ElseIf Right$( Subfield_A$, 11 ) = "South Korea" Then
+              NewCtryCode$ = "ko"
+              Match        = TRUE
+          End If
+      End If
+      If Match = FALSE Then
+          AmbigTerm1$ = "Korea (North)"
+          AmbigTerm2$ = "Korea (South)"
+      End If
+    Case "orgia"
+      If Right$( Subfield_A$, 7 ) = "Georgia" Then
+          If Language$ = "abk" or Language$ = "geo" Then
+              NewCtryCode$ = "gs"
+              Match        = TRUE
+            ElseIf Language$ = "eng" Or Language$ = "spa" Then
+              NewCtryCode$ = "gau"
+              Match        = TRUE
+            Else
+              AmbigTerm1$ = "Georgia (State)"
+              AmbigTerm2$ = "Georgia (Republic)"
+          End If
+      End If
+  End Select
+End If
+
+If Match = FALSE And AmbigTerm1$ = "" Then
+    For i = 0 To COUNTRIES_COUNT
+      Candidate$ = Countries( FULL_NAME, i )
+      If Right$( Subfield_A$, Len( Candidate$ ) ) = Candidate$ Then
+          If Candidate$ = "Washington" Then
+              AmbigTerm1$  = "Washington (D.C.)"
+              AmbigTerm2$  = "Washington (State)"
+              Match        = FALSE
+              Exit For
+            Else
+              Match        = TRUE
+              NewCtryCode$ = Countries( COUNTRIES_CODE, i )
+              Exit For
+          End If
+        Else
+          Match = FALSE
+      End If
+    Next i
+End If
+
+If Match = FALSE And AmbigTerm1$ = "" Then
+    For i = 0 To CITIES_COUNT
+      Candidate$ = US_Cities( FULL_NAME, i )
+      If Right$( Subfield_A$, Len( Candidate$ ) ) = Candidate$ Then
+          Match        = TRUE
+          NewCtryCode$ = US_Cities( CITIES_CODE, i )
+          Exit For
+        Else
+          Match = FALSE
+      End If
+    Next i
+End If
+
+If Match = FALSE And AmbigTerm1$ = "" Then
+    For i = 0 To CITIES_COUNT
+      Candidate$ = WorldCities( FULL_NAME, i )
+      If Right$( Subfield_A$, Len( Candidate$ ) ) = Candidate$ Then
+          Match        = TRUE
+          NewCtryCode$ = WorldCities( CITIES_CODE, i )
+          Exit For
+        Else
+          Match = FALSE
+      End If
+    Next i
+End If
+
+If AmbigTerm1$ <> "" Then
+
+    Begin Dialog Dialog1Definition  192,  74, WaltsMacros$
+      OKButton        70,  50,  52,  14
+      CancelButton   130,  50,  52,  14
+      OptionGroup                                                       .OptionGroup
+       OptionButton   16,  18, 112,  12, "&1  " & AmbigTerm1$,          .OptionButton1
+       OptionButton   16,  30, 112,  12, "&2  " & AmbigTerm2$,          .OptionButton2
+      Text            10,   6, 156,   8, "Choose the correct country:"
+    End Dialog
+
+    Dim Dialog1 As Dialog1Definition
+    On Error Resume Next
+    Dialog Dialog1
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+    Select Case AmbigTerm1$
+      Case "Washington (D.C.)"
+        If Dialog1.OptionGroup = 0 Then
+            NewCtryCode$ = "dcu"
+          Else
+            NewCtryCode$ = "wau"
+        End If
+      Case "China"
+        If Dialog1.OptionGroup = 0 Then
+            NewCtryCode$ = "cc"
+          Else
+            NewCtryCode$ = "ch"
+        End If
+      Case "Congo (Brazzaville)"
+        If Dialog1.OptionGroup = 0 Then
+            NewCtryCode$ = "cf"
+          Else
+            NewCtryCode$ = "cg"
+        End If
+      Case "Korea (North)"
+        If Dialog1.OptionGroup = 0 Then
+            NewCtryCode$ = "kn"
+          Else
+            NewCtryCode$ = "ko"
+        End If
+      Case "Georgia (State)"
+        If Dialog1.OptionGroup = 0 Then
+            NewCtryCode$ = "gau"
+          Else
+            NewCtryCode$ = "gs"
+        End If
+    End Select
+
+    Match = TRUE
+
+End If
+
+If Match Then
+    If NewCtryCode$ = CurrCtryCode$ Then
+        MsgBox "The fixed field was not changed.", INFORMATION_MESSAGE, WaltsMacros$
+      Else
+        If CS.SetFixedField( "Ctry", NewCtryCode$ ) = FALSE Then
+            MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+        End If
+    End If
+  Else
+    MsgBox "Sorry, the macro couldn't find an appropriate code for the fixed field.", INFORMATION_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrays1
+
+' States, provinces, and countries.
+
+Dim ACUTE                    : ACUTE      = Chr$( 226 )
+Dim CIRCUMFLEX               : CIRCUMFLEX = Chr$( 227 )
+
+Dim PEI_Fr$                  : PEI_Fr$    = "I" & CIRCUMFLEX & ".-P.-E" & ACUTE & "."
+Dim NE_Fr$                   : NE_Fr$     = "N.-E" & ACUTE & "."
+
+' Sources of abbreviations differ slightly; this list includes abbrevations given in the
+' 1949 Rules for descriptive cataloging in the Library of Congress, and in the 1973 U.S.
+' Government Printing Office Style Manual.
+
+ReDim US_States( 1, US_STATE_COUNT )
+
+US_States( ABBREVIATION, 0  ) = "Alaska" : US_States( POSTAL_CODE, 0  ) = "AK"
+US_States( ABBREVIATION, 1  ) = "Ala."   : US_States( POSTAL_CODE, 1  ) = "AL"
+US_States( ABBREVIATION, 2  ) = "Ark."   : US_States( POSTAL_CODE, 2  ) = "AR"
+US_States( ABBREVIATION, 3  ) = "Ariz."  : US_States( POSTAL_CODE, 3  ) = "AZ"
+US_States( ABBREVIATION, 4  ) = "Calif." : US_States( POSTAL_CODE, 4  ) = "CA"
+US_States( ABBREVIATION, 5  ) = "Colo."  : US_States( POSTAL_CODE, 5  ) = "CO"
+US_States( ABBREVIATION, 6  ) = "Conn."  : US_States( POSTAL_CODE, 6  ) = "CT"
+US_States( ABBREVIATION, 7  ) = "D.C."   : US_States( POSTAL_CODE, 7  ) = "DC"
+US_States( ABBREVIATION, 8  ) = "Del."   : US_States( POSTAL_CODE, 8  ) = "DE"
+US_States( ABBREVIATION, 9  ) = "Fla."   : US_States( POSTAL_CODE, 9  ) = "FL"
+US_States( ABBREVIATION, 10 ) = "Ga."    : US_States( POSTAL_CODE, 10 ) = "GA"
+US_States( ABBREVIATION, 11 ) = "Hawaii" : US_States( POSTAL_CODE, 11 ) = "HI"
+US_States( ABBREVIATION, 12 ) = "Iowa"   : US_States( POSTAL_CODE, 12 ) = "IA"
+US_States( ABBREVIATION, 13 ) = "Idaho"  : US_States( POSTAL_CODE, 13 ) = "ID"
+US_States( ABBREVIATION, 14 ) = "Ill."   : US_States( POSTAL_CODE, 14 ) = "IL"
+US_States( ABBREVIATION, 15 ) = "Ind."   : US_States( POSTAL_CODE, 15 ) = "IN"
+US_States( ABBREVIATION, 16 ) = "Kan."   : US_States( POSTAL_CODE, 16 ) = "KS"
+US_States( ABBREVIATION, 17 ) = "Kans."  : US_States( POSTAL_CODE, 17 ) = "KS"
+US_States( ABBREVIATION, 18 ) = "Ky."    : US_States( POSTAL_CODE, 18 ) = "KY"
+US_States( ABBREVIATION, 19 ) = "La."    : US_States( POSTAL_CODE, 19 ) = "LA"
+US_States( ABBREVIATION, 20 ) = "Mass."  : US_States( POSTAL_CODE, 20 ) = "MA"
+US_States( ABBREVIATION, 21 ) = "Md."    : US_States( POSTAL_CODE, 21 ) = "MD"
+US_States( ABBREVIATION, 22 ) = "Maine"  : US_States( POSTAL_CODE, 22 ) = "ME"
+US_States( ABBREVIATION, 23 ) = "Me."    : US_States( POSTAL_CODE, 23 ) = "ME"
+US_States( ABBREVIATION, 24 ) = "Mich."  : US_States( POSTAL_CODE, 24 ) = "MI"
+US_States( ABBREVIATION, 25 ) = "Minn."  : US_States( POSTAL_CODE, 25 ) = "MN"
+US_States( ABBREVIATION, 26 ) = "Mo."    : US_States( POSTAL_CODE, 26 ) = "MO"
+US_States( ABBREVIATION, 27 ) = "Miss."  : US_States( POSTAL_CODE, 27 ) = "MS"
+US_States( ABBREVIATION, 28 ) = "Mont."  : US_States( POSTAL_CODE, 28 ) = "MT"
+US_States( ABBREVIATION, 29 ) = "N.C."   : US_States( POSTAL_CODE, 29 ) = "NC"
+US_States( ABBREVIATION, 30 ) = "N.D."   : US_States( POSTAL_CODE, 30 ) = "ND"
+US_States( ABBREVIATION, 31 ) = "Neb."   : US_States( POSTAL_CODE, 31 ) = "NE"
+US_States( ABBREVIATION, 32 ) = "Nebr."  : US_States( POSTAL_CODE, 32 ) = "NE"
+US_States( ABBREVIATION, 33 ) = "N.H."   : US_States( POSTAL_CODE, 33 ) = "NH"
+US_States( ABBREVIATION, 34 ) = "N.J."   : US_States( POSTAL_CODE, 34 ) = "NJ"
+US_States( ABBREVIATION, 35 ) = "N.M."   : US_States( POSTAL_CODE, 35 ) = "NM"
+US_States( ABBREVIATION, 36 ) = "Nev."   : US_States( POSTAL_CODE, 36 ) = "NV"
+US_States( ABBREVIATION, 37 ) = "N.Y."   : US_States( POSTAL_CODE, 37 ) = "NY"
+US_States( ABBREVIATION, 38 ) = "Ohio"   : US_States( POSTAL_CODE, 38 ) = "OH"
+US_States( ABBREVIATION, 39 ) = "Okla."  : US_States( POSTAL_CODE, 39 ) = "OK"
+US_States( ABBREVIATION, 40 ) = "Or."    : US_States( POSTAL_CODE, 40 ) = "OR"
+US_States( ABBREVIATION, 41 ) = "Ore."   : US_States( POSTAL_CODE, 41 ) = "OR"
+US_States( ABBREVIATION, 42 ) = "Pa."    : US_States( POSTAL_CODE, 42 ) = "PA"
+US_States( ABBREVIATION, 43 ) = "R.I."   : US_States( POSTAL_CODE, 43 ) = "RI"
+US_States( ABBREVIATION, 44 ) = "S.C."   : US_States( POSTAL_CODE, 44 ) = "SC"
+US_States( ABBREVIATION, 45 ) = "S.D."   : US_States( POSTAL_CODE, 45 ) = "SD"
+US_States( ABBREVIATION, 46 ) = "Tenn."  : US_States( POSTAL_CODE, 46 ) = "TN"
+US_States( ABBREVIATION, 47 ) = "Tex."   : US_States( POSTAL_CODE, 47 ) = "TX"
+US_States( ABBREVIATION, 48 ) = "Utah"   : US_States( POSTAL_CODE, 48 ) = "UT"
+US_States( ABBREVIATION, 49 ) = "Va."    : US_States( POSTAL_CODE, 49 ) = "VA"
+US_States( ABBREVIATION, 50 ) = "Vt."    : US_States( POSTAL_CODE, 50 ) = "VT"
+US_States( ABBREVIATION, 51 ) = "Wash."  : US_States( POSTAL_CODE, 51 ) = "WA"
+US_States( ABBREVIATION, 52 ) = "Wis."   : US_States( POSTAL_CODE, 52 ) = "WI"
+US_States( ABBREVIATION, 53 ) = "W.Va."  : US_States( POSTAL_CODE, 53 ) = "WV"
+US_States( ABBREVIATION, 54 ) = "Wyo."   : US_States( POSTAL_CODE, 54 ) = "WY"
+
+' The list of Canadian provinces is a little more complex because of different forms of
+' abbreviations between English and French.
+
+ReDim CanStates( 2, CAN_STATE_COUNT )
+
+CanStates( ABBREVIATION, 0  ) = "Alb."     : CanStates( POSTAL_CODE, 0  ) = "AB" : CanStates( CAN_CODE, 0  ) = "abc"
+CanStates( ABBREVIATION, 1  ) = "Alta."    : CanStates( POSTAL_CODE, 1  ) = "AB" : CanStates( CAN_CODE, 1  ) = "abc"
+CanStates( ABBREVIATION, 2  ) = "B.C."     : CanStates( POSTAL_CODE, 2  ) = "BC" : CanStates( CAN_CODE, 2  ) = "bcc"
+CanStates( ABBREVIATION, 3  ) = "C.-B."    : CanStates( POSTAL_CODE, 3  ) = "BC" : CanStates( CAN_CODE, 3  ) = "bcc"
+CanStates( ABBREVIATION, 4  ) = "Man."     : CanStates( POSTAL_CODE, 4  ) = "MB" : CanStates( CAN_CODE, 4  ) = "mbc"
+CanStates( ABBREVIATION, 5  ) = "N.B."     : CanStates( POSTAL_CODE, 5  ) = "NB" : CanStates( CAN_CODE, 5  ) = "mbc"
+CanStates( ABBREVIATION, 6  ) = "N.-B."    : CanStates( POSTAL_CODE, 6  ) = "NB" : CanStates( CAN_CODE, 6  ) = "nkc"
+CanStates( ABBREVIATION, 7  ) = "N.L."     : CanStates( POSTAL_CODE, 7  ) = "NL" : CanStates( CAN_CODE, 7  ) = "nfc"
+CanStates( ABBREVIATION, 8  ) = "T.-N.-L." : CanStates( POSTAL_CODE, 8  ) = "NL" : CanStates( CAN_CODE, 8  ) = "nfc"
+CanStates( ABBREVIATION, 9  ) = "N.-É."    : CanStates( POSTAL_CODE, 9  ) = "NS" : CanStates( CAN_CODE, 9  ) = "nsc"
+CanStates( ABBREVIATION, 10 ) = "N.S."     : CanStates( POSTAL_CODE, 10 ) = "NS" : CanStates( CAN_CODE, 10 ) = "nsc"
+CanStates( ABBREVIATION, 11 ) = NE_Fr$     : CanStates( POSTAL_CODE, 11 ) = "NS" : CanStates( CAN_CODE, 11 ) = "nsc"
+CanStates( ABBREVIATION, 12 ) = "N.W.T."   : CanStates( POSTAL_CODE, 12 ) = "NT" : CanStates( CAN_CODE, 12 ) = "ntc"
+CanStates( ABBREVIATION, 13 ) = "T.N.-O."  : CanStates( POSTAL_CODE, 13 ) = "NT" : CanStates( CAN_CODE, 13 ) = "ntc"
+CanStates( ABBREVIATION, 14 ) = "Nt"       : CanStates( POSTAL_CODE, 14 ) = "NU" : CanStates( CAN_CODE, 14 ) = "nuc"
+CanStates( ABBREVIATION, 15 ) = "Nvt."     : CanStates( POSTAL_CODE, 15 ) = "NU" : CanStates( CAN_CODE, 15 ) = "nuc"
+CanStates( ABBREVIATION, 16 ) = "Ont."     : CanStates( POSTAL_CODE, 16 ) = "ON" : CanStates( CAN_CODE, 16 ) = "onc"
+CanStates( ABBREVIATION, 17 ) = "P.E.I."   : CanStates( POSTAL_CODE, 17 ) = "PE" : CanStates( CAN_CODE, 17 ) = "pic"
+CanStates( ABBREVIATION, 18 ) = "Î.-P.-É." : CanStates( POSTAL_CODE, 18 ) = "PE" : CanStates( CAN_CODE, 18 ) = "pic"
+CanStates( ABBREVIATION, 19 ) = PEI_Fr$    : CanStates( POSTAL_CODE, 19 ) = "PE" : CanStates( CAN_CODE, 19 ) = "pic"
+CanStates( ABBREVIATION, 20 ) = "Qc"       : CanStates( POSTAL_CODE, 20 ) = "QC" : CanStates( CAN_CODE, 20 ) = "quc"
+CanStates( ABBREVIATION, 21 ) = "Que."     : CanStates( POSTAL_CODE, 21 ) = "QC" : CanStates( CAN_CODE, 21 ) = "quc"
+CanStates( ABBREVIATION, 22 ) = "Sask."    : CanStates( POSTAL_CODE, 22 ) = "SK" : CanStates( CAN_CODE, 22 ) = "snc"
+CanStates( ABBREVIATION, 23 ) = "Y.T."     : CanStates( POSTAL_CODE, 23 ) = "YT" : CanStates( CAN_CODE, 23 ) = "ykc"
+CanStates( ABBREVIATION, 24 ) = "Yn"       : CanStates( POSTAL_CODE, 24 ) = "YT" : CanStates( CAN_CODE, 24 ) = "ykc"
+
+ReDim AusStates( 1, 9 )
+
+' The Northern Territory loses out here; its abbreviation is the same as the postal code
+' for Canada's Northwest Territories, and this macro can't tell which might be meant, so
+' it does nothing, leaving it up to the operator to make a decision.
+
+AusStates( ABBREVIATION, 0  ) = "ACT" : AusStates( AUS_STATES_CODE, 0  ) = "aca"
+AusStates( ABBREVIATION, 1  ) = "WA"  : AusStates( AUS_STATES_CODE, 1  ) = "wea"
+AusStates( ABBREVIATION, 2  ) = "NSW" : AusStates( AUS_STATES_CODE, 2  ) = "xna"
+AusStates( ABBREVIATION, 3  ) = "SA"  : AusStates( AUS_STATES_CODE, 3  ) = "xra"
+AusStates( ABBREVIATION, 4  ) = "QLD" : AusStates( AUS_STATES_CODE, 4  ) = "qea"
+AusStates( ABBREVIATION, 5  ) = "Qld" : AusStates( AUS_STATES_CODE, 5  ) = "qea"
+AusStates( ABBREVIATION, 6  ) = "Tas" : AusStates( AUS_STATES_CODE, 6  ) = "tma"
+AusStates( ABBREVIATION, 7  ) = "TAS" : AusStates( AUS_STATES_CODE, 7  ) = "tma"
+AusStates( ABBREVIATION, 8  ) = "Vic" : AusStates( AUS_STATES_CODE, 8  ) = "vra"
+AusStates( ABBREVIATION, 9  ) = "VIC" : AusStates( AUS_STATES_CODE, 9  ) = "vra"
+
+' The countries of the world.
+
+ReDim Countries( 1, COUNTRIES_COUNT )
+
+Countries( FULL_NAME, 0   ) = "Saint Vincent and the Grenadines" : Countries( COUNTRIES_CODE, 0   ) = "xm"
+Countries( FULL_NAME, 1   ) = "Australian Capital Territory"     : Countries( COUNTRIES_CODE, 1   ) = "aca"
+Countries( FULL_NAME, 2   ) = "Newfoundland and Labrador"        : Countries( COUNTRIES_CODE, 2   ) = "nfc"
+Countries( FULL_NAME, 3   ) = "Saint Pierre and Miquelon"        : Countries( COUNTRIES_CODE, 3   ) = "xl"
+Countries( FULL_NAME, 4   ) = "Central African Republic"         : Countries( COUNTRIES_CODE, 4   ) = "cx"
+Countries( FULL_NAME, 5   ) = "Bosnia and Herzegovina"           : Countries( COUNTRIES_CODE, 5   ) = "bn"
+Countries( FULL_NAME, 6   ) = "Northwest Territories"            : Countries( COUNTRIES_CODE, 6   ) = "ntc"
+Countries( FULL_NAME, 7   ) = "Sao Tome and Principe"            : Countries( COUNTRIES_CODE, 7   ) = "sf"
+Countries( FULL_NAME, 8   ) = "District of Columbia"             : Countries( COUNTRIES_CODE, 8   ) = "dcu"
+Countries( FULL_NAME, 9   ) = "Prince Edward Island"             : Countries( COUNTRIES_CODE, 9   ) = "pic"
+Countries( FULL_NAME, 10  ) = "United Arab Emirates"             : Countries( COUNTRIES_CODE, 10  ) = "ts"
+Countries( FULL_NAME, 11  ) = "Antigua and Barbuda"              : Countries( COUNTRIES_CODE, 11  ) = "aq"
+Countries( FULL_NAME, 12  ) = "Trinidad and Tobago"              : Countries( COUNTRIES_CODE, 12  ) = "tr"
+Countries( FULL_NAME, 13  ) = "Dominican Republic"               : Countries( COUNTRIES_CODE, 13  ) = "dr"
+Countries( FULL_NAME, 14  ) = "Northern Territory"               : Countries( COUNTRIES_CODE, 14  ) = "xoa"
+Countries( FULL_NAME, 15  ) = "Equatorial Guinea"                : Countries( COUNTRIES_CODE, 15  ) = "eg"
+Countries( FULL_NAME, 16  ) = "Saint Kitts-Nevis"                : Countries( COUNTRIES_CODE, 16  ) = "xd"
+Countries( FULL_NAME, 17  ) = "Western Australia"                : Countries( COUNTRIES_CODE, 17  ) = "wea"
+Countries( FULL_NAME, 18  ) = "British Columbia"                 : Countries( COUNTRIES_CODE, 18  ) = "bcc"
+Countries( FULL_NAME, 19  ) = "Northern Ireland"                 : Countries( COUNTRIES_CODE, 19  ) = "nik"
+Countries( FULL_NAME, 20  ) = "Papua New Guinea"                 : Countries( COUNTRIES_CODE, 20  ) = "pp"
+Countries( FULL_NAME, 21  ) = "New South Wales"                  : Countries( COUNTRIES_CODE, 21  ) = "xna"
+Countries( FULL_NAME, 22  ) = "North Macedonia"                  : Countries( COUNTRIES_CODE, 22  ) = "xn"
+Countries( FULL_NAME, 23  ) = "South Australia"                  : Countries( COUNTRIES_CODE, 23  ) = "xra"
+Countries( FULL_NAME, 24  ) = "Yukon Territory"                  : Countries( COUNTRIES_CODE, 24  ) = "ykc"
+Countries( FULL_NAME, 25  ) = "American Samoa"                   : Countries( COUNTRIES_CODE, 25  ) = "as"
+Countries( FULL_NAME, 26  ) = "Czech Republic"                   : Countries( COUNTRIES_CODE, 26  ) = "xr"
+Countries( FULL_NAME, 27  ) = "North Carolina"                   : Countries( COUNTRIES_CODE, 27  ) = "ncu"
+Countries( FULL_NAME, 28  ) = "South Carolina"                   : Countries( COUNTRIES_CODE, 28  ) = "scu"
+Countries( FULL_NAME, 29  ) = "United Kingdom"                   : Countries( COUNTRIES_CODE, 29  ) = "xxk"
+Countries( FULL_NAME, 30  ) = "French Guiana"                    : Countries( COUNTRIES_CODE, 30  ) = "fg"
+Countries( FULL_NAME, 31  ) = "Guinea-Bissau"                    : Countries( COUNTRIES_CODE, 31  ) = "pg"
+Countries( FULL_NAME, 32  ) = "Liechtenstein"                    : Countries( COUNTRIES_CODE, 32  ) = "lh"
+Countries( FULL_NAME, 33  ) = "Massachusetts"                    : Countries( COUNTRIES_CODE, 33  ) = "mau"
+Countries( FULL_NAME, 34  ) = "New Brunswick"                    : Countries( COUNTRIES_CODE, 34  ) = "nkc"
+Countries( FULL_NAME, 35  ) = "New Caledonia"                    : Countries( COUNTRIES_CODE, 35  ) = "nl"
+Countries( FULL_NAME, 36  ) = "New Hampshire"                    : Countries( COUNTRIES_CODE, 36  ) = "nhu"
+Countries( FULL_NAME, 37  ) = "United States"                    : Countries( COUNTRIES_CODE, 37  ) = "xxu"
+Countries( FULL_NAME, 38  ) = "West Virginia"                    : Countries( COUNTRIES_CODE, 38  ) = "wvu"
+Countries( FULL_NAME, 39  ) = "Burkina Faso"                     : Countries( COUNTRIES_CODE, 39  ) = "uv"
+Countries( FULL_NAME, 40  ) = "North Dakota"                     : Countries( COUNTRIES_CODE, 40  ) = "ndu"
+Countries( FULL_NAME, 41  ) = "Pennsylvania"                     : Countries( COUNTRIES_CODE, 41  ) = "pau"
+Countries( FULL_NAME, 42  ) = "Rhode Island"                     : Countries( COUNTRIES_CODE, 42  ) = "riu"
+Countries( FULL_NAME, 43  ) = "Saint Helena"                     : Countries( COUNTRIES_CODE, 43  ) = "xj"
+Countries( FULL_NAME, 44  ) = "Saint-Martin"                     : Countries( COUNTRIES_CODE, 44  ) = "st"
+Countries( FULL_NAME, 45  ) = "Saskatchewan"                     : Countries( COUNTRIES_CODE, 45  ) = "snc"
+Countries( FULL_NAME, 46  ) = "Saudi Arabia"                     : Countries( COUNTRIES_CODE, 46  ) = "su"
+Countries( FULL_NAME, 47  ) = "Sierra Leone"                     : Countries( COUNTRIES_CODE, 47  ) = "sl"
+Countries( FULL_NAME, 48  ) = "Sint Maarten"                     : Countries( COUNTRIES_CODE, 48  ) = "sn"
+Countries( FULL_NAME, 49  ) = "South Africa"                     : Countries( COUNTRIES_CODE, 49  ) = "sa"
+Countries( FULL_NAME, 50  ) = "South Dakota"                     : Countries( COUNTRIES_CODE, 50  ) = "sdu"
+Countries( FULL_NAME, 51  ) = "Turkmenistan"                     : Countries( COUNTRIES_CODE, 51  ) = "tk"
+Countries( FULL_NAME, 52  ) = "Vatican City"                     : Countries( COUNTRIES_CODE, 52  ) = "vc"
+Countries( FULL_NAME, 53  ) = "Afghanistan"                      : Countries( COUNTRIES_CODE, 53  ) = "af"
+Countries( FULL_NAME, 54  ) = "Connecticut"                      : Countries( COUNTRIES_CODE, 54  ) = "ctu"
+Countries( FULL_NAME, 55  ) = "El Salvador"                      : Countries( COUNTRIES_CODE, 55  ) = "es"
+Countries( FULL_NAME, 56  ) = "Isle of Man"                      : Countries( COUNTRIES_CODE, 56  ) = "im"
+Countries( FULL_NAME, 57  ) = "Mississippi"                      : Countries( COUNTRIES_CODE, 57  ) = "msu"
+Countries( FULL_NAME, 58  ) = "Netherlands"                      : Countries( COUNTRIES_CODE, 58  ) = "ne"
+Countries( FULL_NAME, 59  ) = "New Zealand"                      : Countries( COUNTRIES_CODE, 59  ) = "nz"
+Countries( FULL_NAME, 60  ) = "Nova Scotia"                      : Countries( COUNTRIES_CODE, 60  ) = "nsc"
+Countries( FULL_NAME, 61  ) = "Philippines"                      : Countries( COUNTRIES_CODE, 61  ) = "ph"
+Countries( FULL_NAME, 62  ) = "Puerto Rico"                      : Countries( COUNTRIES_CODE, 62  ) = "pr"
+Countries( FULL_NAME, 63  ) = "Saint Lucia"                      : Countries( COUNTRIES_CODE, 63  ) = "xk"
+Countries( FULL_NAME, 64  ) = "South Sudan"                      : Countries( COUNTRIES_CODE, 64  ) = "sd"
+Countries( FULL_NAME, 65  ) = "Switzerland"                      : Countries( COUNTRIES_CODE, 65  ) = "sz"
+Countries( FULL_NAME, 66  ) = "Timor-Leste"                      : Countries( COUNTRIES_CODE, 66  ) = "em"
+Countries( FULL_NAME, 67  ) = "Antarctica"                       : Countries( COUNTRIES_CODE, 67  ) = "ay"
+Countries( FULL_NAME, 68  ) = "Azerbaijan"                       : Countries( COUNTRIES_CODE, 68  ) = "aj"
+Countries( FULL_NAME, 69  ) = "Bangladesh"                       : Countries( COUNTRIES_CODE, 69  ) = "bg"
+Countries( FULL_NAME, 70  ) = "Cabo Verde"                       : Countries( COUNTRIES_CODE, 70  ) = "cv"
+Countries( FULL_NAME, 71  ) = "California"                       : Countries( COUNTRIES_CODE, 71  ) = "cau"
+Countries( FULL_NAME, 72  ) = "Costa Rica"                       : Countries( COUNTRIES_CODE, 72  ) = "cr"
+Countries( FULL_NAME, 73  ) = "Guadeloupe"                       : Countries( COUNTRIES_CODE, 73  ) = "gp"
+Countries( FULL_NAME, 74  ) = "Kazakhstan"                       : Countries( COUNTRIES_CODE, 74  ) = "kz"
+Countries( FULL_NAME, 75  ) = "Kyrgyzstan"                       : Countries( COUNTRIES_CODE, 75  ) = "kg"
+Countries( FULL_NAME, 76  ) = "Luxembourg"                       : Countries( COUNTRIES_CODE, 76  ) = "lu"
+Countries( FULL_NAME, 77  ) = "Madagascar"                       : Countries( COUNTRIES_CODE, 77  ) = "mg"
+Countries( FULL_NAME, 78  ) = "Martinique"                       : Countries( COUNTRIES_CODE, 78  ) = "mq"
+Countries( FULL_NAME, 79  ) = "Mauritania"                       : Countries( COUNTRIES_CODE, 79  ) = "mu"
+Countries( FULL_NAME, 80  ) = "Montenegro"                       : Countries( COUNTRIES_CODE, 80  ) = "mo"
+Countries( FULL_NAME, 81  ) = "Montserrat"                       : Countries( COUNTRIES_CODE, 81  ) = "mj"
+Countries( FULL_NAME, 82  ) = "Mozambique"                       : Countries( COUNTRIES_CODE, 82  ) = "mz"
+Countries( FULL_NAME, 83  ) = "New Jersey"                       : Countries( COUNTRIES_CODE, 83  ) = "nju"
+Countries( FULL_NAME, 84  ) = "New Mexico"                       : Countries( COUNTRIES_CODE, 84  ) = "nmu"
+Countries( FULL_NAME, 85  ) = "Queensland"                       : Countries( COUNTRIES_CODE, 85  ) = "qea"
+Countries( FULL_NAME, 86  ) = "San Marino"                       : Countries( COUNTRIES_CODE, 86  ) = "sm"
+Countries( FULL_NAME, 87  ) = "Tajikistan"                       : Countries( COUNTRIES_CODE, 87  ) = "ta"
+Countries( FULL_NAME, 88  ) = "Uzbekistan"                       : Countries( COUNTRIES_CODE, 88  ) = "uz"
+Countries( FULL_NAME, 89  ) = "Washington"                       : Countries( COUNTRIES_CODE, 89  ) = "wau"
+Countries( FULL_NAME, 90  ) = "Argentina"                        : Countries( COUNTRIES_CODE, 90  ) = "ag"
+Countries( FULL_NAME, 91  ) = "Australia"                        : Countries( COUNTRIES_CODE, 91  ) = "at"
+Countries( FULL_NAME, 92  ) = "Gibraltar"                        : Countries( COUNTRIES_CODE, 92  ) = "gi"
+Countries( FULL_NAME, 93  ) = "Greenland"                        : Countries( COUNTRIES_CODE, 93  ) = "gl"
+Countries( FULL_NAME, 94  ) = "Guatemala"                        : Countries( COUNTRIES_CODE, 94  ) = "gt"
+Countries( FULL_NAME, 95  ) = "Indonesia"                        : Countries( COUNTRIES_CODE, 95  ) = "io"
+Countries( FULL_NAME, 96  ) = "Lithuania"                        : Countries( COUNTRIES_CODE, 96  ) = "li"
+Countries( FULL_NAME, 97  ) = "Louisiana"                        : Countries( COUNTRIES_CODE, 97  ) = "lau"
+Countries( FULL_NAME, 98  ) = "Mauritius"                        : Countries( COUNTRIES_CODE, 98  ) = "mf"
+Countries( FULL_NAME, 99  ) = "Minnesota"                        : Countries( COUNTRIES_CODE, 99  ) = "mnu"
+Countries( FULL_NAME, 100 ) = "Nicaragua"                        : Countries( COUNTRIES_CODE, 100 ) = "nq"
+Countries( FULL_NAME, 101 ) = "Singapore"                        : Countries( COUNTRIES_CODE, 101 ) = "si"
+Countries( FULL_NAME, 102 ) = "Sri Lanka"                        : Countries( COUNTRIES_CODE, 102 ) = "ce"
+Countries( FULL_NAME, 103 ) = "Tennessee"                        : Countries( COUNTRIES_CODE, 103 ) = "tnu"
+Countries( FULL_NAME, 104 ) = "Venezuela"                        : Countries( COUNTRIES_CODE, 104 ) = "ve"
+Countries( FULL_NAME, 105 ) = "Wisconsin"                        : Countries( COUNTRIES_CODE, 105 ) = "wiu"
+Countries( FULL_NAME, 106 ) = "Anguilla"                         : Countries( COUNTRIES_CODE, 106 ) = "am"
+Countries( FULL_NAME, 107 ) = "Arkansas"                         : Countries( COUNTRIES_CODE, 107 ) = "aru"
+Countries( FULL_NAME, 108 ) = "Barbados"                         : Countries( COUNTRIES_CODE, 108 ) = "bb"
+Countries( FULL_NAME, 109 ) = "Botswana"                         : Countries( COUNTRIES_CODE, 109 ) = "bs"
+Countries( FULL_NAME, 110 ) = "Bulgaria"                         : Countries( COUNTRIES_CODE, 110 ) = "bu"
+Countries( FULL_NAME, 111 ) = "Cambodia"                         : Countries( COUNTRIES_CODE, 111 ) = "cb"
+Countries( FULL_NAME, 112 ) = "Cameroon"                         : Countries( COUNTRIES_CODE, 112 ) = "cm"
+Countries( FULL_NAME, 113 ) = "Colombia"                         : Countries( COUNTRIES_CODE, 113 ) = "ck"
+Countries( FULL_NAME, 114 ) = "Colorado"                         : Countries( COUNTRIES_CODE, 114 ) = "cou"
+Countries( FULL_NAME, 115 ) = "Delaware"                         : Countries( COUNTRIES_CODE, 115 ) = "deu"
+Countries( FULL_NAME, 116 ) = "Djibouti"                         : Countries( COUNTRIES_CODE, 116 ) = "ft"
+Countries( FULL_NAME, 117 ) = "Dominica"                         : Countries( COUNTRIES_CODE, 117 ) = "dq"
+Countries( FULL_NAME, 118 ) = "Eswatini"                         : Countries( COUNTRIES_CODE, 118 ) = "sq"
+Countries( FULL_NAME, 119 ) = "Ethiopia"                         : Countries( COUNTRIES_CODE, 119 ) = "et"
+Countries( FULL_NAME, 120 ) = "Guernsey"                         : Countries( COUNTRIES_CODE, 120 ) = "gg"
+Countries( FULL_NAME, 121 ) = "Honduras"                         : Countries( COUNTRIES_CODE, 121 ) = "ho"
+Countries( FULL_NAME, 122 ) = "Illinois"                         : Countries( COUNTRIES_CODE, 122 ) = "ilu"
+Countries( FULL_NAME, 123 ) = "Kentucky"                         : Countries( COUNTRIES_CODE, 123 ) = "kyu"
+Countries( FULL_NAME, 124 ) = "Kiribati"                         : Countries( COUNTRIES_CODE, 124 ) = "gb"
+Countries( FULL_NAME, 125 ) = "Malaysia"                         : Countries( COUNTRIES_CODE, 125 ) = "my"
+Countries( FULL_NAME, 126 ) = "Maldives"                         : Countries( COUNTRIES_CODE, 126 ) = "xc"
+Countries( FULL_NAME, 127 ) = "Manitoba"                         : Countries( COUNTRIES_CODE, 127 ) = "mbc"
+Countries( FULL_NAME, 128 ) = "Maryland"                         : Countries( COUNTRIES_CODE, 128 ) = "mdu"
+Countries( FULL_NAME, 129 ) = "Michigan"                         : Countries( COUNTRIES_CODE, 129 ) = "miu"
+Countries( FULL_NAME, 130 ) = "Missouri"                         : Countries( COUNTRIES_CODE, 130 ) = "mou"
+Countries( FULL_NAME, 131 ) = "Mongolia"                         : Countries( COUNTRIES_CODE, 131 ) = "mp"
+Countries( FULL_NAME, 132 ) = "Nebraska"                         : Countries( COUNTRIES_CODE, 132 ) = "nbu"
+Countries( FULL_NAME, 133 ) = "New York"                         : Countries( COUNTRIES_CODE, 133 ) = "nyu"
+Countries( FULL_NAME, 134 ) = "Oklahoma"                         : Countries( COUNTRIES_CODE, 134 ) = "oku"
+Countries( FULL_NAME, 135 ) = "Pakistan"                         : Countries( COUNTRIES_CODE, 135 ) = "pk"
+Countries( FULL_NAME, 136 ) = "Paraguay"                         : Countries( COUNTRIES_CODE, 136 ) = "py"
+Countries( FULL_NAME, 137 ) = "Portugal"                         : Countries( COUNTRIES_CODE, 137 ) = "po"
+Countries( FULL_NAME, 138 ) = "Scotland"                         : Countries( COUNTRIES_CODE, 138 ) = "stk"
+Countries( FULL_NAME, 139 ) = "Slovakia"                         : Countries( COUNTRIES_CODE, 139 ) = "xo"
+Countries( FULL_NAME, 140 ) = "Slovenia"                         : Countries( COUNTRIES_CODE, 140 ) = "xv"
+Countries( FULL_NAME, 141 ) = "Tanzania"                         : Countries( COUNTRIES_CODE, 141 ) = "tz"
+Countries( FULL_NAME, 142 ) = "Tasmania"                         : Countries( COUNTRIES_CODE, 142 ) = "tma"
+Countries( FULL_NAME, 143 ) = "Thailand"                         : Countries( COUNTRIES_CODE, 143 ) = "th"
+Countries( FULL_NAME, 144 ) = "Victoria"                         : Countries( COUNTRIES_CODE, 144 ) = "vra"
+Countries( FULL_NAME, 145 ) = "Virginia"                         : Countries( COUNTRIES_CODE, 145 ) = "vau"
+Countries( FULL_NAME, 146 ) = "Zimbabwe"                         : Countries( COUNTRIES_CODE, 146 ) = "rh"
+Countries( FULL_NAME, 147 ) = "Alabama"                          : Countries( COUNTRIES_CODE, 147 ) = "alu"
+Countries( FULL_NAME, 148 ) = "Albania"                          : Countries( COUNTRIES_CODE, 148 ) = "aa"
+Countries( FULL_NAME, 149 ) = "Alberta"                          : Countries( COUNTRIES_CODE, 149 ) = "abc"
+Countries( FULL_NAME, 150 ) = "Algeria"                          : Countries( COUNTRIES_CODE, 150 ) = "ae"
+Countries( FULL_NAME, 151 ) = "Andorra"                          : Countries( COUNTRIES_CODE, 151 ) = "an"
+Countries( FULL_NAME, 152 ) = "Arizona"                          : Countries( COUNTRIES_CODE, 152 ) = "azu"
+Countries( FULL_NAME, 153 ) = "Armenia"                          : Countries( COUNTRIES_CODE, 153 ) = "ai"
+Countries( FULL_NAME, 154 ) = "Austria"                          : Countries( COUNTRIES_CODE, 154 ) = "au"
+Countries( FULL_NAME, 155 ) = "Bahamas"                          : Countries( COUNTRIES_CODE, 155 ) = "bf"
+Countries( FULL_NAME, 156 ) = "Bahrain"                          : Countries( COUNTRIES_CODE, 156 ) = "ba"
+Countries( FULL_NAME, 157 ) = "Belarus"                          : Countries( COUNTRIES_CODE, 157 ) = "bw"
+Countries( FULL_NAME, 158 ) = "Belgium"                          : Countries( COUNTRIES_CODE, 158 ) = "be"
+Countries( FULL_NAME, 159 ) = "Bolivia"                          : Countries( COUNTRIES_CODE, 159 ) = "bo"
+Countries( FULL_NAME, 160 ) = "Burundi"                          : Countries( COUNTRIES_CODE, 160 ) = "bd"
+Countries( FULL_NAME, 161 ) = "Comoros"                          : Countries( COUNTRIES_CODE, 161 ) = "cq"
+Countries( FULL_NAME, 162 ) = "Croatia"                          : Countries( COUNTRIES_CODE, 162 ) = "ci"
+Countries( FULL_NAME, 163 ) = "Denmark"                          : Countries( COUNTRIES_CODE, 163 ) = "dk"
+Countries( FULL_NAME, 164 ) = "Ecuador"                          : Countries( COUNTRIES_CODE, 164 ) = "ec"
+Countries( FULL_NAME, 165 ) = "England"                          : Countries( COUNTRIES_CODE, 165 ) = "enk"
+Countries( FULL_NAME, 166 ) = "Eritrea"                          : Countries( COUNTRIES_CODE, 166 ) = "ea"
+Countries( FULL_NAME, 167 ) = "Estonia"                          : Countries( COUNTRIES_CODE, 167 ) = "er"
+Countries( FULL_NAME, 168 ) = "Finland"                          : Countries( COUNTRIES_CODE, 168 ) = "fi"
+Countries( FULL_NAME, 169 ) = "Florida"                          : Countries( COUNTRIES_CODE, 169 ) = "flu"
+Countries( FULL_NAME, 170 ) = "Germany"                          : Countries( COUNTRIES_CODE, 170 ) = "gw"
+Countries( FULL_NAME, 171 ) = "Grenada"                          : Countries( COUNTRIES_CODE, 171 ) = "gd"
+Countries( FULL_NAME, 172 ) = "Hungary"                          : Countries( COUNTRIES_CODE, 172 ) = "hu"
+Countries( FULL_NAME, 173 ) = "Iceland"                          : Countries( COUNTRIES_CODE, 173 ) = "ic"
+Countries( FULL_NAME, 174 ) = "Indiana"                          : Countries( COUNTRIES_CODE, 174 ) = "inu"
+Countries( FULL_NAME, 175 ) = "Ireland"                          : Countries( COUNTRIES_CODE, 175 ) = "ie"
+Countries( FULL_NAME, 176 ) = "Jamaica"                          : Countries( COUNTRIES_CODE, 176 ) = "jm"
+Countries( FULL_NAME, 177 ) = "Lebanon"                          : Countries( COUNTRIES_CODE, 177 ) = "le"
+Countries( FULL_NAME, 178 ) = "Lesotho"                          : Countries( COUNTRIES_CODE, 178 ) = "lo"
+Countries( FULL_NAME, 179 ) = "Liberia"                          : Countries( COUNTRIES_CODE, 179 ) = "lb"
+Countries( FULL_NAME, 180 ) = "Mayotte"                          : Countries( COUNTRIES_CODE, 180 ) = "ot"
+Countries( FULL_NAME, 181 ) = "Moldova"                          : Countries( COUNTRIES_CODE, 181 ) = "mv"
+Countries( FULL_NAME, 182 ) = "Montana"                          : Countries( COUNTRIES_CODE, 182 ) = "mtu"
+Countries( FULL_NAME, 183 ) = "Morocco"                          : Countries( COUNTRIES_CODE, 183 ) = "mr"
+Countries( FULL_NAME, 184 ) = "Namibia"                          : Countries( COUNTRIES_CODE, 184 ) = "sx"
+Countries( FULL_NAME, 185 ) = "Nigeria"                          : Countries( COUNTRIES_CODE, 185 ) = "nr"
+Countries( FULL_NAME, 186 ) = "Nunavut"                          : Countries( COUNTRIES_CODE, 186 ) = "nuc"
+Countries( FULL_NAME, 187 ) = "Ontario"                          : Countries( COUNTRIES_CODE, 187 ) = "onc"
+Countries( FULL_NAME, 188 ) = "Romania"                          : Countries( COUNTRIES_CODE, 188 ) = "rm"
+Countries( FULL_NAME, 189 ) = "Senegal"                          : Countries( COUNTRIES_CODE, 189 ) = "sg"
+Countries( FULL_NAME, 190 ) = "Somalia"                          : Countries( COUNTRIES_CODE, 190 ) = "so"
+Countries( FULL_NAME, 191 ) = "Surinam"                          : Countries( COUNTRIES_CODE, 191 ) = "sr"
+Countries( FULL_NAME, 192 ) = "Tokelau"                          : Countries( COUNTRIES_CODE, 192 ) = "tl"
+Countries( FULL_NAME, 193 ) = "Tunisia"                          : Countries( COUNTRIES_CODE, 193 ) = "ti"
+Countries( FULL_NAME, 194 ) = "Ukraine"                          : Countries( COUNTRIES_CODE, 194 ) = "un"
+Countries( FULL_NAME, 195 ) = "Uruguay"                          : Countries( COUNTRIES_CODE, 195 ) = "uy"
+Countries( FULL_NAME, 196 ) = "Vanuatu"                          : Countries( COUNTRIES_CODE, 196 ) = "nn"
+Countries( FULL_NAME, 197 ) = "Vermont"                          : Countries( COUNTRIES_CODE, 197 ) = "vtu"
+Countries( FULL_NAME, 198 ) = "Vietnam"                          : Countries( COUNTRIES_CODE, 198 ) = "vm"
+Countries( FULL_NAME, 199 ) = "Wyoming"                          : Countries( COUNTRIES_CODE, 199 ) = "wyu"
+Countries( FULL_NAME, 200 ) = "Alaska"                           : Countries( COUNTRIES_CODE, 200 ) = "aku"
+Countries( FULL_NAME, 201 ) = "Angola"                           : Countries( COUNTRIES_CODE, 201 ) = "ao"
+Countries( FULL_NAME, 202 ) = "Belize"                           : Countries( COUNTRIES_CODE, 202 ) = "bh"
+Countries( FULL_NAME, 203 ) = "Bhutan"                           : Countries( COUNTRIES_CODE, 203 ) = "bt"
+Countries( FULL_NAME, 204 ) = "Brazil"                           : Countries( COUNTRIES_CODE, 204 ) = "bl"
+Countries( FULL_NAME, 205 ) = "Brunei"                           : Countries( COUNTRIES_CODE, 205 ) = "bx"
+Countries( FULL_NAME, 206 ) = "Canada"                           : Countries( COUNTRIES_CODE, 206 ) = "xxc"
+Countries( FULL_NAME, 207 ) = "Cyprus"                           : Countries( COUNTRIES_CODE, 207 ) = "cy"
+Countries( FULL_NAME, 208 ) = "France"                           : Countries( COUNTRIES_CODE, 208 ) = "fr"
+Countries( FULL_NAME, 209 ) = "Gambia"                           : Countries( COUNTRIES_CODE, 209 ) = "gm"
+Countries( FULL_NAME, 210 ) = "Greece"                           : Countries( COUNTRIES_CODE, 210 ) = "gr"
+Countries( FULL_NAME, 211 ) = "Guinea"                           : Countries( COUNTRIES_CODE, 211 ) = "gv"
+Countries( FULL_NAME, 212 ) = "Guyana"                           : Countries( COUNTRIES_CODE, 212 ) = "gy"
+Countries( FULL_NAME, 213 ) = "Hawaii"                           : Countries( COUNTRIES_CODE, 213 ) = "hiu"
+Countries( FULL_NAME, 214 ) = "Israel"                           : Countries( COUNTRIES_CODE, 214 ) = "is"
+Countries( FULL_NAME, 215 ) = "Jersey"                           : Countries( COUNTRIES_CODE, 215 ) = "je"
+Countries( FULL_NAME, 216 ) = "Jordan"                           : Countries( COUNTRIES_CODE, 216 ) = "jo"
+Countries( FULL_NAME, 217 ) = "Kansas"                           : Countries( COUNTRIES_CODE, 217 ) = "ksu"
+Countries( FULL_NAME, 218 ) = "Kosovo"                           : Countries( COUNTRIES_CODE, 218 ) = "kv"
+Countries( FULL_NAME, 219 ) = "Kuwait"                           : Countries( COUNTRIES_CODE, 219 ) = "ku"
+Countries( FULL_NAME, 220 ) = "Latvia"                           : Countries( COUNTRIES_CODE, 220 ) = "lv"
+Countries( FULL_NAME, 221 ) = "Malawi"                           : Countries( COUNTRIES_CODE, 221 ) = "mw"
+Countries( FULL_NAME, 222 ) = "Mexico"                           : Countries( COUNTRIES_CODE, 222 ) = "mx"
+Countries( FULL_NAME, 223 ) = "Monaco"                           : Countries( COUNTRIES_CODE, 223 ) = "mc"
+Countries( FULL_NAME, 224 ) = "Nevada"                           : Countries( COUNTRIES_CODE, 224 ) = "nvu"
+Countries( FULL_NAME, 225 ) = "Norway"                           : Countries( COUNTRIES_CODE, 225 ) = "no"
+Countries( FULL_NAME, 226 ) = "Oregon"                           : Countries( COUNTRIES_CODE, 226 ) = "oru"
+Countries( FULL_NAME, 227 ) = "Panama"                           : Countries( COUNTRIES_CODE, 227 ) = "pn"
+Countries( FULL_NAME, 228 ) = "Poland"                           : Countries( COUNTRIES_CODE, 228 ) = "pl"
+Countries( FULL_NAME, 229 ) = "Russia"                           : Countries( COUNTRIES_CODE, 229 ) = "ru"
+Countries( FULL_NAME, 230 ) = "Rwanda"                           : Countries( COUNTRIES_CODE, 230 ) = "rw"
+Countries( FULL_NAME, 231 ) = "Serbia"                           : Countries( COUNTRIES_CODE, 231 ) = "rb"
+Countries( FULL_NAME, 232 ) = "Sweden"                           : Countries( COUNTRIES_CODE, 232 ) = "sw"
+Countries( FULL_NAME, 233 ) = "Turkey"                           : Countries( COUNTRIES_CODE, 233 ) = "tu"
+Countries( FULL_NAME, 234 ) = "Tuvalu"                           : Countries( COUNTRIES_CODE, 234 ) = "tv"
+Countries( FULL_NAME, 235 ) = "Uganda"                           : Countries( COUNTRIES_CODE, 235 ) = "ug"
+Countries( FULL_NAME, 236 ) = "Zambia"                           : Countries( COUNTRIES_CODE, 236 ) = "za"
+Countries( FULL_NAME, 237 ) = "Aruba"                            : Countries( COUNTRIES_CODE, 237 ) = "aw"
+Countries( FULL_NAME, 238 ) = "Benin"                            : Countries( COUNTRIES_CODE, 238 ) = "dm"
+Countries( FULL_NAME, 239 ) = "Burma"                            : Countries( COUNTRIES_CODE, 239 ) = "br"
+Countries( FULL_NAME, 240 ) = "Chile"                            : Countries( COUNTRIES_CODE, 240 ) = "cl"
+Countries( FULL_NAME, 241 ) = "Egypt"                            : Countries( COUNTRIES_CODE, 241 ) = "ua"
+Countries( FULL_NAME, 242 ) = "Gabon"                            : Countries( COUNTRIES_CODE, 242 ) = "go"
+Countries( FULL_NAME, 243 ) = "Ghana"                            : Countries( COUNTRIES_CODE, 243 ) = "gh"
+Countries( FULL_NAME, 244 ) = "Haiti"                            : Countries( COUNTRIES_CODE, 244 ) = "ht"
+Countries( FULL_NAME, 245 ) = "Idaho"                            : Countries( COUNTRIES_CODE, 245 ) = "idu"
+Countries( FULL_NAME, 246 ) = "India"                            : Countries( COUNTRIES_CODE, 246 ) = "ii"
+Countries( FULL_NAME, 247 ) = "Italy"                            : Countries( COUNTRIES_CODE, 247 ) = "it"
+Countries( FULL_NAME, 248 ) = "Japan"                            : Countries( COUNTRIES_CODE, 248 ) = "ja"
+Countries( FULL_NAME, 249 ) = "Kenya"                            : Countries( COUNTRIES_CODE, 249 ) = "ke"
+Countries( FULL_NAME, 250 ) = "Libya"                            : Countries( COUNTRIES_CODE, 250 ) = "ly"
+Countries( FULL_NAME, 251 ) = "Maine"                            : Countries( COUNTRIES_CODE, 251 ) = "meu"
+Countries( FULL_NAME, 252 ) = "Malta"                            : Countries( COUNTRIES_CODE, 252 ) = "mm"
+Countries( FULL_NAME, 253 ) = "Nauru"                            : Countries( COUNTRIES_CODE, 253 ) = "nu"
+Countries( FULL_NAME, 254 ) = "Nepal"                            : Countries( COUNTRIES_CODE, 254 ) = "np"
+Countries( FULL_NAME, 255 ) = "Niger"                            : Countries( COUNTRIES_CODE, 255 ) = "ng"
+Countries( FULL_NAME, 256 ) = "Palau"                            : Countries( COUNTRIES_CODE, 256 ) = "pw"
+Countries( FULL_NAME, 257 ) = "Qatar"                            : Countries( COUNTRIES_CODE, 257 ) = "qa"
+Countries( FULL_NAME, 258 ) = "Samoa"                            : Countries( COUNTRIES_CODE, 258 ) = "ws"
+Countries( FULL_NAME, 259 ) = "Spain"                            : Countries( COUNTRIES_CODE, 259 ) = "sp"
+Countries( FULL_NAME, 260 ) = "Sudan"                            : Countries( COUNTRIES_CODE, 260 ) = "sj"
+Countries( FULL_NAME, 261 ) = "Syria"                            : Countries( COUNTRIES_CODE, 261 ) = "sy"
+Countries( FULL_NAME, 262 ) = "Texas"                            : Countries( COUNTRIES_CODE, 262 ) = "txu"
+Countries( FULL_NAME, 263 ) = "Tonga"                            : Countries( COUNTRIES_CODE, 263 ) = "to"
+Countries( FULL_NAME, 264 ) = "Wales"                            : Countries( COUNTRIES_CODE, 264 ) = "wlk"
+Countries( FULL_NAME, 265 ) = "Yemen"                            : Countries( COUNTRIES_CODE, 265 ) = "ye"
+Countries( FULL_NAME, 266 ) = "Chad"                             : Countries( COUNTRIES_CODE, 266 ) = "cd"
+Countries( FULL_NAME, 267 ) = "Cuba"                             : Countries( COUNTRIES_CODE, 267 ) = "cu"
+Countries( FULL_NAME, 268 ) = "Fiji"                             : Countries( COUNTRIES_CODE, 268 ) = "fj"
+Countries( FULL_NAME, 269 ) = "Guam"                             : Countries( COUNTRIES_CODE, 269 ) = "gu"
+Countries( FULL_NAME, 270 ) = "Iowa"                             : Countries( COUNTRIES_CODE, 270 ) = "iau"
+Countries( FULL_NAME, 271 ) = "Iran"                             : Countries( COUNTRIES_CODE, 271 ) = "ir"
+Countries( FULL_NAME, 272 ) = "Iraq"                             : Countries( COUNTRIES_CODE, 272 ) = "iq"
+Countries( FULL_NAME, 273 ) = "Laos"                             : Countries( COUNTRIES_CODE, 273 ) = "ls"
+Countries( FULL_NAME, 274 ) = "Mali"                             : Countries( COUNTRIES_CODE, 274 ) = "ml"
+Countries( FULL_NAME, 275 ) = "Niue"                             : Countries( COUNTRIES_CODE, 275 ) = "xh"
+Countries( FULL_NAME, 276 ) = "Ohio"                             : Countries( COUNTRIES_CODE, 276 ) = "ohu"
+Countries( FULL_NAME, 277 ) = "Oman"                             : Countries( COUNTRIES_CODE, 277 ) = "mk"
+Countries( FULL_NAME, 278 ) = "Peru"                             : Countries( COUNTRIES_CODE, 278 ) = "pe"
+Countries( FULL_NAME, 279 ) = "Togo"                             : Countries( COUNTRIES_CODE, 279 ) = "tg"
+Countries( FULL_NAME, 280 ) = "Utah"                             : Countries( COUNTRIES_CODE, 280 ) = "utu"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrays2
+
+' Cities of the world. The top 100 U.S. cities by population:
+
+ReDim US_Cities( 1, CITIES_COUNT )
+
+US_Cities( FULL_NAME, 0   ) = "Colorado Springs" : US_Cities( CITIES_CODE, 0   ) = "cou"
+US_Cities( FULL_NAME, 1   ) = "North Las Vegas"  : US_Cities( CITIES_CODE, 1   ) = "nvu"
+US_Cities( FULL_NAME, 2   ) = "Corpus Christi"   : US_Cities( CITIES_CODE, 2   ) = "txu"
+US_Cities( FULL_NAME, 3   ) = "Port St. Lucie"   : US_Cities( CITIES_CODE, 3   ) = "flu"
+US_Cities( FULL_NAME, 4   ) = "Salt Lake City"   : US_Cities( CITIES_CODE, 4   ) = "utu"
+US_Cities( FULL_NAME, 5   ) = "San Bernardino"   : US_Cities( CITIES_CODE, 5   ) = "cau"
+US_Cities( FULL_NAME, 6   ) = "St. Petersburg"   : US_Cities( CITIES_CODE, 6   ) = "flu"
+US_Cities( FULL_NAME, 7   ) = "Virginia Beach"   : US_Cities( CITIES_CODE, 7   ) = "vau"
+US_Cities( FULL_NAME, 8   ) = "Grand Prairie"    : US_Cities( CITIES_CODE, 8   ) = "txu"
+US_Cities( FULL_NAME, 9   ) = "Moreno Valley"    : US_Cities( CITIES_CODE, 9   ) = "cau"
+US_Cities( FULL_NAME, 10  ) = "Oklahoma City"    : US_Cities( CITIES_CODE, 10  ) = "oku"
+US_Cities( FULL_NAME, 11  ) = "Overland Park"    : US_Cities( CITIES_CODE, 11  ) = "ksu"
+US_Cities( FULL_NAME, 12  ) = "San Francisco"    : US_Cities( CITIES_CODE, 12  ) = "cau"
+US_Cities( FULL_NAME, 13  ) = "Santa Clarita"    : US_Cities( CITIES_CODE, 13  ) = "cau"
+US_Cities( FULL_NAME, 14  ) = "Spring Valley"    : US_Cities( CITIES_CODE, 14  ) = "nvu"
+US_Cities( FULL_NAME, 15  ) = "Sunrise Manor"    : US_Cities( CITIES_CODE, 15  ) = "nvu"
+US_Cities( FULL_NAME, 16  ) = "Winston-Salem"    : US_Cities( CITIES_CODE, 16  ) = "ncu"
+US_Cities( FULL_NAME, 17  ) = "Fayetteville"     : US_Cities( CITIES_CODE, 17  ) = "ncu"
+US_Cities( FULL_NAME, 18  ) = "Grand Rapids"     : US_Cities( CITIES_CODE, 18  ) = "miu"
+US_Cities( FULL_NAME, 19  ) = "Indianapolis"     : US_Cities( CITIES_CODE, 19  ) = "inu"
+US_Cities( FULL_NAME, 20  ) = "Jacksonville"     : US_Cities( CITIES_CODE, 20  ) = "flu"
+US_Cities( FULL_NAME, 21  ) = "Philadelphia"     : US_Cities( CITIES_CODE, 21  ) = "pau"
+US_Cities( FULL_NAME, 22  ) = "Albuquerque"      : US_Cities( CITIES_CODE, 22  ) = "nmu"
+US_Cities( FULL_NAME, 23  ) = "Bakersfield"      : US_Cities( CITIES_CODE, 23  ) = "cau"
+US_Cities( FULL_NAME, 24  ) = "Baton Rouge"      : US_Cities( CITIES_CODE, 24  ) = "lau"
+US_Cities( FULL_NAME, 25  ) = "Chula Vista"      : US_Cities( CITIES_CODE, 25  ) = "cau"
+US_Cities( FULL_NAME, 26  ) = "Jersey City"      : US_Cities( CITIES_CODE, 26  ) = "nju"
+US_Cities( FULL_NAME, 27  ) = "Kansas City"      : US_Cities( CITIES_CODE, 27  ) = "mou"
+US_Cities( FULL_NAME, 28  ) = "Little Rock"      : US_Cities( CITIES_CODE, 28  ) = "aru"
+US_Cities( FULL_NAME, 29  ) = "Los Angeles"      : US_Cities( CITIES_CODE, 29  ) = "cau"
+US_Cities( FULL_NAME, 30  ) = "Minneapolis"      : US_Cities( CITIES_CODE, 30  ) = "mnu"
+US_Cities( FULL_NAME, 31  ) = "New Orleans"      : US_Cities( CITIES_CODE, 31  ) = "lau"
+US_Cities( FULL_NAME, 32  ) = "San Antonio"      : US_Cities( CITIES_CODE, 32  ) = "txu"
+US_Cities( FULL_NAME, 33  ) = "Sioux Falls"      : US_Cities( CITIES_CODE, 33  ) = "sdu"
+US_Cities( FULL_NAME, 34  ) = "Tallahassee"      : US_Cities( CITIES_CODE, 34  ) = "flu"
+US_Cities( FULL_NAME, 35  ) = "Boise City"       : US_Cities( CITIES_CODE, 35  ) = "idu"
+US_Cities( FULL_NAME, 36  ) = "Cape Coral"       : US_Cities( CITIES_CODE, 36  ) = "flu"
+US_Cities( FULL_NAME, 37  ) = "Chesapeake"       : US_Cities( CITIES_CODE, 37  ) = "vau"
+US_Cities( FULL_NAME, 38  ) = "Cincinnati"       : US_Cities( CITIES_CODE, 38  ) = "ohu"
+US_Cities( FULL_NAME, 39  ) = "Des Moines"       : US_Cities( CITIES_CODE, 39  ) = "iau"
+US_Cities( FULL_NAME, 40  ) = "Enterprise"       : US_Cities( CITIES_CODE, 40  ) = "nvu"
+US_Cities( FULL_NAME, 41  ) = "Fort Wayne"       : US_Cities( CITIES_CODE, 41  ) = "inu"
+US_Cities( FULL_NAME, 42  ) = "Fort Worth"       : US_Cities( CITIES_CODE, 42  ) = "txu"
+US_Cities( FULL_NAME, 43  ) = "Greensboro"       : US_Cities( CITIES_CODE, 43  ) = "ncu"
+US_Cities( FULL_NAME, 44  ) = "Huntsville"       : US_Cities( CITIES_CODE, 44  ) = "alu"
+US_Cities( FULL_NAME, 45  ) = "Long Beach"       : US_Cities( CITIES_CODE, 45  ) = "cau"
+US_Cities( FULL_NAME, 46  ) = "Louisville"       : US_Cities( CITIES_CODE, 46  ) = "kyu"
+US_Cities( FULL_NAME, 47  ) = "Pittsburgh"       : US_Cities( CITIES_CODE, 47  ) = "pau"
+US_Cities( FULL_NAME, 48  ) = "Sacramento"       : US_Cities( CITIES_CODE, 48  ) = "cau"
+US_Cities( FULL_NAME, 49  ) = "Scottsdale"       : US_Cities( CITIES_CODE, 49  ) = "azu"
+US_Cities( FULL_NAME, 50  ) = "Washington"       : US_Cities( CITIES_CODE, 50  ) = "dcu"
+US_Cities( FULL_NAME, 51  ) = "Anchorage"        : US_Cities( CITIES_CODE, 51  ) = "aku"
+US_Cities( FULL_NAME, 52  ) = "Baltimore"        : US_Cities( CITIES_CODE, 52  ) = "mdu"
+US_Cities( FULL_NAME, 53  ) = "Charlotte"        : US_Cities( CITIES_CODE, 53  ) = "ncu"
+US_Cities( FULL_NAME, 54  ) = "Cleveland"        : US_Cities( CITIES_CODE, 54  ) = "ohu"
+US_Cities( FULL_NAME, 55  ) = "Henderson"        : US_Cities( CITIES_CODE, 55  ) = "nvu"
+US_Cities( FULL_NAME, 56  ) = "Knoxville"        : US_Cities( CITIES_CODE, 56  ) = "tnu"
+US_Cities( FULL_NAME, 57  ) = "Las Vegas"        : US_Cities( CITIES_CODE, 57  ) = "nvu"
+US_Cities( FULL_NAME, 58  ) = "Lexington"        : US_Cities( CITIES_CODE, 58  ) = "kyu"
+US_Cities( FULL_NAME, 59  ) = "Milwaukee"        : US_Cities( CITIES_CODE, 59  ) = "wiu"
+US_Cities( FULL_NAME, 60  ) = "Nashville"        : US_Cities( CITIES_CODE, 60  ) = "tnu"
+US_Cities( FULL_NAME, 61  ) = "Riverside"        : US_Cities( CITIES_CODE, 61  ) = "cau"
+US_Cities( FULL_NAME, 62  ) = "Rochester"        : US_Cities( CITIES_CODE, 62  ) = "nyu"
+US_Cities( FULL_NAME, 63  ) = "San Diego"        : US_Cities( CITIES_CODE, 63  ) = "cau"
+US_Cities( FULL_NAME, 64  ) = "Santa Ana"        : US_Cities( CITIES_CODE, 64  ) = "cau"
+US_Cities( FULL_NAME, 65  ) = "St. Louis"        : US_Cities( CITIES_CODE, 65  ) = "mou"
+US_Cities( FULL_NAME, 66  ) = "Vancouver"        : US_Cities( CITIES_CODE, 66  ) = "wau"
+US_Cities( FULL_NAME, 67  ) = "Worcester"        : US_Cities( CITIES_CODE, 67  ) = "mau"
+US_Cities( FULL_NAME, 68  ) = "Amarillo"         : US_Cities( CITIES_CODE, 68  ) = "txu"
+US_Cities( FULL_NAME, 69  ) = "Chandler"         : US_Cities( CITIES_CODE, 69  ) = "azu"
+US_Cities( FULL_NAME, 70  ) = "Glendale"         : US_Cities( CITIES_CODE, 70  ) = "azu"
+US_Cities( FULL_NAME, 71  ) = "Honolulu"         : US_Cities( CITIES_CODE, 71  ) = "hiu"
+US_Cities( FULL_NAME, 72  ) = "McKinney"         : US_Cities( CITIES_CODE, 72  ) = "txu"
+US_Cities( FULL_NAME, 73  ) = "New York"         : US_Cities( CITIES_CODE, 73  ) = "nyu"
+US_Cities( FULL_NAME, 74  ) = "Portland"         : US_Cities( CITIES_CODE, 74  ) = "oru"
+US_Cities( FULL_NAME, 75  ) = "Richmond"         : US_Cities( CITIES_CODE, 75  ) = "vau"
+US_Cities( FULL_NAME, 76  ) = "San Jose"         : US_Cities( CITIES_CODE, 76  ) = "cau"
+US_Cities( FULL_NAME, 77  ) = "St. Paul"         : US_Cities( CITIES_CODE, 77  ) = "mnu"
+US_Cities( FULL_NAME, 78  ) = "Stockton"         : US_Cities( CITIES_CODE, 78  ) = "cau"
+US_Cities( FULL_NAME, 79  ) = "Anaheim"          : US_Cities( CITIES_CODE, 79  ) = "cau"
+US_Cities( FULL_NAME, 80  ) = "Atlanta"          : US_Cities( CITIES_CODE, 80  ) = "gau"
+US_Cities( FULL_NAME, 81  ) = "Augusta"          : US_Cities( CITIES_CODE, 81  ) = "gau"
+US_Cities( FULL_NAME, 82  ) = "Buffalo"          : US_Cities( CITIES_CODE, 82  ) = "nyu"
+US_Cities( FULL_NAME, 83  ) = "Chicago"          : US_Cities( CITIES_CODE, 83  ) = "ilu"
+US_Cities( FULL_NAME, 84  ) = "Detroit"          : US_Cities( CITIES_CODE, 84  ) = "miu"
+US_Cities( FULL_NAME, 85  ) = "El Paso"          : US_Cities( CITIES_CODE, 85  ) = "txu"
+US_Cities( FULL_NAME, 86  ) = "Fontana"          : US_Cities( CITIES_CODE, 86  ) = "cau"
+US_Cities( FULL_NAME, 87  ) = "Fremont"          : US_Cities( CITIES_CODE, 87  ) = "cau"
+US_Cities( FULL_NAME, 88  ) = "Garland"          : US_Cities( CITIES_CODE, 88  ) = "txu"
+US_Cities( FULL_NAME, 89  ) = "Gilbert"          : US_Cities( CITIES_CODE, 89  ) = "azu"
+US_Cities( FULL_NAME, 90  ) = "Hialeah"          : US_Cities( CITIES_CODE, 90  ) = "flu"
+US_Cities( FULL_NAME, 91  ) = "Houston"          : US_Cities( CITIES_CODE, 91  ) = "txu"
+US_Cities( FULL_NAME, 92  ) = "Lincoln"          : US_Cities( CITIES_CODE, 92  ) = "nbu"
+US_Cities( FULL_NAME, 93  ) = "Lubbock"          : US_Cities( CITIES_CODE, 93  ) = "txu"
+US_Cities( FULL_NAME, 94  ) = "Madison"          : US_Cities( CITIES_CODE, 94  ) = "wiu"
+US_Cities( FULL_NAME, 95  ) = "Memphis"          : US_Cities( CITIES_CODE, 95  ) = "tnu"
+US_Cities( FULL_NAME, 96  ) = "Modesto"          : US_Cities( CITIES_CODE, 96  ) = "cau"
+US_Cities( FULL_NAME, 97  ) = "Norfolk"          : US_Cities( CITIES_CODE, 97  ) = "vau"
+US_Cities( FULL_NAME, 98  ) = "Oakland"          : US_Cities( CITIES_CODE, 98  ) = "cau"
+US_Cities( FULL_NAME, 99  ) = "Orlando"          : US_Cities( CITIES_CODE, 99  ) = "flu"
+US_Cities( FULL_NAME, 100 ) = "Phoenix"          : US_Cities( CITIES_CODE, 100 ) = "azu"
+US_Cities( FULL_NAME, 101 ) = "Raleigh"          : US_Cities( CITIES_CODE, 101 ) = "ncu"
+US_Cities( FULL_NAME, 102 ) = "Seattle"          : US_Cities( CITIES_CODE, 102 ) = "wau"
+US_Cities( FULL_NAME, 103 ) = "Spokane"          : US_Cities( CITIES_CODE, 103 ) = "wau"
+US_Cities( FULL_NAME, 104 ) = "Wichita"          : US_Cities( CITIES_CODE, 104 ) = "ksu"
+US_Cities( FULL_NAME, 105 ) = "Yonkers"          : US_Cities( CITIES_CODE, 105 ) = "nyu"
+US_Cities( FULL_NAME, 106 ) = "Aurora"           : US_Cities( CITIES_CODE, 106 ) = "cou"
+US_Cities( FULL_NAME, 107 ) = "Austin"           : US_Cities( CITIES_CODE, 107 ) = "txu"
+US_Cities( FULL_NAME, 108 ) = "Boston"           : US_Cities( CITIES_CODE, 108 ) = "mau"
+US_Cities( FULL_NAME, 109 ) = "Dallas"           : US_Cities( CITIES_CODE, 109 ) = "txu"
+US_Cities( FULL_NAME, 110 ) = "Denver"           : US_Cities( CITIES_CODE, 110 ) = "cou"
+US_Cities( FULL_NAME, 111 ) = "Durham"           : US_Cities( CITIES_CODE, 111 ) = "ncu"
+US_Cities( FULL_NAME, 112 ) = "Fresno"           : US_Cities( CITIES_CODE, 112 ) = "cau"
+US_Cities( FULL_NAME, 113 ) = "Frisco"           : US_Cities( CITIES_CODE, 113 ) = "txu"
+US_Cities( FULL_NAME, 114 ) = "Irvine"           : US_Cities( CITIES_CODE, 114 ) = "cau"
+US_Cities( FULL_NAME, 115 ) = "Irving"           : US_Cities( CITIES_CODE, 115 ) = "txu"
+US_Cities( FULL_NAME, 116 ) = "Laredo"           : US_Cities( CITIES_CODE, 116 ) = "txu"
+US_Cities( FULL_NAME, 117 ) = "Newark"           : US_Cities( CITIES_CODE, 117 ) = "nju"
+US_Cities( FULL_NAME, 118 ) = "Oxnard"           : US_Cities( CITIES_CODE, 118 ) = "cau"
+US_Cities( FULL_NAME, 119 ) = "Peoria"           : US_Cities( CITIES_CODE, 119 ) = "azu"
+US_Cities( FULL_NAME, 120 ) = "Tacoma"           : US_Cities( CITIES_CODE, 120 ) = "wau"
+US_Cities( FULL_NAME, 121 ) = "Toledo"           : US_Cities( CITIES_CODE, 121 ) = "ohu"
+US_Cities( FULL_NAME, 122 ) = "Tucson"           : US_Cities( CITIES_CODE, 122 ) = "azu"
+US_Cities( FULL_NAME, 123 ) = "Miami"            : US_Cities( CITIES_CODE, 123 ) = "flu"
+US_Cities( FULL_NAME, 124 ) = "Omaha"            : US_Cities( CITIES_CODE, 124 ) = "nbu"
+US_Cities( FULL_NAME, 125 ) = "Plano"            : US_Cities( CITIES_CODE, 125 ) = "txu"
+US_Cities( FULL_NAME, 126 ) = "Tampa"            : US_Cities( CITIES_CODE, 126 ) = "flu"
+US_Cities( FULL_NAME, 127 ) = "Tulsa"            : US_Cities( CITIES_CODE, 127 ) = "oku"
+US_Cities( FULL_NAME, 128 ) = "Mesa"             : US_Cities( CITIES_CODE, 128 ) = "azu"
+US_Cities( FULL_NAME, 129 ) = "Reno"             : US_Cities( CITIES_CODE, 129 ) = "nvu"
+
+' The top 100 world cities by population, plus the top 25 Canadian cities and the eight
+' largest Australian cities. U.S. cities in the preceding list are not repeated here.
+' Also missing is London, a name that appears in two different countries (England and
+' Canada).
+
+ReDim WorldCities( 1, CITIES_COUNT )
+
+WorldCities( FULL_NAME, 0   ) = "Ho Chi Minh City" : WorldCities( CITIES_CODE, 0   ) = "vm"
+WorldCities( FULL_NAME, 1   ) = "Saint Petersburg" : WorldCities( CITIES_CODE, 1   ) = "ru"
+WorldCities( FULL_NAME, 2   ) = "Ji Nan Shandong"  : WorldCities( CITIES_CODE, 2   ) = "cc"
+WorldCities( FULL_NAME, 3   ) = "Belo Horizonte"   : WorldCities( CITIES_CODE, 3   ) = "bl"
+WorldCities( FULL_NAME, 4   ) = "Rio de Janeiro"   : WorldCities( CITIES_CODE, 4   ) = "bl"
+WorldCities( FULL_NAME, 5   ) = "Dar Es Salaam"    : WorldCities( CITIES_CODE, 5   ) = "tz"
+WorldCities( FULL_NAME, 6   ) = "Buenos Aires"     : WorldCities( CITIES_CODE, 6   ) = "ag"
+WorldCities( FULL_NAME, 7   ) = "Johannesburg"     : WorldCities( CITIES_CODE, 7   ) = "sa"
+WorldCities( FULL_NAME, 8   ) = "Kuala Lumpur"     : WorldCities( CITIES_CODE, 8   ) = "my"
+WorldCities( FULL_NAME, 9   ) = "Shijiazhuang"     : WorldCities( CITIES_CODE, 9   ) = "cc"
+WorldCities( FULL_NAME, 10  ) = "Addis Ababa"      : WorldCities( CITIES_CODE, 10  ) = "et"
+WorldCities( FULL_NAME, 11  ) = "Guadalajara"      : WorldCities( CITIES_CODE, 11  ) = "mx"
+WorldCities( FULL_NAME, 12  ) = "Mexico City"      : WorldCities( CITIES_CODE, 12  ) = "mx"
+WorldCities( FULL_NAME, 13  ) = "Mississauga"      : WorldCities( CITIES_CODE, 13  ) = "onc"
+WorldCities( FULL_NAME, 14  ) = "Quebec City"      : WorldCities( CITIES_CODE, 14  ) = "quc"
+WorldCities( FULL_NAME, 15  ) = "Alexandria"       : WorldCities( CITIES_CODE, 15  ) = "ua"
+WorldCities( FULL_NAME, 16  ) = "Chittagong"       : WorldCities( CITIES_CODE, 16  ) = "bg"
+WorldCities( FULL_NAME, 17  ) = "Gold Coast"       : WorldCities( CITIES_CODE, 17  ) = "qea"
+WorldCities( FULL_NAME, 18  ) = "Logan City"       : WorldCities( CITIES_CODE, 18  ) = "qea"
+WorldCities( FULL_NAME, 19  ) = "New Taipei"       : WorldCities( CITIES_CODE, 19  ) = "ch"
+WorldCities( FULL_NAME, 20  ) = "Wollongong"       : WorldCities( CITIES_CODE, 20  ) = "xna"
+WorldCities( FULL_NAME, 21  ) = "Ahmedabad"        : WorldCities( CITIES_CODE, 21  ) = "ii"
+WorldCities( FULL_NAME, 22  ) = "Bangalore"        : WorldCities( CITIES_CODE, 22  ) = "ii"
+WorldCities( FULL_NAME, 23  ) = "Barcelona"        : WorldCities( CITIES_CODE, 23  ) = "sp"
+WorldCities( FULL_NAME, 24  ) = "Cape Town"        : WorldCities( CITIES_CODE, 24  ) = "sa"
+WorldCities( FULL_NAME, 25  ) = "Changchun"        : WorldCities( CITIES_CODE, 25  ) = "cc"
+WorldCities( FULL_NAME, 26  ) = "Chongqing"        : WorldCities( CITIES_CODE, 26  ) = "cc"
+WorldCities( FULL_NAME, 27  ) = "Guangzhou"        : WorldCities( CITIES_CODE, 27  ) = "cc"
+WorldCities( FULL_NAME, 28  ) = "Hong Kong"        : WorldCities( CITIES_CODE, 28  ) = "cc"
+WorldCities( FULL_NAME, 29  ) = "Hyderabad"        : WorldCities( CITIES_CODE, 29  ) = "ii"
+WorldCities( FULL_NAME, 30  ) = "Kitchener"        : WorldCities( CITIES_CODE, 30  ) = "onc"
+WorldCities( FULL_NAME, 31  ) = "Longueuil"        : WorldCities( CITIES_CODE, 31  ) = "quc"
+WorldCities( FULL_NAME, 32  ) = "Melbourne"        : WorldCities( CITIES_CODE, 32  ) = "vra"
+WorldCities( FULL_NAME, 33  ) = "Monterrey"        : WorldCities( CITIES_CODE, 33  ) = "mx"
+WorldCities( FULL_NAME, 34  ) = "Newcastle"        : WorldCities( CITIES_CODE, 34  ) = "xna"
+WorldCities( FULL_NAME, 35  ) = "Sao Paulo"        : WorldCities( CITIES_CODE, 35  ) = "bl"
+WorldCities( FULL_NAME, 36  ) = "Saskatoon"        : WorldCities( CITIES_CODE, 36  ) = "snc"
+WorldCities( FULL_NAME, 37  ) = "Singapore"        : WorldCities( CITIES_CODE, 37  ) = "si"
+WorldCities( FULL_NAME, 38  ) = "Vancouver"        : WorldCities( CITIES_CODE, 38  ) = "bcc"
+WorldCities( FULL_NAME, 39  ) = "Zhengzhou"        : WorldCities( CITIES_CODE, 39  ) = "cc"
+WorldCities( FULL_NAME, 40  ) = "Adelaide"         : WorldCities( CITIES_CODE, 40  ) = "xra"
+WorldCities( FULL_NAME, 41  ) = "Brampton"         : WorldCities( CITIES_CODE, 41  ) = "onc"
+WorldCities( FULL_NAME, 42  ) = "Brasilia"         : WorldCities( CITIES_CODE, 42  ) = "bl"
+WorldCities( FULL_NAME, 43  ) = "Brisbane"         : WorldCities( CITIES_CODE, 43  ) = "qea"
+WorldCities( FULL_NAME, 44  ) = "Canberra"         : WorldCities( CITIES_CODE, 44  ) = "aca"
+WorldCities( FULL_NAME, 45  ) = "Changsha"         : WorldCities( CITIES_CODE, 45  ) = "cc"
+WorldCities( FULL_NAME, 46  ) = "Dongguan"         : WorldCities( CITIES_CODE, 46  ) = "cc"
+WorldCities( FULL_NAME, 47  ) = "Edmonton"         : WorldCities( CITIES_CODE, 47  ) = "abc"
+WorldCities( FULL_NAME, 48  ) = "Gatineau"         : WorldCities( CITIES_CODE, 48  ) = "quc"
+WorldCities( FULL_NAME, 49  ) = "Hamilton"         : WorldCities( CITIES_CODE, 49  ) = "onc"
+WorldCities( FULL_NAME, 50  ) = "Hangzhou"         : WorldCities( CITIES_CODE, 50  ) = "cc"
+WorldCities( FULL_NAME, 51  ) = "Istanbul"         : WorldCities( CITIES_CODE, 51  ) = "tu"
+WorldCities( FULL_NAME, 52  ) = "Khartoum"         : WorldCities( CITIES_CODE, 52  ) = "sp"
+WorldCities( FULL_NAME, 53  ) = "Kinshasa"         : WorldCities( CITIES_CODE, 53  ) = "cg"
+WorldCities( FULL_NAME, 54  ) = "Montreal"         : WorldCities( CITIES_CODE, 54  ) = "quc"
+WorldCities( FULL_NAME, 55  ) = "Oakville"         : WorldCities( CITIES_CODE, 55  ) = "onc"
+WorldCities( FULL_NAME, 56  ) = "Santiago"         : WorldCities( CITIES_CODE, 56  ) = "cl"
+WorldCities( FULL_NAME, 57  ) = "Shanghai"         : WorldCities( CITIES_CODE, 57  ) = "cc"
+WorldCities( FULL_NAME, 58  ) = "Shenyang"         : WorldCities( CITIES_CODE, 58  ) = "cc"
+WorldCities( FULL_NAME, 59  ) = "Shenzhen"         : WorldCities( CITIES_CODE, 59  ) = "cc"
+WorldCities( FULL_NAME, 60  ) = "Tel Aviv"         : WorldCities( CITIES_CODE, 60  ) = "is"
+WorldCities( FULL_NAME, 61  ) = "Winnipeg"         : WorldCities( CITIES_CODE, 61  ) = "mbc"
+WorldCities( FULL_NAME, 62  ) = "Abidjan"          : WorldCities( CITIES_CODE, 62  ) = "iv"
+WorldCities( FULL_NAME, 63  ) = "Baghdad"          : WorldCities( CITIES_CODE, 63  ) = "iq"
+WorldCities( FULL_NAME, 64  ) = "Bangkok"          : WorldCities( CITIES_CODE, 64  ) = "th"
+WorldCities( FULL_NAME, 65  ) = "Beijing"          : WorldCities( CITIES_CODE, 65  ) = "cc"
+WorldCities( FULL_NAME, 66  ) = "Burnaby"          : WorldCities( CITIES_CODE, 66  ) = "bcc"
+WorldCities( FULL_NAME, 67  ) = "Calgary"          : WorldCities( CITIES_CODE, 67  ) = "abc"
+WorldCities( FULL_NAME, 68  ) = "Chengdu"          : WorldCities( CITIES_CODE, 68  ) = "cc"
+WorldCities( FULL_NAME, 69  ) = "Chennai"          : WorldCities( CITIES_CODE, 69  ) = "ii"
+WorldCities( FULL_NAME, 70  ) = "Fukuoka"          : WorldCities( CITIES_CODE, 70  ) = "ja"
+WorldCities( FULL_NAME, 71  ) = "Geelong"          : WorldCities( CITIES_CODE, 71  ) = "vra"
+WorldCities( FULL_NAME, 72  ) = "Haerbin"          : WorldCities( CITIES_CODE, 72  ) = "cc"
+WorldCities( FULL_NAME, 73  ) = "Halifax"          : WorldCities( CITIES_CODE, 73  ) = "nsc"
+WorldCities( FULL_NAME, 74  ) = "Jakarta"          : WorldCities( CITIES_CODE, 74  ) = "io"
+WorldCities( FULL_NAME, 75  ) = "Karachi"          : WorldCities( CITIES_CODE, 75  ) = "pk"
+WorldCities( FULL_NAME, 76  ) = "Kolkata"          : WorldCities( CITIES_CODE, 76  ) = "ii"
+WorldCities( FULL_NAME, 77  ) = "Kunming"          : WorldCities( CITIES_CODE, 77  ) = "cc"
+WorldCities( FULL_NAME, 78  ) = "Markham"          : WorldCities( CITIES_CODE, 78  ) = "onc"
+WorldCities( FULL_NAME, 79  ) = "Nairobi"          : WorldCities( CITIES_CODE, 79  ) = "ke"
+WorldCities( FULL_NAME, 80  ) = "Nanjing"          : WorldCities( CITIES_CODE, 80  ) = "cc"
+WorldCities( FULL_NAME, 81  ) = "Qingdao"          : WorldCities( CITIES_CODE, 81  ) = "cc"
+WorldCities( FULL_NAME, 82  ) = "Shantou"          : WorldCities( CITIES_CODE, 82  ) = "cc"
+WorldCities( FULL_NAME, 83  ) = "Tianjin"          : WorldCities( CITIES_CODE, 83  ) = "cc"
+WorldCities( FULL_NAME, 84  ) = "Toronto"          : WorldCities( CITIES_CODE, 84  ) = "onc"
+WorldCities( FULL_NAME, 85  ) = "Vaughan"          : WorldCities( CITIES_CODE, 85  ) = "onc"
+WorldCities( FULL_NAME, 86  ) = "Windsor"          : WorldCities( CITIES_CODE, 86  ) = "onc"
+WorldCities( FULL_NAME, 87  ) = "Yaoundé"          : WorldCities( CITIES_CODE, 87  ) = "cm"
+WorldCities( FULL_NAME, 88  ) = "Ankara"           : WorldCities( CITIES_CODE, 88  ) = "tu"
+WorldCities( FULL_NAME, 89  ) = "Bogota"           : WorldCities( CITIES_CODE, 89  ) = "ck"
+WorldCities( FULL_NAME, 90  ) = "Dalian"           : WorldCities( CITIES_CODE, 90  ) = "cc"
+WorldCities( FULL_NAME, 91  ) = "Foshan"           : WorldCities( CITIES_CODE, 91  ) = "cc"
+WorldCities( FULL_NAME, 92  ) = "Hobart"           : WorldCities( CITIES_CODE, 92  ) = "tmu"
+WorldCities( FULL_NAME, 93  ) = "Jiddah"           : WorldCities( CITIES_CODE, 93  ) = "su"
+WorldCities( FULL_NAME, 94  ) = "Lahore"           : WorldCities( CITIES_CODE, 94  ) = "pk"
+WorldCities( FULL_NAME, 95  ) = "Luanda"           : WorldCities( CITIES_CODE, 95  ) = "ao"
+WorldCities( FULL_NAME, 96  ) = "Madrid"           : WorldCities( CITIES_CODE, 96  ) = "sp"
+WorldCities( FULL_NAME, 97  ) = "Manila"           : WorldCities( CITIES_CODE, 97  ) = "ph"
+WorldCities( FULL_NAME, 98  ) = "Moscow"           : WorldCities( CITIES_CODE, 98  ) = "ru"
+WorldCities( FULL_NAME, 99  ) = "Mumbai"           : WorldCities( CITIES_CODE, 99  ) = "ii"
+WorldCities( FULL_NAME, 100 ) = "Nagoya"           : WorldCities( CITIES_CODE, 100 ) = "ja"
+WorldCities( FULL_NAME, 101 ) = "Ningbo"           : WorldCities( CITIES_CODE, 101 ) = "cc"
+WorldCities( FULL_NAME, 102 ) = "Ottawa"           : WorldCities( CITIES_CODE, 102 ) = "onc"
+WorldCities( FULL_NAME, 103 ) = "Regina"           : WorldCities( CITIES_CODE, 103 ) = "snc"
+WorldCities( FULL_NAME, 104 ) = "Riyadh"           : WorldCities( CITIES_CODE, 104 ) = "su"
+WorldCities( FULL_NAME, 105 ) = "Surrey"           : WorldCities( CITIES_CODE, 105 ) = "bcc"
+WorldCities( FULL_NAME, 106 ) = "Suzhou"           : WorldCities( CITIES_CODE, 106 ) = "cc"
+WorldCities( FULL_NAME, 107 ) = "Sydney"           : WorldCities( CITIES_CODE, 107 ) = "xna"
+WorldCities( FULL_NAME, 108 ) = "Tehran"           : WorldCities( CITIES_CODE, 108 ) = "ir"
+WorldCities( FULL_NAME, 109 ) = "Urumqi"           : WorldCities( CITIES_CODE, 109 ) = "cc"
+WorldCities( FULL_NAME, 110 ) = "Yangon"           : WorldCities( CITIES_CODE, 110 ) = "br"
+WorldCities( FULL_NAME, 111 ) = "Cairo"            : WorldCities( CITIES_CODE, 111 ) = "ua"
+WorldCities( FULL_NAME, 112 ) = "Delhi"            : WorldCities( CITIES_CODE, 112 ) = "ii"
+WorldCities( FULL_NAME, 113 ) = "Dhaka"            : WorldCities( CITIES_CODE, 113 ) = "bg"
+WorldCities( FULL_NAME, 114 ) = "Hanoi"            : WorldCities( CITIES_CODE, 114 ) = "vm"
+WorldCities( FULL_NAME, 115 ) = "Hefei"            : WorldCities( CITIES_CODE, 115 ) = "cc"
+WorldCities( FULL_NAME, 116 ) = "Kabul"            : WorldCities( CITIES_CODE, 116 ) = "af"
+WorldCities( FULL_NAME, 117 ) = "Lagos"            : WorldCities( CITIES_CODE, 117 ) = "nr"
+WorldCities( FULL_NAME, 118 ) = "Laval"            : WorldCities( CITIES_CODE, 118 ) = "quc"
+WorldCities( FULL_NAME, 119 ) = "Osaka"            : WorldCities( CITIES_CODE, 119 ) = "ja"
+WorldCities( FULL_NAME, 120 ) = "Paris"            : WorldCities( CITIES_CODE, 120 ) = "fr"
+WorldCities( FULL_NAME, 121 ) = "Perth"            : WorldCities( CITIES_CODE, 121 ) = "wea"
+WorldCities( FULL_NAME, 122 ) = "Seoul"            : WorldCities( CITIES_CODE, 122 ) = "ko"
+WorldCities( FULL_NAME, 123 ) = "Surat"            : WorldCities( CITIES_CODE, 123 ) = "ii"
+WorldCities( FULL_NAME, 124 ) = "Tokyo"            : WorldCities( CITIES_CODE, 124 ) = "ja"
+WorldCities( FULL_NAME, 125 ) = "Wuhan"            : WorldCities( CITIES_CODE, 125 ) = "cc"
+WorldCities( FULL_NAME, 126 ) = "Xi'an"            : WorldCities( CITIES_CODE, 126 ) = "cc"
+WorldCities( FULL_NAME, 127 ) = "Kano"             : WorldCities( CITIES_CODE, 127 ) = "nr"
+WorldCities( FULL_NAME, 128 ) = "Lima"             : WorldCities( CITIES_CODE, 128 ) = "pe"
+WorldCities( FULL_NAME, 129 ) = "Pune"             : WorldCities( CITIES_CODE, 129 ) = "ii"
+
+End Sub
+'108677826

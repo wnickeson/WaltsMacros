@@ -1,0 +1,2415 @@
+' MacroName:ChangeCase3.2025.20
+' MacroDescription:Changes the case of selected text within a field or of an entire
+' field.
+'
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro in a bibliographic or authority record to change the case
+' of selected text in a field, or, if nothing is selected, to change the case of all the
+' text in the whole field in which the cursor is located. The selection or field must be
+' in Latin script. This macro was written with rules for capitalization in English in
+' mind, but may still be useful with other languages.
+'
+' These are the six options for changing case:
+'
+'   lowercase:     all letters are made lowercase.
+'
+'   UPPERCASE:     ALL LETTERS ARE MADE UPPERCASE (EXCEPT SUBFIELD CODES).
+'
+'   Sentence case: What is a sentence? A sentence is a sequence of words (a "word" being
+'                  a string of letters bounded by space characters) that ends with a
+'                  period (full stop), a question mark, or an exclamation point, with or
+'                  without following quotation marks. The first letter of the string is
+'                  capitalized; all other letters are made lowercase. No terminal
+'                  punctuation is added! Note that the macro can't tell the difference
+'                  between a period that marks the end of a sentence and a period that
+'                  marks an abbreviation or initial, as in "Dr.", "Mrs.", or "H.D."
+'
+'   Initial Capitals Case:
+'                  Every Letter That Follows A Space, Or Other Non-Word Character, Is
+'                  Capitalized. All Other Letters Are Made Lowercase. An Apostrophe Is
+'                  Considered A Word Character, So If It Is Used Other Than To Mark
+'                  Possessive Case Or An Abbreviation The Result Will Be Incorrect:
+'                  Watch Out For The Macro Turning "O'Brien" Into "O'brien," For Example.
+'
+'   Title Case:    Every Letter That Follows a Space, or Other Non-Word Character, Is
+'                  Capitalized. However, following the Chicago Manual of Style Guidelines
+'                  for "Headline-Style Capitalization," Articles, Coordinate
+'                  Conjunctions, and Prepositions Are Made Lowercase--Except that Every
+'                  Word that Begins a Sentence Is Capitalized. The Prepositions Included
+'                  in This Macro's List Are Taken from Wikipedia's List of Single-Word
+'                  Prototypical English Prepositions, Viewed 23 June 2023.
+'
+'   Contents case: All titles in a contents note (field 505) are made first lowercase,
+'                  and then Sentence case. Statements of responsibility are made into
+'                  Initial Capitals. However, the only way this change of case can
+'                  succeed is if the field's components are correctly identified, either
+'                  by subfield coding (in an enhanced contents note) or by ISBD
+'                  punctuation. While the option to use Contents case conversion is
+'                  offered for any contents field, if the note is not enhanced, the
+'                  result may not be what was intended, especially if ISBD punctuation is
+'                  not present or is incorrect. Note that this case option applies only
+'                  to an entire field, not to a selection. Select only portions of a
+'                  contents note to change case in a 505 field in other ways.
+'
+'                  In an enhanced contents note, subfields $t and $r identify strings
+'                  that the macro converts to Sentence case and Initial Capitals case,
+'                  respectively. Strings in subfield $g are simply ignored, as is ISBD
+'                  punctuation. In other contents notes, the whole string between marks
+'                  of ISBD punctuation is changed, which could mean that information that
+'                  might appear in a subfield $g in an enhanced note, such as volume or
+'                  part numbering or naming, or durations of audio or visual works that
+'                  include words or abbreviations, may have its case changed incorrectly.
+'                  In either kind of note, in a record for an English language resource,
+'                  the word "by" that introduces a statement of responsibility is made
+'                  lowercase.
+'
+' For the four options other than lowercase and UPPERCASE, letters between periods
+' without spaces, such as those in abbreviations or initials, are capitalized. Thus,
+' "u.s.a." is converted to "U.S.A.", and "j.r.r." (as in "Tolkien") is made "J.R.R."
+' Initialisms or acronyms without periods are treated as words and will be converted as
+' such. "NASA" might become "nasa" or "Nasa", for example, depending on the conversion
+' option chosen. Spaces between initials with periods make the letters become sentences,
+' so "u. s. a." may become "u. S. A." if Sentence case is selected and whatever precedes
+' the "u" is not a period.
+'
+' The lowercase and UPPERCASE options add a space before and after each delimiter and
+' subfield code, if necessary. Because these functions are used by the other options,
+' this spacing appears when they are selected, also.
+'
+' Two characters are treated specially, following Unicode practice as described in
+' section 5.18.2 of the Unicode Standard, "Complications for Case Mapping":
+'
+'  + Small letter "sharp s" ("ß", or esszet), is uppercased to "SS", and capital "Sharp
+'    S" is lowercased to small "sharp s".
+'
+'  + Letter i: If the language of the resource is Turkish, according to the fixed field
+'    element "Lang":
+'     - Latin small letter i is uppercased to capital I with dot above;
+'     - Latin capital letter I is lowercased to Latin small letter dotless i;
+'     - Latin capital letter I with dot above is lowercased to plain Latin small letter
+'       i.
+'    For all other languages, Latin capital letter I is lowercased to Latin small letter
+'    i, and conversely, i is uppercased to I. If the selection in a Turkish-language
+'    resource is not in Turkish, as in a quotation, the change of case may be incorrect.
+'
+' This macro respects the "titlecase" property of the four Latin Unicode characters that
+' possess it (section 5.18.1 of the Unicode Standard). For example, the Latin capital
+' letter "DZ", which has lowercase form "dz", also has titlecase form "Dz", for use when
+' the letter begins a title. The other Latin Unicode letters with titlecase property are
+' "LJ", "NJ", and "DZ" with a caron over the Z.
+'
+' Because of the possibility that some text may be converted that should not be, such as
+' acronyms and abbreviations, proper nouns, URIs, and so on, select text carefully, and
+' review closely the results of this macro's operation.
+'
+' The macro can simply apply the macro language commands UCase and LCase to ASCII
+' letters, whether they appear as themselves or as base characters followed by one or
+' more diacritical marks. Precomposed characters (single glyphs incorporating base and
+' modifying marks) have their case converted by using lookup tables, which are arrays
+' made up of characters in the Unicode Latin blocks. Characters are neither decomposed
+' nor combined when their case is changed. To decompose characters, or split them into
+' their constituent parts--which is preferred by MARC and the Unicode standard--use my
+' "Decompose" macro.
+'
+' Depending on the font used, some characters, although valid, may not display properly.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Binary
+
+Declare Sub ChangeContents( EnhancedContents )
+Declare Sub FillArrayDontCap
+Declare Sub FillArrayUniLower2Upper
+Declare Sub FillArrayUniPunct
+Declare Sub FillArrayUniUpper2Lower
+
+' The parameters in the following functions are the beginning and ending positions in the
+' field of a selection. If nothing has been selected, the parameters are the beginning
+' and end of the whole field.
+
+Declare Sub MakeInitials  ( i1%, i2% )
+Declare Sub MakeLowercase ( i1%, i2% )
+Declare Sub MakeSentence  ( i1%, i2% )
+Declare Sub MakeUppercase ( i1%, i2%, HowMuch% )
+
+Declare Function ChangeCaseUnicode( InString$, _
+                                    InArray() As String, _
+                                    TitleCase% ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+'----------------------------------------------------------------------------------------
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal ClipboardFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal StringLength As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal WindowHandle As Long ) As Long
+'----------------------------------------------------------------------------------------
+
+Global Const FIRST_LETTER       As Integer = 1
+Global Const INTEGER_RANGE      As Long = 65536 '-32,768 to 32,767
+Global Const NO_CASE            As Integer = 0
+
+Global DELIMITER_ASC            As String*1
+Global DELIMITER_UNI            As String*8
+Global DOUBLE_QUOTE             As String*1
+Global SINGLE_QUOTE             As String*1
+
+Global Language$
+Global UBCharArray%
+
+Global AllLowerCase
+Global AllUpperCase
+Global ContentsField
+
+Global CharArray()              As String
+Global DoNotCapitalize( 117 )   As String
+Global UnicodePunctuation( 72 ) As String
+Global UniLower2Upper( 421 )    As String
+Global UniUpper2Lower( 426 )    As String
+
+'****************************************************************************************
+
+Sub Main
+
+Erase CharArray
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DISPLAY_FF_AT_TOP    As Integer = 1
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const FIXED_FIELD          As Integer = 0
+Const WARNING_QUERY        As Integer = 32
+
+Const CONTENTS_CASE        As Integer = 5
+Const INITIAL_CAPS         As Integer = 3
+Const LOWERCASE            As Integer = 0
+Const QUIT                 As Integer = 7
+Const SECOND_BUTTON        As Integer = 256
+Const SENTENCE_CASE        As Integer = 2
+Const TITLE_CASE           As Integer = 4
+Const UPPERCASE            As Integer = 1
+Const WHOLE_STRING         As Integer = 0
+Const YES_NO_BUTTONS       As Integer = 4
+
+Dim CharA%
+Dim CharCount%
+Dim CharLength%
+Dim CharT$
+Dim CharToAdd$
+Dim Col%
+Dim Conversion%
+Dim EndOfSentenceTest$
+Dim FailureMessage$
+Dim FieldData$
+Dim Indicators$
+Dim Legend$
+Dim LenSelectionActual%
+Dim LenSelectionAdjusted%
+Dim LowerCaseFound%
+Dim NCR$
+Dim NothingFoundMessage$
+Dim PosFF%
+Dim Prep$
+Dim ProcessedString$
+Dim Row%
+Dim SelectionData$
+Dim SelectionStart%
+Dim Start%
+Dim Tag$
+Dim TempString$
+Dim TestChar$
+Dim TitleCaseWarning$
+Dim UpperCaseFound%
+Dim WaltsMacros$
+Dim Window%
+
+Dim AddNewChar
+Dim ChangedFFView            : ChangedFFView  = FALSE
+Dim ClipboardClose
+Dim DelimiterFound           : DelimiterFound = FALSE
+Dim EnhancedContents
+Dim NewSentence              : NewSentence    = FALSE
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer
+
+'----------------------------------------------------------------------------------------
+Const UNICODE_TEXT As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim ClipboardCharsDim%
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim LengthOfField%
+Dim UniCodePoint$
+
+Dim ClipboardChars() As Integer
+'----------------------------------------------------------------------------------------
+
+AllLowerCase      = FALSE
+AllUpperCase      = FALSE
+DELIMITER_ASC     = Chr$( 223 )
+DELIMITER_UNI     = "&#x01C2;"
+DOUBLE_QUOTE      = Chr$( 034 ) & " "
+SINGLE_QUOTE      = Chr$( 039 ) & " "
+
+FailureMessage$   = "Sorry, could not change case of "
+
+TitleCaseWarning$ = "The " & DOUBLE_QUOTE & "Title Case" & DOUBLE_QUOTE & " function is designed to work with text in English,"
+TitleCaseWarning$ = TitleCaseWarning$ & " and the Language code in the fixed field suggests that is not the language of this"
+TitleCaseWarning$ = TitleCaseWarning$ & " field. Do you really want to proceed with this change?"
+
+WaltsMacros$      = "[Walt's macros] Extras3:ChangeCase3"
+
+' First, make sure a record is displayed, as opposed to a list.
+
+Window% = CS.ItemType
+Select Case Window%
+  Case -1, 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only in a bibliographic or authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Get the cursor's position.
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+' There is nothing for the macro to convert if the cursor is in the fixed field.
+
+If Col% = FIXED_FIELD Then
+    MsgBox "Please place the cursor in a variable field, or select text in a variable field, to change its case.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Get the language code from the fixed field. Dealing with the letter i in its dotted and
+' dotless forms in Turkish requires special attention; and when changing case in a
+' contents note, removing the word "by" from a statement of responsibility makes sense
+' only for English language materials. The "Title Case" function also should be used only
+' for resources in English.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+
+If CS.GetFixedField( "Lang", Language$ ) Then
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Make sure the field is retrievable and that it is in Latin script. The
+' "GetFieldUnicode" command can be used here because its results won't be pasted back
+' into the record, which is the reason for using the "CopyField" command instead.
+
+If CS.GetFieldUnicode( "...", Row%, FieldData$ ) = FALSE Then
+    MsgBox "Sorry, this macro was unable to retrieve the data in the field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+  Else
+    If FieldData$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro works only with Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        AddNewChar = TRUE
+    End If
+End If
+
+' Then check for text within the record having been selected, and that any selection is
+' also in Latin script.
+
+If CS.GetSelectedText( SelectionData$ ) Then
+    If SelectionData$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro works only with Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      ElseIf Col% < 6 Then
+        MsgBox "Please select text within a data cell!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+
+' Because the "CopySelected" command doesn't work, the "CopyField" command will be used
+' to retrieve the characters from the field. The selection can be located in the field by
+' its starting position (as reported by the "CursorColumn" command) and the length of the
+' selected string.
+
+    SelectionStart%     = CS.CursorColumn
+    LenSelectionActual% = Len( SelectionData$ )
+    AddNewChar          = FALSE
+End If
+
+' Because the macro has special procedures for a contents field, determine the tag of the
+' field in which the cursor is placed.
+
+Tag$ = Left$( FieldData$, 3 )
+If Tag$ = "505" Then
+    ContentsField = TRUE
+  Else
+    ContentsField = FALSE
+End If
+Indicators$ = Mid$( FieldData$, 4, 2 )
+
+' Get the contents of the whole field with the "CopyField" command, and use Windows API
+' to access the Clipboard.
+
+Clipboard.Clear
+CS.CopyField
+
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    MsgBox "Sorry, the contents of the Clipboard could not be accessed.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+
+ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+If ClipboardDataHandle = 0& Then
+    MsgBox "Sorry, the macro failed to get Clipboard data.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+  Else
+    Exit Sub
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' The act of copying the field loses any selection within it. The selection can be
+' approximately reinstated by the "Copy" command, which highlights text in the field by
+' its position. The command isn't actually used here to copy anything, only to retain the
+' visual cue of highlighting for when the macro is finished.
+
+If SelectionData$ <> "" Then
+    If CS.Copy( Row%, SelectionStart%, Row%, SelectionStart% + LenSelectionActual% - 1 ) Then
+    End If
+End If
+
+' The "GetSelectedText" command retrieves hexadecimal Unicode code points for character
+' codes 0x0100 and higher, but decimal numbers for the range U+0080 to U+00FF (decimal
+' 128 to 255). The "CopyField" command retrieves hexadecimal numbers for everything above
+' U+0080, which is the upper limit of the Basic Latin repertoire. To compare the
+' character strings of the extended ASCII and Unicode encodings, the adjusted length of
+' the selection must be increased by seven for each extended ASCII character in the
+' string. For example, "The cát iñ thë hàt" is 18 characters in length, but as Unicode
+' the macro shows it as "The ca&#x0301;t in&#x0303; the&#x0308; ha&#x0300;t," or 50
+' characters in length.
+
+LenSelectionAdjusted% = LenSelectionActual%
+For i = 1 To Len( SelectionData$ )
+  CharA% = Asc( Mid$( SelectionData$, i, 1 ) )
+  If CharA% > 127 Then
+      LenSelectionAdjusted% = LenSelectionAdjusted% + 7
+  End If
+Next i
+
+' Create a new array of characters from their numerical encoding in the Clipboard array.
+' Those numbers are type "integer", which in the macro's 16-bit environment range from
+' -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters, which are added to
+' the new array as themselves. All other numbers are converted to hexadecimal values by
+' means of the BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly
+' converted to hexadecimal 0080 to 7FFF. Negative decimal numbers must be made positive,
+' which is done by adding them to 65,536. This makes the range -32,768 to -1 become the
+' range 32,768 to 65,535. The BASIC "Hex" function converts those numbers to the
+' hexadecimal range 8000 to FFFF. Finally, the hexadecimal numbers are transformed into
+' Numeric Character References (NCRs), with strings of two or three digits padded with
+' leading zeros to make each string eight characters in length; then each NCR is added to
+' the new array. (Characters whose Unicode numbers are U+10000 or larger probably will
+' cause the macro to fail.)
+
+j = -1
+For i = 5 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+  If CodePoint% = 0 Then
+      CharToAdd$  = ""
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$  = Chr$( CodePoint% )
+      CharLength% = 1
+    ElseIf CodePoint% <> 0 Then
+      If CodePoint% > 127 Then
+          UniCodePoint$ = Hex( ClipboardChars( i ) )
+          If Len( UniCodePoint$ ) < 4 Then
+             UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+          End If
+        Else
+          UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+      End If
+      CharToAdd$  = "&#x" & UniCodePoint$ & ";"
+      CharLength% = 8
+  End If
+
+' If no text has been selected, characters in the Clipboard array are added to the new
+' array, starting with those that follow the tag and indicators (the first five elements
+' of the array). Otherwise, characters from the Clipboard aren't added to the new array
+' until the Clipboard array index has increased to reach the position in the field of the
+' start of the selection. Keep track of the length of the string implied by the array,
+' because the loop will stop when it matches the length of the selection.
+
+  If AddNewChar = FALSE Then
+      If i = SelectionStart% - 1 Then
+          AddNewChar = TRUE
+      End If
+  End If
+  If CharToAdd$ <> "" Then
+      If AddNewChar Then
+          j = j + 1
+          ReDim Preserve CharArray( j )
+          CharArray( j ) = CharToAdd$
+          CharCount% = CharCount% + CharLength%
+          If SelectionData$ <> "" Then
+              If CharCount% = LenSelectionAdjusted% Then
+                  Exit For
+              End If
+          End If
+      End If
+    Else
+      Exit For
+  End If
+  CharToAdd$ = ""
+Next i
+UBCharArray% = UBound( CharArray )
+
+If SelectionData$ = "" Then
+    Legend$ = "field " & Tag$
+  Else
+    Legend$ = "selected text"
+End If
+
+' The next step is to quickly check if the text of the string being worked on, whether a
+' selection or the whole field, is already all uppercase or all lowercase, so as to
+' enable or disable the corresponding buttons in the dialog box when it appears.
+
+FillArrayUniLower2Upper
+FillArrayUniUpper2Lower
+
+For i = 0 To UBCharArray%
+  CharT$ = CharArray( i )
+
+' If the function "ChangeCaseUnicode" returns a different NCR from its input, it must be
+' the character of the other case. Otherwise, the return of the input means no opposite
+' case character was found. The test ends as soon as at least one character of each case
+' is found, but it may have to examine the whole string to form a conclusion.
+
+  If Left$( CharT$, 3 ) = "&#x" Then
+      NCR$ = CharT$
+      If NCR$ = DELIMITER_UNI Then
+          DelimiterFound = TRUE
+        Else
+          If UpperCaseFound% < 1 Then
+              If NCR$ <> ChangeCaseUnicode( NCR$, UniUpper2Lower(), NO_CASE ) Then
+                  If DelimiterFound = FALSE Then
+                      UpperCaseFound% = 1
+                      GoTo CaseChecked:
+                    Else
+                      DelimiterFound  = FALSE
+                  End If
+              End If
+          End If
+          If LowerCaseFound% < 2 Then
+              If NCR$ <> ChangeCaseUnicode( NCR$, UniLower2Upper(), NO_CASE ) Then
+                  If DelimiterFound = FALSE Then
+                      LowerCaseFound% = 2
+                      GoTo CaseChecked:
+                    Else
+                      DelimiterFound  = FALSE
+                  End If
+              End If
+          End If
+      End If
+
+    Else
+
+      CharA% = Asc( CharT$ )
+      Select Case CharA%
+
+        Case 0 To 64
+
+          If DelimiterFound = TRUE Then
+              DelimiterFound = FALSE
+          End If
+
+        Case 65 To 122
+
+          If UpperCaseFound% < 1 Then
+              If CharA% > 64 and CharA% < 91 Then
+                  If DelimiterFound = FALSE Then
+                      UpperCaseFound% = 1
+                      GoTo CaseChecked:
+                    Else
+                      DelimiterFound = FALSE
+                  End If
+              End If
+          End If
+          If LowerCaseFound% < 2 Then
+              If CharA% > 96 And CharA% < 123 Then
+                  If DelimiterFound = FALSE Then
+                      LowerCaseFound% = 2
+                      DelimiterFound  = FALSE
+                      GoTo CaseChecked:
+                    Else
+                      DelimiterFound = FALSE
+                  End If
+              End If
+          End If
+
+        Case 223
+
+          DelimiterFound = TRUE
+
+        Case Else
+
+          If DelimiterFound = FALSE Then
+              If UpperCaseFound% < 1 Then
+                  TestChar$ = LCase$( Chr$( CharA% ) )
+                  If TestChar$ <> CharT$ Then
+                      If DelimiterFound = FALSE Then
+                          UpperCaseFound% = 1
+                          GoTo CaseChecked:
+                        Else
+                          DelimiterFound = FALSE
+                      End If
+                  End If
+              End If
+              If LowerCaseFound% < 2 Then
+                  TestChar$ = UCase$( Chr$( CharA% ) )
+                  If TestChar$ <> CharT$ Then
+                      If DelimiterFound = FALSE Then
+                          LowerCaseFound% = 2
+                        Else
+                          DelimiterFound = FALSE
+                      End If
+                  End If
+              End If
+          End If
+      End Select
+  End If
+
+CaseChecked:
+
+Next i
+
+If LowerCaseFound% = 0 And UpperCaseFound% = 1 Then
+    AllUpperCase = TRUE
+  ElseIf UpperCaseFound% = 0 And LowerCaseFound% = 2 Then
+    AllLowerCase = TRUE
+
+' If there are (apparently) no letters at all, exit the macro.
+
+  ElseIf UpperCaseFound% = 0 And LowerCaseFound% = 0 Then
+    If SelectionData$ <> "" Then
+        NothingFoundMessage$ = "This selection seems to contain no text for this macro to change its case!"
+      Else
+        NothingFoundMessage$ = "There seems to be no text in this " & Tag$ & " field for this macro to change its case!"
+    End If
+    MsgBox NothingFoundMessage$, CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Run the dialog box, with the choices being presented as buttons, so pressing a button's
+' hotkey, or clicking the button, will instantly execute the change--as opposed to the
+' choices being presented as option buttons, which would then require two clicks of the
+' mouse or two key presses to execute the macro. (A design aside: The original version
+' of this macro's dialog box had the six buttons entirely filling the box, without
+' borders. The Windows 11 esthetic now rounds the corners of dialog boxes. This made the
+' bottom of this dialog box look odd, as the square corners of the buttons clashed with
+' the rounded corners of the containing frame. I therefore added a small border around
+' the button group so the buttons can retain their 90-degree corners without conflicting
+' with the dialog box's rounded corners.)
+
+Begin Dialog Dialog1Definition 328, 100, WaltsMacros$ & ".  ||  Change case  of " & Legend$ & " to ...", .Dialog1ControlFunction
+  CancelButton  1,1,1,1
+  ButtonGroup .ConversionSelection
+   PushButton     4,   0, 160,  32, "&lowercase",                            .L
+   PushButton   164,   0, 160,  32, "&UPPERCASE",                            .U
+   PushButton     4,  32, 160,  32, "&Sentence case.",                       .S
+   PushButton   164,  32, 160,  32, "&Initial Caps (Every Word)",            .I
+   PushButton     4,  64, 160,  32, "&Title Case (Chicago Manual of Style)", .T
+   PushButton   164,  64, 160,  32, "&Contents case -- Contents case.",      .C
+End Dialog
+
+Dim Dialog1 as Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+Conversion% = Dialog1.ConversionSelection
+
+Select Case Conversion%
+
+  Case LOWERCASE
+
+    If AllLowerCase = FALSE Then
+        Call MakeLowercase( 0, UBCharArray% )
+    End If
+
+  Case UPPERCASE
+
+    If AllUpperCase = FALSE Then
+        Call MakeUppercase( 0, UBCharArray%, WHOLE_STRING )
+    End If
+
+  Case SENTENCE_CASE
+
+    Call MakeSentence( 0, UBCharArray% )
+
+  Case INITIAL_CAPS
+
+    FillArrayUniPunct
+    Call MakeInitials( 0, UBCharArray% )
+
+  Case TITLE_CASE
+
+    If Language$ <> "eng" And SelectionData$ = "" Then
+        If MsgBox( TitleCaseWarning$, YES_NO_BUTTONS + WARNING_QUERY + SECOND_BUTTON, WaltsMacros$ ) = QUIT Then Exit Sub
+    End If
+
+    FillArrayDontCap
+    Call MakeInitials( 0, UBCharArray% )
+
+' With the first letter of each word in the selected text capitalized, and every other
+' letter in lowercase, search in that text for each of the terms in the array of words to
+' DE-capitalize. This is a case-sensitive search, so matches should be made only at the
+' beginning of the word. If a match is found, check for letters following the word. If
+' there are none, the whole word is matched, and its first letter can be made lowercase.
+' This part of the macro doesn't need to call the "MakeLowercase" function because all
+' the words in the list of prepositions are in ASCII characters, and susceptible to the
+' BASIC Case commands.
+
+    Start% = 0
+    Do
+      i = Start%
+      TempString$ = ""
+      Do
+        CharT$ = CharArray( i )
+        If CharT$ <> " " Then
+            TempString$ = TempString$ & CharT$
+          Else
+            Exit Do
+        End If
+        i = i + 1
+      Loop Until CharT$ = " " Or i > UBCharArray%
+
+' With a word identified--a sequence of characters between spaces--see if it matches an
+' entry in the list of prepositions. If it does, the initial letter of the word is made
+' lowercase, except if it is the beginning of a sentence, in which case it remains
+' uppercase. This test involves looking at the previous word in the string for the marks
+' that denote the end of a sentence.
+
+      For j = 0 To UBound( DoNotCapitalize )
+        Prep$ = DoNotCapitalize( j )
+        If TempString$ = Prep$ Then
+            If Start% > 2 Then
+                EndOfSentenceTest$ = CharArray( Start% - 2 ) & CharArray( Start% - 1 )
+                If EndOfSentenceTest$ = ". " Or EndOfSentenceTest$ = "? " Or EndOfSentenceTest$ = "! " Then
+                    NewSentence = TRUE
+                  Else
+                    If ( InStr( ".!?", CharArray( i - 3 ) ) > 0 ) And _
+                       ( EndOfSentenceTest$ = DOUBLE_QUOTE Or EndOfSentenceTest$ = SINGLE_QUOTE ) Then
+                        NewSentence = TRUE
+                    End If
+                End If
+                If NewSentence Then
+                    NewSentence = FALSE
+                  Else
+                    CharArray( Start% ) = LCase$( Left$( TempString$, 1 ) )
+                    Exit For
+                End If
+            End If
+        End If
+      Next j
+      Start% = i + 1
+    Loop Until Start% > UBCharArray%
+
+  Case CONTENTS_CASE
+
+    If Right$( Indicators$, 1 ) = "0" Then
+        EnhancedContents = TRUE
+      Else
+        EnhancedContents = FALSE
+    End If
+    Call ChangeContents( EnhancedContents )
+
+End Select
+
+ProcessedString$ = ""
+For i = 0 To UBCharArray%
+  ProcessedString$ = ProcessedString$ & CharArray( i )
+Next i
+
+' After the text string has had all initial letters capitalized, letters in
+' abbreviations, that is, letters surrounded by periods or full stops with no spaces
+' between them, must be found and capitalized. Otherwise "U.S.A." or "u.s.a." might
+' become "U.s.a."
+
+Select Case Conversion%
+
+  Case CONTENTS_CASE, INITIAL_CAPS, SENTENCE_CASE, TITLE_CASE
+
+    Start% = 1
+    Do
+      p = InStr( Start%, ProcessedString$, "." )
+      If p > 0 Then
+          q = InStr( p + 1, ProcessedString$, "." )
+          If q > 0 Then
+              TempString$ = Mid$( ProcessedString$, p + 1, q - p - 1 )
+            If TempString$ = "" Then
+              Start%      = q + 1
+             Else
+              If InStr( TempString$, " " ) = 0 Then
+                  Call MakeUppercase( 0, UBCharArray%, WHOLE_STRING )
+                  ProcessedString$ = Left$( ProcessedString$, p ) & TempString$ & Mid$( ProcessedString$, q )
+                  Start%      = p + Len( TempString$ )
+                Else
+                  Start%      = q + 1
+              End If
+           End If
+            Else
+              Exit Do
+          End If
+      End If
+    Loop Until p = 0
+
+End Select
+
+' If text was changed within the field, replace the whole field. If a selection was made,
+' replace it with the changed text.
+
+If SelectionData$ = "" Then
+    If CS.SetFieldLine( Row%, Tag$ & Indicators$ & ProcessedString$ ) = FALSE Then
+        MsgBox FailureMessage$ & Legend$ & ".", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+  Else
+    If CS.SetSelectedText( ProcessedString$ ) = FALSE Then
+        MsgBox "Sorry, could not change case of the selection.", CRITICAL_MESSAGE, WaltsMacros$
+    End If
+End If
+
+' Return the cursor to where it was when the macro was invoked.
+
+CS.CursorColumn = Col%
+
+End Sub
+
+'****************************************************************************************
+
+Sub ChangeContents( EnhancedContents )
+
+' This function converts case in a contents field. It uses subfield coding in an enhanced
+' note, or ISBD punctuation otherwise, to isolate each title and statement of
+' responsibility. Each title is converted to Sentence case, meaning only the initial
+' character is capitalized, and a statement of responsibility following that title is
+' converted to Initial Capitals. In an enhanced contents note, other information,
+' contained in subfield $g, is ignored. In other contents notes, information that is
+' neither a title nor a statement of responsibility is capitalized according to whatever
+' case the string it is contained in is being changed to.
+
+Dim BUILDING   As String*1   : BUILDING = "B"
+Dim DONE       As String*1   : DONE     = "D"
+Dim NONE       As String*1   : NONE     = "N"
+Dim SOR_STATUS As String* 1
+
+Dim CharT$
+Dim Start%
+Dim SubfieldCode$
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer
+
+' If the contents note is enhanced, treatment of text is simple, because subfield codes
+' straightforwardly identify the field's components.
+
+If EnhancedContents Then
+    Start% = 0
+    Do
+      For i = Start% To UBCharArray%
+        CharT$ = CharArray( i )
+        If CharT$ = DELIMITER_UNI Then
+            SubfieldCode$ = CharArray( i + 1 )
+            For j = i + 2 To UBCharArray%
+              CharT$ = CharArray( j )
+              If CharT$ = DELIMITER_UNI Then
+                  Start% = j
+                  Exit For
+              End If
+            Next j
+            If j < UBCharArray% Then
+                j = j - 1
+            End If
+            Exit For
+        End If
+      Next i
+      Call MakeLowercase( i + 3, j )
+      If SubfieldCode$ = "t" Then
+          Call MakeUppercase( i + 3, j, FIRST_LETTER )
+        ElseIf SubfieldCode$ = "r" Then
+          Call MakeInitials( i + 3, j )
+          If Language$ = "eng" Then
+              If CharArray( i + 2 ) & CharArray( i + 3 ) & CharArray( i + 4 ) & CharArray( i + 5 ) = " By " Then
+                  CharArray( i + 3 ) = "b"
+              End If
+          End If
+      End If
+    Loop Until i > UBCharArray%
+
+  Else
+
+' If the contents note is not enhanced, ISBD punctuation must be relied upon to change
+' case. Starting from the beginning, look for the next space, and test if it's the last
+' character in the prescribed ISBD punctuation. If it is, it will mark the end of a
+' phrase, which will by default be converted to Sentence case unless a statement of
+' responsibility has been identified, in which case the phrase will be converted to
+' Initials Case. A non-ISBD dash, as in older cataloging, probably won't be recognized by
+' the macro: "Title 1.--Title 2.--Title 3." will be read as a single sentence.
+
+    Start%     = 0
+    i          = Start%
+    SOR_STATUS = NONE
+    Do
+      For i = Start% To UBCharArray%
+        CharT$ = CharArray( i )
+        If CharT$ = " " Then
+            If i > 3 Then
+                If CharArray( i - 2 ) & CharArray( i - 1 ) = " ;" Or _
+                   CharArray( i - 3 ) & CharArray( i - 2 ) & CharArray( i - 1 ) = " --" Then
+
+' By default, characters added to the current string, or section of the array, are
+' assumed to be in the title. If they may actually be in the statement of responsibility,
+' the check is whether such a statement is in the process of being added to, or built.
+' This is known because of the presence of the ISBD slash indicating its beginning.
+
+                    If SOR_STATUS = BUILDING Then
+                        SOR_STATUS = DONE
+                    End If
+                    Exit For
+                  ElseIf CharArray( i - 2 ) & CharArray( i - 1 ) = " /" Then
+                    SOR_STATUS = BUILDING
+                    Exit For
+                End If
+            End If
+        End If
+      Next i
+      If i > UBCharArray% Then
+          i = i - 1
+          If SOR_STATUS = BUILDING Then
+              SOR_STATUS = DONE
+          End If
+      End If
+      If SOR_STATUS <> DONE Then
+          Call MakeSentence( Start%, i )
+        Else
+          Call MakeInitials( Start%, i )
+          If Language$ = "eng" Then
+              If CharArray( Start% - 1 ) & CharArray( Start% ) & CharArray( Start% + 1 ) & CharArray( Start% + 2 ) = " By " Then
+                  CharArray( Start% ) = "b"
+              End If
+          End If
+      End If
+      Start% = i + 1
+    Loop Until Start% > UBCharArray%
+
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrayDontCap
+
+' This is the list of articles, coordinate conjunctions, and prepositions that won't be
+' capitalized if Title Case is selected. Each term in the list begins with a capital
+' letter to force a match at the beginning of a word, even though the capital letter will
+' be made lowercase after the match.
+
+DoNotCapitalize( 0   ) = "A"
+DoNotCapitalize( 1   ) = "Aboard"
+DoNotCapitalize( 2   ) = "About"
+DoNotCapitalize( 3   ) = "Above"
+DoNotCapitalize( 4   ) = "Abreast"
+DoNotCapitalize( 5   ) = "Absent"
+DoNotCapitalize( 6   ) = "Across"
+DoNotCapitalize( 7   ) = "After"
+DoNotCapitalize( 8   ) = "Against"
+DoNotCapitalize( 9   ) = "Along"
+DoNotCapitalize( 10  ) = "Aloft"
+DoNotCapitalize( 11  ) = "Alongside"
+DoNotCapitalize( 12  ) = "Amid"
+DoNotCapitalize( 13  ) = "Among"
+DoNotCapitalize( 14  ) = "An"
+DoNotCapitalize( 15  ) = "And"
+DoNotCapitalize( 16  ) = "Anti"
+DoNotCapitalize( 17  ) = "Apropos"
+DoNotCapitalize( 18  ) = "Around"
+DoNotCapitalize( 19  ) = "As"
+DoNotCapitalize( 20  ) = "Aslant"
+DoNotCapitalize( 21  ) = "Astride"
+DoNotCapitalize( 22  ) = "At"
+DoNotCapitalize( 23  ) = "Atop"
+DoNotCapitalize( 24  ) = "Bar"
+DoNotCapitalize( 25  ) = "Barring"
+DoNotCapitalize( 26  ) = "Before"
+DoNotCapitalize( 27  ) = "Behind"
+DoNotCapitalize( 28  ) = "Below"
+DoNotCapitalize( 29  ) = "Beneath"
+DoNotCapitalize( 30  ) = "Beside"
+DoNotCapitalize( 31  ) = "Besides"
+DoNotCapitalize( 32  ) = "Between"
+DoNotCapitalize( 33  ) = "Beyond"
+DoNotCapitalize( 34  ) = "But"
+DoNotCapitalize( 35  ) = "By"
+DoNotCapitalize( 36  ) = "Chez"
+DoNotCapitalize( 37  ) = "Circa"
+DoNotCapitalize( 38  ) = "Come"
+DoNotCapitalize( 39  ) = "Concerning"
+DoNotCapitalize( 40  ) = "Contra"
+DoNotCapitalize( 41  ) = "Counting"
+DoNotCapitalize( 42  ) = "Cum"
+DoNotCapitalize( 43  ) = "Despite"
+DoNotCapitalize( 44  ) = "Down"
+DoNotCapitalize( 45  ) = "During"
+DoNotCapitalize( 46  ) = "Effective"
+DoNotCapitalize( 47  ) = "Ere"
+DoNotCapitalize( 48  ) = "Except"
+DoNotCapitalize( 49  ) = "Excepting"
+DoNotCapitalize( 50  ) = "Excluding"
+DoNotCapitalize( 51  ) = "Failing"
+DoNotCapitalize( 52  ) = "Following"
+DoNotCapitalize( 53  ) = "For"
+DoNotCapitalize( 54  ) = "From"
+DoNotCapitalize( 55  ) = "In"
+DoNotCapitalize( 56  ) = "Including"
+DoNotCapitalize( 57  ) = "Inside"
+DoNotCapitalize( 58  ) = "Into"
+DoNotCapitalize( 59  ) = "Less"
+DoNotCapitalize( 60  ) = "Like"
+DoNotCapitalize( 61  ) = "Minus"
+DoNotCapitalize( 62  ) = "Modulo"
+DoNotCapitalize( 63  ) = "Near"
+DoNotCapitalize( 64  ) = "Next"
+DoNotCapitalize( 65  ) = "Nor"
+DoNotCapitalize( 66  ) = "Notwithstanding"
+DoNotCapitalize( 67  ) = "Of"
+DoNotCapitalize( 68  ) = "Off"
+DoNotCapitalize( 69  ) = "Offshore"
+DoNotCapitalize( 70  ) = "On"
+DoNotCapitalize( 71  ) = "Onto"
+DoNotCapitalize( 72  ) = "Opposite"
+DoNotCapitalize( 73  ) = "Or"
+DoNotCapitalize( 74  ) = "Out"
+DoNotCapitalize( 75  ) = "Outside"
+DoNotCapitalize( 76  ) = "Over"
+DoNotCapitalize( 77  ) = "Pace"
+DoNotCapitalize( 78  ) = "Past"
+DoNotCapitalize( 79  ) = "Pending"
+DoNotCapitalize( 80  ) = "Per"
+DoNotCapitalize( 81  ) = "Plus"
+DoNotCapitalize( 82  ) = "Post"
+DoNotCapitalize( 83  ) = "Pre"
+DoNotCapitalize( 84  ) = "Pro"
+DoNotCapitalize( 85  ) = "Qua"
+DoNotCapitalize( 86  ) = "Re"
+DoNotCapitalize( 87  ) = "Regarding"
+DoNotCapitalize( 88  ) = "Respecting"
+DoNotCapitalize( 89  ) = "Sans"
+DoNotCapitalize( 90  ) = "Save"
+DoNotCapitalize( 91  ) = "Saving"
+DoNotCapitalize( 92  ) = "Short"
+DoNotCapitalize( 93  ) = "Since"
+DoNotCapitalize( 94  ) = "Sub"
+DoNotCapitalize( 95  ) = "Than"
+DoNotCapitalize( 96  ) = "The"
+DoNotCapitalize( 97  ) = "Through"
+DoNotCapitalize( 98  ) = "Throughout"
+DoNotCapitalize( 99  ) = "Till"
+DoNotCapitalize( 100 ) = "Times"
+DoNotCapitalize( 101 ) = "To"
+DoNotCapitalize( 102 ) = "Toward"
+DoNotCapitalize( 103 ) = "Towards"
+DoNotCapitalize( 104 ) = "Under"
+DoNotCapitalize( 105 ) = "Underneath"
+DoNotCapitalize( 106 ) = "Unlike"
+DoNotCapitalize( 107 ) = "Until"
+DoNotCapitalize( 108 ) = "Up"
+DoNotCapitalize( 109 ) = "Upon"
+DoNotCapitalize( 110 ) = "Versus"
+DoNotCapitalize( 111 ) = "Via"
+DoNotCapitalize( 112 ) = "Vice"
+DoNotCapitalize( 113 ) = "Vis-à-vis"
+DoNotCapitalize( 114 ) = "Wanting"
+DoNotCapitalize( 115 ) = "With"
+DoNotCapitalize( 116 ) = "Within"
+DoNotCapitalize( 117 ) = "Without"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrayUniLower2Upper
+
+' Unicode encoding requires two arrays to handle case conversion, because the order of
+' characters differs between upper and lower case. The arrays are the Unicode code point
+' pairs of cased letters. They need to be in order by the first of the pairs of
+' characters in each element so they can be searched with a binary, rather than a linear,
+' search, to speed up processing. This array is in order of lowercase code points, and
+' the other is order of uppercase. Two procedures are used because one would be too big
+' for the macro.
+
+UniLower2Upper( 0   ) = "00E000C0" 'à and À
+UniLower2Upper( 1   ) = "00E100C1" 'á and Á, etc.
+UniLower2Upper( 2   ) = "00E200C2"
+UniLower2Upper( 3   ) = "00E300C3"
+UniLower2Upper( 4   ) = "00E400C4"
+UniLower2Upper( 5   ) = "00E500C5"
+UniLower2Upper( 6   ) = "00E600C6"
+UniLower2Upper( 7   ) = "00E700C7"
+UniLower2Upper( 8   ) = "00E800C8"
+UniLower2Upper( 9   ) = "00E900C9"
+UniLower2Upper( 10  ) = "00EA00CA"
+UniLower2Upper( 11  ) = "00EB00CB"
+UniLower2Upper( 12  ) = "00EC00CC"
+UniLower2Upper( 13  ) = "00ED00CD"
+UniLower2Upper( 14  ) = "00EE00CE"
+UniLower2Upper( 15  ) = "00EF00CF"
+UniLower2Upper( 16  ) = "00F000D0"
+UniLower2Upper( 17  ) = "00F100D1"
+UniLower2Upper( 18  ) = "00F200D2"
+UniLower2Upper( 19  ) = "00F300D3"
+UniLower2Upper( 20  ) = "00F400D4"
+UniLower2Upper( 21  ) = "00F500D5"
+UniLower2Upper( 22  ) = "00F600D6"
+UniLower2Upper( 23  ) = "00F800D8"
+UniLower2Upper( 24  ) = "00F900D9"
+UniLower2Upper( 25  ) = "00FA00DA"
+UniLower2Upper( 26  ) = "00FB00DB"
+UniLower2Upper( 27  ) = "00FC00DC"
+UniLower2Upper( 28  ) = "00FD00DD"
+UniLower2Upper( 29  ) = "00FE00DE"
+UniLower2Upper( 30  ) = "00FF0178"
+UniLower2Upper( 31  ) = "01010100"
+UniLower2Upper( 32  ) = "01030102"
+UniLower2Upper( 33  ) = "01050104"
+UniLower2Upper( 34  ) = "01070106"
+UniLower2Upper( 35  ) = "01090108"
+UniLower2Upper( 36  ) = "010B010A"
+UniLower2Upper( 37  ) = "010D010C"
+UniLower2Upper( 38  ) = "010F010E"
+UniLower2Upper( 39  ) = "01110110"
+UniLower2Upper( 40  ) = "01130112"
+UniLower2Upper( 41  ) = "01150114"
+UniLower2Upper( 42  ) = "01170116"
+UniLower2Upper( 43  ) = "01190118"
+UniLower2Upper( 44  ) = "011B011A"
+UniLower2Upper( 45  ) = "011D011C"
+UniLower2Upper( 46  ) = "011F011E"
+UniLower2Upper( 47  ) = "01210120"
+UniLower2Upper( 48  ) = "01230122"
+UniLower2Upper( 49  ) = "01250124"
+UniLower2Upper( 50  ) = "01270126"
+UniLower2Upper( 51  ) = "01290128"
+UniLower2Upper( 52  ) = "012B012A"
+UniLower2Upper( 53  ) = "012D012C"
+UniLower2Upper( 54  ) = "012F012E"
+UniLower2Upper( 55  ) = "01300069"
+UniLower2Upper( 56  ) = "01310049" 'dotless i to regular capital I
+UniLower2Upper( 57  ) = "01330132"
+UniLower2Upper( 58  ) = "01350134"
+UniLower2Upper( 59  ) = "01370136"
+UniLower2Upper( 60  ) = "013A0139"
+UniLower2Upper( 61  ) = "013C013B"
+UniLower2Upper( 62  ) = "013E013D"
+UniLower2Upper( 63  ) = "0140013F"
+UniLower2Upper( 64  ) = "01420141"
+UniLower2Upper( 65  ) = "01440143"
+UniLower2Upper( 66  ) = "01460145"
+UniLower2Upper( 67  ) = "01480147"
+UniLower2Upper( 68  ) = "014B014A"
+UniLower2Upper( 69  ) = "014D014C"
+UniLower2Upper( 70  ) = "014F014E"
+UniLower2Upper( 71  ) = "01510150"
+UniLower2Upper( 72  ) = "01530152"
+UniLower2Upper( 73  ) = "01550154"
+UniLower2Upper( 74  ) = "01570156"
+UniLower2Upper( 75  ) = "01590158"
+UniLower2Upper( 76  ) = "015B015A"
+UniLower2Upper( 77  ) = "015D015C"
+UniLower2Upper( 78  ) = "015F015E"
+UniLower2Upper( 79  ) = "01610160"
+UniLower2Upper( 80  ) = "01630162"
+UniLower2Upper( 81  ) = "01650164"
+UniLower2Upper( 82  ) = "01670166"
+UniLower2Upper( 83  ) = "01690168"
+UniLower2Upper( 84  ) = "016B016A"
+UniLower2Upper( 85  ) = "016D016C"
+UniLower2Upper( 86  ) = "016F016E"
+UniLower2Upper( 87  ) = "01710170"
+UniLower2Upper( 88  ) = "01730172"
+UniLower2Upper( 89  ) = "01750174"
+UniLower2Upper( 90  ) = "01770176"
+UniLower2Upper( 91  ) = "017A0179"
+UniLower2Upper( 92  ) = "017C017B"
+UniLower2Upper( 93  ) = "017E017D"
+UniLower2Upper( 94  ) = "01800243"
+UniLower2Upper( 95  ) = "01830182"
+UniLower2Upper( 96  ) = "01850184"
+UniLower2Upper( 97  ) = "01880187"
+UniLower2Upper( 98  ) = "018C018B"
+UniLower2Upper( 99  ) = "01920191"
+UniLower2Upper( 100 ) = "019501F6"
+UniLower2Upper( 101 ) = "01990198"
+UniLower2Upper( 102 ) = "019A023D"
+UniLower2Upper( 103 ) = "019E0220"
+UniLower2Upper( 104 ) = "01A101A0"
+UniLower2Upper( 105 ) = "01A301A2"
+UniLower2Upper( 106 ) = "01A501A4"
+UniLower2Upper( 107 ) = "01A801A7"
+UniLower2Upper( 108 ) = "01AD01AC"
+UniLower2Upper( 109 ) = "01B001AF"
+UniLower2Upper( 110 ) = "01B401B3"
+UniLower2Upper( 111 ) = "01B601B5"
+UniLower2Upper( 112 ) = "01B901B8"
+UniLower2Upper( 113 ) = "01BD01BC"
+UniLower2Upper( 114 ) = "01BF01F7"
+UniLower2Upper( 115 ) = "01C601C4"
+UniLower2Upper( 116 ) = "01C901C7"
+UniLower2Upper( 117 ) = "01CC01CA"
+UniLower2Upper( 118 ) = "01CE01CD"
+UniLower2Upper( 119 ) = "01D001CF"
+UniLower2Upper( 120 ) = "01D201D1"
+UniLower2Upper( 121 ) = "01D401D3"
+UniLower2Upper( 122 ) = "01D601D5"
+UniLower2Upper( 123 ) = "01D801D7"
+UniLower2Upper( 124 ) = "01DA01D9"
+UniLower2Upper( 125 ) = "01DC01DB"
+UniLower2Upper( 126 ) = "01DD018E"
+UniLower2Upper( 127 ) = "01DF01DE"
+UniLower2Upper( 128 ) = "01E101E0"
+UniLower2Upper( 129 ) = "01E301E2"
+UniLower2Upper( 130 ) = "01E501E4"
+UniLower2Upper( 131 ) = "01E701E6"
+UniLower2Upper( 132 ) = "01E901E8"
+UniLower2Upper( 133 ) = "01EB01EA"
+UniLower2Upper( 134 ) = "01ED01EC"
+UniLower2Upper( 135 ) = "01EF01EE"
+UniLower2Upper( 136 ) = "01F301F1"
+UniLower2Upper( 137 ) = "01F501F4"
+UniLower2Upper( 138 ) = "01F901F8"
+UniLower2Upper( 139 ) = "01FB01FA"
+UniLower2Upper( 140 ) = "01FD01FC"
+UniLower2Upper( 141 ) = "01FF01FE"
+UniLower2Upper( 142 ) = "02010200"
+UniLower2Upper( 143 ) = "02030202"
+UniLower2Upper( 144 ) = "02050204"
+UniLower2Upper( 145 ) = "02070206"
+UniLower2Upper( 146 ) = "02090208"
+UniLower2Upper( 147 ) = "020B020A"
+UniLower2Upper( 148 ) = "020D020C"
+UniLower2Upper( 149 ) = "020F020E"
+UniLower2Upper( 150 ) = "02110210"
+UniLower2Upper( 151 ) = "02130212"
+UniLower2Upper( 152 ) = "02150214"
+UniLower2Upper( 153 ) = "02170216"
+UniLower2Upper( 154 ) = "02190218"
+UniLower2Upper( 155 ) = "021B021A"
+UniLower2Upper( 156 ) = "021D021C"
+UniLower2Upper( 157 ) = "021F021E"
+UniLower2Upper( 158 ) = "02230222"
+UniLower2Upper( 159 ) = "02250224"
+UniLower2Upper( 160 ) = "02270226"
+UniLower2Upper( 161 ) = "02290228"
+UniLower2Upper( 162 ) = "022B022A"
+UniLower2Upper( 163 ) = "022D022C"
+UniLower2Upper( 164 ) = "022F022E"
+UniLower2Upper( 165 ) = "02310230"
+UniLower2Upper( 166 ) = "02330232"
+UniLower2Upper( 167 ) = "023C023B"
+UniLower2Upper( 168 ) = "023F2C7E"
+UniLower2Upper( 169 ) = "02402C7F"
+UniLower2Upper( 170 ) = "02420241"
+UniLower2Upper( 171 ) = "02470246"
+UniLower2Upper( 172 ) = "02490248"
+UniLower2Upper( 173 ) = "024B024A"
+UniLower2Upper( 174 ) = "024D024C"
+UniLower2Upper( 175 ) = "024F024E"
+UniLower2Upper( 176 ) = "02502C6F"
+UniLower2Upper( 177 ) = "02512C6D"
+UniLower2Upper( 178 ) = "02522C70"
+UniLower2Upper( 179 ) = "02530181"
+UniLower2Upper( 180 ) = "02540186"
+UniLower2Upper( 181 ) = "02560189"
+UniLower2Upper( 182 ) = "0257018A"
+UniLower2Upper( 183 ) = "0259018F"
+UniLower2Upper( 184 ) = "025B0190"
+UniLower2Upper( 185 ) = "025CA7AB"
+UniLower2Upper( 186 ) = "02600193"
+UniLower2Upper( 187 ) = "0261A7AC"
+UniLower2Upper( 188 ) = "02630194"
+UniLower2Upper( 189 ) = "0265A78D"
+UniLower2Upper( 190 ) = "0266A7AA"
+UniLower2Upper( 191 ) = "02680197"
+UniLower2Upper( 192 ) = "02690196"
+UniLower2Upper( 193 ) = "026AA7AE"
+UniLower2Upper( 194 ) = "026B2C62"
+UniLower2Upper( 195 ) = "026CA7AD"
+UniLower2Upper( 196 ) = "026F019C"
+UniLower2Upper( 197 ) = "02712C6E"
+UniLower2Upper( 198 ) = "0272019D"
+UniLower2Upper( 199 ) = "0275019F"
+UniLower2Upper( 200 ) = "027D2C64"
+UniLower2Upper( 201 ) = "028001A6"
+UniLower2Upper( 202 ) = "0282A7C5"
+UniLower2Upper( 203 ) = "028301A9"
+UniLower2Upper( 204 ) = "0287A7B1"
+UniLower2Upper( 205 ) = "028801AE"
+UniLower2Upper( 206 ) = "02890244"
+UniLower2Upper( 207 ) = "028A01B1"
+UniLower2Upper( 208 ) = "028B01B2"
+UniLower2Upper( 209 ) = "028C0245"
+UniLower2Upper( 210 ) = "029201B7"
+UniLower2Upper( 211 ) = "029DA7B2"
+UniLower2Upper( 212 ) = "029EA7B0"
+UniLower2Upper( 213 ) = "1D79A77D"
+UniLower2Upper( 214 ) = "1D7D2C63"
+UniLower2Upper( 215 ) = "1D8EA7C6"
+UniLower2Upper( 216 ) = "1E011E00"
+UniLower2Upper( 217 ) = "1E031E02"
+UniLower2Upper( 218 ) = "1E051E04"
+UniLower2Upper( 219 ) = "1E071E06"
+UniLower2Upper( 220 ) = "1E091E08"
+UniLower2Upper( 221 ) = "1E0B1E0A"
+UniLower2Upper( 222 ) = "1E0D1E0C"
+UniLower2Upper( 223 ) = "1E0F1E0E"
+UniLower2Upper( 224 ) = "1E111E10"
+UniLower2Upper( 225 ) = "1E131E12"
+UniLower2Upper( 226 ) = "1E151E14"
+UniLower2Upper( 227 ) = "1E171E16"
+UniLower2Upper( 228 ) = "1E191E18"
+UniLower2Upper( 229 ) = "1E1B1E1A"
+UniLower2Upper( 230 ) = "1E1D1E1C"
+UniLower2Upper( 231 ) = "1E1F1E1E"
+UniLower2Upper( 232 ) = "1E211E20"
+UniLower2Upper( 233 ) = "1E231E22"
+UniLower2Upper( 234 ) = "1E251E24"
+UniLower2Upper( 235 ) = "1E271E26"
+UniLower2Upper( 236 ) = "1E291E28"
+UniLower2Upper( 237 ) = "1E2B1E2A"
+UniLower2Upper( 238 ) = "1E2D1E2C"
+UniLower2Upper( 239 ) = "1E2F1E2E"
+UniLower2Upper( 240 ) = "1E311E30"
+UniLower2Upper( 241 ) = "1E331E32"
+UniLower2Upper( 242 ) = "1E351E34"
+UniLower2Upper( 243 ) = "1E371E36"
+UniLower2Upper( 244 ) = "1E391E38"
+UniLower2Upper( 245 ) = "1E3B1E3A"
+UniLower2Upper( 246 ) = "1E3D1E3C"
+UniLower2Upper( 247 ) = "1E3F1E3E"
+UniLower2Upper( 248 ) = "1E411E40"
+UniLower2Upper( 249 ) = "1E431E42"
+UniLower2Upper( 250 ) = "1E451E44"
+UniLower2Upper( 251 ) = "1E471E46"
+UniLower2Upper( 252 ) = "1E491E48"
+UniLower2Upper( 253 ) = "1E4B1E4A"
+UniLower2Upper( 254 ) = "1E4D1E4C"
+UniLower2Upper( 255 ) = "1E4F1E4E"
+UniLower2Upper( 256 ) = "1E511E50"
+UniLower2Upper( 257 ) = "1E531E52"
+UniLower2Upper( 258 ) = "1E551E54"
+UniLower2Upper( 259 ) = "1E571E56"
+UniLower2Upper( 260 ) = "1E591E58"
+UniLower2Upper( 261 ) = "1E5B1E5A"
+UniLower2Upper( 262 ) = "1E5D1E5C"
+UniLower2Upper( 263 ) = "1E5F1E5E"
+UniLower2Upper( 264 ) = "1E611E60"
+UniLower2Upper( 265 ) = "1E631E62"
+UniLower2Upper( 266 ) = "1E651E64"
+UniLower2Upper( 267 ) = "1E671E66"
+UniLower2Upper( 268 ) = "1E691E68"
+UniLower2Upper( 269 ) = "1E6B1E6A"
+UniLower2Upper( 270 ) = "1E6D1E6C"
+UniLower2Upper( 271 ) = "1E6F1E6E"
+UniLower2Upper( 272 ) = "1E711E70"
+UniLower2Upper( 273 ) = "1E731E72"
+UniLower2Upper( 274 ) = "1E751E74"
+UniLower2Upper( 275 ) = "1E771E76"
+UniLower2Upper( 276 ) = "1E791E78"
+UniLower2Upper( 277 ) = "1E7B1E7A"
+UniLower2Upper( 278 ) = "1E7D1E7C"
+UniLower2Upper( 279 ) = "1E7F1E7E"
+UniLower2Upper( 280 ) = "1E811E80"
+UniLower2Upper( 281 ) = "1E831E82"
+UniLower2Upper( 282 ) = "1E851E84"
+UniLower2Upper( 283 ) = "1E871E86"
+UniLower2Upper( 284 ) = "1E891E88"
+UniLower2Upper( 285 ) = "1E8B1E8A"
+UniLower2Upper( 286 ) = "1E8D1E8C"
+UniLower2Upper( 287 ) = "1E8F1E8E"
+UniLower2Upper( 288 ) = "1E911E90"
+UniLower2Upper( 289 ) = "1E931E92"
+UniLower2Upper( 290 ) = "1E951E94"
+UniLower2Upper( 291 ) = "1EA11EA0"
+UniLower2Upper( 292 ) = "1EA31EA2"
+UniLower2Upper( 293 ) = "1EA51EA4"
+UniLower2Upper( 294 ) = "1EA71EA6"
+UniLower2Upper( 295 ) = "1EA91EA8"
+UniLower2Upper( 296 ) = "1EAB1EAA"
+UniLower2Upper( 297 ) = "1EAD1EAC"
+UniLower2Upper( 298 ) = "1EAF1EAE"
+UniLower2Upper( 299 ) = "1EB11EB0"
+UniLower2Upper( 300 ) = "1EB31EB2"
+UniLower2Upper( 301 ) = "1EB51EB4"
+UniLower2Upper( 302 ) = "1EB71EB6"
+UniLower2Upper( 303 ) = "1EB91EB8"
+UniLower2Upper( 304 ) = "1EBB1EBA"
+UniLower2Upper( 305 ) = "1EBD1EBC"
+UniLower2Upper( 306 ) = "1EBF1EBE"
+UniLower2Upper( 307 ) = "1EC11EC0"
+UniLower2Upper( 308 ) = "1EC31EC2"
+UniLower2Upper( 309 ) = "1EC51EC4"
+UniLower2Upper( 310 ) = "1EC71EC6"
+UniLower2Upper( 311 ) = "1EC91EC8"
+UniLower2Upper( 312 ) = "1ECB1ECA"
+UniLower2Upper( 313 ) = "1ECD1ECC"
+UniLower2Upper( 314 ) = "1ECF1ECE"
+UniLower2Upper( 315 ) = "1ED11ED0"
+UniLower2Upper( 316 ) = "1ED31ED2"
+UniLower2Upper( 317 ) = "1ED51ED4"
+UniLower2Upper( 318 ) = "1ED71ED6"
+UniLower2Upper( 319 ) = "1ED91ED8"
+UniLower2Upper( 320 ) = "1EDB1EDA"
+UniLower2Upper( 321 ) = "1EDD1EDC"
+UniLower2Upper( 322 ) = "1EDF1EDE"
+UniLower2Upper( 323 ) = "1EE11EE0"
+UniLower2Upper( 324 ) = "1EE31EE2"
+UniLower2Upper( 325 ) = "1EE51EE4"
+UniLower2Upper( 326 ) = "1EE71EE6"
+UniLower2Upper( 327 ) = "1EE91EE8"
+UniLower2Upper( 328 ) = "1EEB1EEA"
+UniLower2Upper( 329 ) = "1EED1EEC"
+UniLower2Upper( 330 ) = "1EEF1EEE"
+UniLower2Upper( 331 ) = "1EF11EF0"
+UniLower2Upper( 332 ) = "1EF31EF2"
+UniLower2Upper( 333 ) = "1EF51EF4"
+UniLower2Upper( 334 ) = "1EF71EF6"
+UniLower2Upper( 335 ) = "1EF91EF8"
+UniLower2Upper( 336 ) = "1EFB1EFA"
+UniLower2Upper( 337 ) = "1EFD1EFC"
+UniLower2Upper( 338 ) = "1EFF1EFE"
+UniLower2Upper( 339 ) = "214E2132"
+UniLower2Upper( 340 ) = "2C612C60"
+UniLower2Upper( 341 ) = "2C65023A"
+UniLower2Upper( 342 ) = "2C66023E"
+UniLower2Upper( 343 ) = "2C682C67"
+UniLower2Upper( 344 ) = "2C6A2C69"
+UniLower2Upper( 345 ) = "2C6C2C6B"
+UniLower2Upper( 346 ) = "2C732C72"
+UniLower2Upper( 347 ) = "2C762C75"
+UniLower2Upper( 348 ) = "A723A722"
+UniLower2Upper( 349 ) = "A725A724"
+UniLower2Upper( 350 ) = "A727A726"
+UniLower2Upper( 351 ) = "A729A728"
+UniLower2Upper( 352 ) = "A72BA72A"
+UniLower2Upper( 353 ) = "A72DA72C"
+UniLower2Upper( 354 ) = "A72FA72E"
+UniLower2Upper( 355 ) = "A733A732"
+UniLower2Upper( 356 ) = "A735A734"
+UniLower2Upper( 357 ) = "A737A736"
+UniLower2Upper( 358 ) = "A739A738"
+UniLower2Upper( 359 ) = "A73BA73A"
+UniLower2Upper( 360 ) = "A73DA73C"
+UniLower2Upper( 361 ) = "A73FA73E"
+UniLower2Upper( 362 ) = "A741A740"
+UniLower2Upper( 363 ) = "A743A742"
+UniLower2Upper( 364 ) = "A745A744"
+UniLower2Upper( 365 ) = "A747A746"
+UniLower2Upper( 366 ) = "A749A748"
+UniLower2Upper( 367 ) = "A74BA74A"
+UniLower2Upper( 368 ) = "A74DA74C"
+UniLower2Upper( 369 ) = "A74FA74E"
+UniLower2Upper( 370 ) = "A751A750"
+UniLower2Upper( 371 ) = "A753A752"
+UniLower2Upper( 372 ) = "A755A754"
+UniLower2Upper( 373 ) = "A757A756"
+UniLower2Upper( 374 ) = "A759A758"
+UniLower2Upper( 375 ) = "A75BA75A"
+UniLower2Upper( 376 ) = "A75DA75C"
+UniLower2Upper( 377 ) = "A75FA75E"
+UniLower2Upper( 378 ) = "A761A760"
+UniLower2Upper( 379 ) = "A763A762"
+UniLower2Upper( 380 ) = "A765A764"
+UniLower2Upper( 381 ) = "A767A766"
+UniLower2Upper( 382 ) = "A769A768"
+UniLower2Upper( 383 ) = "A76BA76A"
+UniLower2Upper( 384 ) = "A76DA76C"
+UniLower2Upper( 385 ) = "A76FA76E"
+UniLower2Upper( 386 ) = "A77AA779"
+UniLower2Upper( 387 ) = "A77CA77B"
+UniLower2Upper( 388 ) = "A77FA77E"
+UniLower2Upper( 389 ) = "A781A780"
+UniLower2Upper( 390 ) = "A783A782"
+UniLower2Upper( 391 ) = "A785A784"
+UniLower2Upper( 392 ) = "A787A786"
+UniLower2Upper( 393 ) = "A78CA78B"
+UniLower2Upper( 394 ) = "A791A790"
+UniLower2Upper( 395 ) = "A793A792"
+UniLower2Upper( 396 ) = "A794A7C4"
+UniLower2Upper( 397 ) = "A797A796"
+UniLower2Upper( 398 ) = "A799A798"
+UniLower2Upper( 399 ) = "A79BA79A"
+UniLower2Upper( 400 ) = "A79DA79C"
+UniLower2Upper( 401 ) = "A79FA79E"
+UniLower2Upper( 402 ) = "A7A1A7A0"
+UniLower2Upper( 403 ) = "A7A3A7A2"
+UniLower2Upper( 404 ) = "A7A5A7A4"
+UniLower2Upper( 405 ) = "A7A7A7A6"
+UniLower2Upper( 406 ) = "A7A9A7A8"
+UniLower2Upper( 407 ) = "A7B5A7B4"
+UniLower2Upper( 408 ) = "A7B7A7B6"
+UniLower2Upper( 409 ) = "A7B9A7B8"
+UniLower2Upper( 410 ) = "A7BBA7BA"
+UniLower2Upper( 411 ) = "A7BDA7BC"
+UniLower2Upper( 412 ) = "A7BFA7BE"
+UniLower2Upper( 413 ) = "A7C1A7C0"
+UniLower2Upper( 414 ) = "A7C3A7C2"
+UniLower2Upper( 415 ) = "A7C8A7C7"
+UniLower2Upper( 416 ) = "A7CAA7C9"
+UniLower2Upper( 417 ) = "A7D1A7D0"
+UniLower2Upper( 418 ) = "A7D7A7D6"
+UniLower2Upper( 419 ) = "A7D9A7D8"
+UniLower2Upper( 420 ) = "A7F6A7F5"
+UniLower2Upper( 421 ) = "AB53A7B3"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrayUniPunct
+
+' Various punctuation marks, which lack the case property.
+
+UnicodePunctuation( 0  ) = "2010"
+UnicodePunctuation( 1  ) = "2011"
+UnicodePunctuation( 2  ) = "2012"
+UnicodePunctuation( 3  ) = "2013"
+UnicodePunctuation( 4  ) = "2014"
+UnicodePunctuation( 5  ) = "2015"
+UnicodePunctuation( 6  ) = "2016"
+UnicodePunctuation( 7  ) = "2017"
+UnicodePunctuation( 8  ) = "2018"
+UnicodePunctuation( 9  ) = "2019"
+UnicodePunctuation( 10 ) = "201A"
+UnicodePunctuation( 11 ) = "201B"
+UnicodePunctuation( 12 ) = "201C"
+UnicodePunctuation( 13 ) = "201D"
+UnicodePunctuation( 14 ) = "201E"
+UnicodePunctuation( 15 ) = "201F"
+UnicodePunctuation( 16 ) = "2020"
+UnicodePunctuation( 17 ) = "2021"
+UnicodePunctuation( 18 ) = "2022"
+UnicodePunctuation( 19 ) = "2023"
+UnicodePunctuation( 20 ) = "2024"
+UnicodePunctuation( 21 ) = "2025"
+UnicodePunctuation( 22 ) = "2026"
+UnicodePunctuation( 23 ) = "2027"
+UnicodePunctuation( 24 ) = "2030"
+UnicodePunctuation( 25 ) = "2031"
+UnicodePunctuation( 26 ) = "2032"
+UnicodePunctuation( 27 ) = "2033"
+UnicodePunctuation( 28 ) = "2034"
+UnicodePunctuation( 29 ) = "2035"
+UnicodePunctuation( 30 ) = "2036"
+UnicodePunctuation( 31 ) = "2037"
+UnicodePunctuation( 32 ) = "2038"
+UnicodePunctuation( 33 ) = "2039"
+UnicodePunctuation( 34 ) = "203A"
+UnicodePunctuation( 35 ) = "203B"
+UnicodePunctuation( 36 ) = "203C"
+UnicodePunctuation( 37 ) = "203D"
+UnicodePunctuation( 38 ) = "203E"
+UnicodePunctuation( 39 ) = "203F"
+UnicodePunctuation( 40 ) = "2040"
+UnicodePunctuation( 41 ) = "2041"
+UnicodePunctuation( 42 ) = "2042"
+UnicodePunctuation( 43 ) = "2043"
+UnicodePunctuation( 44 ) = "2045"
+UnicodePunctuation( 45 ) = "2046"
+UnicodePunctuation( 46 ) = "2047"
+UnicodePunctuation( 47 ) = "2048"
+UnicodePunctuation( 48 ) = "2049"
+UnicodePunctuation( 49 ) = "204A"
+UnicodePunctuation( 50 ) = "204B"
+UnicodePunctuation( 51 ) = "204C"
+UnicodePunctuation( 52 ) = "204D"
+UnicodePunctuation( 53 ) = "204E"
+UnicodePunctuation( 54 ) = "204F"
+UnicodePunctuation( 55 ) = "2050"
+UnicodePunctuation( 56 ) = "2051"
+UnicodePunctuation( 57 ) = "2053"
+UnicodePunctuation( 58 ) = "2054"
+UnicodePunctuation( 59 ) = "2055"
+UnicodePunctuation( 60 ) = "2056"
+UnicodePunctuation( 61 ) = "2057"
+UnicodePunctuation( 62 ) = "2058"
+UnicodePunctuation( 63 ) = "2059"
+UnicodePunctuation( 64 ) = "205A"
+UnicodePunctuation( 65 ) = "205B"
+UnicodePunctuation( 66 ) = "205C"
+UnicodePunctuation( 67 ) = "205D"
+UnicodePunctuation( 68 ) = "205E"
+UnicodePunctuation( 69 ) = "207D"
+UnicodePunctuation( 70 ) = "207E"
+UnicodePunctuation( 71 ) = "208D"
+UnicodePunctuation( 72 ) = "208E"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrayUniUpper2Lower
+
+UniUpper2Lower( 0   ) = "00C000E0" 'À and à
+UniUpper2Lower( 1   ) = "00C100E1" 'Á and á, etc.
+UniUpper2Lower( 2   ) = "00C200E2"
+UniUpper2Lower( 3   ) = "00C300E3"
+UniUpper2Lower( 4   ) = "00C400E4"
+UniUpper2Lower( 5   ) = "00C500E5"
+UniUpper2Lower( 6   ) = "00C600E6"
+UniUpper2Lower( 7   ) = "00C700E7"
+UniUpper2Lower( 8   ) = "00C800E8"
+UniUpper2Lower( 9   ) = "00C900E9"
+UniUpper2Lower( 10  ) = "00CA00EA"
+UniUpper2Lower( 11  ) = "00CB00EB"
+UniUpper2Lower( 12  ) = "00CC00EC"
+UniUpper2Lower( 13  ) = "00CD00ED"
+UniUpper2Lower( 14  ) = "00CE00EE"
+UniUpper2Lower( 15  ) = "00CF00EF"
+UniUpper2Lower( 16  ) = "00D000F0"
+UniUpper2Lower( 17  ) = "00D100F1"
+UniUpper2Lower( 18  ) = "00D200F2"
+UniUpper2Lower( 19  ) = "00D300F3"
+UniUpper2Lower( 20  ) = "00D400F4"
+UniUpper2Lower( 21  ) = "00D500F5"
+UniUpper2Lower( 22  ) = "00D600F6"
+UniUpper2Lower( 23  ) = "00D800F8"
+UniUpper2Lower( 24  ) = "00D900F9"
+UniUpper2Lower( 25  ) = "00DA00FA"
+UniUpper2Lower( 26  ) = "00DB00FB"
+UniUpper2Lower( 27  ) = "00DC00FC"
+UniUpper2Lower( 28  ) = "00DD00FD"
+UniUpper2Lower( 29  ) = "00DE00FE"
+UniUpper2Lower( 30  ) = "01000101"
+UniUpper2Lower( 31  ) = "01020103"
+UniUpper2Lower( 32  ) = "01040105"
+UniUpper2Lower( 33  ) = "01060107"
+UniUpper2Lower( 34  ) = "01080109"
+UniUpper2Lower( 35  ) = "010A010B"
+UniUpper2Lower( 36  ) = "010C010D"
+UniUpper2Lower( 37  ) = "010E010F"
+UniUpper2Lower( 38  ) = "01100111"
+UniUpper2Lower( 39  ) = "01120113"
+UniUpper2Lower( 40  ) = "01140115"
+UniUpper2Lower( 41  ) = "01160117"
+UniUpper2Lower( 42  ) = "01180119"
+UniUpper2Lower( 43  ) = "011A011B"
+UniUpper2Lower( 44  ) = "011C011D"
+UniUpper2Lower( 45  ) = "011E011F"
+UniUpper2Lower( 46  ) = "01200121"
+UniUpper2Lower( 47  ) = "01220123"
+UniUpper2Lower( 48  ) = "01240125"
+UniUpper2Lower( 49  ) = "01260127"
+UniUpper2Lower( 50  ) = "01280129"
+UniUpper2Lower( 51  ) = "012A012B"
+UniUpper2Lower( 52  ) = "012C012D"
+UniUpper2Lower( 53  ) = "012E012F"
+UniUpper2Lower( 54  ) = "01300069"
+UniUpper2Lower( 55  ) = "01320133"
+UniUpper2Lower( 56  ) = "01340135"
+UniUpper2Lower( 57  ) = "01360137"
+UniUpper2Lower( 58  ) = "0139013A"
+UniUpper2Lower( 59  ) = "013B013C"
+UniUpper2Lower( 60  ) = "013D013E"
+UniUpper2Lower( 61  ) = "013F0140"
+UniUpper2Lower( 62  ) = "01410142"
+UniUpper2Lower( 63  ) = "01430144"
+UniUpper2Lower( 64  ) = "01450146"
+UniUpper2Lower( 65  ) = "01470148"
+UniUpper2Lower( 66  ) = "014A014B"
+UniUpper2Lower( 67  ) = "014C014D"
+UniUpper2Lower( 68  ) = "014E014F"
+UniUpper2Lower( 69  ) = "01500151"
+UniUpper2Lower( 70  ) = "01520153"
+UniUpper2Lower( 71  ) = "01540155"
+UniUpper2Lower( 72  ) = "01560157"
+UniUpper2Lower( 73  ) = "01580159"
+UniUpper2Lower( 74  ) = "015A015B"
+UniUpper2Lower( 75  ) = "015C015D"
+UniUpper2Lower( 76  ) = "015E015F"
+UniUpper2Lower( 77  ) = "01600161"
+UniUpper2Lower( 78  ) = "01620163"
+UniUpper2Lower( 79  ) = "01640165"
+UniUpper2Lower( 80  ) = "01660167"
+UniUpper2Lower( 81  ) = "01680169"
+UniUpper2Lower( 82  ) = "016A016B"
+UniUpper2Lower( 83  ) = "016C016D"
+UniUpper2Lower( 84  ) = "016E016F"
+UniUpper2Lower( 85  ) = "01700171"
+UniUpper2Lower( 86  ) = "01720173"
+UniUpper2Lower( 87  ) = "01740175"
+UniUpper2Lower( 88  ) = "01760177"
+UniUpper2Lower( 89  ) = "017800FF"
+UniUpper2Lower( 90  ) = "0179017A"
+UniUpper2Lower( 91  ) = "017B017C"
+UniUpper2Lower( 92  ) = "017D017E"
+UniUpper2Lower( 93  ) = "017F0073"
+UniUpper2Lower( 94  ) = "01810253"
+UniUpper2Lower( 95  ) = "01820183"
+UniUpper2Lower( 96  ) = "01840185"
+UniUpper2Lower( 97  ) = "01860254"
+UniUpper2Lower( 98  ) = "01870188"
+UniUpper2Lower( 99  ) = "01890256"
+UniUpper2Lower( 100 ) = "018A0257"
+UniUpper2Lower( 101 ) = "018B018C"
+UniUpper2Lower( 102 ) = "018E01DD"
+UniUpper2Lower( 103 ) = "018F0259"
+UniUpper2Lower( 104 ) = "0190025B"
+UniUpper2Lower( 105 ) = "01910192"
+UniUpper2Lower( 106 ) = "01930260"
+UniUpper2Lower( 107 ) = "01940263"
+UniUpper2Lower( 108 ) = "01960269"
+UniUpper2Lower( 109 ) = "01970268"
+UniUpper2Lower( 110 ) = "01980199"
+UniUpper2Lower( 111 ) = "019C026F"
+UniUpper2Lower( 112 ) = "019D0272"
+UniUpper2Lower( 113 ) = "019F0275"
+UniUpper2Lower( 114 ) = "01A001A1"
+UniUpper2Lower( 115 ) = "01A201A3"
+UniUpper2Lower( 116 ) = "01A401A5"
+UniUpper2Lower( 117 ) = "01A60280"
+UniUpper2Lower( 118 ) = "01A701A8"
+UniUpper2Lower( 119 ) = "01A90283"
+UniUpper2Lower( 120 ) = "01AC01AD"
+UniUpper2Lower( 121 ) = "01AE0288"
+UniUpper2Lower( 122 ) = "01AF01B0"
+UniUpper2Lower( 123 ) = "01B1028A"
+UniUpper2Lower( 124 ) = "01B2028B"
+UniUpper2Lower( 125 ) = "01B301B4"
+UniUpper2Lower( 126 ) = "01B501B6"
+UniUpper2Lower( 127 ) = "01B70292"
+UniUpper2Lower( 128 ) = "01B801B9"
+UniUpper2Lower( 129 ) = "01BC01BD"
+UniUpper2Lower( 130 ) = "01C401C6"
+UniUpper2Lower( 131 ) = "01C501C6"
+UniUpper2Lower( 132 ) = "01C701C9"
+UniUpper2Lower( 133 ) = "01C801C9"
+UniUpper2Lower( 134 ) = "01CA01CC"
+UniUpper2Lower( 135 ) = "01CB01CC"
+UniUpper2Lower( 136 ) = "01CD01CE"
+UniUpper2Lower( 137 ) = "01CF01D0"
+UniUpper2Lower( 138 ) = "01D101D2"
+UniUpper2Lower( 139 ) = "01D301D4"
+UniUpper2Lower( 140 ) = "01D501D6"
+UniUpper2Lower( 141 ) = "01D701D8"
+UniUpper2Lower( 142 ) = "01D901DA"
+UniUpper2Lower( 143 ) = "01DB01DC"
+UniUpper2Lower( 144 ) = "01DE01DF"
+UniUpper2Lower( 145 ) = "01E001E1"
+UniUpper2Lower( 146 ) = "01E201E3"
+UniUpper2Lower( 147 ) = "01E401E5"
+UniUpper2Lower( 148 ) = "01E601E7"
+UniUpper2Lower( 149 ) = "01E801E9"
+UniUpper2Lower( 150 ) = "01EA01EB"
+UniUpper2Lower( 151 ) = "01EC01ED"
+UniUpper2Lower( 152 ) = "01EE01EF"
+UniUpper2Lower( 153 ) = "01F101F3"
+UniUpper2Lower( 154 ) = "01F201F3"
+UniUpper2Lower( 155 ) = "01F401F5"
+UniUpper2Lower( 156 ) = "01F60195"
+UniUpper2Lower( 157 ) = "01F701BF"
+UniUpper2Lower( 158 ) = "01F801F9"
+UniUpper2Lower( 159 ) = "01FA01FB"
+UniUpper2Lower( 160 ) = "01FC01FD"
+UniUpper2Lower( 161 ) = "01FE01FF"
+UniUpper2Lower( 162 ) = "02000201"
+UniUpper2Lower( 163 ) = "02020203"
+UniUpper2Lower( 164 ) = "02040205"
+UniUpper2Lower( 165 ) = "02060207"
+UniUpper2Lower( 166 ) = "02080209"
+UniUpper2Lower( 167 ) = "020A020B"
+UniUpper2Lower( 168 ) = "020C020D"
+UniUpper2Lower( 169 ) = "020E020F"
+UniUpper2Lower( 170 ) = "02100211"
+UniUpper2Lower( 171 ) = "02120213"
+UniUpper2Lower( 172 ) = "02140215"
+UniUpper2Lower( 173 ) = "02160217"
+UniUpper2Lower( 174 ) = "02180219"
+UniUpper2Lower( 175 ) = "021A021B"
+UniUpper2Lower( 176 ) = "021C021D"
+UniUpper2Lower( 177 ) = "021E021F"
+UniUpper2Lower( 178 ) = "0220019E"
+UniUpper2Lower( 179 ) = "02220223"
+UniUpper2Lower( 180 ) = "02240225"
+UniUpper2Lower( 181 ) = "02260227"
+UniUpper2Lower( 182 ) = "02280229"
+UniUpper2Lower( 183 ) = "022A022B"
+UniUpper2Lower( 184 ) = "022C022D"
+UniUpper2Lower( 185 ) = "022E022F"
+UniUpper2Lower( 186 ) = "02300231"
+UniUpper2Lower( 187 ) = "02320233"
+UniUpper2Lower( 188 ) = "023A2C65"
+UniUpper2Lower( 189 ) = "023B023C"
+UniUpper2Lower( 190 ) = "023D019A"
+UniUpper2Lower( 191 ) = "023E2C66"
+UniUpper2Lower( 192 ) = "02410242"
+UniUpper2Lower( 193 ) = "02430180"
+UniUpper2Lower( 194 ) = "02440289"
+UniUpper2Lower( 195 ) = "0245028C"
+UniUpper2Lower( 196 ) = "02460247"
+UniUpper2Lower( 197 ) = "02480249"
+UniUpper2Lower( 198 ) = "024A024B"
+UniUpper2Lower( 199 ) = "024C024D"
+UniUpper2Lower( 200 ) = "024E024F"
+UniUpper2Lower( 201 ) = "1E001E01"
+UniUpper2Lower( 202 ) = "1E021E03"
+UniUpper2Lower( 203 ) = "1E041E05"
+UniUpper2Lower( 204 ) = "1E061E07"
+UniUpper2Lower( 205 ) = "1E081E09"
+UniUpper2Lower( 206 ) = "1E0A1E0B"
+UniUpper2Lower( 207 ) = "1E0C1E0D"
+UniUpper2Lower( 208 ) = "1E0E1E0F"
+UniUpper2Lower( 209 ) = "1E101E11"
+UniUpper2Lower( 210 ) = "1E121E13"
+UniUpper2Lower( 211 ) = "1E141E15"
+UniUpper2Lower( 212 ) = "1E161E17"
+UniUpper2Lower( 213 ) = "1E181E19"
+UniUpper2Lower( 214 ) = "1E1A1E1B"
+UniUpper2Lower( 215 ) = "1E1C1E1D"
+UniUpper2Lower( 216 ) = "1E1E1E1F"
+UniUpper2Lower( 217 ) = "1E201E21"
+UniUpper2Lower( 218 ) = "1E221E23"
+UniUpper2Lower( 219 ) = "1E241E25"
+UniUpper2Lower( 220 ) = "1E261E27"
+UniUpper2Lower( 221 ) = "1E281E29"
+UniUpper2Lower( 222 ) = "1E2A1E2B"
+UniUpper2Lower( 223 ) = "1E2C1E2D"
+UniUpper2Lower( 224 ) = "1E2E1E2F"
+UniUpper2Lower( 225 ) = "1E301E31"
+UniUpper2Lower( 226 ) = "1E321E33"
+UniUpper2Lower( 227 ) = "1E341E35"
+UniUpper2Lower( 228 ) = "1E361E37"
+UniUpper2Lower( 229 ) = "1E381E39"
+UniUpper2Lower( 230 ) = "1E3A1E3B"
+UniUpper2Lower( 231 ) = "1E3C1E3D"
+UniUpper2Lower( 232 ) = "1E3E1E3F"
+UniUpper2Lower( 233 ) = "1E401E41"
+UniUpper2Lower( 234 ) = "1E421E43"
+UniUpper2Lower( 235 ) = "1E441E45"
+UniUpper2Lower( 236 ) = "1E461E47"
+UniUpper2Lower( 237 ) = "1E481E49"
+UniUpper2Lower( 238 ) = "1E4A1E4B"
+UniUpper2Lower( 239 ) = "1E4C1E4D"
+UniUpper2Lower( 240 ) = "1E4E1E4F"
+UniUpper2Lower( 241 ) = "1E501E51"
+UniUpper2Lower( 242 ) = "1E521E53"
+UniUpper2Lower( 243 ) = "1E541E55"
+UniUpper2Lower( 244 ) = "1E561E57"
+UniUpper2Lower( 245 ) = "1E581E59"
+UniUpper2Lower( 246 ) = "1E5A1E5B"
+UniUpper2Lower( 247 ) = "1E5C1E5D"
+UniUpper2Lower( 248 ) = "1E5E1E5F"
+UniUpper2Lower( 249 ) = "1E601E61"
+UniUpper2Lower( 250 ) = "1E621E63"
+UniUpper2Lower( 251 ) = "1E641E65"
+UniUpper2Lower( 252 ) = "1E661E67"
+UniUpper2Lower( 253 ) = "1E681E69"
+UniUpper2Lower( 254 ) = "1E6A1E6B"
+UniUpper2Lower( 255 ) = "1E6C1E6D"
+UniUpper2Lower( 256 ) = "1E6E1E6F"
+UniUpper2Lower( 257 ) = "1E701E71"
+UniUpper2Lower( 258 ) = "1E721E73"
+UniUpper2Lower( 259 ) = "1E741E75"
+UniUpper2Lower( 260 ) = "1E761E77"
+UniUpper2Lower( 261 ) = "1E781E79"
+UniUpper2Lower( 262 ) = "1E7A1E7B"
+UniUpper2Lower( 263 ) = "1E7C1E7D"
+UniUpper2Lower( 264 ) = "1E7E1E7F"
+UniUpper2Lower( 265 ) = "1E801E81"
+UniUpper2Lower( 266 ) = "1E821E83"
+UniUpper2Lower( 267 ) = "1E841E85"
+UniUpper2Lower( 268 ) = "1E861E87"
+UniUpper2Lower( 269 ) = "1E881E89"
+UniUpper2Lower( 270 ) = "1E8A1E8B"
+UniUpper2Lower( 271 ) = "1E8C1E8D"
+UniUpper2Lower( 272 ) = "1E8E1E8F"
+UniUpper2Lower( 273 ) = "1E901E91"
+UniUpper2Lower( 274 ) = "1E921E93"
+UniUpper2Lower( 275 ) = "1E941E95"
+UniUpper2Lower( 276 ) = "1E9E00DF"
+UniUpper2Lower( 277 ) = "1EA01EA1"
+UniUpper2Lower( 278 ) = "1EA21EA3"
+UniUpper2Lower( 279 ) = "1EA41EA5"
+UniUpper2Lower( 280 ) = "1EA61EA7"
+UniUpper2Lower( 281 ) = "1EA81EA9"
+UniUpper2Lower( 282 ) = "1EAA1EAB"
+UniUpper2Lower( 283 ) = "1EAC1EAD"
+UniUpper2Lower( 284 ) = "1EAE1EAF"
+UniUpper2Lower( 285 ) = "1EB01EB1"
+UniUpper2Lower( 286 ) = "1EB21EB3"
+UniUpper2Lower( 287 ) = "1EB41EB5"
+UniUpper2Lower( 288 ) = "1EB61EB7"
+UniUpper2Lower( 289 ) = "1EB81EB9"
+UniUpper2Lower( 290 ) = "1EBA1EBB"
+UniUpper2Lower( 291 ) = "1EBC1EBD"
+UniUpper2Lower( 292 ) = "1EBE1EBF"
+UniUpper2Lower( 293 ) = "1EC01EC1"
+UniUpper2Lower( 294 ) = "1EC21EC3"
+UniUpper2Lower( 295 ) = "1EC41EC5"
+UniUpper2Lower( 296 ) = "1EC61EC7"
+UniUpper2Lower( 297 ) = "1EC81EC9"
+UniUpper2Lower( 298 ) = "1ECA1ECB"
+UniUpper2Lower( 299 ) = "1ECC1ECD"
+UniUpper2Lower( 300 ) = "1ECE1ECF"
+UniUpper2Lower( 301 ) = "1ED01ED1"
+UniUpper2Lower( 302 ) = "1ED21ED3"
+UniUpper2Lower( 303 ) = "1ED41ED5"
+UniUpper2Lower( 304 ) = "1ED61ED7"
+UniUpper2Lower( 305 ) = "1ED81ED9"
+UniUpper2Lower( 306 ) = "1EDA1EDB"
+UniUpper2Lower( 307 ) = "1EDC1EDD"
+UniUpper2Lower( 308 ) = "1EDE1EDF"
+UniUpper2Lower( 309 ) = "1EE01EE1"
+UniUpper2Lower( 310 ) = "1EE21EE3"
+UniUpper2Lower( 311 ) = "1EE41EE5"
+UniUpper2Lower( 312 ) = "1EE61EE7"
+UniUpper2Lower( 313 ) = "1EE81EE9"
+UniUpper2Lower( 314 ) = "1EEA1EEB"
+UniUpper2Lower( 315 ) = "1EEC1EED"
+UniUpper2Lower( 316 ) = "1EEE1EEF"
+UniUpper2Lower( 317 ) = "1EF01EF1"
+UniUpper2Lower( 318 ) = "1EF21EF3"
+UniUpper2Lower( 319 ) = "1EF41EF5"
+UniUpper2Lower( 320 ) = "1EF61EF7"
+UniUpper2Lower( 321 ) = "1EF81EF9"
+UniUpper2Lower( 322 ) = "1EFA1EFB"
+UniUpper2Lower( 323 ) = "1EFC1EFD"
+UniUpper2Lower( 324 ) = "1EFE1EFF"
+UniUpper2Lower( 325 ) = "2132214E"
+UniUpper2Lower( 326 ) = "2C602C61"
+UniUpper2Lower( 327 ) = "2C62026B"
+UniUpper2Lower( 328 ) = "2C631D7D"
+UniUpper2Lower( 329 ) = "2C64027D"
+UniUpper2Lower( 330 ) = "2C672C68"
+UniUpper2Lower( 331 ) = "2C692C6A"
+UniUpper2Lower( 332 ) = "2C6B2C6C"
+UniUpper2Lower( 333 ) = "2C6D0251"
+UniUpper2Lower( 334 ) = "2C6E0271"
+UniUpper2Lower( 335 ) = "2C6F0250"
+UniUpper2Lower( 336 ) = "2C700252"
+UniUpper2Lower( 337 ) = "2C722C73"
+UniUpper2Lower( 338 ) = "2C752C76"
+UniUpper2Lower( 339 ) = "2C7E023F"
+UniUpper2Lower( 340 ) = "2C7F0240"
+UniUpper2Lower( 341 ) = "A722A723"
+UniUpper2Lower( 342 ) = "A724A725"
+UniUpper2Lower( 343 ) = "A726A727"
+UniUpper2Lower( 344 ) = "A728A729"
+UniUpper2Lower( 345 ) = "A72AA72B"
+UniUpper2Lower( 346 ) = "A72CA72D"
+UniUpper2Lower( 347 ) = "A72EA72F"
+UniUpper2Lower( 348 ) = "A732A733"
+UniUpper2Lower( 349 ) = "A734A735"
+UniUpper2Lower( 350 ) = "A736A737"
+UniUpper2Lower( 351 ) = "A738A739"
+UniUpper2Lower( 352 ) = "A73AA73B"
+UniUpper2Lower( 353 ) = "A73CA73D"
+UniUpper2Lower( 354 ) = "A73EA73F"
+UniUpper2Lower( 355 ) = "A740A741"
+UniUpper2Lower( 356 ) = "A742A743"
+UniUpper2Lower( 357 ) = "A744A745"
+UniUpper2Lower( 358 ) = "A746A747"
+UniUpper2Lower( 359 ) = "A748A749"
+UniUpper2Lower( 360 ) = "A74AA74B"
+UniUpper2Lower( 361 ) = "A74CA74D"
+UniUpper2Lower( 362 ) = "A74EA74F"
+UniUpper2Lower( 363 ) = "A750A751"
+UniUpper2Lower( 364 ) = "A752A753"
+UniUpper2Lower( 365 ) = "A754A755"
+UniUpper2Lower( 366 ) = "A756A757"
+UniUpper2Lower( 367 ) = "A758A759"
+UniUpper2Lower( 368 ) = "A75AA75B"
+UniUpper2Lower( 369 ) = "A75CA75D"
+UniUpper2Lower( 370 ) = "A75EA75F"
+UniUpper2Lower( 371 ) = "A760A761"
+UniUpper2Lower( 372 ) = "A762A763"
+UniUpper2Lower( 373 ) = "A764A765"
+UniUpper2Lower( 374 ) = "A766A767"
+UniUpper2Lower( 375 ) = "A768A769"
+UniUpper2Lower( 376 ) = "A76AA76B"
+UniUpper2Lower( 377 ) = "A76CA76D"
+UniUpper2Lower( 378 ) = "A76EA76F"
+UniUpper2Lower( 379 ) = "A779A77A"
+UniUpper2Lower( 380 ) = "A77BA77C"
+UniUpper2Lower( 381 ) = "A77D1D79"
+UniUpper2Lower( 382 ) = "A77EA77F"
+UniUpper2Lower( 383 ) = "A780A781"
+UniUpper2Lower( 384 ) = "A782A783"
+UniUpper2Lower( 385 ) = "A784A785"
+UniUpper2Lower( 386 ) = "A786A787"
+UniUpper2Lower( 387 ) = "A78BA78C"
+UniUpper2Lower( 388 ) = "A78D0265"
+UniUpper2Lower( 389 ) = "A790A791"
+UniUpper2Lower( 390 ) = "A792A793"
+UniUpper2Lower( 391 ) = "A796A797"
+UniUpper2Lower( 392 ) = "A798A799"
+UniUpper2Lower( 393 ) = "A79AA79B"
+UniUpper2Lower( 394 ) = "A79CA79D"
+UniUpper2Lower( 395 ) = "A79EA79F"
+UniUpper2Lower( 396 ) = "A7A0A7A1"
+UniUpper2Lower( 397 ) = "A7A2A7A3"
+UniUpper2Lower( 398 ) = "A7A4A7A5"
+UniUpper2Lower( 399 ) = "A7A6A7A7"
+UniUpper2Lower( 400 ) = "A7A8A7A9"
+UniUpper2Lower( 401 ) = "A7AA0266"
+UniUpper2Lower( 402 ) = "A7AB025C"
+UniUpper2Lower( 403 ) = "A7AC0261"
+UniUpper2Lower( 404 ) = "A7AD026C"
+UniUpper2Lower( 405 ) = "A7AE026A"
+UniUpper2Lower( 406 ) = "A7B0029E"
+UniUpper2Lower( 407 ) = "A7B10287"
+UniUpper2Lower( 408 ) = "A7B2029D"
+UniUpper2Lower( 409 ) = "A7B3AB53"
+UniUpper2Lower( 410 ) = "A7B4A7B5"
+UniUpper2Lower( 411 ) = "A7B6A7B7"
+UniUpper2Lower( 412 ) = "A7B8A7B9"
+UniUpper2Lower( 413 ) = "A7BAA7BB"
+UniUpper2Lower( 414 ) = "A7BCA7BD"
+UniUpper2Lower( 415 ) = "A7BEA7BF"
+UniUpper2Lower( 416 ) = "A7C0A7C1"
+UniUpper2Lower( 417 ) = "A7C2A7C3"
+UniUpper2Lower( 418 ) = "A7C4A794"
+UniUpper2Lower( 419 ) = "A7C50282"
+UniUpper2Lower( 420 ) = "A7C61D8E"
+UniUpper2Lower( 421 ) = "A7C7A7C8"
+UniUpper2Lower( 422 ) = "A7C9A7CA"
+UniUpper2Lower( 423 ) = "A7D0A7D1"
+UniUpper2Lower( 424 ) = "A7D6A7D7"
+UniUpper2Lower( 425 ) = "A7D8A7D9"
+UniUpper2Lower( 426 ) = "A7F5A7F6"
+
+End Sub
+
+'****************************************************************************************
+
+Sub MakeInitials( i1%, i2% )
+
+Const APOSTROPHE    As Integer = 39
+Const NON_WORD_CHAR As Integer = 0
+Const WORD_CHAR     As Integer = 1
+
+Dim CharT$
+Dim PrevChar%
+
+Dim FollowsDelimiter         : FollowsDelimiter = FALSE
+Dim PunctuationFound
+
+Dim i As Integer, j As Integer
+
+Call MakeLowercase( i1%, i2% )
+
+' The first word character after a non-word character is capitalized. Word characters are
+' the letters of the Roman alphabet (including those modified with diacritical marks),
+' the ten digits, and the underscore, or low line, character. All other characters are
+' considered non-word characters, or word boundaries. However, the apostrophe ',
+' signifying abbreviation or the genitive case, is considered a word character if it is
+' followed by a word character. The macro therefore properly leaves lowercase words such
+' as "Artist's" and "Shouldn't." But that also means names like "D'Oyly" and "M'Cartney"
+' will be mangled to "D'oyly" and "M'cartney".
+
+PrevChar% = NON_WORD_CHAR
+
+i = i1%
+Do
+  CharT$ = CharArray( i )
+  If CharT$ = DELIMITER_ASC Or CharT$ = DELIMITER_UNI Then
+      FollowsDelimiter = TRUE
+    Else
+      If CharT$ Like "[0-9_a-z]" Then
+          If FollowsDelimiter Then
+              PrevChar%        = NON_WORD_CHAR
+              FollowsDelimiter = FALSE
+            Else
+              If PrevChar% = NON_WORD_CHAR Then
+                  CharT$ = UCase$( CharT$ )
+              End If
+              PrevChar% = WORD_CHAR
+          End If
+        ElseIf Asc( CharT$ ) = APOSTROPHE Then
+          If PrevChar% = WORD_CHAR Then
+              PrevChar% = WORD_CHAR
+            Else
+              PrevChar% = NON_WORD_CHAR
+          End If
+        ElseIf Left$( CharT$, 3 ) = "&#x" Then
+          PunctuationFound = FALSE
+          For j = 0 To UBound( UnicodePunctuation)
+            If Mid$( CharT$, 4, 4 ) = UnicodePunctuation( j ) Then
+                PrevChar%        = NON_WORD_CHAR
+                PunctuationFound = TRUE
+                Exit For
+            End If
+          Next j
+          If PunctuationFound = FALSE Then
+          If PrevChar% = NON_WORD_CHAR Then
+              CharT$ = ChangeCaseUnicode( CharT$, UniLower2Upper(), FIRST_LETTER )
+          End If
+          PrevChar% = WORD_CHAR
+          End If
+        Else
+          PrevChar% = NON_WORD_CHAR
+      End If
+  End If
+  CharArray( i ) = CharT$
+  i = i + 1
+Loop Until i > i2%
+
+End Sub
+
+'****************************************************************************************
+
+Sub MakeLowercase( i1%, i2% )
+
+' The working of this function, and the corresponding function MakeUppercase, is
+' described in the "How it works" section above. Special treatment is accorded the
+' Turkish dotless i.
+
+Dim CharT$
+Dim LCaseChar$
+
+Dim FollowsDelimiter
+
+Dim i As Integer, p As Integer
+
+FollowsDelimiter = FALSE
+
+i = i1%
+Do
+  CharT$ = CharArray( i )
+  If CharT$ = DELIMITER_ASC Or CharT$ = DELIMITER_UNI Then
+      FollowsDelimiter = TRUE
+      LCaseChar$       = CharT$
+  End If
+  If Left$( CharT$, 3 ) = "&#x" Then
+      LCaseChar$ = ChangeCaseUnicode( CharT$, UniUpper2Lower(), NO_CASE )
+    Else
+      If CharT$ Like "[0-9a-z]" Then
+          LCaseChar$ = CharT$
+          If FollowsDelimiter Then
+              FollowsDelimiter = FALSE
+          End If
+        ElseIf CharT$ Like "[A-HJ-Z]" Then
+          LCaseChar$ = LCase$( CharT$ )
+        ElseIf CharT$ = "I" Then
+          If Language$ = "tur" Then
+              LCaseChar$ = "&#x0131;"
+            Else
+              LCaseChar$ = "i"
+          End If
+        Else
+          LCaseChar$ = CharT$
+      End If
+  End If
+' If the character changed case, replace it in the array. If only the first character was
+' to be changed (that is, the first character with case), exit the sub after making that
+' one change.
+
+  If LCaseChar$ <> CharT$ Then
+      CharArray( i ) = LCaseChar$
+  End If
+  i = i + 1
+Loop Until i > i2%
+
+End Sub
+
+'****************************************************************************************
+
+Sub MakeSentence( i1%, i2% )
+
+' This sub capitalizes the first letter of the string, then looks ahead for one of the
+' three punctuation marks that can end sentences--the period, exclamation point, or
+' question mark--followed by a space. The space may be preceded by a single or double
+' quotation mark. If one of these combinations of characters is found, the next letter is
+' capitalized.
+
+Dim Prev1Char$
+Dim Prev2Char$
+Dim Start%
+
+Dim CharT$
+
+Dim i As Integer
+
+Call MakeLowercase( i1%, i2% )
+
+Start% = i1%
+Do
+  For i = Start% To i2%
+    CharT$ = CharArray( i )
+    If CharT$ = " " Then
+        Prev1Char$ = CharArray( i - 1 )
+        If Prev1Char$ = "." Or Prev1Char$ = "?" Or Prev1Char$ = "!" Then
+            Call MakeUppercase( Start%, i2%, FIRST_LETTER )
+            Start% = i + 1
+          Else
+            Prev2Char$ = CharArray( i - 2 ) & CharArray( i - 1 )
+            If Prev2Char$ = "." & DOUBLE_QUOTE Or Prev2Char$ = "?" & DOUBLE_QUOTE Or Prev2Char$ = "!" & DOUBLE_QUOTE Or _
+               Prev2Char$ = "." & SINGLE_QUOTE Or Prev2Char$ = "?" & SINGLE_QUOTE Or Prev2Char$ = "!" & SINGLE_QUOTE Then
+                Call MakeUppercase( Start%, i2%, FIRST_LETTER )
+                Start% = i + 1
+            End If
+        End If
+    End If
+  Next i
+Loop Until i > i2%
+
+Call MakeUppercase( i1%, i2%, FIRST_LETTER )
+
+End Sub
+
+'****************************************************************************************
+
+Sub MakeUppercase( i1%, i2%, HowMuch% )
+
+' The "HowMuch%" parameter for this function determines whether the whole string in the
+' array is made uppercase or only the first character that has case (so an initial mark
+' of punctuation like a quotation mark is ignored). Like the corresponding lowercase
+' function, the Turkish i needs to be accounted for.
+
+Dim CharT$
+Dim UCaseChar$
+Dim CaseChanged%
+
+Dim FollowsDelimiter
+
+Dim i As Integer, p As Integer
+
+i = i1%
+Do
+  UCaseChar$ = ""
+  CharT$     = CharArray( i )
+  If CharT$ = DELIMITER_ASC Or CharT$ = DELIMITER_UNI Then
+      FollowsDelimiter = TRUE
+      UCaseChar$       = CharT$
+    Else
+      If Left$( CharT$, 3 ) = "&#x" Then
+          UCaseChar$ = ChangeCaseUnicode( CharT$, UniLower2Upper(), NO_CASE )
+        Else
+          If CharT$ Like "[0-9a-hj-z]" Then
+              If FollowsDelimiter Then
+                  FollowsDelimiter = FALSE
+                  UCaseChar$       = CharT$
+                Else
+                  UCaseChar$       = UCase$( CharT$ )
+              End If
+            ElseIf CharT$ = "i" Then
+              If Language$ = "tur" Then
+                  UCaseChar$       = "&#x0130;"
+                Else
+                  UCaseChar$       = "I"
+              End If
+            Else
+              UCaseChar$ = CharT$
+              If UCaseChar$ Like "[A-Z]" Then
+                  CaseChanged%   = CaseChanged% + 1
+              End If
+          End If
+      End If
+  End If
+  If UCaseChar$ = "&#x00DF;" Then
+      UCaseChar$ = "SS"
+  End If
+
+' If the character changed case, replace it in the array. If only the first character was
+' to be changed (that is, the first character with case), exit the sub after making that
+' one change.
+
+  If UCaseChar$ <> CharT$ Then
+      CharArray( i ) = UCaseChar$
+      CaseChanged%   = CaseChanged% + 1
+  End If
+  If CaseChanged% = 1 Then
+      If HowMuch% = FIRST_LETTER Then
+          Exit Do
+      End If
+  End If
+  i = i + 1
+Loop Until i > i2%
+
+End Sub
+
+'****************************************************************************************
+
+Function ChangeCaseUnicode( InString$, InArray() As String, TitleCase% ) As String
+
+' This function uses a binary search in one of the two arrays presented as a lookup
+' table to convert case. The "TitleCase" parameter indicates whether one of the four
+' Latin characters that has that property should be in titlecase when converted from
+' lowercase to uppercase--which it should be if the letter begins a sentence.
+
+Dim Candidate$
+Dim CodePoint$
+Dim Compare%
+Dim High%
+Dim Low%
+Dim Match%
+Dim Middle%
+Dim Target$
+Dim TargetVal&
+
+Target$ = UCase$( Mid$( InString$, 4, 4 ) )
+
+' If the input is the delimiter, nothing need be done.
+
+If Target$ = "01C2" Then
+    CodePoint$ = Target$
+  Else
+
+' Get the decimal value of the NCR to speed up searching by limiting the search to the
+' values in the Unicode blocks that make up the array. Any value not in the blocks simply
+' maps to itself. Hexadecimal values from 8000 to FFFF are negative decimal numbers, but
+' there are no cased Latin script characters in that range, so they don't need to be
+' taken into account here.
+
+    If Left$( Target$, 1 ) Like "[0-7]" Then
+        TargetVal& = Val( "&H" & Target$ )
+      Else
+        TargetVal& = INTEGER_RANGE + Val( "&H" & Target$ )
+    End If
+
+    If ( TargetVal& >= 192   And TargetVal& <= 255 )   Or _  'U+00C0-U+00FF  Basic Latin, Latin-1 Supplement
+       ( TargetVal& >= 256   And TargetVal& <= 383 )   Or _  'U+0100-U+017F  Latin Extended-A
+       ( TargetVal& >= 384   And TargetVal& <  591 )   Or _  'U+0180-U+024F  Latin Extended-B
+       ( TargetVal& >= 592   And TargetVal& <= 670 )   Or _  'U+0250-U+02AF  IPA Extensions
+       ( TargetVal& >= 7680  And TargetVal& <= 7935 )  Or _  'U+1E00-U+1EFF  Latin Extended Additional
+         TargetVal& =  8498  Or  TargetVal& =  8526    Or _  'U+2132, U+214E Turned F, capital and small
+       ( TargetVal& >= 11360 And TargetVal& <= 11391 ) Or _  'U+2C60-U+2C7F  Latin Extended-C
+       ( TargetVal& >= 42784 And TargetVal& <= 43007 ) Or _  'U+A720-U+A7FF  Latin Extended-D
+       ( TargetVal& >= 43824 And TargetVal& <= 43887 ) Then  'U+AB30-U+AB6F  Latin Extended-E
+
+        Low%  = 0
+        High% = UBound( InArray )
+        Do While Low% <= High%
+          Middle%    = Int( ( High% + Low% ) / 2 )
+          Candidate$ = Left$( InArray( Middle% ), 4 )
+          Compare%   = StrComp( Candidate$, Target$ )
+          Select Case Compare%
+            Case -1
+              Low%   = Middle% + 1
+            Case 0
+              Match% = Middle%
+              Exit Do
+            Case 1
+              High%  = Middle% - 1
+          End Select
+        Loop
+        If Candidate$ = Target$ Then
+            CodePoint$ = Right$( InArray( Match% ), 4 )
+          Else
+            CodePoint$ = Target$
+        End If
+      Else
+        CodePoint$ = Target$
+    End If
+
+    If TitleCase% = FIRST_LETTER Then
+        Select Case CodePoint$
+          Case "01C4"  'Latin capital letter "DZ" with caron
+            CodePoint$ = "01C5"
+          Case "01C7"  'Latin capital letter "LJ"
+            CodePoint$ = "01C8"
+          Case "01CA"  'Latin capital letter "NJ"
+            CodePoint$ = "01CB"
+          Case "01F1"  'Latin capital letter "DZ"
+            CodePoint$ = "01F2"
+        End Select
+    End If
+
+End If
+
+ChangeCaseUnicode = "&#x" & CodePoint$ & ";"
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+' The dialog box function simply enables or disables buttons when the dialog box opens,
+' depending on what was found when the macro began.
+
+Const DISABLED   As Integer = 0
+Const INITIALIZE As Integer = 1
+Const INVISIBLE  As Integer = 0
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible "Cancel", INVISIBLE
+    If AllUpperCase Then
+        DlgEnable  "U",      DISABLED
+      ElseIf AllLowerCase Then
+        DlgEnable  "L",      DISABLED
+    End If
+    If ContentsField Then
+        DlgFocus   "C"
+      Else
+        DlgEnable  "C",      DISABLED
+    End If
+
+End Select
+
+End Function
+'241690381

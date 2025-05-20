@@ -1,24 +1,34 @@
-'MacroName:CutterMaker2.2024.42
-'MacroDescription:Creates an alphanumeric Cutter, or a numeric Cutter to fit into a
+' MacroName:CutterMaker2.2025.01
+' MacroDescription:Creates an alphanumeric Cutter, or a numeric Cutter to fit into a
 ' specified range, for selected or copied text, with an option to paste the output
-' directly into a call number field. Supplies a Cutter from LC's tables for regions,
-' countries, U.S. states, and Canadian provinces.
+' directly into a call number field. Includes LC's translation table to help modify a
+' Cutter for translations. Supplies a Cutter from LC's tables for regions, countries,
+' U.S. states, and Canadian provinces.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Thanks to Zhuo Pan at Duke University Libraries for helpful comments, although all
-' responsibility for this macro is mine alone.
+' Copyright 2025 Walter F. Nickeson.
 '
-' Last updated: 12 May 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Select a text string in a Connexion record and run the macro to generate
@@ -34,8 +44,8 @@
 ' This macro is designed to help quickly add information to a call number field, but it
 ' doesn't need to run with a bibliographic record open, as the Cutter it creates is put
 ' on the Clipboard for copying to any destination. However, if the macro is run in a
-' bibliographic record, the macro offers to add the Cutter it creates to the end of one
-' of the call number fields.
+' bibliographic record, the macro offers to add the Cutter it creates to the end of a
+' call number field of your choice.
 '
 ' For any selected text, the macro follows the guidelines in Classification and
 ' Shelflisting Manual (CSM) section G63, "Cutter Numbers" (July 2013) to generate a two-
@@ -43,7 +53,7 @@
 ' calculation, and uses only the the first four alphanumeric characters of the selection.
 ' A space or a period will be considered by the macro to be the end of the selection.
 ' Some special characters are converted to their nearest Latin alphabet equivalents; for
-' example, the letter "o" with slash ("ø") is considered to be a simple "o" by the macro.
+' example, the letter "o" with slash ("Ã¸") is considered to be a simple "o" by the macro.
 ' Text copied from outside Connexion--that is, text encoded in the Windows character set
 ' rather than in OCLC-MARC---that contains diacritical marks or special characters may
 ' produce wrong results. The default output of the macro is a Cutter consisting of the
@@ -58,9 +68,10 @@
 ' numeric string "4137." The macro offers shortcuts to fit Cutters into the specific
 ' ranges used in Table P-PZ40. For example, the Cutter for the word "apple" is "A67", but
 ' for a literature call number that uses that table, the other Cutters generated are
-' "A882" (to fit into the range A61-A9999) and "Z552" (to fit into the range Z4581-
-' Z9999). Similarly, the Cutter for the string "zither" may be "Z58," "Z271," and "Z99."
-' But the macro can also generate a Cutter beginning with a letter to fit into any range.
+' "A882" (to fit into the range A61-A9999 for titles) and "Z552" (to fit into the range
+' Z4581-Z9999 for authorized access points for biography and criticism). Similarly, the
+' Cutter for the string "zither" may be "Z58," "Z271," and "Z99." But the macro can also
+' generate a Cutter beginning with a letter to fit into any range.
 '
 ' To fit a number into a range, enter up to four digits in each of the dialog box's two
 ' text input boxes, for the lower and upper limits of the range. If fewer than four
@@ -74,15 +85,23 @@
 ' enter "8" and "829", as given in the table, as the upper and lower limits of the range,
 ' and run the macro to receive the suggestion "8152".
 '
+' To extend or modify a Cutter to represent a translation, click the "Translation..."
+' button to see LC's translation table (CSM section G150, January 2020). If the language
+' of the resource as given in the fixed field is on the list, its digits are
+' automatically offered as the default addition to the calculated Cutter. Otherwise, use
+' the list as a guide to create a number that fits between existing entries in the LC's.
+' Mark the checkbox to add the modification to the generated Cutter. Back in the main
+' window, another checkbox confirms acceptance or rejection of the additional digits.
+'
 ' The macro can also supply standard Cutters for many geographic areas and jurisdictions,
-' as found in LC's "Regions and Countries Table" (CSM section G300, June 2019) or "U.S.
+' as found in LC's "Regions and Countries Table" (CSM section G300, June 2019) and "U.S.
 ' States and Canadian Provinces" table (CSM section G302, July 2013). To retrieve one of
 ' these Cutters, run the macro in a bibliographic record with the cursor in a 650 or 651
-' field that contains the place to be Cuttered. The field must be an LC subject heading;
-' there is no need to select text. Besides providing Cutters for the 50 U.S. states and
-' 13 Canadian provinces and territories, the tables also establish Cutters for "all 195
-' independent countries as of 2019, 26 major dependencies and areas of special
-' sovereignty, some historical jurisdictions or entities, and some islands." Three
+' field that contains the place to be Cuttered. The field must be an LC subject heading,
+' and there is no need to select text. Besides providing Cutters for the 50 U.S. states
+' and 13 Canadian provinces and territories, the tables also establish Cutters for "all
+' 195 independent countries as of 2019, 26 major dependencies and areas of special
+' sovereignty, some historical jurisdictions or entities, and some islands." Four
 ' country names are ambiguous when they are used as qualifiers in field 651 and require
 ' user input to resolve; these names are Armenia, Congo, Korea, and Macedonia. The same
 ' qualifier is used for "Armenia" and "Armenia (Republic)," "Congo (Brazzaville)" and
@@ -115,7 +134,7 @@
 '
 ' After creating a Cutter, if a bibliographic record is open the macro shows a list of
 ' all the call number fields (050, 055, 060, 070, 090, and 099) in the record, in case
-' you want to paste the Cutter at the end of one of them. If there are several such
+' the Cutter is to be pasted in at the end of one of them. If there are several such
 ' fields, the macro tries to present as the default selection a field which doesn't
 ' already have a Cutter; but this default suggestion may be ignored, and any call number
 ' field in the record may be selected. If the call number field ends with an empty
@@ -131,6 +150,7 @@ Option Explicit
 Declare Sub FillArray1
 Declare Sub FillArray2
 Declare Sub FillArray3
+Declare Sub FillArray4
 
 Declare Function CalculateBaseCutter     ( SelectionString$, _
                                            RangeSpan% )        As Integer
@@ -146,8 +166,9 @@ Declare Function ShowCutterSource        ( GeogName$, _
                                            ArrayIndex%, _
                                            WhichArray% )       As String
 
-Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
+Declare Function Dialog3ControlFunction( Id$, Action%, SVal& )
 
 Type FieldInfo
  tContent    As String
@@ -155,16 +176,24 @@ Type FieldInfo
  tRank       As Integer
 End Type
 
+Global Const CHECKED              As Integer = 1
 Global Const CONTROL_CHANGE       As Integer = 2
+Global Const DISABLED             As Integer = 0
 Global Const DLG_STATEMENT_CANCEL As Integer = 102
+Global Const ENABLED              As Integer = 1
+Global Const IDLE_STATE           As Integer = 5
 Global Const INITIALIZE           As Integer = 1
 Global Const INVISIBLE            As Integer = 0
+Global Const KEEP_DLG_OPEN        As Integer = -1
+Global Const NO_SELECTION         As Integer = -1
+Global Const UNCHECKED            As Integer = 0
 
 Global Const RANK_1               As Integer = 3   'Numeric values to rank call number fields so as to try to present a
 Global Const RANK_2               As Integer = 2   'preferred default field for addition of the Cutter.
 Global Const RANK_3               As Integer = 1
 
 Global Const ABBREVS_LIST         As Integer = 58
+Global Const LANG_LIST            As Integer = 13
 Global Const REGIONS_LIST         As Integer = 383
 
 Global DELIMITER    As String*1
@@ -178,7 +207,10 @@ Global DefaultSelection%
 Global FirstCutter$
 Global HelpHeading$
 Global HelpSelection$
+Global InitialTrSelection%
+Global Language$
 Global SelectionString$
+Global TrCutter$
 Global WaltsMacros$
 
 Global SelectionFound
@@ -187,13 +219,13 @@ Global StartsWithDigit
 Global Abbrevs         ( 2, ABBREVS_LIST ) As String
 Global AmbigRegions    ( 2 )               As String
 Global CallNumberFields()                  As FieldInfo
+Global LangCode        ( LANG_LIST )       As String
+Global LangList        ( LANG_LIST )       As String
 Global Regions         ( 2, REGIONS_LIST ) As String
 
 '****************************************************************************************
 
 Sub Main
-AmbigHdgIndex% = 0
-Cutter$ = ""
 
 Dim CS as Object
 On Error Resume Next
@@ -202,6 +234,7 @@ On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
 Const CRITICAL_MESSAGE            As Integer = 16
+Const DISPLAY_FF_AT_TOP           As Integer = 1
 Const DLG_FUNCTION_CANCEL         As Integer = 0
 Const FIXED_FIELD_COLUMN          As Integer = 0
 Const INFORMATION_MESSAGE         As Integer = 64
@@ -212,7 +245,6 @@ Const PUSHBUTTON_ADD              As Integer = 1
 Const PUSHBUTTON_CLOSE            As Integer = 2
 Const WARNING_QUERY               As Integer = 32
 
-Dim Abbreviation$
 Dim AmbigHdgInfo$
 Dim BibHeading$
 Dim CharA%
@@ -224,12 +256,12 @@ Dim CurrentRow%
 Dim DialogResult%
 Dim FieldData$
 Dim FieldRank%
+Dim LenRegion%
 Dim LineToChange%
 Dim ListSelection%
 Dim ModifiedSelection$
-Dim QualifierString$
-Dim QualifierTerm$
-Dim QualifierTermMatch%
+Dim NothingDoing$
+Dim PosFF%
 Dim RawSelection$
 Dim Region$
 Dim SearchString$
@@ -240,57 +272,51 @@ Dim SelectionStringChar3%
 Dim SelectionStringChar4%
 Dim Tag$
 Dim TempString$
-Dim TestString$
 Dim TypeOfWindow%
 Dim UBCallNumberFields%
 
 Dim BibRecord
-Dim CursorInGeogHdg          : CursorInGeogHdg = FALSE
+Dim ChangedFFView            : ChangedFFView   = FALSE
+Dim CursorInGeoHdg          : CursorInGeoHdg = FALSE
 Dim FoundField
 Dim MatchingEntry            : MatchingEntry   = FALSE
 
-Dim i As Integer, j As Integer, p As Integer, x As Integer
+Dim i As Integer, j As Integer, p As Integer
 
 Dim DisplayFields() As String
 
-' The entries in the "AmbigRegions" array are strings of "fields." Each string consists
-' of the ambiguous heading followed by the indexes in the "Regions" array of the two
-' headings that share that term. Some headings that appear more than once in that array
-' are really only different forms of the same name, and so have the same established
-' Cutter.
+DELIMITER           = Chr$( 223 )
+DOUBLE_QUOTE        = Chr$( 034 )
+InitialTrSelection% = NO_SELECTION
+StartsWithDigit     = FALSE
+WaltsMacros$        = "[Walt's macros] Essentials:CutterMaker2"
 
-AmbigRegions( 0 ) = "ARMENIA,36,239"
-AmbigRegions( 1 ) = "CONGO,12,33"
-AmbigRegions( 2 ) = "KOREA,95,348"
+HelpSelection$      = "To fit a Cutter into a range, enter one to four digits in each of the two input boxes, from the lower "
+HelpSelection$      = HelpSelection$ & "end of the range to the upper. If either number string contains fewer than four "
+HelpSelection$      = HelpSelection$ & "digits, the macro will automatically pad it: A short number string in the input box "
+HelpSelection$      = HelpSelection$ & "for the lower end of the range will be padded with zeros; for the upper end of the "
+HelpSelection$      = HelpSelection$ & "range, it will be padded with nines. For example, entering " & DOUBLE_QUOTE & "2"
+HelpSelection$      = HelpSelection$ & DOUBLE_QUOTE & " and " & DOUBLE_QUOTE & "3" & DOUBLE_QUOTE & " as the bounds of the "
+HelpSelection$      = HelpSelection$ & "range is automatically considered by the macro to define a range from " & DOUBLE_QUOTE
+HelpSelection$      = HelpSelection$ & "2000" & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "3999" & DOUBLE_QUOTE & ", or a span "
+HelpSelection$      = HelpSelection$ & "of 1999. To make the macro consider the upper end number to be an exclusive limit, "
+HelpSelection$      = HelpSelection$ & "either add zeros or enter a number one lower than the limit. For example, to find a "
+HelpSelection$      = HelpSelection$ & "Cutter between 2 and 3, but not greater than 3, enter " & DOUBLE_QUOTE & "2"
+HelpSelection$      = HelpSelection$ & DOUBLE_QUOTE & " for the lower end of the range, and either " & DOUBLE_QUOTE & "3000"
+HelpSelection$      = HelpSelection$ & DOUBLE_QUOTE & " or " & DOUBLE_QUOTE & "2999" & DOUBLE_QUOTE & " as the upper limit. "
+HelpSelection$      = HelpSelection$ & "Note that you can enter the same number in both boxes. For example, a range from "
+HelpSelection$      = HelpSelection$ & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " is "
+HelpSelection$      = HelpSelection$ & "considered by the macro to be actually " & DOUBLE_QUOTE & "5000" & DOUBLE_QUOTE
+HelpSelection$      = HelpSelection$ & " to " & DOUBLE_QUOTE & "5999" & DOUBLE_QUOTE & "."
 
-DELIMITER         = Chr$( 223 )
-DOUBLE_QUOTE      = Chr$( 034 )
-StartsWithDigit   = FALSE
-WaltsMacros$      = "[Walt's macros] Essentials:CutterMaker2"
+HelpHeading$        = "Because no text was selected, the macro looked for a geographic area in the heading in which the "
+HelpHeading$        = HelpHeading$ & "cursor is placed, and found an established Cutter for that geographic area from LC's "
+HelpHeading$        = HelpHeading$ & "tables. For a string of areas, the macro takes for the source of the Cutter the first "
+HelpHeading$        = HelpHeading$ & "area, assuming it is the top jurisdiction in the hierarchy. Because this is an "
+HelpHeading$        = HelpHeading$ & "established Cutter, it cannot be modified."
 
-HelpSelection$    = "To fit a Cutter into a range, enter one to four digits in each of the two input boxes, from the lower "
-HelpSelection$    = HelpSelection$ & "end of the range to the upper. If either number string contains fewer than four digits, "
-HelpSelection$    = HelpSelection$ & "the macro will automatically pad it: A short number string in the input box for the "
-HelpSelection$    = HelpSelection$ & "lower end of the range will be padded with zeros; for the upper end of the range, it "
-HelpSelection$    = HelpSelection$ & "will be padded with nines. For example, entering " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE
-HelpSelection$    = HelpSelection$ & " and " & DOUBLE_QUOTE & "3" & DOUBLE_QUOTE & " as the bounds of the range is "
-HelpSelection$    = HelpSelection$ & "automatically considered by the macro to define a range from " & DOUBLE_QUOTE & "2000"
-HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "3999" & DOUBLE_QUOTE & ", or a span of 1999. "
-HelpSelection$    = HelpSelection$ & "To make the macro consider the upper end number to be an exclusive limit, either add "
-HelpSelection$    = HelpSelection$ & "zeros or enter a number one lower than the limit. For example, to find a Cutter between "
-HelpSelection$    = HelpSelection$ & "2 and 3, but not greater than 3, enter " & DOUBLE_QUOTE & "2" & DOUBLE_QUOTE & " for "
-HelpSelection$    = HelpSelection$ & "the lower end of the range, and either " & DOUBLE_QUOTE & "3000" & DOUBLE_QUOTE & " or "
-HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & "2999" & DOUBLE_QUOTE & " as the upper limit. Note that you can enter the "
-HelpSelection$    = HelpSelection$ & "same number in both boxes. For example, a range from " & DOUBLE_QUOTE & "5"
-HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "5" & DOUBLE_QUOTE & " is considered by the macro "
-HelpSelection$    = HelpSelection$ & "to be actually " & DOUBLE_QUOTE & "5000" & DOUBLE_QUOTE & " to " & DOUBLE_QUOTE & "5999"
-HelpSelection$    = HelpSelection$ & DOUBLE_QUOTE & "."
-
-HelpHeading$      = "Because no text was selected, the macro looked for a geographic area in the heading in which the cursor "
-HelpHeading$      = HelpHeading$ & "is placed, and found an established Cutter for that geographic area from LC's tables. For "
-HelpHeading$      = HelpHeading$ & "a string of areas, the macro takes for the source of the Cutter the first area, assuming "
-HelpHeading$      = HelpHeading$ & "it is the top jurisdiction in the hierarchy. Because this is an established Cutter, it "
-HelpHeading$      = HelpHeading$ & "cannot be modified."
+NothingDoing$       = "To create a Cutter, please select text or place the cursor in a subject heading field with a "
+NothingDoing$       = NothingDoing$ & "geographic term."
 
 ' First, find out if a bibliographic record is displayed, although the macro doesn't need
 ' to run in one.
@@ -305,20 +331,31 @@ End Select
 
 If BibRecord Then
 
-' If the macro is running in a bibliographic record, get the row number of the line the
-' cursor is in. Follow by checking for selected text in the record. If text is not
-' selected (apart from the tag and indicator cells, which are automatically selected if
-' the cursor is positioned in them), and the cursor is not in the fixed field, check if
-' the cursor is in a field that could contain a geographic name or jurisdiction (fields
-' 650 or 651), and if it is, go ahead and fill the arrays with the established Cutters
-' derived from the LC tables. If the cursor is not in one of those fields, check if text
-' is on the Clipboard. If nothing is available from which a Cutter may be generated,
-' display a warning and quit.
+' If the macro is running in a bibliographic record, first try to get the language of the
+' item, in order to offer a default choice for Cuttering a translation.
+
+    PosFF% = CS.FixedFieldPosition
+    If PosFF% <> DISPLAY_FF_AT_TOP Then
+        CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+        ChangedFFView         = TRUE
+    End If
+    If CS.GetFixedField( "Lang", Language$ ) Then
+    End If
+    If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Then get the row number of the line the cursor is in and check for selected text in the
+' record. If text is not selected (apart from the tag and indicator cells, which are
+' automatically selected if the cursor is positioned in them), and the cursor is not in
+' the fixed field, check if the cursor is in a field that could contain a geographic name
+' or jurisdiction (fields 650 or 651), and if it is, go ahead and fill the arrays with
+' the established Cutters derived from the LC tables. If the cursor is not in one of
+' those fields, check if text is on the Clipboard. If nothing is available from which a
+' Cutter may be generated, display a warning and quit.
 
     CurrentRow% = CS.CursorRow
     CurrentCol% = CS.CursorColumn
     If CurrentCol% = FIXED_FIELD_COLUMN Then
-        MsgBox "Please select text or place the cursor in a subject heading field with a geographic heading.", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox NothingDoing$, CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
     End If
 
@@ -346,8 +383,8 @@ If BibRecord Then
 
                       Case "651"
 
-                        CursorInGeogHdg = TRUE
-                        p               = InStr( TempString$, DELIMITER )
+                        CursorInGeoHdg = TRUE
+                        p              = InStr( TempString$, DELIMITER )
                         If p = 0 Then
                             BibHeading$ = TempString$
                           Else
@@ -362,9 +399,9 @@ If BibRecord Then
                         If p = 0 Then
                             GoTo TryClipboard:
                           Else
-                            CursorInGeogHdg = TRUE
-                            TempString$     = Trim$( Mid$( TempString$, p + 2 ) )
-                            p               = InStr( TempString$, DELIMITER )
+                            CursorInGeoHdg = TRUE
+                            TempString$    = Trim$( Mid$( TempString$, p + 2 ) )
+                            p              = InStr( TempString$, DELIMITER )
                               If p = 0 Then
                                   BibHeading$ = TempString$
                                 Else
@@ -374,12 +411,12 @@ If BibRecord Then
 
                       Case Else
 
-                        MsgBox "Please select text or place the cursor in a subject heading field with a geographic heading.", CRITICAL_MESSAGE, WaltsMacros$
+                        MsgBox NothingDoing$, CRITICAL_MESSAGE, WaltsMacros$
                         Exit Sub
 
                     End Select
                   Else
-                    MsgBox "Sorry, this macro works only in fields with LC subject headings.", CRITICAL_MESSAGE, WaltsMacros$
+                    MsgBox NothingDoing$, CRITICAL_MESSAGE, WaltsMacros$
                     Exit Sub
                 End If
 
@@ -457,9 +494,9 @@ If BibRecord Then
                     End If
 
                     For i = 0 To ABBREVS_LIST
-                      Region$ = Abbrevs( 0, i )
-                      x       = Len( Region$ )
-                      If Region$ = Left$( SearchString$, x ) Or Region$ = Right$( SearchString$, x ) Then
+                      Region$    = Abbrevs( 0, i )
+                      LenRegion% = Len( Region$ )
+                      If Region$ = Left$( SearchString$, LenRegion% ) Or Region$ = Right$( SearchString$, LenRegion% ) Then
                           Cutter$       = Abbrevs( 1, i )
                           CutterSource$ = ShowCutterSource( Region$, i, ABBREVS_LIST )
                           GoTo ShowDialogBox:
@@ -492,16 +529,16 @@ If BibRecord Then
                             OkButton        62,  50,  52,  14
                             CancelButton   122,  50,  52,  14
                             Text            10,   6, 160,   8, "Select the appropriate country for this place:"
-                            OptionGroup                            .OptionGroup1
-                             OptionButton    1,  1,    1,   1, "", .OptionButtonDummy
-                             OptionButton   16,  18, 158,  12, "", .OptionButton1
-                             OptionButton   16,  30, 158,  12, "", .OptionButton2
+                            OptionGroup                            .OptionGroup
+                             OptionButton    1,  1,    1,   1, "", .OptBtn_Dummy
+                             OptionButton   16,  18, 158,  12, "", .OptBtn_1
+                             OptionButton   16,  30, 158,  12, "", .OptBtn_2
                           End Dialog
                         Dim Dialog1 As Dialog1Definition
                         On Error Resume Next
                         Dialog Dialog1
                         If Err = DLG_STATEMENT_CANCEL Then Exit Sub
-                        AmbigHdgIndex% = Dialog1.OptionGroup1
+                        AmbigHdgIndex% = Dialog1.OptionGroup
                         AmbigHdgIndex% = Val( GetField( AmbigHdgInfo$, AmbigHdgIndex% + 1, "," ) )
                         Cutter$        = Regions( 1, AmbigHdgIndex% )
                         Region$        = Regions( 0, AmbigHdgIndex% )
@@ -531,7 +568,7 @@ If BibRecord Then
                           End If
                         Next i
                         If MatchingEntry Then
-                            Cutter$ = Regions( 1, i )
+                            Cutter$       = Regions( 1, i )
                             CutterSource$ = ShowCutterSource( Region$, i, REGIONS_LIST )
                           Else
                             MsgBox "Sorry, could not find a Cutter for " & DOUBLE_QUOTE & SearchString$ & DOUBLE_QUOTE & _
@@ -544,6 +581,8 @@ If BibRecord Then
                 If Cutter$ <> "" Then GoTo ShowDialogBox:
             End If
         End If
+      Else
+        FillArray4
     End If
 End If
 
@@ -551,7 +590,7 @@ End If
 ' or there is no record displayed at all, offer to generate a Cutter from the content of
 ' the Clipboard.
 
-If SelectionFound = FALSE And ( BibRecord = FALSE Or CursorInGeogHdg = FALSE ) Then
+If SelectionFound = FALSE And ( BibRecord = FALSE Or CursorInGeoHdg = FALSE ) Then
 
 TryClipboard:
 
@@ -564,7 +603,7 @@ TryClipboard:
         Exit Sub
     End If
     If RawSelection$ = "" Then
-        MsgBox "Please select text to Cutter!", CRITICAL_MESSAGE, WaltsMacros$
+        MsgBox NothingDoing$, CRITICAL_MESSAGE, WaltsMacros$
         Exit Sub
       Else
         If Len( RawSelection$ ) > 16 Then
@@ -960,31 +999,34 @@ Next i
 
 ' Now the dialog box where all the action takes place can be run.
 
-Begin Dialog Dialog2Definition  340, 110, WaltsMacros$, .Dialog2ControlFunction
-  PushButton      10,  25,  80,  14, "&Add to selected field:",            .ButtonAdd
-  PushButton      98,  25,  58,  14, "&Copy && close",                     .ButtonCopyClose
-  CancelButton   278,  86,  52,  14
-  TextBox        206,  18,  24,  12,                                       .InputBox1
-  TextBox        242,  18,  24,  12,                                       .InputBox2
-  PushButton     272,  18,  24,  12, "&Go",                                .ButtonGoRange
-  PushButton     218,  86,  52,  14, "&Reset",                             .ButtonReset
-  PushButton     304,  18,  16,  12, "&?",                                 .ButtonHelp
-  ListBox         10,  44, 148,  44, DisplayFields(),                      .ListOfCallNumberFields
-  TextBox         10,   8,  26,  12,                                       .CutterDisplay
+Begin Dialog Dialog2Definition  348, 110, WaltsMacros$, .Dialog2ControlFunction
+  PushButton      10,  25,  84,  14, "&Add to selected field:",            .PshBtn_Add
+  PushButton     106,  25,  58,  14, "&Copy && close",                     .PshBtn_CopyClose
+  CancelButton   286,  86,  52,  14
+  TextBox        214,  18,  24,  12,                                       .TxtBox_Input1
+  TextBox        250,  18,  24,  12,                                       .TxtBox_Input2
+  PushButton     280,  18,  24,  12, "&Go",                                .PshBtn_GoRange
+  PushButton     226,  86,  52,  14, "&Reset",                             .PshBtn_Reset
+  PushButton     312,  18,  16,  12, "&?",                                 .PshBtn_Help
+  PushButton      10,  83,  52,  14, "&Translation...",                    .PshBtn_Translate
+  CheckBox        68,  82,  88,  12, "Add translation number",             .ChkBox_Translate
+  Text            80,  92,  78,   8, "",                                   .TranslateCutter
+  ListBox         10,  44, 156,  44, DisplayFields(),                      .LstBox_CallNumberFields
+  TextBox         10,   8,  36,  12,                                       .CutterDisplay
   OptionGroup                                                              .OptionGroupCutterFormat
-   OptionButton   40,   8,  56,  12, "Al&phanumeric",                      .OptionAlphanumeric
-   OptionButton  100,   8,  56,  12, "&Numbers only",                      .OptionNumbersOnly
+   OptionButton   50,   8,  56,  12, "Al&phanumeric",                      .OptBtn_Alphanumeric
+   OptionButton  110,   8,  56,  12, "&Numbers only",                      .OptBtn_NumbersOnly
   OptionGroup                                                              .OptionGroupRanges
-   OptionButton  174,  18,  30,  12, "",                                   .OptionGroupRangesDummy
-   OptionButton  174,  18,  30,  12, "&From",                              .OptionCustomRange
-   OptionButton  174,  48, 102,  12, "&Separate works (A61-Z458)",         .OptionPZSeparateWorks
-   OptionButton  174,  62, 121,  12, "&Biography and criticism (Z5-Z999)", .OptionPZBiogCriticism
-  GroupBox       166,   4, 164,  74, "Fit into range",                     .GBFitIntoRange
-  GroupBox       166,   4, 164,  52, "Source of Cutter",                   .GBCutterSource
-  GroupBox       166,  36, 164,  42, "Use Table P-PZ40",                   .GBUsePZTable
-  Text           174,  15, 148,  32, "",                                   .CutterSourceText
-  Text           232,  19,   8,   8, "to",                                 .To
-  Text           167,  49, 161,  27, "",                                   .WarningArea
+   OptionButton  182,  18,  30,  12, "",                                   .OptBtn_GroupRangesDummy
+   OptionButton  182,  18,  30,  12, "&From",                              .OptBtn_CustomRange
+   OptionButton  182,  48, 102,  12, "&Separate works (A61-Z458)",         .OptBtn_PZSeparateWorks
+   OptionButton  182,  62, 121,  12, "&Biography and criticism (Z5-Z999)", .OptBtn_PZBiogCriticism
+  GroupBox       174,   4, 164,  74, "Fit into range",                     .GrpBox_FitIntoRange
+  GroupBox       174,   4, 164,  52, "Source of Cutter",                   .GrpBox_CutterSource
+  GroupBox       174,  36, 164,  42, "Use Table P-PZ40",                   .GrpBox_UsePZTable
+  Text           182,  15, 148,  32, "",                                   .CutterSourceText
+  Text           240,  19,   8,   8, "to",                                 .To
+  Text           175,  49, 161,  27, "",                                   .WarningArea
 End Dialog
 
 Dim Dialog2 as Dialog2Definition
@@ -1003,7 +1045,8 @@ Select Case DialogResult%
 ' decimal if the Cutter is to appear in subfield $b. If there is no subfield $b present
 ' in the field, add one just to hold the Cutter.
 
-    ListSelection% = Dialog2.ListOfCallNumberFields
+    Cutter$        = Dialog2.CutterDisplay
+    ListSelection% = Dialog2.LstBox_CallNumberFields
     LineToChange%  = CallNumberFields( ListSelection% ).tLineNumber
     FieldData$     = CallNumberFields( ListSelection% ).tContent
     Tag$           = Left$( FieldData$, 3 )
@@ -1032,10 +1075,10 @@ Select Case DialogResult%
 
   Case PUSHBUTTON_CLOSE
 
-' "Copy & close" simply sets the Clipboard and ends the macro.
+' "Copy & close" simply puts text on the Clipboard and ends the macro.
 
     Clipboard.Clear
-    Clipboard.SetText Cutter$
+    Clipboard.SetText Trim$( Dialog2.CutterDisplay )
     Exit Sub
 
 End Select
@@ -1046,8 +1089,8 @@ End Sub
 
 Sub FillArray1
 
-' Three different procedures to fill the arrays, as trying to do it all in one would
-' exceed OML's capacity.
+' Three different procedures are needed to fill the arrays, as trying to do it all in one
+' would exceed OML's capacity.
 
 ' These arrays contain, with some adaptations, material in LC's "Regions and Countries
 ' Table" (Classification & Shelflisting Manual (CSM) section G300, June 2019) and "U.S.
@@ -1056,10 +1099,10 @@ Sub FillArray1
 ' although the following four terms have had diacritical marks removed for ease of
 ' processing:
 '
-'   CURAÇAO
-'   CÔTE D'IVOIRE
-'   RÉUNION
-'   TERRES AUSTRALES ET ANTARCTIQUES FRANÇAISES
+'   CURAÃ‡AO
+'   CÃ”TE D'IVOIRE
+'   RÃ‰UNION
+'   TERRES AUSTRALES ET ANTARCTIQUES FRANÃ‡AISES
 
 Regions( 0, 0   ) = "TERRES AUSTRALES ET ANTARCTIQUES FRANCAISES"
 Regions( 0, 1   ) = "EUROPEAN FREE TRADE ASSOCIATION COUNTRIES"
@@ -1445,6 +1488,16 @@ Regions( 0, 380 ) = "PERU"
 Regions( 0, 381 ) = "ROME"
 Regions( 0, 382 ) = "TOGO"
 Regions( 0, 383 ) = "UTAH"
+
+' The entries in the "AmbigRegions" array are strings of "fields." Each string consists
+' of the ambiguous heading followed by the indexes in the "Regions" array of the two
+' headings that share that term. Some headings that appear more than once in that array
+' are really only different forms of the same name, and so have the same established
+' Cutter.
+
+AmbigRegions( 0 ) = "ARMENIA,36,239"
+AmbigRegions( 1 ) = "CONGO,12,33"
+AmbigRegions( 2 ) = "KOREA,95,348"
 
 End Sub
 
@@ -1847,6 +1900,8 @@ End Sub
 
 Sub FillArray3
 
+' The United States and Canada.
+
 Abbrevs( 0, 0  ) = "Calif." : Abbrevs( 1, 0  ) = "C2"  : Abbrevs( 2, 0  ) = "CALIFORNIA"
 Abbrevs( 0, 1  ) = "N.W.T." : Abbrevs( 1, 1  ) = "N7"  : Abbrevs( 2, 1  ) = "NORTHWEST TERRITORIES"
 Abbrevs( 0, 2  ) = "P.E.I." : Abbrevs( 1, 2  ) = "P8"  : Abbrevs( 2, 2  ) = "PRINCE EDWARD ISLAND"
@@ -1906,6 +1961,49 @@ Abbrevs( 0, 55 ) = "Or."    : Abbrevs( 1, 55 ) = "O7"  : Abbrevs( 2, 55 ) = "ORE
 Abbrevs( 0, 56 ) = "Pa."    : Abbrevs( 1, 56 ) = "P4"  : Abbrevs( 2, 56 ) = "PENNSYLVANIA"
 Abbrevs( 0, 57 ) = "Va."    : Abbrevs( 1, 57 ) = "V8"  : Abbrevs( 2, 57 ) = "VIRGINIA"
 Abbrevs( 0, 58 ) = "Vt."    : Abbrevs( 1, 58 ) = "V5"  : Abbrevs( 2, 58 ) = "VERMONT"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray4
+
+' OML doesn't allow for columns in a dialog box list box. A column may be approximated by
+' careful use of spaces, although the proportionally-spaced font used in dialog boxes
+' prevents a straight vertical line of text from appearing.
+
+LangList(  0 ) = "Polyglot (2 or more translations)    12"
+LangList(  1 ) = "Arabic translation                          125"
+LangList(  2 ) = "Chinese translation                       127"
+LangList(  3 ) = "English translation                         13"
+LangList(  4 ) = "French translation                         14"
+LangList(  5 ) = "German translation                        15"
+LangList(  6 ) = "Hebrew translation                        154"
+LangList(  7 ) = "Italian translation                           16"
+LangList(  8 ) = "Japanese translation                     163"
+LangList(  9 ) = "Korean translation                         164"
+LangList( 10 ) = "Portuguese translation                   167"
+LangList( 11 ) = "Russian translation                        17"
+LangList( 12 ) = "Spanish translation                        18"
+LangList( 13 ) = "Vietnamese translation                  19"
+
+' This array matches the code in the fixed field element "Lang" with the full form of the
+' name in the preceding array.
+
+LangCode(  0 ) = ""
+LangCode(  1 ) = "ara"
+LangCode(  2 ) = "chi"
+LangCode(  3 ) = "eng"
+LangCode(  4 ) = "fre"
+LangCode(  5 ) = "ger"
+LangCode(  6 ) = "heb"
+LangCode(  7 ) = "ita"
+LangCode(  8 ) = "jpn"
+LangCode(  9 ) = "kor"
+LangCode( 10 ) = "por"
+LangCode( 11 ) = "rus"
+LangCode( 12 ) = "spa"
+LangCode( 13 ) = "vie"
 
 End Sub
 
@@ -2357,15 +2455,15 @@ Select Case Action%
     RegionsString$  = AmbigRegions( AmbigHdgIndex% )
     AmbiguousTerm1% = Val( GetField( RegionsString$, 2, "," ) )
     AmbiguousTerm2% = Val( GetField( RegionsString$, 3, "," ) )
-    DlgText    "OptionButton1",                Regions( 0, AmbiguousTerm1% )
-    DlgText    "OptionButton2",                Regions( 0, AmbiguousTerm2% )
-    DlgVisible "OptionButtonDummy",            INVISIBLE
+    DlgText    "OptBtn_1",                Regions( 0, AmbiguousTerm1% )
+    DlgText    "OptBtn_2",                Regions( 0, AmbiguousTerm2% )
+    DlgVisible "OptBtn_Dummy",            INVISIBLE
 
 
   Case CONTROL_CHANGE
 
     If Id$ = "OK" Then
-        Select Case DlgValue( "OptionGroup1" )
+        Select Case DlgValue( "OptionGroup" )
           Case 0
             Cutter$ = Regions( 1, AmbiguousTerm1% )
           Case 1
@@ -2381,16 +2479,12 @@ End Function
 
 Function Dialog2ControlFunction( Id$, Action%, SValue& )
 
-' This function controls the second dialog box. It displays the Cutter, whether a simple
-' number already generated in the Main sub, or one calculated to fit into a range
-' depending on the input received by the dialog box.
+' This function controls the second, or main, dialog box. It displays the Cutter, whether
+' a simple number already generated in the Main sub, or one calculated to fit into a
+' range depending on the input received by the dialog box.
 
-Const DISABLED         As Integer = 0
 Const DUMMY_BUTTON     As Integer = 0
-Const ENABLED          As Integer = 1
 Const FOCUS_CHANGE     As Integer = 4
-Const IDLE_STATE       As Integer = 5
-Const KEEP_DLG_OPEN    As Integer = -1
 Const VISIBLE          As Integer = 1
 
 Const ALPHANUMERIC     As Integer = 0
@@ -2408,8 +2502,6 @@ Dim CutterInitialLetter$
 Dim LengthOfCurrentInput%
 Dim TempString$
 
-Dim i As Integer
-
 ' Static variables retain their values through each call of the dialog box control
 ' function.
 
@@ -2419,6 +2511,8 @@ Static CurrentTextBox$
 Static CutterNumbersOnly$
 Static HelpText$
 Static InputWarningMessage$
+Static Instructions$
+Static LanguageCutter$
 Static Lower%
 Static OtherInput$
 Static OtherTextBox$
@@ -2430,42 +2524,70 @@ Static WhatIsTheProblem%
 Static FitIntoRange
 Static RangeCalc
 
+Dim i As Integer
+
+Instructions$     = "LC provides for extending Cutters to represent translations, but only for the very limited number of "
+Instructions$     = Instructions$ & "languages shown here in the Translation Table. To add translation digits for other "
+Instructions$     = Instructions$ & "languages, follow these guidelines in CSM G150: " & DOUBLE_QUOTE & "If a language is not "
+Instructions$     = Instructions$ & "listed on the Translation Table, select a number for that language that would agree "
+Instructions$     = Instructions$ & "alphabetically with the table. Do not repurpose a number listed in the Translation Table."
+Instructions$     = Instructions$ & DOUBLE_QUOTE & " Enter a string of digits for your language of translation in the text "
+Instructions$     = Instructions$ & "box and make sure the checkbox is marked to have the macro modify its original "
+Instructions$     = Instructions$ & "calculated Cutter."
+
 Select Case Action%
 
   Case INITIALIZE
 
-    DlgValue   "OptionGroupCutterFormat",      ALPHANUMERIC
-    DlgVisible "OptionGroupRangesDummy",       INVISIBLE
-    DlgEnable  "ButtonGoRange",                DISABLED
-    DlgVisible "WarningArea",                  INVISIBLE
+    DlgValue   "OptionGroupCutterFormat", ALPHANUMERIC
+    DlgVisible "OptBtn_GroupRangesDummy", INVISIBLE
+    DlgEnable  "PshBtn_GoRange",          DISABLED
+    DlgVisible "WarningArea",             INVISIBLE
     WhatIsTheProblem%            = NO_PROBLEM
     FitIntoRange                 = FALSE
     PreviousInputWarningMessage$ = ""
     InputWarningMessage$         = ""
     RangeCalc                    = FALSE
-    DlgText    "CutterDisplay",                FirstCutter$
-    DlgValue   "ListOfCallNumberFields",       DefaultSelection%
+    DlgText    "CutterDisplay",           FirstCutter$
+    DlgValue   "LstBox_CallNumberFields", DefaultSelection%
     If CountOfTopRank% > 1 Then
-        DlgFocus   "ListOfCallNumberFields"
+        DlgFocus   "LstBox_CallNumberFields"
     End If
     If SelectionFound Or CutterSource$ = "Clipboard" Then
-        DlgVisible "CutterSourceText",             INVISIBLE
-        DlgVisible "GBCutterSource",               INVISIBLE
+        DlgVisible "CutterSourceText",        INVISIBLE
+        DlgVisible "GrpBox_CutterSource",     INVISIBLE
         HelpText$ = HelpSelection$
       Else
-        DlgText    "CutterSourceText",             CutterSource$
-        DlgVisible "GBFitIntoRange",               INVISIBLE
-        DlgVisible "GBUsePZTable",                 INVISIBLE
-        DlgVisible "InputBox1",                    INVISIBLE
-        DlgVisible "InputBox2",                    INVISIBLE
-        DlgVisible "OptionAlphanumeric",           INVISIBLE
-        DlgVisible "OptionPZBiogCriticism",        INVISIBLE
-        DlgVisible "OptionGroupRangesDummy",       INVISIBLE
-        DlgVisible "OptionNumbersOnly",            INVISIBLE
-        DlgVisible "OptionPZSeparateWorks",        INVISIBLE
-        DlgVisible "ButtonGoRange",                INVISIBLE
-        DlgVisible "To",                           INVISIBLE
+        DlgText    "CutterSourceText",        CutterSource$
+        DlgVisible "GrpBox_FitIntoRange",     INVISIBLE
+        DlgVisible "GrpBox_UsePZTable",       INVISIBLE
+        DlgVisible "TxtBox_Input1",           INVISIBLE
+        DlgVisible "TxtBox_Input2",           INVISIBLE
+        DlgVisible "OptBtn_Alphanumeric",     INVISIBLE
+        DlgVisible "OptBtn_PZBiogCriticism",  INVISIBLE
+        DlgVisible "OptBtn_GroupRangesDummy", INVISIBLE
+        DlgVisible "OptBtn_NumbersOnly",      INVISIBLE
+        DlgVisible "OptBtn_PZSeparateWorks",  INVISIBLE
+        DlgVisible "PshBtn_GoRange",          INVISIBLE
+        DlgVisible "To",                      INVISIBLE
         HelpText$ = HelpHeading$
+    End If
+
+' When the dialog box opens, the checkbox for the translation digits to modify the Cutter
+' are hidden. But if the language of the resource is in LC's translation table list, find
+' the Cutter, so as to offer it as an automatic default if the "Translation..." button is
+' clicked.
+
+    DlgVisible "ChkBox_Translate",        INVISIBLE
+    DlgVisible "TranslateCutter",         INVISIBLE
+    If Language$ <> "" Then
+        For i = 1 To LANG_LIST
+          If Language$ = LangCode( i ) Then
+              TrCutter$           = Trim$( Right$( LangList( i ), 3 ) )
+              InitialTrSelection% = i
+              Exit For
+          End If
+        Next i
     End If
 
 
@@ -2473,24 +2595,24 @@ Select Case Action%
 
     Select Case Id$
 
-      Case "OptionAlphanumeric"
+      Case "OptBtn_Alphanumeric"
 
         If FitIntoRange Then
-            TempString$ = DlgText( "InputBox1" )
+            TempString$ = DlgText( "TxtBox_Input1" )
             TempString$ = TempString$ & String$( 4 - Len( TempString$ ), "0" )
             Lower%      = Val( TempString$ )
-            TempString$ = DlgText( "InputBox2" )
+            TempString$ = DlgText( "TxtBox_Input2" )
             TempString$ = TempString$ & String$( 4 - Len( OtherInput$ ), "9" )
             Upper%      = Val( TempString$ )
             CutterInitialLetter$ = Left$( SelectionString$, 1 ) & _
                                    CalculateCutterWithRange( Lower%, Upper%, Mid$( SelectionString$, 2 ), 3 )
-            DlgText    "CutterDisplay",                CutterInitialLetter$
+            DlgText    "CutterDisplay",           CutterInitialLetter$
           Else
-            DlgText    "CutterDisplay",                FirstCutter$
-            DlgValue   "OptionGroupRanges",            DUMMY_BUTTON
+            DlgText    "CutterDisplay",           FirstCutter$
+            DlgValue   "OptionGroupRanges",       DUMMY_BUTTON
           End If
 
-      Case "OptionNumbersOnly"
+      Case "OptBtn_NumbersOnly"
 
 ' A completely numeric Cutter is always fit into a range, even if not specified by
 ' entries in the input boxes. In that case the range is implicit, and is actually 1000 to
@@ -2506,22 +2628,22 @@ Select Case Action%
             Cutter$ = CalculateCutterWithRange( 1000, 9999, SelectionString$, 4 )
         End If
         Cutter$ = CheckTerminalZero( Cutter$ )
-        DlgText    "CutterDisplay",                Cutter$
+        DlgText    "CutterDisplay",           Cutter$
 
-      Case "OptionCustomRange"
+      Case "OptBtn_CustomRange"
 
-        DlgFocus   "InputBox1"
+        DlgFocus   "TxtBox_Input1"
         RangeCalc = TRUE
-        DlgValue   "OptionGroupCutterFormat",      NUMBERS_ONLY
+        DlgValue   "OptionGroupCutterFormat", NUMBERS_ONLY
 
-      Case "OptionPZSeparateWorks"
+      Case "OptBtn_PZSeparateWorks"
 
 ' For literature using Table P-PZ40, a normal Cutter is used for all strings except those
 ' beginning with "A" or "Z". In those cases, the Cutter must be squeezed into a range--
 ' the upper end of the span for the letter "A", but the beginning part for the letter
 ' "Z".
 
-        DlgValue   "OptionGroupCutterFormat",      DUMMY_BUTTON
+        DlgValue   "OptionGroupCutterFormat", DUMMY_BUTTON
         Select Case Left$( SelectionString$, 1 )
           Case "A"
             Cutter$ = "A" & CalculateCutterWithRange( 6100, 9999, Mid$( SelectionString$, 2 ), 3 )
@@ -2531,23 +2653,23 @@ Select Case Action%
             Cutter$ = FirstCutter$
         End Select
         Cutter$ = CheckTerminalZero( Cutter$ )
-        DlgText    "CutterDisplay",                Cutter$
-        DlgText    "InputBox1",                    ""
-        DlgText    "InputBox2",                    ""
+        DlgText    "CutterDisplay",           Cutter$
+        DlgText    "TxtBox_Input1",           ""
+        DlgText    "TxtBox_Input2",           ""
 
-      Case "OptionPZBiogCriticism"
+      Case "OptBtn_PZBiogCriticism"
 
 ' Also for Table P-PZ40, works of criticism, etc. are prefaced by the letter "Z" and fit
 ' into the upper end of the span.
 
-        DlgValue   "OptionGroupCutterFormat",      DUMMY_BUTTON
+        DlgValue   "OptionGroupCutterFormat", DUMMY_BUTTON
         Cutter$ = "Z" & Left$( CalculateCutterWithRange( 5000, 9999, SelectionString$, 3 ), 3 )
         Cutter$ = CheckTerminalZero( Cutter$ )
-        DlgText    "CutterDisplay",                Cutter$
-        DlgText    "InputBox1",                    ""
-        DlgText    "InputBox2",                    ""
+        DlgText    "CutterDisplay",           Cutter$
+        DlgText    "TxtBox_Input1",           ""
+        DlgText    "TxtBox_Input2",           ""
 
-      Case "ButtonGoRange"
+      Case "PshBtn_GoRange"
 
 ' This button calculates the Cutter when a valid span is entered into the input boxes.
 
@@ -2560,31 +2682,36 @@ Select Case Action%
             Cutter$ = CutterInitialLetter$
         End If
         Cutter$              = CheckTerminalZero( Cutter$ )
-        DlgText    "CutterDisplay",                Cutter$
+        DlgText    "CutterDisplay",           Cutter$
         WhatIsTheProblem%    = NO_PROBLEM
         InputWarningMessage$ = ""
-        DlgEnable  "ButtonGoRange",                DISABLED
+        DlgEnable  "PshBtn_GoRange",          DISABLED
         RangeCalc            = FALSE
 
         Dialog2ControlFunction = KEEP_DLG_OPEN
 
-      Case "ButtonReset"
+      Case "PshBtn_Reset"
 
 ' The "Reset" button clears everything and restores the appearance of the dialog box to
 ' its state when first invoked.
 
-        DlgEnable  "ButtonGoRange",                DISABLED
-        DlgText    "CutterDisplay",                FirstCutter$
-        DlgText    "InputBox1",                    ""
-        DlgText    "InputBox2",                    ""
-        DlgValue   "OptionGroupCutterFormat",      ALPHANUMERIC
-        DlgValue   "OptionGroupRanges",            DUMMY_BUTTON
-        DlgVisible "WarningArea",                  INVISIBLE
-        DlgFocus   "ButtonAdd"
+        DlgEnable  "PshBtn_GoRange",          DISABLED
+        DlgValue   "ChkBox_Translate",        UNCHECKED
+        DlgVisible "ChkBox_Translate",        INVISIBLE
+        DlgText    "CutterDisplay",           FirstCutter$
+        DlgText    "TxtBox_Input1",           ""
+        DlgText    "TxtBox_Input2",           ""
+        DlgValue   "OptionGroupCutterFormat", ALPHANUMERIC
+        DlgValue   "OptionGroupRanges",       DUMMY_BUTTON
+        DlgVisible "TranslateCutter",         INVISIBLE
+        DlgVisible "WarningArea",             INVISIBLE
+        DlgFocus   "PshBtn_Add"
+        DlgVisible "ChkBox_Translate",        INVISIBLE
+        DlgVisible "TranslateCutter",         INVISIBLE
 
         Dialog2ControlFunction = KEEP_DLG_OPEN
 
-      Case "ButtonHelp"
+      Case "PshBtn_Help"
 
 ' The help dialog box is chiefly for guidance on input of a range.
 
@@ -2602,6 +2729,52 @@ Select Case Action%
 
         Dialog2ControlFunction = KEEP_DLG_OPEN
 
+      Case "PshBtn_Translate"
+
+' To add digits to the Cutter to indicate a translation. Only the languages that appear
+' in LC's "Translation Table" are included. However, a text box is provided for adding a
+' user-supplied translation Cutter.
+
+        Begin Dialog Dialog3Definition  298, 172, WaltsMacros$, .Dialog3ControlFunction
+          OkButton      176, 148,  52,  14
+          CancelButton  236, 148,  52,  14
+          PushButton     10, 148,  52,  14, "&Clear",                               .PshBtn_Clear
+          ListBox        10,   8, 128, 128, LangList(),                             .LstBox_Langs
+          CheckBox       10, 128,  12,  12, "",                                     .ChkBox_TrCutter
+          TextBox        24, 128,  32,  12,                                         .TxtBox_TrCutter
+          Text          144,   8, 144, 112, Instructions$
+          Text           60, 129, 110,   8, "Add digits for translation to Cutter?"
+        End Dialog
+
+        Dim Dialog3 As Dialog3Definition
+        On Error Resume Next
+        If Dialog( Dialog3 ) Then
+            If Dialog3.ChkBox_TrCutter = CHECKED Then
+                LanguageCutter$ = TrCutter$
+                DlgText    "CutterDisplay",           Cutter$ & LanguageCutter$
+                DlgVisible "ChkBox_Translate",        VISIBLE
+                DlgValue   "ChkBox_Translate",        CHECKED
+                DlgVisible "TranslateCutter",         VISIBLE
+                DlgText    "TranslateCutter",         DOUBLE_QUOTE & LanguageCutter$ & DOUBLE_QUOTE & " to Cutter"
+            End If
+          Else
+            DlgText    "CutterDisplay",           Cutter$
+            DlgValue   "ChkBox_Translate",        UNCHECKED
+            DlgVisible "ChkBox_Translate",        INVISIBLE
+            DlgVisible "TranslateCutter",         INVISIBLE
+        End If
+        DlgFocus   "PshBtn_Add"
+
+        Dialog2ControlFunction = KEEP_DLG_OPEN
+
+      Case "ChkBox_Translate"
+
+        If DlgValue( "ChkBox_Translate" ) = CHECKED Then
+            DlgText    "CutterDisplay",           Cutter$ & LanguageCutter$
+          Else
+            DlgText    "CutterDisplay",           Cutter$
+        End If
+
     End Select
 
 
@@ -2611,29 +2784,29 @@ Select Case Action%
 ' of numbers is to be the input value.
 
     ControlWithFocus$ = Id$
-    If ControlWithFocus$ = "InputBox1" Or ControlWithFocus$ = "InputBox2" Then
+    If ControlWithFocus$ = "TxtBox_Input1" Or ControlWithFocus$ = "TxtBox_Input2" Then
         RangeCalc = TRUE
-        DlgValue   "OptionGroupRanges",            1
-        DlgValue   "OptionGroupCutterFormat",      NUMBERS_ONLY
+        DlgValue   "OptionGroupRanges",       1
+        DlgValue   "OptionGroupCutterFormat", NUMBERS_ONLY
     End If
 
 
   Case IDLE_STATE
 
 ' Monitor the input boxes as they are being filled for valid input: Numbers only,
-' excluding zeros, a length of at most four characters, and proper relationship (the left
+' excluding zeros; a length of at most four characters; and proper relationship (the left
 ' input box being a number lower than the right input box, after temporary modification--
 ' a range of "5" to "5" is valid because the macro will modify the input, effectively
-' changing the range to be "5000" to "5999").
+' changing it to be "5000" to "5999").
 
     If RangeCalc Then
 
         CurrentTextBox$ = ControlWithFocus$
-        If ControlWithFocus$ = "InputBox1" Then
-            OtherTextBox$   = "InputBox2"
+        If ControlWithFocus$ = "TxtBox_Input1" Then
+            OtherTextBox$   = "TxtBox_Input2"
           Else
-            CurrentTextBox$ = "InputBox2"
-            OtherTextBox$   = "InputBox1"
+            CurrentTextBox$ = "TxtBox_Input2"
+            OtherTextBox$   = "TxtBox_Input1"
         End If
         CurrentInput$ = DlgText( CurrentTextBox$ )
         OtherInput$   = DlgText( OtherTextBox$ )
@@ -2647,7 +2820,7 @@ Select Case Action%
             WhatIsTheProblem% = STARTS_WITH_ZERO
           ElseIf CurrentInput$ Like "[!0-9]" Then
             WhatIsTheProblem% = NON_DIGITS
-          ElseIf Len( CurrentInput$ ) > 4 Then
+          ElseIf LengthOfCurrentInput% > 4 Then
             WhatIsTheProblem% = TOO_LONG
         End If
         If WhatIsTheProblem% <> NO_PROBLEM Then
@@ -2655,18 +2828,20 @@ Select Case Action%
             Select Case WhatIsTheProblem%
 
               Case STARTS_WITH_ZERO, NON_DIGITS
+
                 If WhatIsTheProblem% = STARTS_WITH_ZERO Then
                     InputWarningMessage$ = "    A range must not start or end with zero!"
                   Else
                     InputWarningMessage$ = "    Please enter only digits!"
                 End If
-                DlgText    CurrentTextBox,                 ""
+                DlgText    "CurrentTextBox",          ""
 
               Case TOO_LONG
+
                 InputWarningMessage$  = "    Please enter no more than 4 digits!"
                 If CurrentInput$ <> PreviousInput$ Then
                     CurrentInput$ = PreviousInput$
-                    DlgText    CurrentTextBox,                 CurrentInput$
+                    DlgText    "CurrentTextBox",          CurrentInput$
                 End If
 
             End Select
@@ -2674,13 +2849,13 @@ Select Case Action%
           Else
 
             If CurrentInput$ <> "" And OtherInput$ <> "" Then
-                If ControlWithFocus$ = "InputBox1" Then
-                    CheckCurrentInput$   = CurrentInput$ & String$( 4 - Len( CurrentInput$ ), "0" )
+                If ControlWithFocus$ = "TxtBox_Input1" Then
+                    CheckCurrentInput$   = CurrentInput$ & String$( 4 - LengthOfCurrentInput%, "0" )
                     CheckOtherInput$     = OtherInput$ & String$( 4 - Len( OtherInput$ ), "9" )
                     Lower%               = Val( CheckCurrentInput$ )
                     Upper%               = Val( CheckOtherInput$ )
                  Else
-                    CheckCurrentInput$   = CurrentInput$ & String$( 4 - Len( CurrentInput$ ), "9" )
+                    CheckCurrentInput$   = CurrentInput$ & String$( 4 - LengthOfCurrentInput%, "9" )
                     CheckOtherInput$     = OtherInput$ & String$( 4 - Len( OtherInput$ ), "0" )
                     Lower%               = Val( CheckOtherInput$ )
                     Upper%               = Val( CheckCurrentInput$ )
@@ -2701,32 +2876,32 @@ Select Case Action%
         PreviousInput$ = CurrentInput$
 
         If WhatIsTheProblem% = NO_PROBLEM Then
-            DlgEnable  "ButtonGoRange",                ENABLED
+            DlgEnable  "PshBtn_GoRange",          ENABLED
             FitIntoRange = TRUE
             If DlgVisible( "WarningArea" ) Then
-                DlgVisible "WarningArea",                  INVISIBLE
+                DlgVisible "WarningArea",             INVISIBLE
             End If
-            If DlgVisible( "OptionPZSeparateWorks" ) = INVISIBLE Then
-                DlgVisible "OptionPZSeparateWorks",        VISIBLE
+            If DlgVisible( "OptBtn_PZSeparateWorks" ) = INVISIBLE Then
+                DlgVisible "OptBtn_PZSeparateWorks",  VISIBLE
             End If
-            If DlgVisible( "OptionPZBiogCriticism" ) = INVISIBLE Then
-                DlgVisible "OptionPZBiogCriticism",        VISIBLE
+            If DlgVisible( "OptBtn_PZBiogCriticism" ) = INVISIBLE Then
+                DlgVisible "OptBtn_PZBiogCriticism",  VISIBLE
             End If
           Else
-            DlgEnable  "ButtonGoRange",                DISABLED
+            DlgEnable  "PshBtn_GoRange",          DISABLED
             FitIntoRange = FALSE
         End If
 
         If InputWarningMessage$ <> PreviousInputWarningMessage$ Then
             If InputWarningMessage$ = "" Then
-                DlgVisible "WarningArea",                  INVISIBLE
-                DlgVisible "OptionPZSeparateWorks",        VISIBLE
-                DlgVisible "OptionPZBiogCriticism",        VISIBLE
+                DlgVisible "WarningArea",             INVISIBLE
+                DlgVisible "OptBtn_PZSeparateWorks",  VISIBLE
+                DlgVisible "OptBtn_PZBiogCriticism",  VISIBLE
               Else
-                DlgVisible "WarningArea",                  VISIBLE
-                DlgText    "WarningArea",                  InputWarningMessage$
-                DlgVisible "OptionPZSeparateWorks",        INVISIBLE
-                DlgVisible "OptionPZBiogCriticism",        INVISIBLE
+                DlgVisible "WarningArea",             VISIBLE
+                DlgText    "WarningArea",             InputWarningMessage$
+                DlgVisible "OptBtn_PZSeparateWorks",  INVISIBLE
+                DlgVisible "OptBtn_PZBiogCriticism",  INVISIBLE
             End If
             PreviousInputWarningMessage$ = InputWarningMessage$
         End If
@@ -2739,4 +2914,68 @@ Select Case Action%
 End Select
 
 End Function
-'2743117665
+
+'****************************************************************************************
+
+Function Dialog3ControlFunction( Id$, Action%, SVal& )
+
+' When the dialog box opens, the listbox value is -1, meaning no language in the array is
+' selected.
+
+Dim Selection%
+
+Dim i As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgValue   "LstBox_Langs",            InitialTrSelection%
+    If TrCutter$ <> "" Then
+        DlgText    "TxtBox_TrCutter",         TrCutter$
+        DlgValue   "ChkBox_TrCutter",         CHECKED
+        DlgFocus   "OK"
+      Else
+        DlgFocus   "TxtBox_TrCutter"
+    End If
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "LstBox_Langs"
+
+        Selection% = DlgValue( "LstBox_Langs" )
+        TrCutter$  = Trim$( Right$( LangList( Selection% ), 5 ) )
+        DlgText    "TxtBox_TrCutter",         TrCutter$
+
+      Case "PshBtn_Clear"
+
+        DlgText    "TxtBox_TrCutter",         ""
+        DlgValue   "ChkBox_TrCutter",         UNCHECKED
+        DlgValue   "LstBox_Langs",            NO_SELECTION
+        DlgEnable  "OK",                      DISABLED
+        Dialog3ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+
+  Case IDLE_STATE
+
+    If Trim$( DlgText( "TxtBox_TrCutter" ) ) = "" Then
+        If DlgEnable( "OK" ) Then
+            DlgEnable  "OK",                      DISABLED
+        End If
+      Else
+        If DlgEnable( "OK" ) = DISABLED Then
+            DlgEnable  "OK",                      ENABLED
+            TrCutter$ = Trim$( DlgText( "TxtBox_TrCutter" ) )
+        End If
+    End If
+    Dialog3ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'2982127964

@@ -1,29 +1,41 @@
-'MacroName:DimensionX.2024.01
-'MacroDescription:Inserts the multiplication or dimension sign "×" at the cursor
+' MacroName:DimensionX.2025.01
+' MacroDescription:Inserts the multiplication or dimension sign "Ã—" at the cursor
 ' position, or changes the letter "x" used to indicate dimensions to the actual
-' dimension sign "×".
+' dimension sign "Ã—".
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 11 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
 '
-'x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—
 ' How it works: Run the macro in a bibliographic record to insert the multiplication or
-' dimension sign "×" (ASCII 215, or Unicode U+00D7) at the cursor position. If the cursor
+' dimension sign "Ã—" (ASCII 215, or Unicode U+00D7) at the cursor position. If the cursor
 ' is placed next to a lowercase letter "x" that indicates dimensions--that is, that is
 ' surrounded by digits, rather than letters or other characters--the macro replaces the
 ' letter with the dimension sign. In that case, the macro will also replace any other
 ' letter "x" in that field that is also serving to indicate dimensions.
-'x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×x×
+'xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—xÃ—
 
 Option Explicit
 
@@ -211,4 +223,4 @@ If CS.GetField( "...", Row%, FieldData$ ) Then
 End If
 
 End Sub
-'2157842
+'2278812

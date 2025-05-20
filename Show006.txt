@@ -1,20 +1,32 @@
-'MacroName:Show006.2024.01
-'MacroDescription:Displays in user-friendly form existing 006 fields in a bibliographic
+' MacroName:Show006.2025.01
+' MacroDescription:Displays in user-friendly form existing 006 fields in a bibliographic
 ' record for confirmation or editing, and helps in adding new 006 fields for all types of
 ' material.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 9 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record to view the contents of an 006
@@ -76,14 +88,14 @@ Declare Function Sort        ( InString$ ) As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Global Const ADD                As Integer = 1   'The value to add a new 006 field.
-Global Const DISABLED           As Integer = 0   'The value to make a dialog box control disabled.
-Global Const ENABLED            As Integer = 1   'The value to make a dialog box control enabled.
-Global Const INVISIBLE          As Integer = 0   'The value to make a dialog box control invisible.
-Global Const LENGTH_006_FIELD   As Integer = 17  'The length in bytes of the data portion of the 006 field.
-Global Const LEVEL_2_FORM_COUNT As Integer = 15  'The count of the Level II forms of material in the MARC 21 bibliographic format.
-Global Const REPLACE            As Integer = 0   'The value to replace an existing 006 field.
-Global Const VISIBLE            As Integer = 1   'The value to make a dialog box control visible.
+Global Const ADD                         As Integer = 1
+Global Const DISABLED                    As Integer = 0
+Global Const ENABLED                     As Integer = 1
+Global Const INVISIBLE                   As Integer = 0
+Global Const LENGTH_006_FIELD            As Integer = 17
+Global Const LEVEL_2_FORM_COUNT          As Integer = 15
+Global Const REPLACE                     As Integer = 0
+Global Const VISIBLE                     As Integer = 1
 
 ' The 15 Level II forms of material, corresponding to the "Type of record" element in a
 ' bibliographic record. Because whichever of these codes matches the fixed field element
@@ -146,14 +158,15 @@ Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
-Const CRITICAL_MESSAGE         As Integer = 16  'The value to display a "Critical message" (which includes the red button with
-                                                ' a big "X") in a message box; used to report the macro quitting.
-Const DIALOG_BUTTON_CANCEL     As Integer = 102 'The value returned by the dialog function when the "Cancel" button is clicked.
-Const DISPLAY_FF_AT_TOP        As Integer = 1   'The value to display the fixed field at the top of a record.
-Const INFORMATION_MESSAGE      As Integer = 64  'The value to display the "Information message" icon in a message box.
-Const MSGBOX_RETURN_YES        As Integer = 6   'The value returned by a message box when the "Yes" button is clicked.
-Const MSGBOX_SETBUTTONS_YES_NO As Integer = 4   'The value to set two buttons, "OK" and "Cancel," in a message box.
-Const WARNING_QUERY            As Integer = 32  'The value to display the "Warning query" icon in a message box.
+Const CRITICAL_MESSAGE         As Integer = 16
+Const DIALOG_BUTTON_CANCEL     As Integer = 102
+Const DISPLAY_FF_AT_TOP        As Integer = 1
+Const INFORMATION_MESSAGE      As Integer = 64
+Const MSGBOX_RETURN_YES        As Integer = 6
+Const MSGBOX_SETBUTTONS_YES_NO As Integer = 4
+Const WARNING_QUERY            As Integer = 32
+
+Dim FILL_CHAR As String*1    : FILL_CHAR      = Chr$( 252 )
 
 Dim CharT$
 Dim FFType$
@@ -164,8 +177,6 @@ Dim Row%
 Dim TypeOfWindow%
 Dim VisMatLegendA$           : VisMatLegendA$ = "Enter a time of up to 3 digits:"
 Dim VisMatLegendB$           : VisMatLegendB$ = "Or select a code from this list:"
-
-Dim FILL_CHAR As String*1    : FILL_CHAR      = Chr$( 252 )
 
 Dim ChangedFFView            : ChangedFFView  = FALSE
 
@@ -185,9 +196,9 @@ End Select
 ' If a bibliographic record is displayed, continue by setting some variables and filling
 ' arrays.
 
+DOUBLE_QUOTE     = Chr$( 034 )
 Index006%        = 1
 New006           = FALSE
-DOUBLE_QUOTE            = Chr$( 034 )
 ValidLitText1    = TRUE
 ValidRunningTime = TRUE
 
@@ -2623,12 +2634,15 @@ DlgVisible      "DropListBox12",    VISIBLE
 DlgText         "Position12",       "/13, Literary text for sound recordings"
 DlgVisible      "Position12",       VISIBLE
 If New006 = FALSE Then Code$ = Mid$( CodeString, 13, 1 )
+
 Select Case Current006Type
+
   Case MUSICAL_RECORDING
     DlgListBoxArray "DropListBox12",    LTxtA()
     DlgValue        "DropListBox12",    0 'blank
     DlgEnable       "DropListBox12",    DISABLED
     DlgEnable       "Position12",       DISABLED
+
   Case NON_MUSICAL_RECORDING
     DlgListBoxArray "DropListBox12",    LTxtB()
     If New006 Then
@@ -2645,6 +2659,7 @@ Select Case Current006Type
           End If
         Next i
     End If
+
   Case NOTATED_MUSIC, MS_NOTATED_MUSIC
     DlgListBoxArray "DropListBox12",    LTxtC()
     DlgValue        "DropListBox12",    0 'n
@@ -2656,12 +2671,16 @@ DlgVisible      "DropListBox13",    VISIBLE
 DlgText         "Position13",       "/14, Literary text for sound recordings"
 DlgVisible      "Position13",       VISIBLE
 If New006 = FALSE Then Code$ = Mid$( CodeString, 14, 1 )
+
 Select Case Current006Type
+
   Case MUSICAL_RECORDING
+
     DlgListBoxArray "DropListBox13",    LTxtA()
     DlgValue        "DropListBox13",    0 'blank
     DlgEnable       "DropListBox13",    DISABLED
     DlgEnable       "Position13",       DISABLED
+
   Case NON_MUSICAL_RECORDING
     DlgListBoxArray "DropListBox13",    LTxtB()
     If New006 Then
@@ -2678,6 +2697,7 @@ Select Case Current006Type
           End If
         Next i
     End If
+
   Case NOTATED_MUSIC, MS_NOTATED_MUSIC
     DlgListBoxArray "DropListBox13",    LTxtC()
     DlgValue        "DropListBox13",    1 'blank
@@ -2887,7 +2907,9 @@ DlgVisible      "DropListBox6",     VISIBLE
 DlgText         "Position6",        "/16, Type of visual material"
 DlgVisible      "Position6",        VISIBLE
 If New006 = FALSE Then Code$ = Mid$( CodeString, 16, 1 )
+
 Select Case Current006Type
+
   Case PROJECTED_MEDIUM
     DlgListBoxArray "DropListBox6",     TMatG()
     If New006 Then
@@ -2904,6 +2926,7 @@ Select Case Current006Type
           End If
         Next i
     End If
+
   Case NONPROJ_GRAPHIC_2D
     DlgListBoxArray "DropListBox6",     TMatK()
     If New006 Then
@@ -2920,6 +2943,7 @@ Select Case Current006Type
           End If
         Next i
     End If
+
   Case KIT
     DlgListBoxArray "DropListBox6",     TMatO()
     If New006 Then
@@ -2936,6 +2960,7 @@ Select Case Current006Type
           End If
         Next i
     End If
+
   Case ARTIFACT_OBJECT_3D
     DlgListBoxArray "DropListBox6",     TMatR()
     If New006 Then
@@ -3109,9 +3134,9 @@ Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
 ' This is the function that controls the dialog box.
 
-Const CONTROL_CHANGE As Integer = 2   'The value of the dialog box function parameter "Action%" when a control changes.
-Const INITIALIZE     As Integer = 1   'The value of the dialog function parameter "Action%" when the dialog box opens.
-Const KEEP_DLG_OPEN  As Integer = -1  'The value of the dialog function to keep a dialog box open.
+Const CONTROL_CHANGE As Integer = 2
+Const INITIALIZE     As Integer = 1
+Const KEEP_DLG_OPEN  As Integer = -1
 
 Dim Count006String$
 Dim Selection%
@@ -3173,6 +3198,7 @@ Select Case Action%
         DlgValue        "FormDropListBox",  Index006% - 1
         SetupDialogBox( Current006Type )
     End If
+
 
   Case CONTROL_CHANGE
 
@@ -3251,4 +3277,4 @@ Select Case Action%
 End Select
 
 End Function
-'3255112270
+'3281111962

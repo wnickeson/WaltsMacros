@@ -1,20 +1,32 @@
-'MacroName:RDAHelper(PrintedMaterial).2024.03
-'MacroDescription:Makes changes to a bibliographic record for printed material (resources
+' MacroName:RDAHelper(PrintedMaterial).2025.01
+' MacroDescription:Makes changes to a bibliographic record for printed material (resources
 ' whose carrier type is "volume" or "sheet"--including books, maps, music scores,
 ' posters, etc.), to help convert it to RDA (ISBD) form.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 12 April 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************#
 ' How it works: Run the macro in an English language bibliographic record for printed
@@ -63,7 +75,7 @@
 '    - converting copyright date to supplied (i.e., bracketed) publication date and
 '      moving copyright date, if different, to 264 #4. >>>>>OPTION: Choose to always move
 '      the copyright date to 264 #4 by changing the value of the variable
-'      "AlwaysShowCopyright%" on line 192 below
+'      "AlwaysShowCopyright%" on line 204 below
 '    - converting dates recorded as decades or centuries, whether certain or probable, to
 '      "between" ranges (e.g., "[191-]" becomes "[between 1910 and 1919?]")
 '    - converting a "ca." date to a probable date (e.g., "[ca. 1970]" becomes "[1970?]")
@@ -3142,4 +3154,4 @@ If Action% = 1 Then
 End If
 
 End Function
-'3146114688
+'3158115570

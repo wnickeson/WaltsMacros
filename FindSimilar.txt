@@ -1,0 +1,2450 @@
+' MacroName:FindSimilar.2025.69
+' MacroDescription:Simplified, guided keyword search for other manifestations of the work
+' described in the displayed bibliographic record.
+'
+' This macro was written by Walter F. Nickeson and last updated 7 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run this macro while viewing a bibliographic record to quickly find
+' similar records. (The cursor position is irrelevant.) The macro shows the displayed
+' record's authorized access point--that is, the preferred title, and creator if present
+' (the 245 and 1XX fields)--as a basis for a WorldCat search. Other information drawn
+' from the displayed record can be added, and edited, to qualify or filter the results of
+' the search. This macro is useful to help find other records for the manifestation than
+' the one displayed; to verify that the record displayed is really the best choice of
+' those available; to help find the same work in a different manifestation or expression;
+' or to create a set of possibly duplicate records, some of which may contain unique
+' information that can be used in the record being worked on. (When this macro finds
+' duplicate records, my macro "DupRecsReportHelper" can help you report them to OCLC.)
+'
+' To find all records for the work, in any expression, leave all the checkboxes on the
+' left side of the macro (that include manifestation information) unchecked, and select
+' "Any" as the value in the first drop-down box on the right side (which includes format
+' information). That will cause the macro to search only on the authorized access point,
+' without any limitations. Of course, the end result may be too many records to display.
+'
+' Dialog boxes in macros use the ISO/IEC 8859-1 character set--essentially, the
+' characters available on a standard U.S. keyboard--so macros can only show, and search
+' with, information from records in Latin script, and only a subset of those Latin
+' characters at that. If the record contains characters that the macro can't display or
+' search with, it will fail. Instructions for searching for non-Latin records in the
+' Client are at <https://help.oclc.org/Metadata_Services/Connexion/Connexion_client/
+' International_cataloging/Work_with_international_records/00Search_non_Latin_records>.
+'
+' This macro is a simplified version of my more powerful and flexible macro
+' "KeywordSearchHelper," which also can use the elements of a displayed record as the
+' basis for a search. This simplification means that Worldcat searches are word only
+' (although the title may be searched by phrase); that Boolean operators aren't allowed
+' (see below); that not all possible searches are offered with the checkboxes and drop-
+' down lists in the dialog box; and that only a few fields are searched. For example, the
+' only title that can be searched is in field 245 (except if a 130 field is present), and
+' although seven of that field's subfields are indexed, this macro searches only for
+' information found in the displayed record's subfields $a and $b. Similarly, only the
+' first place of publication and first publisher found in the first 26X field are
+' included when the macro opens. However, all the text boxes that show information taken
+' from the displayed record can be edited, to make the search more or less precise. This
+' may be most important in searching for a publisher, as in older records transcription
+' rules allowed for shortened forms and abbreviations that in a search may hide some
+' matches. The macro initially shows all the information in the first subfield $a of the
+' 26X field, leaving it up to you delete or expand terms such as "Co.", "Bros.", "GmbH,"
+' etc.
+'
+' The Boolean operators "and", "not", and "or" are treated as searchable words, and
+' parentheses, which ordinarily are used to group or nest search terms, are ignored. The
+' words "with", "w", "near", and "n" are also treated as searchable words, not as
+' proximity operators. All words, and all search elements, are joined by an implicit
+' "and"; the simplest way to broaden a search is to omit words or de-select checkboxes
+' and select "Any" in the drop-down lists.
+'
+' Some kinds of contractions, indicated by the presence of an apostrophe, will be
+' problematic. As OCLC states, "Words preceded by single letter c, d, j, l, m, n, s, or t
+' and an apostrophe are not yet normalized in the system," which means that to search for
+' the French title L'etranger you might have to search both "etranger" and "letranger" to
+' find all titles. However, as noted above, this macro can't handle the search string
+' "etranger OR letranger".
+'
+' When entering dates to search, use a hyphen as might be expected, e.g. "2014-" for the
+' years 2014 and later, or "-2001" for all years preceding 2002. Use a question mark to
+' denote a possible decade or century, e.g. "194?" for the years 1940 to 1949. Use the
+' digit "0" for unknown dates, e.g. "1940" for "194u", or "0000" if no date is available.
+' The macro makes these substitutions automatically when drawing information from the
+' displayed record.
+'
+' When supplying a number for extent from the displayed record, the macro takes the first
+' string of Arabic numerals (the single number "1" is such a string) it finds in subfield
+' $a of the 300 field. If no string of Arabic numerals is found, the macro looks for the
+' first string of Roman numerals. In this text box, it is best to omit all alphabetic
+' characters, as the search string can't know that one record's "p." is the same as
+' another record's "pages", for example.
+'
+' If more information is required for a proper search, such as series, uniform titles,
+' and keywords in notes, for example, use my macro "KeywordSearchHelper."
+'
+' The logic behind all the searches this macro helps with are from OCLC's online
+' documentation for "Searching WorldCat Indexes" <https://help.oclc.org/Librarian_Toolbox/Searching_WorldCat_Indexes>.
+' That document lists what parts of the record are included in any particular search.
+' This macro may help simplify some searches by employing that logic for you.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Text
+
+Declare Sub FillArray1
+Declare Sub FillArray2
+Declare Sub SetupDialogBox( FormatSelection% )
+
+Declare Function CopyField()                 As String
+Declare Function MakeSearchable( InString$ ) As String
+Declare Function ProcessImprint( InString$ ) As String
+Declare Function QuoteOperators( InString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+Declare Function Dialog3ControlFunction( Id$, Action%, SVal& )
+
+Global CS As Object
+
+Global Const CHECKED          As Integer = 1
+Global Const INITIALIZE       As Integer = 1
+
+Global Const DISP             As Integer = 1
+Global Const SRCH             As Integer = 2
+Global Const UB_CHARARRAY     As Integer = 436
+Global Const UNIDEC           As Integer = 0
+
+Global Const NOT_THIS_FORMAT  As Integer = 1
+Global Const ONLY_THIS_FORMAT As Integer = 2
+
+Global DOUBLE_QUOTE           As String*1
+Global SINGLE_QUOTE           As String*1
+
+Global AAPSegment$
+Global BibInfoSegment$
+Global BibQualitiesSegment$
+Global ClipboardFailure$
+Global Extent$
+Global FFCtry$
+Global FFDate$
+Global FormatSegment$
+Global NameHeading$
+Global OriginalBrailleValue%
+Global OriginalElectronicValue%
+Global OriginalFormOfItemValue%
+Global OriginalLargePrintValue%
+Global OriginalMicroformValue%
+Global OriginalPrimaryFormatValue%
+Global PubName$
+Global PubPlace$
+Global TitleSubfA$
+Global TitleSubfB$
+Global WaltsMacros$
+
+Global CatLangEng
+
+Global ComputerForms  ( 10 ) As String
+Global ContingResForms( 8 )  As String
+Global Electronic     ( 4 )  As String
+Global MapsForms      ( 3 )  As String
+Global NonProjForms   ( 8 )  As String
+Global ProjForms      ( 12 ) As String
+Global RealiaForms    ( 9 )  As String
+Global SelectAll      ( 2 )  As String
+Global SingleForm     ( 0 )  As String
+Global SoundRecForms  ( 7 )  As String
+
+Global CharArray      ( 2, UB_CHARARRAY ) As String
+
+'----------------------------------------------------------------------------------------
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal uFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal lpString As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal hMem As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal hMem As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal HWND As Long ) As Long
+
+'****************************************************************************************
+
+Sub Main
+
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Extent$                  = ""
+FFCtry$                  = ""
+FFDate$                  = ""
+NameHeading$             = ""
+OriginalFormOfItemValue% = 0
+PubName$                 = ""
+PubPlace$                = ""
+TitleSubfA$              = ""
+TitleSubfB$              = ""
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DISPLAY_FF_AT_TOP    As Integer = 1
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const INFORMATION_MESSAGE  As Integer = 64
+
+Const PHRASE               As Integer = 1
+Const DIRECT_FORMAT        As Integer = 4
+Const ONLINE_FORMAT        As Integer = 3
+
+Dim DELIMITER As String*1    : DELIMITER     = Chr$( 223 )
+
+Dim CharT$
+Dim CompleteSearchString$
+Dim FFBLvl$
+Dim FFCrTp$
+Dim FFFile$
+Dim FFForm$
+Dim FFSrTp$
+Dim FFTMat$
+Dim FFType$
+Dim FieldData$
+Dim FirstLetter$
+Dim FormatSearchCode$
+Dim Imprint$
+Dim Ind2$
+Dim ISBDTitlePunct$
+Dim MatTypeSearch%
+Dim MeaningOfZeroRecords$
+Dim NameSearchString$
+Dim NameTag$
+Dim PosFF%
+Dim RecordsFound&
+Dim Row%
+Dim SMD$
+Dim Speed$
+Dim Subfield$
+Dim SubfieldCode$
+Dim TempString$
+Dim TitleSearchString$
+Dim TitleSearchType%
+Dim TypeOfRecord$
+Dim TypeOfWindow%
+Dim VideoFormat$
+
+Dim ChangedFFView            : ChangedFFView = FALSE
+Dim FoundField
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer
+
+Dim AllAspects( 3 ) As String
+AllAspects( 0 )      = "As displayed record"
+AllAspects( 1 )      = "Include all"
+AllAspects( 2 )      = "Exclude all"
+AllAspects( 3 )      = "As selected"
+
+Dim AnyNoneOnly( 2 ) As String
+AnyNoneOnly( 0 )     = "Any"
+AnyNoneOnly( 1 )     = "None"
+AnyNoneOnly( 2 )     = "Only"
+
+Dim FormatCodes( 11 ) As String
+FormatCodes( 0  )    = "Any"
+FormatCodes( 1  )    = "bks"
+FormatCodes( 2  )    = "com"
+FormatCodes( 3  )    = "cnr"
+FormatCodes( 4  )    = "map"
+FormatCodes( 5  )    = "mix"
+FormatCodes( 6  )    = "rec"
+FormatCodes( 7  )    = "rec"
+FormatCodes( 8  )    = "vis"
+FormatCodes( 9  )    = "vis"
+FormatCodes( 10 )    = "vis"
+FormatCodes( 11 )    = "sco"
+
+Dim PrimaryFormats( 11 ) As String
+PrimaryFormats( 0  ) = "Any"
+PrimaryFormats( 1  ) = "Books"
+PrimaryFormats( 2  ) = "Computer files"
+PrimaryFormats( 3  ) = "Continuing resources"
+PrimaryFormats( 4  ) = "Maps"
+PrimaryFormats( 5  ) = "Mixed materials"
+PrimaryFormats( 6  ) = "Musical sound recordings"
+PrimaryFormats( 7  ) = "Non-musical sound recordings"
+PrimaryFormats( 8  ) = "Non-projected graphics"
+PrimaryFormats( 9  ) = "Projected graphics"
+PrimaryFormats( 10 ) = "Realia, 3D objects, kits"
+PrimaryFormats( 11 ) = "Scores"
+
+Dim NotOnly( 2 ) As String
+NotOnly( 0 )         = "Yes"
+NotOnly( 1 )         = "Not"
+NotOnly( 2 )         = "Only"
+
+ComputerForms( 0  )  = "Any"
+ComputerForms( 1  )  = "Bibliographic data"
+ComputerForms( 2  )  = "Computer program"
+ComputerForms( 3  )  = "Document"
+ComputerForms( 4  )  = "Font"
+ComputerForms( 5  )  = "Game"
+ComputerForms( 6  )  = "Interactive multimedia"
+ComputerForms( 7  )  = "Numeric data"
+ComputerForms( 8  )  = "Online system or service"
+ComputerForms( 9  )  = "Representational"
+ComputerForms( 10 )  = "Sounds"
+
+ContingResForms( 0 ) = "None of the following:"
+ContingResForms( 1 ) = "Integrating resource"
+ContingResForms( 2 ) = "Monographic series"
+ContingResForms( 3 ) = "Newspaper"
+ContingResForms( 4 ) = "Periodical"
+ContingResForms( 5 ) = "Serial"
+ContingResForms( 6 ) = "Updating database"
+ContingResForms( 7 ) = "Updating loose-leaf"
+ContingResForms( 8 ) = "Updating website"
+
+Electronic( 0 )      = "Any"
+Electronic( 1 )      = "None"
+Electronic( 2 )      = "Only"
+Electronic( 3 )      = "Online"
+Electronic( 4 )      = "Direct"
+
+MapsForms( 0 )       = "Any"
+MapsForms( 1 )       = "Atlas"
+MapsForms( 2 )       = "Globe"
+MapsForms( 3 )       = "Single map"
+
+NonProjForms( 0 )    = "Any"
+NonProjForms( 1 )    = "Art original"
+NonProjForms( 2 )    = "Art reproduction"
+NonProjForms( 3 )    = "Chart"
+NonProjForms( 4 )    = "Flash card"
+NonProjForms( 5 )    = "Graphic"
+NonProjForms( 6 )    = "Photograph"
+NonProjForms( 7 )    = "Picture"
+NonProjForms( 8 )    = "Technical drawing"
+
+ProjForms( 0  )      = "Any"
+ProjForms( 1  )      = "Beta (videocassette)"
+ProjForms( 2  )      = "Blu-ray disc"
+ProjForms( 3  )      = "DVD video"
+ProjForms( 4  )      = "Filmstrip"
+ProjForms( 5  )      = "Motion picture"
+ProjForms( 6  )      = "Slide"
+ProjForms( 7  )      = "Transparency"
+ProjForms( 8  )      = "U-matic (videocassette)"
+ProjForms( 9  )      = "VHS (videocassette)"
+ProjForms( 10 )      = "Videocassette"
+ProjForms( 11 )      = "Videodisc"
+ProjForms( 12 )      = "Videorecording"
+
+RealiaForms( 0 )     = "Any"
+RealiaForms( 1 )     = "Art original"
+RealiaForms( 2 )     = "Art reproduction"
+RealiaForms( 3 )     = "Diorama"
+RealiaForms( 4 )     = "Game"
+RealiaForms( 5 )     = "Kit"
+RealiaForms( 6 )     = "Microscope slide"
+RealiaForms( 7 )     = "Model"
+RealiaForms( 8 )     = "Realia"
+RealiaForms( 9 )     = "Toy"
+
+SelectAll( 0 )       = ""
+SelectAll( 1 )       = "all of"
+SelectAll( 2 )       = "none of"
+
+SingleForm( 0 )      = "Any"
+
+SoundRecForms( 0 )   = "Any"
+SoundRecForms( 1 )   = "CD audio"
+SoundRecForms( 2 )   = "Cylinder"
+SoundRecForms( 3 )   = "LP"
+SoundRecForms( 4 )   = "Roll"
+SoundRecForms( 5 )   = "Sound cassette"
+SoundRecForms( 6 )   = "Sound-tape reel"
+SoundRecForms( 7 )   = "Wire recording"
+
+DOUBLE_QUOTE          = Chr$( 034 )
+SINGLE_QUOTE          = Chr$( 039 )
+WaltsMacros$          = "[Walt's macros] Essentials:FindSimilar"
+
+MeaningOfZeroRecords$ = "The system reports no records found for this search string (which has been placed on the Windows"
+MeaningOfZeroRecords$ = MeaningOfZeroRecords$ & " Clipboard). This may actually mean instead that too many records were"
+MeaningOfZeroRecords$ = MeaningOfZeroRecords$ & " found. To review the search string, and modify it for a new search, click "
+MeaningOfZeroRecords$ = MeaningOfZeroRecords$ & DOUBLE_QUOTE & "Continue." & DOUBLE_QUOTE & " Otherwise, click " & DOUBLE_QUOTE
+MeaningOfZeroRecords$ = MeaningOfZeroRecords$ & "Cancel" & DOUBLE_QUOTE & " to end the macro."
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then fill the arrays.
+
+FillArray1
+FillArray2
+
+' Go through the displayed record, retrieving information for each of the fields used in
+' the text boxes. However, get the dates of the record from the fixed field, to avoid
+' having to extract numbers from other text in the 26X field.
+
+Row% = 1
+Do
+  FoundField = CS.GetFieldLineUnicode( Row%, FieldData$ )
+  If FoundField Then
+
+      Select Case Val( Left$( FieldData$, 3 ) )
+
+        Case 100 To 111, 130
+
+          TempString$ = ""
+          If CS.GetFieldLine( Row%, FieldData$ ) Then
+              If FieldData$ = "Data contains non-latin script" Then
+                  MsgBox "Sorry, this macro doesn't work with records containing non-Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+                Else
+                  CS.CursorRow = Row%
+                  FieldData$   = CopyField()
+                  If CopyField = "NOGO" Then
+                      MsgBox "Sorry, the record contains characters that this macro can neither display nor search.", CRITICAL_MESSAGE, WaltsMacros$
+                      Exit Sub
+                    Else
+                      If ClipboardFailure$ <> "" Then
+                          MsgBox ClipboardFailure$, CRITICAL_MESSAGE, WaltsMacros$
+                          Exit Sub
+                      End If
+                  End If
+              End If
+              NameTag$   = Left$( FieldData$, 3 )
+              FieldData$ = Mid$( FieldData$, 6 )
+              If Left$( FieldData$, 1 ) <> DELIMITER Then
+                  FieldData$ = DELIMITER & "a " & FieldData$
+              End If
+              i = 1
+              Do
+                Subfield$ = Trim$( GetField( FieldData$, i, DELIMITER ) )
+                If Subfield$ = "" Then
+                    If i > 1 Then
+                        Exit Do
+                      Else
+                        Subfield$ = " "
+                    End If
+                  Else
+                    SubfieldCode$ = Left$( Subfield$, 1 )
+                    Subfield$     = Trim$( Mid$( Subfield$, 2 ) )
+                    If NameTag$ = "100" And SubfieldCode$ Like "[abcdq]" Or _  'Not included: eu
+                       NameTag$ = "110" And SubfieldCode$ Like "[abcdn]" Or _  'e
+                       NameTag$ = "111" And SubfieldCode$ Like "[acdenq]" Or _
+                       NameTag$ = "130" And SubfieldCode$ Like "[aknoprs]" Then
+                        TempString$ = Trim$( TempString$ & " " & Trim$( Subfield$ ) )
+                    End If
+                End If
+                i = i + 1
+              Loop Until Subfield$ = ""
+              If Right$( TempString$, 1 ) Like "[,.]" Then
+                  TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+              End If
+              NameHeading$ = TempString$
+          End If
+
+        Case 245
+
+          TempString$ = ""
+          If CS.GetFieldLine( Row%, FieldData$ ) Then
+              If FieldData$ = "Data contains non-latin script" Then
+                  MsgBox "Sorry, this macro doesn't work with records containing non-Latin scripts.", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+                Else
+                  CS.CursorRow = Row%
+                  FieldData$   = CopyField()
+                  If CopyField = "NOGO" Then
+                      MsgBox "Sorry, the record contains characters that this macro can neither display nor search.", CRITICAL_MESSAGE, WaltsMacros$
+                      Exit Sub
+                    Else
+                      If ClipboardFailure$ <> "" Then
+                          MsgBox ClipboardFailure$, CRITICAL_MESSAGE, WaltsMacros$
+                          Exit Sub
+                      End If
+                  End If
+              End If
+              FieldData$   = Mid$( FieldData$, 6 + Val( Mid$( FieldData$, 5, 1 ) ) )
+              FirstLetter$ = Left$( FieldData$, 1 )
+              If FirstLetter$ Like "[a-z]" Then
+                  Mid$( FieldData$, 1, 1 ) = UCase$( FirstLetter$ )
+              End If
+              If Left$( FieldData$, 1 ) <> DELIMITER Then
+                  FieldData$ = DELIMITER & "a " & FieldData$
+              End If
+              i = 1
+              Do
+                Subfield$ = Trim$( GetField( FieldData$, i, DELIMITER ) )
+                If Subfield$ = "" Then
+                    If i > 1 Then
+                        Exit Do
+                      Else
+                        Subfield$ = " "
+                    End If
+                  Else
+                    SubfieldCode$ = Left$( Subfield$, 1 )
+                    Subfield$     = Trim$( Mid$( Subfield$, 2 ) )
+                    Select Case SubfieldCode$
+                      Case "a"
+                        TitleSubfA$ = Subfield$
+                      Case "b"
+                        TitleSubfB$ = Subfield$
+                        Exit Do
+                      Case Else
+                        ' Ignore subfields "f", "g", "k", "n", "p"
+                    End Select
+                End If
+                i = i + 1
+              Loop Until Subfield$ = ""
+              If TitleSubfB$ <> "" Then
+                  If Right$( TitleSubfB$, 1 ) Like "[.:;/]" Then
+                      TitleSubfB$ = Left$( TitleSubfB$, Len( TitleSubfB$ ) - 1 )
+                  End If
+              End If
+              ISBDTitlePunct$ = Right$( TitleSubfA$, 2 )
+              If ISBDTitlePunct$ Like " [:/]" Then
+                  TitleSubfA$ = Left$( TitleSubfA$, Len( TitleSubfA$ ) - 2 )
+                  If TitleSubfB$ <> "" Then
+                      TitleSubfB$ = ISBDTitlePunct$ & " " & TitleSubfB$
+                  End If
+              End If
+          End If
+
+        Case 260, 264
+
+          TempString$ = ""
+          If CS.GetFieldLine( Row%, FieldData$ ) Then
+              If FieldData$ = "Data contains non-latin script" Then
+                  MsgBox "The heading in the 26X field is not searchable because it contains non-Latin script. This macro works only with characters in Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+                  Exit Sub
+                Else
+                  CS.CursorRow = Row%
+                  FieldData$   = CopyField()
+                  If CopyField = "NOGO" Then
+                      MsgBox "Sorry, the record contains characters that this macro can neither display nor search.", CRITICAL_MESSAGE, WaltsMacros$
+                      Exit Sub
+                    Else
+                      If ClipboardFailure$ <> "" Then
+                          MsgBox ClipboardFailure$, CRITICAL_MESSAGE, WaltsMacros$
+                          Exit Sub
+                      End If
+                  End If
+              End If
+          End If
+          Imprint$ = Mid$( FieldData$, 6 )
+          If Left$( Imprint$, 1 ) <> DELIMITER Then
+              Imprint$ = DELIMITER & "a " & Imprint$
+          End If
+          Do
+            p = InStr( Imprint$, "[" )
+            If p > 0 Then
+                Imprint$ = Left$( Imprint$, p - 1 ) & Mid$( Imprint$, p + 1 )
+            End If
+          Loop Until p = 0
+          Do
+            p = InStr( Imprint$, "]" )
+            If p > 0 Then
+                TempString$ = Left$( Imprint$, p - 1 )
+                If Right$( TempString$, 1 ) = "?" Then
+                    TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+                End If
+                Imprint$ = TempString$ & Mid$( Imprint$, p + 1 )
+            End If
+          Loop Until p = 0
+          i = 1
+          Do
+            Subfield$     = Trim$( GetField( Imprint$, i, DELIMITER ) )
+            SubfieldCode$ = Left$( Subfield$, 2 )
+            Select Case SubfieldCode$
+              Case "a "
+                If PubPlace$ = "" Then
+                    PubPlace$ = ProcessImprint( Subfield$ )
+                End If
+              Case "b "
+                If PubName$ = "" Then
+                    PubName$ = ProcessImprint( Subfield$ )
+                End If
+            End Select
+            i = i + 1
+          Loop Until Subfield$ = "" And i > 2
+
+        Case 300
+
+          TempString$ = ""
+          If CS.GetFieldLine( Row%, FieldData$ ) Then
+          For i = 6 To Len( FieldData$ )
+            CharT$ = Mid$( FieldData$, i, 1 )
+            If CharT$ Like "[0-9]" Then
+                TempString$ = TempString$ & CharT$
+              Else
+                If TempString$ <> "" Then
+                    Exit For
+                End If
+            End If
+          Next i
+          Extent$ = TempString$
+          End If
+          Exit Do
+
+        Case 301 To 999
+
+          Exit Do
+
+      End Select
+  End If
+  Row% = Row% + 1
+Loop Until FoundField = FALSE
+
+' With the variable fields taken care of, get certain values from the fixed field.
+
+PosFF% = CS.FixedFieldPosition
+If PosFF% <> DISPLAY_FF_AT_TOP Then
+    CS.FixedFieldPosition = DISPLAY_FF_AT_TOP
+    ChangedFFView         = TRUE
+End If
+
+If CS.GetFixedField( "Dates", FFDate$ ) Then
+    If FFDate$ = "uuuu" Then
+        FFDate$ = ""
+    End If
+End If
+
+If CS.GetFixedField( "Ctry", FFCtry$ ) Then
+    If FFCtry$ = "xx" Then
+        FFCtry$ = ""
+    End If
+End If
+
+If CS.GetFixedField( "BLvl", FFBLvl$ ) Then 'Monograph vs. serial
+End If
+
+If CS.GetFixedField( "CrTp", FFCrTp$ ) Then 'Type of Cartographic Material
+End If
+
+If CS.GetFixedField( "File", FFFile$ ) Then 'Type of Computer File
+End If
+
+If CS.GetFixedField( "SrTp", FFSrTp$ ) Then 'Type of Continuing Resource
+End If
+
+If CS.GetFixedField( "TMat", FFTMat$ ) Then 'Type of Visual Material
+End If
+
+If CS.GetFixedField( "Form", FFForm$ ) Then
+    Select Case FFForm$
+
+      Case ""       'None of the following
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = NOT_THIS_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = NOT_THIS_FORMAT
+
+      Case "a"      'Microfilm
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = NOT_THIS_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = ONLY_THIS_FORMAT
+
+      Case "b"      'Microfiche
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = NOT_THIS_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = ONLY_THIS_FORMAT
+
+      Case "c"      'Microopaque
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = NOT_THIS_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = ONLY_THIS_FORMAT
+
+      Case "d"      'Large print
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = NOT_THIS_FORMAT
+        OriginalLargePrintValue% = ONLY_THIS_FORMAT
+        OriginalMicroformValue%  = NOT_THIS_FORMAT
+
+      Case "f"      'Braille
+        OriginalBrailleValue%    = ONLY_THIS_FORMAT
+        OriginalElectronicValue% = NOT_THIS_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = NOT_THIS_FORMAT
+
+      Case "o"      'Online
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = ONLINE_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = NOT_THIS_FORMAT
+
+      Case "q"      'Direct electronic
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = DIRECT_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = NOT_THIS_FORMAT
+
+      Case "r"      'Regular print reproduction
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = NOT_THIS_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = NOT_THIS_FORMAT
+
+      Case "s"      'Electronic
+        OriginalBrailleValue%    = NOT_THIS_FORMAT
+        OriginalElectronicValue% = ONLY_THIS_FORMAT
+        OriginalLargePrintValue% = NOT_THIS_FORMAT
+        OriginalMicroformValue%  = NOT_THIS_FORMAT
+
+    End Select
+  Else
+    FFForm$ = "0"
+End If
+
+' The "Type of Record" determines the basic format to search for. Combined with the
+' specific information from other fixed field elements, the default values for the drop-
+' down menus in the dialog box can be set.
+
+If CS.GetFixedField( "Type", FFType$ ) Then
+
+    Select Case FFType$
+
+      Case "a" To "f", "t"
+
+        Select Case FFType$
+
+          Case "a", "t"  'Language material (Books)
+            If FFBLvl$ Like "[acdm]" Then       'Monograph
+                TypeOfRecord$               = "bks"
+                OriginalPrimaryFormatValue% = 1
+                OriginalFormOfItemValue%    = 0
+              ElseIf FFBLvl$ Like "[bis]" Then  'Serial
+                TypeOfRecord$               = "cnr"
+                OriginalPrimaryFormatValue% = 3
+                Select Case FFSrTp$
+                  Case ""
+                    OriginalFormOfItemValue% = 0
+                  Case "d"  'Updating database
+                    OriginalFormOfItemValue% = 6
+                  Case "l"  'Updating loose-leaf
+                    OriginalFormOfItemValue% = 7
+                  Case "m"  'Monographic series
+                    OriginalFormOfItemValue% = 2
+                  Case "n"  'Newspaper
+                    OriginalFormOfItemValue% = 3
+                  Case "p"  'Periodical
+                    OriginalFormOfItemValue% = 5
+                  Case "w"  'Updating Web site
+                    OriginalFormOfItemValue% = 8
+                End Select
+            End If
+
+          Case "c", "d"  'Notated music (Scores)
+            TypeOfRecord$               = "sco"
+            OriginalPrimaryFormatValue% = 11
+            OriginalFormOfItemValue%    = 0
+
+          Case "e", "f"  'Cartographic material (Maps)
+            TypeOfRecord$               = "map"
+            OriginalPrimaryFormatValue% = 4
+            Select Case FFCrTp$
+              Case "a"  'Single map
+                OriginalFormOfItemValue% = 3
+              Case "d"  'Globe
+                OriginalFormOfItemValue% = 2
+              Case "e"  'Atlas
+                OriginalFormOfItemValue% = 1
+              Case Else
+                OriginalFormOfItemValue% = 0
+            End Select
+
+        End Select
+
+' For Visual materials, distinguish between projected graphics, non-projected graphics,
+' and realia, etc.
+
+      Case "g", "k"  'Visual Materials
+        TypeOfRecord$ = "vis"
+        Select Case FFType$
+
+' For projected graphics, look further for an 007 field for videorecordings, to identify
+' the carrier.
+
+          Case "g"  'Projected medium
+            OriginalPrimaryFormatValue% = 9
+            Select Case FFTMat$
+              Case "f"  'Filmstrip
+                OriginalFormOfItemValue% = 4
+              Case "m"  'Motion picture
+                OriginalFormOfItemValue% = 5
+              Case "s"  'Slide
+                OriginalFormOfItemValue% = 6
+              Case "t"  'Transparency
+                OriginalFormOfItemValue% = 7
+              Case "v"  'Videorecording
+                OriginalFormOfItemValue% = 12
+            End Select
+            i = 1
+            Do
+              FoundField = CS.GetField( "007", i, FieldData$ )
+              If FoundField Then
+                  If Mid$( FieldData$, 6, 1 ) = "v" Then
+                      p = InStr( FieldData$, DELIMITER & "b" )
+                      If p > 0 Then
+                          SMD$ = Trim$( Mid$( FieldData$, p + 2, 2 ) )  'Subfield $b
+                          Select Case SMD$
+                            Case "d"  'Videodisc
+                              OriginalFormOfItemValue% = 11
+                            Case "f"  'Videocassette
+                              OriginalFormOfItemValue% = 10
+                          End Select
+                      End If
+                      p = InStr( FieldData$, DELIMITER & "e" )
+                      If p > 0 Then
+                          VideoFormat$ = Trim$( Mid$( FieldData$, p + 2, 2 ) )  'Subfield $e
+                          Select Case VideoFormat$
+                            Case "a"  'Beta
+                              OriginalFormOfItemValue% = 1
+                            Case "b"  'VHS
+                              OriginalFormOfItemValue% = 9
+                            Case "c"  'U-matic
+                              OriginalFormOfItemValue% = 8
+                            Case "s"  'Blu-ray
+                              OriginalFormOfItemValue% = 2
+                            Case "v"  'DVD
+                              OriginalFormOfItemValue% = 3
+                          End Select
+                      End If
+                      Exit Do
+                    Else
+                      i = i + 1
+                  End If
+              End If
+            Loop Until FoundField = FALSE
+
+          Case "k"  'Two-dimensional nonprojected graphic
+            OriginalPrimaryFormatValue% = 8
+            Select Case FFTMat$
+              Case "a"  'Art original
+                OriginalFormOfItemValue% = 1
+              Case "c"  'Art reproduction
+                OriginalFormOfItemValue% = 2
+              Case "i"  'Picture
+                OriginalFormOfItemValue% = 7
+              Case "k"  'Graphic
+                OriginalFormOfItemValue% = 5
+              Case "l"  'Technical drawing
+                OriginalFormOfItemValue% = 8
+              Case "n"  'Chart
+                OriginalFormOfItemValue% = 3
+              Case "o"  'Flash card
+                OriginalFormOfItemValue% = 4
+            End Select
+
+' Look for an 007 field for this type of record to check for codes that indicate the
+' resource may be a photograph.
+
+            i = 1
+            Do
+              FoundField = CS.GetField( "007", i, FieldData$ )
+              If FoundField Then
+                  If Mid$( FieldData$, 6, 1 ) = "k" Then
+                      Exit Do
+                    Else
+                      i = i + 1
+                  End If
+              End If
+            Loop Until FoundField = FALSE
+            If FoundField Then
+                p = InStr( FieldData$, DELIMITER & "b" )
+                If p > 0 Then
+                    SMD$ = Trim$( Mid$( FieldData$, p + 2, 2 ) )
+                End If
+                Select Case SMD$
+                  Case "g", "h", "r", "v"  'Photographs
+                    OriginalFormOfItemValue% = 6
+                End Select
+            End If
+
+        End Select
+
+      Case "o", "r"  'Kit, Three-dimensional artifact or naturally occurring object
+        TypeOfRecord$ = "vis"
+        OriginalPrimaryFormatValue% = 10
+        If FFType$ = "o" Then  'Kit
+            OriginalPrimaryFormatValue% = 5
+          Else
+            Select Case FFTMat$
+              Case "a"  'Art original
+                OriginalPrimaryFormatValue% = 1
+              Case "c"  'Art reproduction
+                OriginalPrimaryFormatValue% = 2
+              Case "d"  'Diorama
+                OriginalPrimaryFormatValue% = 3
+              Case "g"  'Game
+                OriginalPrimaryFormatValue% = 4
+              Case "p"  'Microscope slide
+                OriginalPrimaryFormatValue% = 6
+              Case "q"  'Model
+                OriginalPrimaryFormatValue% = 7
+              Case "r"  'Realia
+                OriginalPrimaryFormatValue% = 8
+              Case "w"  'Toy
+                OriginalPrimaryFormatValue% = 9
+            End Select
+        End If
+
+      Case "i", "j"  'Sound Recordings
+        TypeOfRecord$ = "rec"
+        If FFType$ = "i" Then  'Nonmusical sound recording
+            OriginalPrimaryFormatValue% = 7
+          Else                 'Musical sound recording
+            OriginalPrimaryFormatValue% = 6
+        End If
+        i = 1
+
+' Get the first 007 field for any type of sound recording.
+
+        Do
+          FoundField = CS.GetField( "007", i, FieldData$ )
+          If Mid$( FieldData$, 6, 1 ) = "s" Then
+              Exit Do
+          End If
+          i = i + 1
+        Loop Until FoundField = FALSE
+        If FoundField Then
+            p = InStr( FieldData$, DELIMITER & "b" )
+            If p > 0 Then
+                SMD$ = Trim$( Mid$( FieldData$, p + 2, 2 ) )  'Subfield $b
+            End If
+            p = InStr( FieldData$, DELIMITER & "d" )
+            If p > 0 Then
+                Speed$ = Trim$( Mid$( FieldData$, p + 2, 2 ) )  'Subfield $d
+            End If
+            Select Case SMD$
+              Case "d"      'Sound disc
+                Select Case Speed$
+                  Case "b"  '33 1/3 rpm: LP
+                    OriginalFormOfItemValue% = 3
+                  Case "f"  '1.4 m/sec: CD
+                    OriginalFormOfItemValue% = 1
+                End Select
+              Case "e"      'Cylinder
+                OriginalFormOfItemValue% = 2
+              Case "q"      'Roll
+                OriginalFormOfItemValue% = 4
+              Case "s"      'Sound cassette
+                OriginalFormOfItemValue% = 5
+              Case "t"      'Sound-tape reel
+                OriginalFormOfItemValue% = 6
+              Case "w"      'Wire recording
+                OriginalFormOfItemValue% = 7
+              Case Else
+                OriginalFormOfItemValue% = 0
+            End Select
+        End If
+
+      Case "m"
+        TypeOfRecord$ = "com"
+        OriginalPrimaryFormatValue% = 2
+        If FFForm$ = "o" Or FFForm$ = "q" Or FFForm$ = "s" Then
+            OriginalFormOfItemValue% = 0
+        End If
+        Select Case FFFile$
+          Case "a"  'Numeric data
+            OriginalFormOfItemValue% = 7
+          Case "b"  'Computer program
+            OriginalFormOfItemValue% = 2
+          Case "c"  'Representational
+            OriginalFormOfItemValue% = 9
+          Case "d"  'Document
+            OriginalFormOfItemValue% = 3
+          Case "e"  'Bibliographic data
+            OriginalFormOfItemValue% = 1
+          Case "f"  'Font
+            OriginalFormOfItemValue% = 4
+          Case "g"  'Game
+            OriginalFormOfItemValue% = 5
+          Case "h"  'Sounds
+            OriginalFormOfItemValue% = 10
+          Case "i"  'Interactive multimedia
+            OriginalFormOfItemValue% = 6
+          Case "j"  'Online system or service
+            OriginalFormOfItemValue% = 8
+        End Select
+
+      Case "p"
+        OriginalPrimaryFormatValue% = 5
+        OriginalFormOfItemValue%    = 0
+
+    End Select
+
+End If
+
+If ChangedFFView Then CS.FixedFieldPosition = PosFF%
+
+' Get the language of cataloging of the displayed record. If it's English, the dialog box
+' check box for "English-language cataloging" will be checked by default.
+
+If CS.GetField( "040", 1, FieldData$ ) Then
+    p = InStr( FieldData$, DELIMITER & "b" )
+    If p > 0 Then
+        If InStr( Mid$( FieldData$, p, 7 ), "eng" ) Then
+            CatLangEng = TRUE
+          Else
+            CatLangEng = FALSE
+        End If
+    End If
+End If
+
+Begin Dialog Dialog1Definition  352, 260, WaltsMacros$, .Dialog1ControlFunction
+  OkButton       230, 236,  52,  14                                                            '0
+  CancelButton   290, 236,  52,  14                                                            '1
+  Text            18,  20,  32,   8, "Name:"                                                   '2
+  TextBox         42,  18, 250,  12,                                      .TxtBoxName          '3
+  Text            18,  38,  32,   8, "Title:"                                                  '4
+  TextBox         42,  36, 290,  12,                                      .TxtBoxTitle         '5
+  PushButton     300,  18,  32,  12, "Clear",                             .Clear1XXButton      '6
+  Text            42,  51,  48,   8, "Search title as:"                                        '7
+  OptionGroup                                                             .SearchOption        '8
+   OptionButton   92,  50,  36,  12, "&word",                             .OptBtnWordSearch    '9
+   OptionButton  128,  50,  36,  12, "phra&se",                           .OptBtnPhraseSearch  '10
+  CheckBox       256,  50,  72,  12, "Include subfield $&b",              .ChkBox245SubfB      '11
+  CheckBox        18,  82, 132,  12, "Select &all:",                      .ChkBoxSelectAll     '12
+  TextBox         64,  98,  42,  12,                                      .TxtBoxDate          '13
+  CheckBox        18,  98,  36,  12, "&Date(s):",                         .ChkBoxDate          '14
+  CheckBox        18, 116,  44,  12, "P&ublisher:",                       .ChkBoxPub           '15
+  TextBox         64, 116,  98,  12,                                      .TxtBoxPub           '16
+  CheckBox        18, 134,  32,  12, "&Place:",                           .ChkBoxPlace         '17
+  TextBox         64, 134,  98,  12,                                      .TxtBoxPlace         '18
+  CheckBox        18, 152,  28,  12, "&Ctry:",                            .ChkBoxCtry          '19
+  TextBox         64, 152,  24,  12,                                      .TxtBoxCtry          '20
+  CheckBox       100, 152,  36,  12, "E&xtent:",                          .ChkBoxExtent        '21
+  TextBox        138, 152,  24,  12,                                      .TxtBoxExtent        '22
+  DropListBox    188,  82, 144, 112, PrimaryFormats(),                    .DrpLstBoxFormats    '23
+  Text           188, 102,  44,   8, "F&orm of item:"                                          '24
+  DropListBox    234, 100,  98, 120, "",                                  .DrpLstBoxFormOfItem '25
+  DropListBox    214, 128,  94,  48, AllAspects(),                        .DrpLstBoxAllAspects '26
+  Text           218, 148,  34,   8, "&Electronic:"                                            '27
+  DropListBox    260, 146,  44,  56, Electronic(),                        .DrpLstBoxElectronic '28
+  Text           218, 166,  34,   8, "&Microform:"                                             '29
+  DropListBox    260, 164,  44,  48, AnyNoneOnly(),                       .DrpLstBoxMicroforms '30
+  Text           218, 184,  34,   8, "B&raille:"                                               '31
+  DropListBox    260, 182,  44,  48, AnyNoneOnly(),                       .DrpLstBoxBraille    '32
+  Text           218, 202,  34,   8, "Large pri&nt:"                                           '33
+  DropListBox    260, 200,  44,  48, NotOnly(),                           .DrpLstBoxLargePrint '34
+  CheckBox        18, 190, 104,  12, "En&glish-language cataloging",      .ChkBoxLang          '35
+  CheckBox        18, 206,  28,  12, "D&LC",                              .ChkBoxDLC           '36
+  CheckBox        88, 206,  44,  12, "&Full level",                       .ChkBoxELvl          '37
+  GroupBox        10,   4, 332,  63, "Authorized access point to search"                       '38
+  GroupBox        10,  70, 162, 102, "Add/modify search information"                           '39
+  GroupBox       180,  70, 162, 158, "Format"                                                  '40
+  GroupBox       188, 116, 146, 104, "Aspects"                                                 '41
+  GroupBox        10, 176, 162,  52, "Only records:"                                           '42
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+' Build the search string, by segments, corresponding to the areas of the dialog box,
+' depending on what has been selected or entered there.
+
+If Dialog1.SearchOption > 0 Then
+    TitleSearchType% = PHRASE
+End If
+MatTypeSearch%    = Dialog1.DrpLstBoxFormOfItem
+NameSearchString$ = Trim$( Dialog1.TxtBoxName )
+
+If NameSearchString$ <> "" Then
+
+    NameSearchString$ = MakeSearchable( NameSearchString$ )
+    NameSearchString$ = QuoteOperators( NameSearchString$ )
+
+    Select Case NameTag$
+
+      Case "100"
+
+        NameSearchString$ = "pn:" & NameSearchString$
+
+      Case "110", "111", "130"
+
+        If NameTag$ Like "11[01]" Then
+            NameSearchString$ = "cn:" & NameSearchString$
+        End If
+        If NameTag$ = "130" Then
+            NameSearchString$ = "ut:" & NameSearchString$
+        End If
+
+    End Select
+
+End If
+
+TitleSearchString$ = Trim$( Dialog1.TxtBoxTitle)
+TitleSearchString$ = MakeSearchable( TitleSearchString$ )
+TitleSearchString$ = QuoteOperators( TitleSearchString$ )
+If TitleSearchType% = PHRASE Then
+    TitleSearchString$ = "ti=" & TitleSearchString$
+  Else
+    TitleSearchString$ = "ti:" & TitleSearchString$
+End If
+
+If NameSearchString$ <> "" Then
+    AAPSegment$ = NameSearchString$ & " AND " & TitleSearchString$
+  Else
+    AAPSegment$ = TitleSearchString$
+End If
+
+If Dialog1.ChkBoxPub = CHECKED Then
+    TempString$ = Trim$( Dialog1.TxtBoxPub )
+    If TempString$ <> "" Then
+        TempString$     = MakeSearchable( TempString$ )
+        TempString$     = QuoteOperators( TempString$ )
+        BibInfoSegment$ = BibInfoSegment$ & " AND pb:" & TempString$
+    End If
+End If
+
+If Dialog1.ChkBoxDate = CHECKED Then
+    TempString$ = Trim$( Dialog1.TxtBoxDate )
+    If TempString$ <> "" Then
+        For i = 1 To Len( TempString$ )
+          If Mid$( TempString$, i, 1 ) = "u" Then
+              Mid$( TempString$, i, 1 ) = "?"
+          End If
+        Next i
+        BibInfoSegment$ = BibInfoSegment$ & " AND yr:" & TempString$
+    End If
+End If
+
+If Dialog1.ChkBoxPlace = CHECKED Then
+    TempString$   = Trim$( Dialog1.TxtBoxPlace )
+    If TempString$ <> "" Then
+        TempString$     = MakeSearchable( TempString$ )
+        TempString$     = QuoteOperators( TempString$ )
+        BibInfoSegment$ = BibInfoSegment$ & " AND pl:" & TempString$
+    End If
+End If
+
+If Dialog1.ChkBoxCtry = CHECKED Then
+    TempString$   = Trim$( Dialog1.TxtBoxCtry )
+    If TempString$ <> "" Then
+        BibInfoSegment$ = BibInfoSegment$ & " AND cp:" & Trim$( Dialog1.TxtBoxCtry )
+    End If
+End If
+
+If Dialog1.ChkBoxExtent = CHECKED Then
+    TempString$   = Trim$( Dialog1.TxtBoxExtent )
+    If TempString$ <> "" Then
+        BibInfoSegment$ = BibInfoSegment$ & " AND p3:" & Trim$( Dialog1.TxtBoxExtent )
+    End If
+End If
+
+TypeOfRecord$ = FormatCodes( Dialog1.DrpLstBoxFormats )
+If MatTypeSearch% = 0 Then
+    FormatSearchCode$ = TypeOfRecord$
+  Else
+    Select Case TypeOfRecord$
+
+      Case "bks"
+        FormatSearchCode$ = "bks"
+
+      Case "map"
+        Select Case MatTypeSearch%
+          Case 1
+            FormatSearchCode$ = "atl"
+          Case 2
+            FormatSearchCode$ = "glb"
+          Case 3
+            FormatSearchCode$ = "map"
+        End Select
+
+      Case "vis"
+        If FFType$ = "g" Then
+            Select Case MatTypeSearch%
+              Case 1
+                FormatSearchCode$ = "bta"
+              Case 2
+                FormatSearchCode$ = "blu"
+              Case 3
+                FormatSearchCode$ = "dvv"
+              Case 4
+                FormatSearchCode$ = "flm"
+              Case 5
+                FormatSearchCode$ = "mot"
+              Case 6
+                FormatSearchCode$ = "sld"
+              Case 7
+                FormatSearchCode$ = "trn"
+              Case 8
+                FormatSearchCode$ = "umc"
+              Case 9
+                FormatSearchCode$ = "vhs"
+              Case 10
+                FormatSearchCode$ = "vca"
+              Case 11
+                FormatSearchCode$ = "vdc"
+              Case 12
+                FormatSearchCode$ = "vid"
+            End Select
+
+          ElseIf FFType$ = "k" Then
+            Select Case MatTypeSearch%
+              Case 1
+                FormatSearchCode$ = "oar"
+              Case 2
+                FormatSearchCode$ = "rep"
+              Case 3
+                FormatSearchCode$ = "cht"
+              Case 4
+                FormatSearchCode$ = "crd"
+              Case 5
+                FormatSearchCode$ = "grp"
+              Case 6
+                FormatSearchCode$ = "pht"
+              Case 7
+                FormatSearchCode$ = "pic"
+              Case 8
+                FormatSearchCode$ = "tch"
+            End Select
+        End If
+
+      Case "rec"
+        Select Case MatTypeSearch%
+          Case 1
+            FormatSearchCode$ = "cda"
+          Case 2
+            FormatSearchCode$ = "wxc"
+          Case 3
+            FormatSearchCode$ = "lps"
+          Case 4
+            FormatSearchCode$ = "rll"
+          Case 5
+            FormatSearchCode$ = "cas"
+          Case 6
+            FormatSearchCode$ = "rtr"
+          Case 7
+            FormatSearchCode$ = "wrr"
+        End Select
+
+      Case "com"
+        Select Case MatTypeSearch%
+          Case 1
+            FormatSearchCode$ = "bdt"
+          Case 2
+            FormatSearchCode$ = "pgm"
+          Case 3
+            FormatSearchCode$ = "dct"
+          Case 4
+            FormatSearchCode$ = "fnt"
+          Case 5
+            FormatSearchCode$ = "cgm"
+          Case 6
+            FormatSearchCode$ = "imm"
+          Case 7
+            FormatSearchCode$ = "ndt"
+          Case 8
+            FormatSearchCode$ = "oss"
+          Case 9
+            FormatSearchCode$ = "cig"
+          Case 8
+            FormatSearchCode$ = "snd"
+        End Select
+
+    End Select
+End If
+
+If FormatSearchCode$ <> "Any" Then
+    FormatSegment$ = " AND mt:" & FormatSearchCode$
+End If
+FormatSearchCode$ = ""
+
+FormatSegment$ = FormatSegment$ & FormatSearchCode$
+
+Select Case Dialog1.DrpLstBoxElectronic
+  Case NOT_THIS_FORMAT
+    FormatSearchCode$ = " NOT mt:elc"
+  Case ONLY_THIS_FORMAT
+    FormatSearchCode$ = " AND mt:elc"
+  Case Else
+    FormatSearchCode$ = ""
+End Select
+
+FormatSegment$ = FormatSegment$ & FormatSearchCode$
+
+Select Case Dialog1.DrpLstBoxMicroforms
+  Case NOT_THIS_FORMAT
+    FormatSearchCode$ = " NOT mt:mic"
+  Case ONLY_THIS_FORMAT
+    FormatSearchCode$ = " AND mt:mic"
+  Case Else
+    FormatSearchCode$ = ""
+End Select
+
+FormatSegment$ = FormatSegment$ & FormatSearchCode$
+
+Select Case Dialog1.DrpLstBoxBraille
+  Case NOT_THIS_FORMAT
+    FormatSearchCode$ = " NOT mt:brl"
+  Case ONLY_THIS_FORMAT
+    FormatSearchCode$ = " AND mt:brl"
+  Case Else
+    FormatSearchCode$ = ""
+End Select
+
+FormatSegment$ = FormatSegment$ & FormatSearchCode$
+
+Select Case Dialog1.DrpLstBoxLargePrint
+  Case NOT_THIS_FORMAT
+    FormatSearchCode$ = " NOT mt:lpt"
+  Case ONLY_THIS_FORMAT
+    FormatSearchCode$ = " AND mt:lpt"
+  Case Else
+    FormatSearchCode$ = ""
+End Select
+
+FormatSegment$ = FormatSegment$ & FormatSearchCode$
+
+If Dialog1.ChkBoxDLC = CHECKED Then
+    BibQualitiesSegment$ = BibQualitiesSegment$ & " AND dl:y"
+End If
+
+If Dialog1.ChkBoxELvl = CHECKED Then
+    BibQualitiesSegment$ = BibQualitiesSegment$ & " AND lv:b"
+End If
+
+If Dialog1.ChkBoxLang = CHECKED Then
+    BibQualitiesSegment$ = BibQualitiesSegment$ & " AND ll:eng"
+End If
+
+CompleteSearchString$ = AAPSegment$ & BibInfoSegment$ & FormatSegment$ & BibQualitiesSegment$
+
+Recycle:
+
+' Eliminate double spaces, purely for esthetic reasons.
+
+Do
+  p = InStr( CompleteSearchString$, "  " )
+  If p > 0 Then
+      CompleteSearchString$ = Left$( CompleteSearchString$, p - 1 ) & Mid$( CompleteSearchString$, p + 1 )
+  End If
+Loop Until p = 0
+
+Clipboard.Clear
+Clipboard.SetText CompleteSearchString$
+
+RecordsFound& = CS.Search( "WC", CompleteSearchString$ )
+
+Select Case RecordsFound&
+
+  Case 1
+
+    MsgBox "The system reports one record found, and this must be it!", INFORMATION_MESSAGE, WaltsMacros$
+
+  Case 0
+
+' Because the search is based on an existing record, and is trying to find similar
+' records, the system ought to retrieve at least the displayed record. A report of zero
+' records could have several meanings. One is that too many records were found. In that
+' case, the search could be re-run with tighter matching requirements. Another meaning
+' might be that information drawn from the displayed record was modified sufficiently to
+' not match anything in WorldCat, whether the intent was to broaden or narrow the search.
+' It's also possible that something went wrong in the macro's execution. Whatever the
+' reason, the macro offers the option to review the search string and change it manually
+' (that is, without the macro's dialog box) to try again.
+
+    Begin Dialog Dialog2Definition  224, 82, WaltsMacros$
+      CancelButton  162,  58,  52,  14
+      PushButton    102,  58,  52,  14, "&Continue"
+      Text           10,   6, 204,  40, MeaningOfZeroRecords$
+    End Dialog
+
+    Dim Dialog2 As Dialog2Definition
+    On Error Resume Next
+    Dialog Dialog2
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+' The last dialog box shows the different components of the search string for easier
+' identification of elements to modify, if the search is to be executed again.
+
+    Begin Dialog Dialog3Definition  392, 104, WaltsMacros$, .Dialog3ControlFunction
+      PushButton    270,  80,  52,  14, "&Search"
+      CancelButton  330,  80,  52,  14
+      TextBox        94,   6, 288,  12,                               .TextBox1
+      TextBox        94,  24, 288,  12,                               .TextBox2
+      TextBox        94,  42, 288,  12,                               .TextBox3
+      TextBox        94,  60, 288,  12,                               .TextBox4
+      Text           10,   8,  80,   8, "Authorized access point:"
+      Text           10,  26,  80,   8, "Manifestation information:"
+      Text           10,  44,  80,   8, "Format information:"
+      Text           10,  62,  80,   8, "Kind of record:"
+    End Dialog
+    Dim Dialog3 As Dialog3Definition
+    On Error Resume Next
+    Dialog Dialog3
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+    AAPSegment$           = Trim$( Dialog3.TextBox1 )
+    BibInfoSegment$       = Trim$( Dialog3.TextBox2 )
+    BibQualitiesSegment$  = Trim$( Dialog3.TextBox3 )
+    FormatSegment         = Trim$( Dialog3.TextBox4 )
+
+    CompleteSearchString$ = AAPSegment$
+
+    If BibInfoSegment$ <> "" Then
+        If Left$( BibInfoSegment$, 3 ) <> "NOT" Then
+            CompleteSearchString$ = CompleteSearchString$ & " AND " & BibInfoSegment$
+        End If
+    End If
+
+    If BibQualitiesSegment$ <> "" Then
+        If Left$( BibQualitiesSegment$, 3 ) <> "NOT" Then
+            CompleteSearchString$ = CompleteSearchString$ & " AND " & BibQualitiesSegment$
+        End If
+    End If
+
+    If FormatSegment$ <> "" Then
+        If Left$( FormatSegment$, 3 ) <> "NOT" Then
+            CompleteSearchString$ = CompleteSearchString$ & " AND " & FormatSegment$
+        End If
+    End If
+
+    GoTo Recycle:
+
+End Select
+
+End Sub
+
+' ***************************************************************************************
+
+Sub FillArray1
+
+' Filling the array of characters to substitute or omit in display or search takes two
+' subroutines, as a single one is too large to compile.
+'
+' The first dimension of the array is the Unicode code point, as a decimal number; the
+' second dimension is the display character or characters; the third dimension is whether
+' to include the character in the search string ("IN"), omit it entirely ("NS"), or
+' substitute a space for it ("SP"). A character not in the array will cause the macro to
+' fail, as it can't be displayed or searched.
+
+CharArray( UNIDEC, 0   ) = "32"   : CharArray( DISP, 0   ) = " "          : CharArray( SRCH, 0   ) = "IN"
+CharArray( UNIDEC, 1   ) = "33"   : CharArray( DISP, 1   ) = "!"          : CharArray( SRCH, 1   ) = "SP"
+CharArray( UNIDEC, 2   ) = "34"   : CharArray( DISP, 2   ) = DOUBLE_QUOTE : CharArray( SRCH, 2   ) = "SP"
+CharArray( UNIDEC, 3   ) = "35"   : CharArray( DISP, 3   ) = "#"          : CharArray( SRCH, 3   ) = "OM"
+CharArray( UNIDEC, 4   ) = "36"   : CharArray( DISP, 4   ) = "$"          : CharArray( SRCH, 4   ) = "SP"
+CharArray( UNIDEC, 5   ) = "37"   : CharArray( DISP, 5   ) = "%"          : CharArray( SRCH, 5   ) = "SP"
+CharArray( UNIDEC, 6   ) = "38"   : CharArray( DISP, 6   ) = "&"          : CharArray( SRCH, 6   ) = "IN"
+CharArray( UNIDEC, 7   ) = "39"   : CharArray( DISP, 7   ) = SINGLE_QUOTE : CharArray( SRCH, 7   ) = "OM"
+CharArray( UNIDEC, 8   ) = "40"   : CharArray( DISP, 8   ) = "("          : CharArray( SRCH, 8   ) = "OM"
+CharArray( UNIDEC, 9   ) = "41"   : CharArray( DISP, 9   ) = ")"          : CharArray( SRCH, 9   ) = "OM"
+CharArray( UNIDEC, 10  ) = "42"   : CharArray( DISP, 10  ) = "*"          : CharArray( SRCH, 10  ) = "SP"
+CharArray( UNIDEC, 11  ) = "43"   : CharArray( DISP, 11  ) = "+"          : CharArray( SRCH, 11  ) = "SP"
+CharArray( UNIDEC, 12  ) = "44"   : CharArray( DISP, 12  ) = ","          : CharArray( SRCH, 12  ) = "SP"
+CharArray( UNIDEC, 13  ) = "45"   : CharArray( DISP, 13  ) = "-"          : CharArray( SRCH, 13  ) = "SP"
+CharArray( UNIDEC, 14  ) = "46"   : CharArray( DISP, 14  ) = "."          : CharArray( SRCH, 14  ) = "SP"
+CharArray( UNIDEC, 15  ) = "47"   : CharArray( DISP, 15  ) = "/"          : CharArray( SRCH, 15  ) = "SP"
+CharArray( UNIDEC, 16  ) = "48"   : CharArray( DISP, 16  ) = "0"          : CharArray( SRCH, 16  ) = "IN"
+CharArray( UNIDEC, 17  ) = "49"   : CharArray( DISP, 17  ) = "1"          : CharArray( SRCH, 17  ) = "IN"
+CharArray( UNIDEC, 18  ) = "50"   : CharArray( DISP, 18  ) = "2"          : CharArray( SRCH, 18  ) = "IN"
+CharArray( UNIDEC, 19  ) = "51"   : CharArray( DISP, 19  ) = "3"          : CharArray( SRCH, 19  ) = "IN"
+CharArray( UNIDEC, 20  ) = "52"   : CharArray( DISP, 20  ) = "4"          : CharArray( SRCH, 20  ) = "IN"
+CharArray( UNIDEC, 21  ) = "53"   : CharArray( DISP, 21  ) = "5"          : CharArray( SRCH, 21  ) = "IN"
+CharArray( UNIDEC, 22  ) = "54"   : CharArray( DISP, 22  ) = "6"          : CharArray( SRCH, 22  ) = "IN"
+CharArray( UNIDEC, 23  ) = "55"   : CharArray( DISP, 23  ) = "7"          : CharArray( SRCH, 23  ) = "IN"
+CharArray( UNIDEC, 24  ) = "56"   : CharArray( DISP, 24  ) = "8"          : CharArray( SRCH, 24  ) = "IN"
+CharArray( UNIDEC, 25  ) = "57"   : CharArray( DISP, 25  ) = "9"          : CharArray( SRCH, 25  ) = "IN"
+CharArray( UNIDEC, 26  ) = "58"   : CharArray( DISP, 26  ) = ":"          : CharArray( SRCH, 26  ) = "SP"
+CharArray( UNIDEC, 27  ) = "59"   : CharArray( DISP, 27  ) = ";"          : CharArray( SRCH, 27  ) = "SP"
+CharArray( UNIDEC, 28  ) = "60"   : CharArray( DISP, 28  ) = "<"          : CharArray( SRCH, 28  ) = "SP"
+CharArray( UNIDEC, 29  ) = "61"   : CharArray( DISP, 29  ) = "="          : CharArray( SRCH, 29  ) = "SP"
+CharArray( UNIDEC, 30  ) = "62"   : CharArray( DISP, 30  ) = ">"          : CharArray( SRCH, 30  ) = "SP"
+CharArray( UNIDEC, 31  ) = "63"   : CharArray( DISP, 31  ) = "?"          : CharArray( SRCH, 31  ) = "SP"
+CharArray( UNIDEC, 32  ) = "64"   : CharArray( DISP, 32  ) = "@"          : CharArray( SRCH, 32  ) = "SP"
+CharArray( UNIDEC, 33  ) = "65"   : CharArray( DISP, 33  ) = "A"          : CharArray( SRCH, 33  ) = "IN"
+CharArray( UNIDEC, 34  ) = "66"   : CharArray( DISP, 34  ) = "B"          : CharArray( SRCH, 34  ) = "IN"
+CharArray( UNIDEC, 35  ) = "67"   : CharArray( DISP, 35  ) = "C"          : CharArray( SRCH, 35  ) = "IN"
+CharArray( UNIDEC, 36  ) = "68"   : CharArray( DISP, 36  ) = "D"          : CharArray( SRCH, 36  ) = "IN"
+CharArray( UNIDEC, 37  ) = "69"   : CharArray( DISP, 37  ) = "E"          : CharArray( SRCH, 37  ) = "IN"
+CharArray( UNIDEC, 38  ) = "70"   : CharArray( DISP, 38  ) = "F"          : CharArray( SRCH, 38  ) = "IN"
+CharArray( UNIDEC, 39  ) = "71"   : CharArray( DISP, 39  ) = "G"          : CharArray( SRCH, 39  ) = "IN"
+CharArray( UNIDEC, 40  ) = "72"   : CharArray( DISP, 40  ) = "H"          : CharArray( SRCH, 40  ) = "IN"
+CharArray( UNIDEC, 41  ) = "73"   : CharArray( DISP, 41  ) = "I"          : CharArray( SRCH, 41  ) = "IN"
+CharArray( UNIDEC, 42  ) = "74"   : CharArray( DISP, 42  ) = "J"          : CharArray( SRCH, 42  ) = "IN"
+CharArray( UNIDEC, 43  ) = "75"   : CharArray( DISP, 43  ) = "K"          : CharArray( SRCH, 43  ) = "IN"
+CharArray( UNIDEC, 44  ) = "76"   : CharArray( DISP, 44  ) = "L"          : CharArray( SRCH, 44  ) = "IN"
+CharArray( UNIDEC, 45  ) = "77"   : CharArray( DISP, 45  ) = "M"          : CharArray( SRCH, 45  ) = "IN"
+CharArray( UNIDEC, 46  ) = "78"   : CharArray( DISP, 46  ) = "N"          : CharArray( SRCH, 46  ) = "IN"
+CharArray( UNIDEC, 47  ) = "79"   : CharArray( DISP, 47  ) = "O"          : CharArray( SRCH, 47  ) = "IN"
+CharArray( UNIDEC, 48  ) = "80"   : CharArray( DISP, 48  ) = "P"          : CharArray( SRCH, 48  ) = "IN"
+CharArray( UNIDEC, 49  ) = "81"   : CharArray( DISP, 49  ) = "Q"          : CharArray( SRCH, 49  ) = "IN"
+CharArray( UNIDEC, 50  ) = "82"   : CharArray( DISP, 50  ) = "R"          : CharArray( SRCH, 50  ) = "IN"
+CharArray( UNIDEC, 51  ) = "83"   : CharArray( DISP, 51  ) = "S"          : CharArray( SRCH, 51  ) = "IN"
+CharArray( UNIDEC, 52  ) = "84"   : CharArray( DISP, 52  ) = "T"          : CharArray( SRCH, 52  ) = "IN"
+CharArray( UNIDEC, 53  ) = "85"   : CharArray( DISP, 53  ) = "U"          : CharArray( SRCH, 53  ) = "IN"
+CharArray( UNIDEC, 54  ) = "86"   : CharArray( DISP, 54  ) = "V"          : CharArray( SRCH, 54  ) = "IN"
+CharArray( UNIDEC, 55  ) = "87"   : CharArray( DISP, 55  ) = "W"          : CharArray( SRCH, 55  ) = "IN"
+CharArray( UNIDEC, 56  ) = "88"   : CharArray( DISP, 56  ) = "X"          : CharArray( SRCH, 56  ) = "IN"
+CharArray( UNIDEC, 57  ) = "89"   : CharArray( DISP, 57  ) = "Y"          : CharArray( SRCH, 57  ) = "IN"
+CharArray( UNIDEC, 58  ) = "90"   : CharArray( DISP, 58  ) = "Z"          : CharArray( SRCH, 58  ) = "IN"
+CharArray( UNIDEC, 59  ) = "91"   : CharArray( DISP, 59  ) = "["          : CharArray( SRCH, 59  ) = "OM"
+CharArray( UNIDEC, 60  ) = "92"   : CharArray( DISP, 60  ) = "\"          : CharArray( SRCH, 60  ) = "SP"
+CharArray( UNIDEC, 61  ) = "93"   : CharArray( DISP, 61  ) = "]"          : CharArray( SRCH, 61  ) = "OM"
+CharArray( UNIDEC, 62  ) = "94"   : CharArray( DISP, 62  ) = "^"          : CharArray( SRCH, 62  ) = "OM"
+CharArray( UNIDEC, 63  ) = "95"   : CharArray( DISP, 63  ) = "_"          : CharArray( SRCH, 63  ) = "OM"
+CharArray( UNIDEC, 64  ) = "96"   : CharArray( DISP, 64  ) = "`"          : CharArray( SRCH, 64  ) = "OM"
+CharArray( UNIDEC, 65  ) = "97"   : CharArray( DISP, 65  ) = "a"          : CharArray( SRCH, 65  ) = "IN"
+CharArray( UNIDEC, 66  ) = "98"   : CharArray( DISP, 66  ) = "b"          : CharArray( SRCH, 66  ) = "IN"
+CharArray( UNIDEC, 67  ) = "99"   : CharArray( DISP, 67  ) = "c"          : CharArray( SRCH, 67  ) = "IN"
+CharArray( UNIDEC, 68  ) = "100"  : CharArray( DISP, 68  ) = "d"          : CharArray( SRCH, 68  ) = "IN"
+CharArray( UNIDEC, 69  ) = "101"  : CharArray( DISP, 69  ) = "e"          : CharArray( SRCH, 69  ) = "IN"
+CharArray( UNIDEC, 70  ) = "102"  : CharArray( DISP, 70  ) = "f"          : CharArray( SRCH, 70  ) = "IN"
+CharArray( UNIDEC, 71  ) = "103"  : CharArray( DISP, 71  ) = "g"          : CharArray( SRCH, 71  ) = "IN"
+CharArray( UNIDEC, 72  ) = "104"  : CharArray( DISP, 72  ) = "h"          : CharArray( SRCH, 72  ) = "IN"
+CharArray( UNIDEC, 73  ) = "105"  : CharArray( DISP, 73  ) = "i"          : CharArray( SRCH, 73  ) = "IN"
+CharArray( UNIDEC, 74  ) = "106"  : CharArray( DISP, 74  ) = "j"          : CharArray( SRCH, 74  ) = "IN"
+CharArray( UNIDEC, 75  ) = "107"  : CharArray( DISP, 75  ) = "k"          : CharArray( SRCH, 75  ) = "IN"
+CharArray( UNIDEC, 76  ) = "108"  : CharArray( DISP, 76  ) = "l"          : CharArray( SRCH, 76  ) = "IN"
+CharArray( UNIDEC, 77  ) = "109"  : CharArray( DISP, 77  ) = "m"          : CharArray( SRCH, 77  ) = "IN"
+CharArray( UNIDEC, 78  ) = "110"  : CharArray( DISP, 78  ) = "n"          : CharArray( SRCH, 78  ) = "IN"
+CharArray( UNIDEC, 79  ) = "111"  : CharArray( DISP, 79  ) = "o"          : CharArray( SRCH, 79  ) = "IN"
+CharArray( UNIDEC, 80  ) = "112"  : CharArray( DISP, 80  ) = "p"          : CharArray( SRCH, 80  ) = "IN"
+CharArray( UNIDEC, 81  ) = "113"  : CharArray( DISP, 81  ) = "q"          : CharArray( SRCH, 81  ) = "IN"
+CharArray( UNIDEC, 82  ) = "114"  : CharArray( DISP, 82  ) = "r"          : CharArray( SRCH, 82  ) = "IN"
+CharArray( UNIDEC, 83  ) = "115"  : CharArray( DISP, 83  ) = "s"          : CharArray( SRCH, 83  ) = "IN"
+CharArray( UNIDEC, 84  ) = "116"  : CharArray( DISP, 84  ) = "t"          : CharArray( SRCH, 84  ) = "IN"
+CharArray( UNIDEC, 85  ) = "117"  : CharArray( DISP, 85  ) = "u"          : CharArray( SRCH, 85  ) = "IN"
+CharArray( UNIDEC, 86  ) = "118"  : CharArray( DISP, 86  ) = "v"          : CharArray( SRCH, 86  ) = "IN"
+CharArray( UNIDEC, 87  ) = "119"  : CharArray( DISP, 87  ) = "w"          : CharArray( SRCH, 87  ) = "IN"
+CharArray( UNIDEC, 88  ) = "120"  : CharArray( DISP, 88  ) = "x"          : CharArray( SRCH, 88  ) = "IN"
+CharArray( UNIDEC, 89  ) = "121"  : CharArray( DISP, 89  ) = "y"          : CharArray( SRCH, 89  ) = "IN"
+CharArray( UNIDEC, 90  ) = "122"  : CharArray( DISP, 90  ) = "z"          : CharArray( SRCH, 90  ) = "IN"
+CharArray( UNIDEC, 91  ) = "123"  : CharArray( DISP, 91  ) = "{"          : CharArray( SRCH, 91  ) = "OM"
+CharArray( UNIDEC, 92  ) = "124"  : CharArray( DISP, 92  ) = "|"          : CharArray( SRCH, 92  ) = "OM"
+CharArray( UNIDEC, 93  ) = "125"  : CharArray( DISP, 93  ) = "}"          : CharArray( SRCH, 93  ) = "OM"
+CharArray( UNIDEC, 94  ) = "126"  : CharArray( DISP, 94  ) = "~"          : CharArray( SRCH, 94  ) = "OM"
+CharArray( UNIDEC, 95  ) = "161"  : CharArray( DISP, 95  ) = "¡"          : CharArray( SRCH, 95  ) = "OM"
+CharArray( UNIDEC, 96  ) = "163"  : CharArray( DISP, 96  ) = "£"          : CharArray( SRCH, 96  ) = "SP"
+CharArray( UNIDEC, 97  ) = "167"  : CharArray( DISP, 97  ) = "§"          : CharArray( SRCH, 97  ) = "SP"
+CharArray( UNIDEC, 98  ) = "169"  : CharArray( DISP, 98  ) = "©"          : CharArray( SRCH, 98  ) = "OM"
+CharArray( UNIDEC, 99  ) = "170"  : CharArray( DISP, 99  ) = "a"          : CharArray( SRCH, 99  ) = "IN"
+CharArray( UNIDEC, 100 ) = "172"  : CharArray( DISP, 100 ) = "¬"          : CharArray( SRCH, 100 ) = "SP"
+CharArray( UNIDEC, 101 ) = "174"  : CharArray( DISP, 101 ) = "®"          : CharArray( SRCH, 101 ) = "SP"
+CharArray( UNIDEC, 102 ) = "176"  : CharArray( DISP, 102 ) = "°"          : CharArray( SRCH, 102 ) = "OM"
+CharArray( UNIDEC, 103 ) = "177"  : CharArray( DISP, 103 ) = "±"          : CharArray( SRCH, 103 ) = "SP"
+CharArray( UNIDEC, 104 ) = "178"  : CharArray( DISP, 104 ) = "2"          : CharArray( SRCH, 104 ) = "IN"
+CharArray( UNIDEC, 105 ) = "179"  : CharArray( DISP, 105 ) = "3"          : CharArray( SRCH, 105 ) = "IN"
+CharArray( UNIDEC, 106 ) = "180"  : CharArray( DISP, 106 ) = "´"          : CharArray( SRCH, 106 ) = "OM"
+CharArray( UNIDEC, 107 ) = "181"  : CharArray( DISP, 107 ) = "µ"          : CharArray( SRCH, 107 ) = "SP"
+CharArray( UNIDEC, 108 ) = "182"  : CharArray( DISP, 108 ) = "¶"          : CharArray( SRCH, 108 ) = "SP"
+CharArray( UNIDEC, 109 ) = "183"  : CharArray( DISP, 109 ) = "·"          : CharArray( SRCH, 109 ) = "OM"
+CharArray( UNIDEC, 110 ) = "185"  : CharArray( DISP, 110 ) = "1"          : CharArray( SRCH, 110 ) = "IN"
+CharArray( UNIDEC, 111 ) = "186"  : CharArray( DISP, 111 ) = "o"          : CharArray( SRCH, 111 ) = "IN"
+CharArray( UNIDEC, 112 ) = "191"  : CharArray( DISP, 112 ) = "¿"          : CharArray( SRCH, 112 ) = "OM"
+CharArray( UNIDEC, 113 ) = "192"  : CharArray( DISP, 113 ) = "A"          : CharArray( SRCH, 113 ) = "IN"
+CharArray( UNIDEC, 114 ) = "193"  : CharArray( DISP, 114 ) = "A"          : CharArray( SRCH, 114 ) = "IN"
+CharArray( UNIDEC, 115 ) = "194"  : CharArray( DISP, 115 ) = "A"          : CharArray( SRCH, 115 ) = "IN"
+CharArray( UNIDEC, 116 ) = "195"  : CharArray( DISP, 116 ) = "A"          : CharArray( SRCH, 116 ) = "IN"
+CharArray( UNIDEC, 117 ) = "196"  : CharArray( DISP, 117 ) = "A"          : CharArray( SRCH, 117 ) = "IN"
+CharArray( UNIDEC, 118 ) = "197"  : CharArray( DISP, 118 ) = "A"          : CharArray( SRCH, 118 ) = "IN"
+CharArray( UNIDEC, 119 ) = "198"  : CharArray( DISP, 119 ) = "Ae"         : CharArray( SRCH, 119 ) = "IN"
+CharArray( UNIDEC, 120 ) = "199"  : CharArray( DISP, 120 ) = "C"          : CharArray( SRCH, 120 ) = "IN"
+CharArray( UNIDEC, 121 ) = "200"  : CharArray( DISP, 121 ) = "E"          : CharArray( SRCH, 121 ) = "IN"
+CharArray( UNIDEC, 122 ) = "201"  : CharArray( DISP, 122 ) = "E"          : CharArray( SRCH, 122 ) = "IN"
+CharArray( UNIDEC, 123 ) = "202"  : CharArray( DISP, 123 ) = "E"          : CharArray( SRCH, 123 ) = "IN"
+CharArray( UNIDEC, 124 ) = "203"  : CharArray( DISP, 124 ) = "E"          : CharArray( SRCH, 124 ) = "IN"
+CharArray( UNIDEC, 125 ) = "204"  : CharArray( DISP, 125 ) = "I"          : CharArray( SRCH, 125 ) = "IN"
+CharArray( UNIDEC, 126 ) = "205"  : CharArray( DISP, 126 ) = "I"          : CharArray( SRCH, 126 ) = "IN"
+CharArray( UNIDEC, 127 ) = "206"  : CharArray( DISP, 127 ) = "I"          : CharArray( SRCH, 127 ) = "IN"
+CharArray( UNIDEC, 128 ) = "207"  : CharArray( DISP, 128 ) = "I"          : CharArray( SRCH, 128 ) = "IN"
+CharArray( UNIDEC, 129 ) = "208"  : CharArray( DISP, 129 ) = "D"          : CharArray( SRCH, 129 ) = "IN"
+CharArray( UNIDEC, 130 ) = "209"  : CharArray( DISP, 130 ) = "N"          : CharArray( SRCH, 130 ) = "IN"
+CharArray( UNIDEC, 131 ) = "210"  : CharArray( DISP, 131 ) = "O"          : CharArray( SRCH, 131 ) = "IN"
+CharArray( UNIDEC, 132 ) = "211"  : CharArray( DISP, 132 ) = "O"          : CharArray( SRCH, 132 ) = "IN"
+CharArray( UNIDEC, 133 ) = "212"  : CharArray( DISP, 133 ) = "O"          : CharArray( SRCH, 133 ) = "IN"
+CharArray( UNIDEC, 134 ) = "213"  : CharArray( DISP, 134 ) = "O"          : CharArray( SRCH, 134 ) = "IN"
+CharArray( UNIDEC, 135 ) = "214"  : CharArray( DISP, 135 ) = "O"          : CharArray( SRCH, 135 ) = "IN"
+CharArray( UNIDEC, 136 ) = "215"  : CharArray( DISP, 136 ) = "×"          : CharArray( SRCH, 136 ) = "IN"
+CharArray( UNIDEC, 137 ) = "216"  : CharArray( DISP, 137 ) = "O"          : CharArray( SRCH, 137 ) = "IN"
+CharArray( UNIDEC, 138 ) = "217"  : CharArray( DISP, 138 ) = "U"          : CharArray( SRCH, 138 ) = "IN"
+CharArray( UNIDEC, 139 ) = "218"  : CharArray( DISP, 139 ) = "U"          : CharArray( SRCH, 139 ) = "IN"
+CharArray( UNIDEC, 140 ) = "219"  : CharArray( DISP, 140 ) = "U"          : CharArray( SRCH, 140 ) = "IN"
+CharArray( UNIDEC, 141 ) = "220"  : CharArray( DISP, 141 ) = "U"          : CharArray( SRCH, 141 ) = "IN"
+CharArray( UNIDEC, 142 ) = "221"  : CharArray( DISP, 142 ) = "Y"          : CharArray( SRCH, 142 ) = "IN"
+CharArray( UNIDEC, 143 ) = "222"  : CharArray( DISP, 143 ) = "Th"         : CharArray( SRCH, 143 ) = "IN"
+CharArray( UNIDEC, 144 ) = "223"  : CharArray( DISP, 144 ) = "ss"         : CharArray( SRCH, 144 ) = "IN"
+CharArray( UNIDEC, 145 ) = "224"  : CharArray( DISP, 145 ) = "a"          : CharArray( SRCH, 145 ) = "IN"
+CharArray( UNIDEC, 146 ) = "225"  : CharArray( DISP, 146 ) = "a"          : CharArray( SRCH, 146 ) = "IN"
+CharArray( UNIDEC, 147 ) = "226"  : CharArray( DISP, 147 ) = "a"          : CharArray( SRCH, 147 ) = "IN"
+CharArray( UNIDEC, 148 ) = "227"  : CharArray( DISP, 148 ) = "a"          : CharArray( SRCH, 148 ) = "IN"
+CharArray( UNIDEC, 149 ) = "228"  : CharArray( DISP, 149 ) = "a"          : CharArray( SRCH, 149 ) = "IN"
+CharArray( UNIDEC, 150 ) = "229"  : CharArray( DISP, 150 ) = "a"          : CharArray( SRCH, 150 ) = "IN"
+CharArray( UNIDEC, 151 ) = "230"  : CharArray( DISP, 151 ) = "ae"         : CharArray( SRCH, 151 ) = "IN"
+CharArray( UNIDEC, 152 ) = "231"  : CharArray( DISP, 152 ) = "c"          : CharArray( SRCH, 152 ) = "IN"
+CharArray( UNIDEC, 153 ) = "232"  : CharArray( DISP, 153 ) = "e"          : CharArray( SRCH, 153 ) = "IN"
+CharArray( UNIDEC, 154 ) = "233"  : CharArray( DISP, 154 ) = "e"          : CharArray( SRCH, 154 ) = "IN"
+CharArray( UNIDEC, 155 ) = "234"  : CharArray( DISP, 155 ) = "e"          : CharArray( SRCH, 155 ) = "IN"
+CharArray( UNIDEC, 156 ) = "235"  : CharArray( DISP, 156 ) = "e"          : CharArray( SRCH, 156 ) = "IN"
+CharArray( UNIDEC, 157 ) = "236"  : CharArray( DISP, 157 ) = "i"          : CharArray( SRCH, 157 ) = "IN"
+CharArray( UNIDEC, 158 ) = "237"  : CharArray( DISP, 158 ) = "i"          : CharArray( SRCH, 158 ) = "IN"
+CharArray( UNIDEC, 159 ) = "238"  : CharArray( DISP, 159 ) = "i"          : CharArray( SRCH, 159 ) = "IN"
+CharArray( UNIDEC, 160 ) = "239"  : CharArray( DISP, 160 ) = "i"          : CharArray( SRCH, 160 ) = "IN"
+CharArray( UNIDEC, 161 ) = "240"  : CharArray( DISP, 161 ) = "d"          : CharArray( SRCH, 161 ) = "IN"
+CharArray( UNIDEC, 162 ) = "241"  : CharArray( DISP, 162 ) = "n"          : CharArray( SRCH, 162 ) = "IN"
+CharArray( UNIDEC, 163 ) = "242"  : CharArray( DISP, 163 ) = "o"          : CharArray( SRCH, 163 ) = "IN"
+CharArray( UNIDEC, 164 ) = "243"  : CharArray( DISP, 164 ) = "o"          : CharArray( SRCH, 164 ) = "IN"
+CharArray( UNIDEC, 165 ) = "244"  : CharArray( DISP, 165 ) = "o"          : CharArray( SRCH, 165 ) = "IN"
+CharArray( UNIDEC, 166 ) = "245"  : CharArray( DISP, 166 ) = "o"          : CharArray( SRCH, 166 ) = "IN"
+CharArray( UNIDEC, 167 ) = "246"  : CharArray( DISP, 167 ) = "o"          : CharArray( SRCH, 167 ) = "IN"
+CharArray( UNIDEC, 168 ) = "247"  : CharArray( DISP, 168 ) = "÷"          : CharArray( SRCH, 168 ) = "IN"
+CharArray( UNIDEC, 169 ) = "248"  : CharArray( DISP, 169 ) = "o"          : CharArray( SRCH, 169 ) = "IN"
+CharArray( UNIDEC, 170 ) = "249"  : CharArray( DISP, 170 ) = "u"          : CharArray( SRCH, 170 ) = "IN"
+CharArray( UNIDEC, 171 ) = "250"  : CharArray( DISP, 171 ) = "u"          : CharArray( SRCH, 171 ) = "IN"
+CharArray( UNIDEC, 172 ) = "251"  : CharArray( DISP, 172 ) = "u"          : CharArray( SRCH, 172 ) = "IN"
+CharArray( UNIDEC, 173 ) = "252"  : CharArray( DISP, 173 ) = "u"          : CharArray( SRCH, 173 ) = "IN"
+CharArray( UNIDEC, 174 ) = "253"  : CharArray( DISP, 174 ) = "y"          : CharArray( SRCH, 174 ) = "IN"
+CharArray( UNIDEC, 175 ) = "254"  : CharArray( DISP, 175 ) = "th"         : CharArray( SRCH, 175 ) = "IN"
+CharArray( UNIDEC, 176 ) = "255"  : CharArray( DISP, 176 ) = "y"          : CharArray( SRCH, 176 ) = "IN"
+CharArray( UNIDEC, 177 ) = "256"  : CharArray( DISP, 177 ) = "A"          : CharArray( SRCH, 177 ) = "IN"
+CharArray( UNIDEC, 178 ) = "257"  : CharArray( DISP, 178 ) = "a"          : CharArray( SRCH, 178 ) = "IN"
+CharArray( UNIDEC, 179 ) = "258"  : CharArray( DISP, 179 ) = "A"          : CharArray( SRCH, 179 ) = "IN"
+CharArray( UNIDEC, 180 ) = "259"  : CharArray( DISP, 180 ) = "a"          : CharArray( SRCH, 180 ) = "IN"
+CharArray( UNIDEC, 181 ) = "260"  : CharArray( DISP, 181 ) = "A"          : CharArray( SRCH, 181 ) = "IN"
+CharArray( UNIDEC, 182 ) = "261"  : CharArray( DISP, 182 ) = "a"          : CharArray( SRCH, 182 ) = "IN"
+CharArray( UNIDEC, 183 ) = "262"  : CharArray( DISP, 183 ) = "C"          : CharArray( SRCH, 183 ) = "IN"
+CharArray( UNIDEC, 184 ) = "263"  : CharArray( DISP, 184 ) = "c"          : CharArray( SRCH, 184 ) = "IN"
+CharArray( UNIDEC, 185 ) = "264"  : CharArray( DISP, 185 ) = "C"          : CharArray( SRCH, 185 ) = "IN"
+CharArray( UNIDEC, 186 ) = "265"  : CharArray( DISP, 186 ) = "c"          : CharArray( SRCH, 186 ) = "IN"
+CharArray( UNIDEC, 187 ) = "266"  : CharArray( DISP, 187 ) = "C"          : CharArray( SRCH, 187 ) = "IN"
+CharArray( UNIDEC, 188 ) = "267"  : CharArray( DISP, 188 ) = "c"          : CharArray( SRCH, 188 ) = "IN"
+CharArray( UNIDEC, 189 ) = "268"  : CharArray( DISP, 189 ) = "C"          : CharArray( SRCH, 189 ) = "IN"
+CharArray( UNIDEC, 190 ) = "269"  : CharArray( DISP, 190 ) = "c"          : CharArray( SRCH, 190 ) = "IN"
+CharArray( UNIDEC, 191 ) = "270"  : CharArray( DISP, 191 ) = "D"          : CharArray( SRCH, 191 ) = "IN"
+CharArray( UNIDEC, 192 ) = "271"  : CharArray( DISP, 192 ) = "d"          : CharArray( SRCH, 192 ) = "IN"
+CharArray( UNIDEC, 193 ) = "274"  : CharArray( DISP, 193 ) = "E"          : CharArray( SRCH, 193 ) = "IN"
+CharArray( UNIDEC, 194 ) = "275"  : CharArray( DISP, 194 ) = "e"          : CharArray( SRCH, 194 ) = "IN"
+CharArray( UNIDEC, 195 ) = "276"  : CharArray( DISP, 195 ) = "E"          : CharArray( SRCH, 195 ) = "IN"
+CharArray( UNIDEC, 196 ) = "277"  : CharArray( DISP, 196 ) = "e"          : CharArray( SRCH, 196 ) = "IN"
+CharArray( UNIDEC, 197 ) = "278"  : CharArray( DISP, 197 ) = "E"          : CharArray( SRCH, 197 ) = "IN"
+CharArray( UNIDEC, 198 ) = "279"  : CharArray( DISP, 198 ) = "e"          : CharArray( SRCH, 198 ) = "IN"
+CharArray( UNIDEC, 199 ) = "280"  : CharArray( DISP, 199 ) = "E"          : CharArray( SRCH, 199 ) = "IN"
+CharArray( UNIDEC, 200 ) = "281"  : CharArray( DISP, 200 ) = "e"          : CharArray( SRCH, 200 ) = "IN"
+CharArray( UNIDEC, 201 ) = "282"  : CharArray( DISP, 201 ) = "E"          : CharArray( SRCH, 201 ) = "IN"
+CharArray( UNIDEC, 202 ) = "283"  : CharArray( DISP, 202 ) = "e"          : CharArray( SRCH, 202 ) = "IN"
+CharArray( UNIDEC, 203 ) = "284"  : CharArray( DISP, 203 ) = "G"          : CharArray( SRCH, 203 ) = "IN"
+CharArray( UNIDEC, 204 ) = "285"  : CharArray( DISP, 204 ) = "g"          : CharArray( SRCH, 204 ) = "IN"
+CharArray( UNIDEC, 205 ) = "286"  : CharArray( DISP, 205 ) = "G"          : CharArray( SRCH, 205 ) = "IN"
+CharArray( UNIDEC, 206 ) = "287"  : CharArray( DISP, 206 ) = "g"          : CharArray( SRCH, 206 ) = "IN"
+CharArray( UNIDEC, 207 ) = "288"  : CharArray( DISP, 207 ) = "G"          : CharArray( SRCH, 207 ) = "IN"
+CharArray( UNIDEC, 208 ) = "289"  : CharArray( DISP, 208 ) = "g"          : CharArray( SRCH, 208 ) = "IN"
+CharArray( UNIDEC, 209 ) = "290"  : CharArray( DISP, 209 ) = "G"          : CharArray( SRCH, 209 ) = "IN"
+CharArray( UNIDEC, 210 ) = "291"  : CharArray( DISP, 210 ) = "g"          : CharArray( SRCH, 210 ) = "IN"
+CharArray( UNIDEC, 211 ) = "292"  : CharArray( DISP, 211 ) = "H"          : CharArray( SRCH, 211 ) = "IN"
+CharArray( UNIDEC, 212 ) = "293"  : CharArray( DISP, 212 ) = "h"          : CharArray( SRCH, 212 ) = "IN"
+CharArray( UNIDEC, 213 ) = "294"  : CharArray( DISP, 213 ) = "H"          : CharArray( SRCH, 213 ) = "IN"
+CharArray( UNIDEC, 214 ) = "295"  : CharArray( DISP, 214 ) = "h"          : CharArray( SRCH, 214 ) = "IN"
+CharArray( UNIDEC, 215 ) = "296"  : CharArray( DISP, 215 ) = "I"          : CharArray( SRCH, 215 ) = "IN"
+CharArray( UNIDEC, 216 ) = "297"  : CharArray( DISP, 216 ) = "i"          : CharArray( SRCH, 216 ) = "IN"
+CharArray( UNIDEC, 217 ) = "298"  : CharArray( DISP, 217 ) = "I"          : CharArray( SRCH, 217 ) = "IN"
+CharArray( UNIDEC, 218 ) = "299"  : CharArray( DISP, 218 ) = "i"          : CharArray( SRCH, 218 ) = "IN"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArray2
+
+CharArray( UNIDEC, 219 ) = "300"  : CharArray( DISP, 219 ) = "I"          : CharArray( SRCH, 219 ) = "IN"
+CharArray( UNIDEC, 220 ) = "301"  : CharArray( DISP, 220 ) = "i"          : CharArray( SRCH, 220 ) = "IN"
+CharArray( UNIDEC, 221 ) = "302"  : CharArray( DISP, 221 ) = "I"          : CharArray( SRCH, 221 ) = "IN"
+CharArray( UNIDEC, 222 ) = "303"  : CharArray( DISP, 222 ) = "i"          : CharArray( SRCH, 222 ) = "IN"
+CharArray( UNIDEC, 223 ) = "304"  : CharArray( DISP, 223 ) = "I"          : CharArray( SRCH, 223 ) = "IN"
+CharArray( UNIDEC, 224 ) = "305"  : CharArray( DISP, 224 ) = "i"          : CharArray( SRCH, 224 ) = "IN"
+CharArray( UNIDEC, 225 ) = "308"  : CharArray( DISP, 225 ) = "J"          : CharArray( SRCH, 225 ) = "IN"
+CharArray( UNIDEC, 226 ) = "309"  : CharArray( DISP, 226 ) = "j"          : CharArray( SRCH, 226 ) = "IN"
+CharArray( UNIDEC, 227 ) = "310"  : CharArray( DISP, 227 ) = "K"          : CharArray( SRCH, 227 ) = "IN"
+CharArray( UNIDEC, 228 ) = "311"  : CharArray( DISP, 228 ) = "k"          : CharArray( SRCH, 228 ) = "IN"
+CharArray( UNIDEC, 229 ) = "312"  : CharArray( DISP, 229 ) = "q"          : CharArray( SRCH, 229 ) = "IN"
+CharArray( UNIDEC, 230 ) = "313"  : CharArray( DISP, 230 ) = "L"          : CharArray( SRCH, 230 ) = "IN"
+CharArray( UNIDEC, 231 ) = "314"  : CharArray( DISP, 231 ) = "l"          : CharArray( SRCH, 231 ) = "IN"
+CharArray( UNIDEC, 232 ) = "315"  : CharArray( DISP, 232 ) = "L"          : CharArray( SRCH, 232 ) = "IN"
+CharArray( UNIDEC, 233 ) = "316"  : CharArray( DISP, 233 ) = "l"          : CharArray( SRCH, 233 ) = "IN"
+CharArray( UNIDEC, 234 ) = "317"  : CharArray( DISP, 234 ) = "L"          : CharArray( SRCH, 234 ) = "IN"
+CharArray( UNIDEC, 235 ) = "318"  : CharArray( DISP, 235 ) = "l"          : CharArray( SRCH, 235 ) = "IN"
+CharArray( UNIDEC, 236 ) = "319"  : CharArray( DISP, 236 ) = "L"          : CharArray( SRCH, 236 ) = "IN"
+CharArray( UNIDEC, 237 ) = "319"  : CharArray( DISP, 237 ) = "L"          : CharArray( SRCH, 237 ) = "IN"
+CharArray( UNIDEC, 238 ) = "320"  : CharArray( DISP, 238 ) = "l"          : CharArray( SRCH, 238 ) = "IN"
+CharArray( UNIDEC, 239 ) = "320"  : CharArray( DISP, 239 ) = "l"          : CharArray( SRCH, 239 ) = "IN"
+CharArray( UNIDEC, 240 ) = "321"  : CharArray( DISP, 240 ) = "L"          : CharArray( SRCH, 240 ) = "IN"
+CharArray( UNIDEC, 241 ) = "322"  : CharArray( DISP, 241 ) = "l"          : CharArray( SRCH, 241 ) = "IN"
+CharArray( UNIDEC, 242 ) = "323"  : CharArray( DISP, 242 ) = "N"          : CharArray( SRCH, 242 ) = "IN"
+CharArray( UNIDEC, 243 ) = "324"  : CharArray( DISP, 243 ) = "n"          : CharArray( SRCH, 243 ) = "IN"
+CharArray( UNIDEC, 244 ) = "325"  : CharArray( DISP, 244 ) = "N"          : CharArray( SRCH, 244 ) = "IN"
+CharArray( UNIDEC, 245 ) = "326"  : CharArray( DISP, 245 ) = "n"          : CharArray( SRCH, 245 ) = "IN"
+CharArray( UNIDEC, 246 ) = "327"  : CharArray( DISP, 246 ) = "N"          : CharArray( SRCH, 246 ) = "IN"
+CharArray( UNIDEC, 247 ) = "328"  : CharArray( DISP, 247 ) = "n"          : CharArray( SRCH, 247 ) = "IN"
+CharArray( UNIDEC, 248 ) = "329"  : CharArray( DISP, 248 ) = "n"          : CharArray( SRCH, 248 ) = "IN"
+CharArray( UNIDEC, 249 ) = "330"  : CharArray( DISP, 249 ) = "N"          : CharArray( SRCH, 249 ) = "IN"
+CharArray( UNIDEC, 250 ) = "331"  : CharArray( DISP, 250 ) = "n"          : CharArray( SRCH, 250 ) = "IN"
+CharArray( UNIDEC, 251 ) = "332"  : CharArray( DISP, 251 ) = "O"          : CharArray( SRCH, 251 ) = "IN"
+CharArray( UNIDEC, 252 ) = "333"  : CharArray( DISP, 252 ) = "o"          : CharArray( SRCH, 252 ) = "IN"
+CharArray( UNIDEC, 253 ) = "334"  : CharArray( DISP, 253 ) = "O"          : CharArray( SRCH, 253 ) = "IN"
+CharArray( UNIDEC, 254 ) = "335"  : CharArray( DISP, 254 ) = "o"          : CharArray( SRCH, 254 ) = "IN"
+CharArray( UNIDEC, 255 ) = "336"  : CharArray( DISP, 255 ) = "O"          : CharArray( SRCH, 255 ) = "IN"
+CharArray( UNIDEC, 256 ) = "337"  : CharArray( DISP, 256 ) = "o"          : CharArray( SRCH, 256 ) = "IN"
+CharArray( UNIDEC, 257 ) = "338"  : CharArray( DISP, 257 ) = "Oe"         : CharArray( SRCH, 257 ) = "IN"
+CharArray( UNIDEC, 258 ) = "339"  : CharArray( DISP, 258 ) = "oe"         : CharArray( SRCH, 258 ) = "IN"
+CharArray( UNIDEC, 259 ) = "340"  : CharArray( DISP, 259 ) = "R"          : CharArray( SRCH, 259 ) = "IN"
+CharArray( UNIDEC, 260 ) = "341"  : CharArray( DISP, 260 ) = "r"          : CharArray( SRCH, 260 ) = "IN"
+CharArray( UNIDEC, 261 ) = "342"  : CharArray( DISP, 261 ) = "R"          : CharArray( SRCH, 261 ) = "IN"
+CharArray( UNIDEC, 262 ) = "343"  : CharArray( DISP, 262 ) = "r"          : CharArray( SRCH, 262 ) = "IN"
+CharArray( UNIDEC, 263 ) = "344"  : CharArray( DISP, 263 ) = "R"          : CharArray( SRCH, 263 ) = "IN"
+CharArray( UNIDEC, 264 ) = "345"  : CharArray( DISP, 264 ) = "r"          : CharArray( SRCH, 264 ) = "IN"
+CharArray( UNIDEC, 265 ) = "346"  : CharArray( DISP, 265 ) = "S"          : CharArray( SRCH, 265 ) = "IN"
+CharArray( UNIDEC, 266 ) = "347"  : CharArray( DISP, 266 ) = "s"          : CharArray( SRCH, 266 ) = "IN"
+CharArray( UNIDEC, 267 ) = "348"  : CharArray( DISP, 267 ) = "S"          : CharArray( SRCH, 267 ) = "IN"
+CharArray( UNIDEC, 268 ) = "349"  : CharArray( DISP, 268 ) = "s"          : CharArray( SRCH, 268 ) = "IN"
+CharArray( UNIDEC, 269 ) = "350"  : CharArray( DISP, 269 ) = "S"          : CharArray( SRCH, 269 ) = "IN"
+CharArray( UNIDEC, 270 ) = "351"  : CharArray( DISP, 270 ) = "s"          : CharArray( SRCH, 270 ) = "IN"
+CharArray( UNIDEC, 271 ) = "352"  : CharArray( DISP, 271 ) = "S"          : CharArray( SRCH, 271 ) = "IN"
+CharArray( UNIDEC, 272 ) = "353"  : CharArray( DISP, 272 ) = "s"          : CharArray( SRCH, 272 ) = "IN"
+CharArray( UNIDEC, 273 ) = "354"  : CharArray( DISP, 273 ) = "T"          : CharArray( SRCH, 273 ) = "IN"
+CharArray( UNIDEC, 274 ) = "355"  : CharArray( DISP, 274 ) = "t"          : CharArray( SRCH, 274 ) = "IN"
+CharArray( UNIDEC, 275 ) = "356"  : CharArray( DISP, 275 ) = "T"          : CharArray( SRCH, 275 ) = "IN"
+CharArray( UNIDEC, 276 ) = "357"  : CharArray( DISP, 276 ) = "t"          : CharArray( SRCH, 276 ) = "IN"
+CharArray( UNIDEC, 277 ) = "358"  : CharArray( DISP, 277 ) = "T"          : CharArray( SRCH, 277 ) = "IN"
+CharArray( UNIDEC, 278 ) = "359"  : CharArray( DISP, 278 ) = "t"          : CharArray( SRCH, 278 ) = "IN"
+CharArray( UNIDEC, 279 ) = "360"  : CharArray( DISP, 279 ) = "U"          : CharArray( SRCH, 279 ) = "IN"
+CharArray( UNIDEC, 280 ) = "361"  : CharArray( DISP, 280 ) = "u"          : CharArray( SRCH, 280 ) = "IN"
+CharArray( UNIDEC, 281 ) = "362"  : CharArray( DISP, 281 ) = "U"          : CharArray( SRCH, 281 ) = "IN"
+CharArray( UNIDEC, 282 ) = "363"  : CharArray( DISP, 282 ) = "u"          : CharArray( SRCH, 282 ) = "IN"
+CharArray( UNIDEC, 283 ) = "364"  : CharArray( DISP, 283 ) = "U"          : CharArray( SRCH, 283 ) = "IN"
+CharArray( UNIDEC, 284 ) = "365"  : CharArray( DISP, 284 ) = "u"          : CharArray( SRCH, 284 ) = "IN"
+CharArray( UNIDEC, 285 ) = "366"  : CharArray( DISP, 285 ) = "U"          : CharArray( SRCH, 285 ) = "IN"
+CharArray( UNIDEC, 286 ) = "367"  : CharArray( DISP, 286 ) = "u"          : CharArray( SRCH, 286 ) = "IN"
+CharArray( UNIDEC, 287 ) = "368"  : CharArray( DISP, 287 ) = "U"          : CharArray( SRCH, 287 ) = "IN"
+CharArray( UNIDEC, 288 ) = "369"  : CharArray( DISP, 288 ) = "u"          : CharArray( SRCH, 288 ) = "IN"
+CharArray( UNIDEC, 289 ) = "370"  : CharArray( DISP, 289 ) = "U"          : CharArray( SRCH, 289 ) = "IN"
+CharArray( UNIDEC, 290 ) = "371"  : CharArray( DISP, 290 ) = "u"          : CharArray( SRCH, 290 ) = "IN"
+CharArray( UNIDEC, 291 ) = "372"  : CharArray( DISP, 291 ) = "W"          : CharArray( SRCH, 291 ) = "IN"
+CharArray( UNIDEC, 292 ) = "373"  : CharArray( DISP, 292 ) = "w"          : CharArray( SRCH, 292 ) = "IN"
+CharArray( UNIDEC, 293 ) = "374"  : CharArray( DISP, 293 ) = "Y"          : CharArray( SRCH, 293 ) = "IN"
+CharArray( UNIDEC, 294 ) = "375"  : CharArray( DISP, 294 ) = "y"          : CharArray( SRCH, 294 ) = "IN"
+CharArray( UNIDEC, 295 ) = "376"  : CharArray( DISP, 295 ) = "Y"          : CharArray( SRCH, 295 ) = "IN"
+CharArray( UNIDEC, 296 ) = "377"  : CharArray( DISP, 296 ) = "Z"          : CharArray( SRCH, 296 ) = "IN"
+CharArray( UNIDEC, 297 ) = "378"  : CharArray( DISP, 297 ) = "z"          : CharArray( SRCH, 297 ) = "IN"
+CharArray( UNIDEC, 298 ) = "379"  : CharArray( DISP, 298 ) = "Z"          : CharArray( SRCH, 298 ) = "IN"
+CharArray( UNIDEC, 299 ) = "380"  : CharArray( DISP, 299 ) = "z"          : CharArray( SRCH, 299 ) = "IN"
+CharArray( UNIDEC, 300 ) = "381"  : CharArray( DISP, 300 ) = "Z"          : CharArray( SRCH, 300 ) = "IN"
+CharArray( UNIDEC, 301 ) = "382"  : CharArray( DISP, 301 ) = "z"          : CharArray( SRCH, 301 ) = "IN"
+CharArray( UNIDEC, 302 ) = "383"  : CharArray( DISP, 302 ) = "s"          : CharArray( SRCH, 302 ) = "IN"
+CharArray( UNIDEC, 303 ) = "416"  : CharArray( DISP, 303 ) = "O"          : CharArray( SRCH, 303 ) = "IN"
+CharArray( UNIDEC, 304 ) = "416"  : CharArray( DISP, 304 ) = "O"          : CharArray( SRCH, 304 ) = "IN"
+CharArray( UNIDEC, 305 ) = "417"  : CharArray( DISP, 305 ) = "o"          : CharArray( SRCH, 305 ) = "IN"
+CharArray( UNIDEC, 306 ) = "417"  : CharArray( DISP, 306 ) = "o"          : CharArray( SRCH, 306 ) = "IN"
+CharArray( UNIDEC, 307 ) = "431"  : CharArray( DISP, 307 ) = "U"          : CharArray( SRCH, 307 ) = "IN"
+CharArray( UNIDEC, 308 ) = "431"  : CharArray( DISP, 308 ) = "U"          : CharArray( SRCH, 308 ) = "IN"
+CharArray( UNIDEC, 309 ) = "432"  : CharArray( DISP, 309 ) = "u"          : CharArray( SRCH, 309 ) = "IN"
+CharArray( UNIDEC, 310 ) = "432"  : CharArray( DISP, 310 ) = "u"          : CharArray( SRCH, 310 ) = "IN"
+CharArray( UNIDEC, 311 ) = "439"  : CharArray( DISP, 311 ) = "z"          : CharArray( SRCH, 311 ) = "IN"
+CharArray( UNIDEC, 312 ) = "461"  : CharArray( DISP, 312 ) = "A"          : CharArray( SRCH, 312 ) = "IN"
+CharArray( UNIDEC, 313 ) = "462"  : CharArray( DISP, 313 ) = "a"          : CharArray( SRCH, 313 ) = "IN"
+CharArray( UNIDEC, 314 ) = "463"  : CharArray( DISP, 314 ) = "I"          : CharArray( SRCH, 314 ) = "IN"
+CharArray( UNIDEC, 315 ) = "464"  : CharArray( DISP, 315 ) = "i"          : CharArray( SRCH, 315 ) = "IN"
+CharArray( UNIDEC, 316 ) = "465"  : CharArray( DISP, 316 ) = "O"          : CharArray( SRCH, 316 ) = "IN"
+CharArray( UNIDEC, 317 ) = "466"  : CharArray( DISP, 317 ) = "o"          : CharArray( SRCH, 317 ) = "IN"
+CharArray( UNIDEC, 318 ) = "467"  : CharArray( DISP, 318 ) = "U"          : CharArray( SRCH, 318 ) = "IN"
+CharArray( UNIDEC, 319 ) = "468"  : CharArray( DISP, 319 ) = "u"          : CharArray( SRCH, 319 ) = "IN"
+CharArray( UNIDEC, 320 ) = "469"  : CharArray( DISP, 320 ) = "U"          : CharArray( SRCH, 320 ) = "IN"
+CharArray( UNIDEC, 321 ) = "470"  : CharArray( DISP, 321 ) = "u"          : CharArray( SRCH, 321 ) = "IN"
+CharArray( UNIDEC, 322 ) = "471"  : CharArray( DISP, 322 ) = "U"          : CharArray( SRCH, 322 ) = "IN"
+CharArray( UNIDEC, 323 ) = "472"  : CharArray( DISP, 323 ) = "u"          : CharArray( SRCH, 323 ) = "IN"
+CharArray( UNIDEC, 324 ) = "473"  : CharArray( DISP, 324 ) = "U"          : CharArray( SRCH, 324 ) = "IN"
+CharArray( UNIDEC, 325 ) = "474"  : CharArray( DISP, 325 ) = "u"          : CharArray( SRCH, 325 ) = "IN"
+CharArray( UNIDEC, 326 ) = "475"  : CharArray( DISP, 326 ) = "U"          : CharArray( SRCH, 326 ) = "IN"
+CharArray( UNIDEC, 327 ) = "476"  : CharArray( DISP, 327 ) = "u"          : CharArray( SRCH, 327 ) = "IN"
+CharArray( UNIDEC, 328 ) = "478"  : CharArray( DISP, 328 ) = "A"          : CharArray( SRCH, 328 ) = "IN"
+CharArray( UNIDEC, 329 ) = "479"  : CharArray( DISP, 329 ) = "a"          : CharArray( SRCH, 329 ) = "IN"
+CharArray( UNIDEC, 330 ) = "480"  : CharArray( DISP, 330 ) = "A"          : CharArray( SRCH, 330 ) = "IN"
+CharArray( UNIDEC, 331 ) = "481"  : CharArray( DISP, 331 ) = "a"          : CharArray( SRCH, 331 ) = "IN"
+CharArray( UNIDEC, 332 ) = "482"  : CharArray( DISP, 332 ) = "Ae"         : CharArray( SRCH, 332 ) = "IN"
+CharArray( UNIDEC, 333 ) = "483"  : CharArray( DISP, 333 ) = "ae"         : CharArray( SRCH, 333 ) = "IN"
+CharArray( UNIDEC, 334 ) = "484"  : CharArray( DISP, 334 ) = "G"          : CharArray( SRCH, 334 ) = "IN"
+CharArray( UNIDEC, 335 ) = "485"  : CharArray( DISP, 335 ) = "g"          : CharArray( SRCH, 335 ) = "IN"
+CharArray( UNIDEC, 336 ) = "486"  : CharArray( DISP, 336 ) = "G"          : CharArray( SRCH, 336 ) = "IN"
+CharArray( UNIDEC, 337 ) = "487"  : CharArray( DISP, 337 ) = "g"          : CharArray( SRCH, 337 ) = "IN"
+CharArray( UNIDEC, 338 ) = "488"  : CharArray( DISP, 338 ) = "K"          : CharArray( SRCH, 338 ) = "IN"
+CharArray( UNIDEC, 339 ) = "489"  : CharArray( DISP, 339 ) = "k"          : CharArray( SRCH, 339 ) = "IN"
+CharArray( UNIDEC, 340 ) = "490"  : CharArray( DISP, 340 ) = "O"          : CharArray( SRCH, 340 ) = "IN"
+CharArray( UNIDEC, 341 ) = "491"  : CharArray( DISP, 341 ) = "o"          : CharArray( SRCH, 341 ) = "IN"
+CharArray( UNIDEC, 342 ) = "492"  : CharArray( DISP, 342 ) = "O"          : CharArray( SRCH, 342 ) = "IN"
+CharArray( UNIDEC, 343 ) = "493"  : CharArray( DISP, 343 ) = "o"          : CharArray( SRCH, 343 ) = "IN"
+CharArray( UNIDEC, 344 ) = "494"  : CharArray( DISP, 344 ) = "Z"          : CharArray( SRCH, 344 ) = "IN"
+CharArray( UNIDEC, 345 ) = "495"  : CharArray( DISP, 345 ) = "z"          : CharArray( SRCH, 345 ) = "IN"
+CharArray( UNIDEC, 346 ) = "496"  : CharArray( DISP, 346 ) = "j"          : CharArray( SRCH, 346 ) = "IN"
+CharArray( UNIDEC, 347 ) = "500"  : CharArray( DISP, 347 ) = "G"          : CharArray( SRCH, 347 ) = "IN"
+CharArray( UNIDEC, 348 ) = "501"  : CharArray( DISP, 348 ) = "g"          : CharArray( SRCH, 348 ) = "IN"
+CharArray( UNIDEC, 349 ) = "504"  : CharArray( DISP, 349 ) = "N"          : CharArray( SRCH, 349 ) = "IN"
+CharArray( UNIDEC, 350 ) = "505"  : CharArray( DISP, 350 ) = "n"          : CharArray( SRCH, 350 ) = "IN"
+CharArray( UNIDEC, 351 ) = "506"  : CharArray( DISP, 351 ) = "A"          : CharArray( SRCH, 351 ) = "IN"
+CharArray( UNIDEC, 352 ) = "507"  : CharArray( DISP, 352 ) = "a"          : CharArray( SRCH, 352 ) = "IN"
+CharArray( UNIDEC, 353 ) = "508"  : CharArray( DISP, 353 ) = "A"          : CharArray( SRCH, 353 ) = "IN"
+CharArray( UNIDEC, 354 ) = "509"  : CharArray( DISP, 354 ) = "a"          : CharArray( SRCH, 354 ) = "IN"
+CharArray( UNIDEC, 355 ) = "510"  : CharArray( DISP, 355 ) = "O"          : CharArray( SRCH, 355 ) = "IN"
+CharArray( UNIDEC, 356 ) = "511"  : CharArray( DISP, 356 ) = "o"          : CharArray( SRCH, 356 ) = "IN"
+CharArray( UNIDEC, 357 ) = "512"  : CharArray( DISP, 357 ) = "A"          : CharArray( SRCH, 357 ) = "IN"
+CharArray( UNIDEC, 358 ) = "513"  : CharArray( DISP, 358 ) = "a"          : CharArray( SRCH, 358 ) = "IN"
+CharArray( UNIDEC, 359 ) = "514"  : CharArray( DISP, 359 ) = "A"          : CharArray( SRCH, 359 ) = "IN"
+CharArray( UNIDEC, 360 ) = "515"  : CharArray( DISP, 360 ) = "a"          : CharArray( SRCH, 360 ) = "IN"
+CharArray( UNIDEC, 361 ) = "516"  : CharArray( DISP, 361 ) = "E"          : CharArray( SRCH, 361 ) = "IN"
+CharArray( UNIDEC, 362 ) = "517"  : CharArray( DISP, 362 ) = "e"          : CharArray( SRCH, 362 ) = "IN"
+CharArray( UNIDEC, 363 ) = "518"  : CharArray( DISP, 363 ) = "E"          : CharArray( SRCH, 363 ) = "IN"
+CharArray( UNIDEC, 364 ) = "519"  : CharArray( DISP, 364 ) = "e"          : CharArray( SRCH, 364 ) = "IN"
+CharArray( UNIDEC, 365 ) = "520"  : CharArray( DISP, 365 ) = "I"          : CharArray( SRCH, 365 ) = "IN"
+CharArray( UNIDEC, 366 ) = "521"  : CharArray( DISP, 366 ) = "i"          : CharArray( SRCH, 366 ) = "IN"
+CharArray( UNIDEC, 367 ) = "522"  : CharArray( DISP, 367 ) = "I"          : CharArray( SRCH, 367 ) = "IN"
+CharArray( UNIDEC, 368 ) = "523"  : CharArray( DISP, 368 ) = "i"          : CharArray( SRCH, 368 ) = "IN"
+CharArray( UNIDEC, 369 ) = "524"  : CharArray( DISP, 369 ) = "O"          : CharArray( SRCH, 369 ) = "IN"
+CharArray( UNIDEC, 370 ) = "525"  : CharArray( DISP, 370 ) = "o"          : CharArray( SRCH, 370 ) = "IN"
+CharArray( UNIDEC, 371 ) = "526"  : CharArray( DISP, 371 ) = "O"          : CharArray( SRCH, 371 ) = "IN"
+CharArray( UNIDEC, 372 ) = "527"  : CharArray( DISP, 372 ) = "o"          : CharArray( SRCH, 372 ) = "IN"
+CharArray( UNIDEC, 373 ) = "528"  : CharArray( DISP, 373 ) = "R"          : CharArray( SRCH, 373 ) = "IN"
+CharArray( UNIDEC, 374 ) = "529"  : CharArray( DISP, 374 ) = "r"          : CharArray( SRCH, 374 ) = "IN"
+CharArray( UNIDEC, 375 ) = "530"  : CharArray( DISP, 375 ) = "R"          : CharArray( SRCH, 375 ) = "IN"
+CharArray( UNIDEC, 376 ) = "531"  : CharArray( DISP, 376 ) = "r"          : CharArray( SRCH, 376 ) = "IN"
+CharArray( UNIDEC, 377 ) = "532"  : CharArray( DISP, 377 ) = "U"          : CharArray( SRCH, 377 ) = "IN"
+CharArray( UNIDEC, 378 ) = "533"  : CharArray( DISP, 378 ) = "u"          : CharArray( SRCH, 378 ) = "IN"
+CharArray( UNIDEC, 379 ) = "534"  : CharArray( DISP, 379 ) = "U"          : CharArray( SRCH, 379 ) = "IN"
+CharArray( UNIDEC, 380 ) = "535"  : CharArray( DISP, 380 ) = "u"          : CharArray( SRCH, 380 ) = "IN"
+CharArray( UNIDEC, 381 ) = "536"  : CharArray( DISP, 381 ) = "S"          : CharArray( SRCH, 381 ) = "IN"
+CharArray( UNIDEC, 382 ) = "537"  : CharArray( DISP, 382 ) = "s"          : CharArray( SRCH, 382 ) = "IN"
+CharArray( UNIDEC, 383 ) = "538"  : CharArray( DISP, 383 ) = "T"          : CharArray( SRCH, 383 ) = "IN"
+CharArray( UNIDEC, 384 ) = "539"  : CharArray( DISP, 384 ) = "t"          : CharArray( SRCH, 384 ) = "IN"
+CharArray( UNIDEC, 385 ) = "542"  : CharArray( DISP, 385 ) = "H"          : CharArray( SRCH, 385 ) = "IN"
+CharArray( UNIDEC, 386 ) = "543"  : CharArray( DISP, 386 ) = "h"          : CharArray( SRCH, 386 ) = "IN"
+CharArray( UNIDEC, 387 ) = "550"  : CharArray( DISP, 387 ) = "A"          : CharArray( SRCH, 387 ) = "IN"
+CharArray( UNIDEC, 388 ) = "551"  : CharArray( DISP, 388 ) = "a"          : CharArray( SRCH, 388 ) = "IN"
+CharArray( UNIDEC, 389 ) = "552"  : CharArray( DISP, 389 ) = "E"          : CharArray( SRCH, 389 ) = "IN"
+CharArray( UNIDEC, 390 ) = "553"  : CharArray( DISP, 390 ) = "e"          : CharArray( SRCH, 390 ) = "IN"
+CharArray( UNIDEC, 391 ) = "554"  : CharArray( DISP, 391 ) = "O"          : CharArray( SRCH, 391 ) = "IN"
+CharArray( UNIDEC, 392 ) = "555"  : CharArray( DISP, 392 ) = "o"          : CharArray( SRCH, 392 ) = "IN"
+CharArray( UNIDEC, 393 ) = "556"  : CharArray( DISP, 393 ) = "O"          : CharArray( SRCH, 393 ) = "IN"
+CharArray( UNIDEC, 394 ) = "557"  : CharArray( DISP, 394 ) = "o"          : CharArray( SRCH, 394 ) = "IN"
+CharArray( UNIDEC, 395 ) = "558"  : CharArray( DISP, 395 ) = "O"          : CharArray( SRCH, 395 ) = "IN"
+CharArray( UNIDEC, 396 ) = "559"  : CharArray( DISP, 396 ) = "o"          : CharArray( SRCH, 396 ) = "IN"
+CharArray( UNIDEC, 397 ) = "560"  : CharArray( DISP, 397 ) = "O"          : CharArray( SRCH, 397 ) = "IN"
+CharArray( UNIDEC, 398 ) = "561"  : CharArray( DISP, 398 ) = "o"          : CharArray( SRCH, 398 ) = "IN"
+CharArray( UNIDEC, 399 ) = "562"  : CharArray( DISP, 399 ) = "Y"          : CharArray( SRCH, 399 ) = "IN"
+CharArray( UNIDEC, 400 ) = "563"  : CharArray( DISP, 400 ) = "y"          : CharArray( SRCH, 400 ) = "IN"
+CharArray( UNIDEC, 401 ) = "658"  : CharArray( DISP, 401 ) = "z"          : CharArray( SRCH, 401 ) = "IN"
+CharArray( UNIDEC, 402 ) = "697"  : CharArray( DISP, 402 ) = SINGLE_QUOTE : CharArray( SRCH, 402 ) = "OM"
+CharArray( UNIDEC, 403 ) = "698"  : CharArray( DISP, 403 ) = DOUBLE_QUOTE : CharArray( SRCH, 403 ) = "OM"
+CharArray( UNIDEC, 404 ) = "699"  : CharArray( DISP, 404 ) = SINGLE_QUOTE : CharArray( SRCH, 404 ) = "OM"
+CharArray( UNIDEC, 405 ) = "700"  : CharArray( DISP, 405 ) = SINGLE_QUOTE : CharArray( SRCH, 405 ) = "OM"
+CharArray( UNIDEC, 406 ) = "702"  : CharArray( DISP, 406 ) = SINGLE_QUOTE : CharArray( SRCH, 406 ) = "OM"
+CharArray( UNIDEC, 407 ) = "703"  : CharArray( DISP, 407 ) = SINGLE_QUOTE : CharArray( SRCH, 407 ) = "OM" '768-879: Combining characters; also 65056-65059
+CharArray( UNIDEC, 408 ) = "8304" : CharArray( DISP, 408 ) = "0"          : CharArray( SRCH, 408 ) = "IN" 'SUPERSCRIPTS
+CharArray( UNIDEC, 409 ) = "8308" : CharArray( DISP, 409 ) = "4"          : CharArray( SRCH, 409 ) = "IN"
+CharArray( UNIDEC, 410 ) = "8309" : CharArray( DISP, 410 ) = "5"          : CharArray( SRCH, 410 ) = "IN"
+CharArray( UNIDEC, 411 ) = "8310" : CharArray( DISP, 411 ) = "6"          : CharArray( SRCH, 411 ) = "IN"
+CharArray( UNIDEC, 412 ) = "8311" : CharArray( DISP, 412 ) = "7"          : CharArray( SRCH, 412 ) = "IN"
+CharArray( UNIDEC, 413 ) = "8312" : CharArray( DISP, 413 ) = "8"          : CharArray( SRCH, 413 ) = "IN"
+CharArray( UNIDEC, 414 ) = "8313" : CharArray( DISP, 414 ) = "9"          : CharArray( SRCH, 414 ) = "IN"
+CharArray( UNIDEC, 415 ) = "8314" : CharArray( DISP, 415 ) = "+"          : CharArray( SRCH, 415 ) = "SP"
+CharArray( UNIDEC, 416 ) = "8315" : CharArray( DISP, 416 ) = "-"          : CharArray( SRCH, 416 ) = "SP"
+CharArray( UNIDEC, 417 ) = "8317" : CharArray( DISP, 417 ) = "("          : CharArray( SRCH, 417 ) = "OM"
+CharArray( UNIDEC, 418 ) = "8318" : CharArray( DISP, 418 ) = ")"          : CharArray( SRCH, 418 ) = "OM"
+CharArray( UNIDEC, 419 ) = "8320" : CharArray( DISP, 419 ) = "0"          : CharArray( SRCH, 419 ) = "IN" 'SUBSCRIPTS
+CharArray( UNIDEC, 420 ) = "8321" : CharArray( DISP, 420 ) = "1"          : CharArray( SRCH, 420 ) = "IN"
+CharArray( UNIDEC, 421 ) = "8322" : CharArray( DISP, 421 ) = "2"          : CharArray( SRCH, 421 ) = "IN"
+CharArray( UNIDEC, 422 ) = "8323" : CharArray( DISP, 422 ) = "3"          : CharArray( SRCH, 422 ) = "IN"
+CharArray( UNIDEC, 423 ) = "8324" : CharArray( DISP, 423 ) = "4"          : CharArray( SRCH, 423 ) = "IN"
+CharArray( UNIDEC, 424 ) = "8325" : CharArray( DISP, 424 ) = "5"          : CharArray( SRCH, 424 ) = "IN"
+CharArray( UNIDEC, 425 ) = "8326" : CharArray( DISP, 425 ) = "6"          : CharArray( SRCH, 425 ) = "IN"
+CharArray( UNIDEC, 426 ) = "8327" : CharArray( DISP, 426 ) = "7"          : CharArray( SRCH, 426 ) = "IN"
+CharArray( UNIDEC, 427 ) = "8328" : CharArray( DISP, 427 ) = "8"          : CharArray( SRCH, 427 ) = "IN"
+CharArray( UNIDEC, 428 ) = "8329" : CharArray( DISP, 428 ) = "9"          : CharArray( SRCH, 428 ) = "IN"
+CharArray( UNIDEC, 429 ) = "8330" : CharArray( DISP, 429 ) = "+"          : CharArray( SRCH, 429 ) = "SP"
+CharArray( UNIDEC, 430 ) = "8331" : CharArray( DISP, 430 ) = "-"          : CharArray( SRCH, 430 ) = "SP"
+CharArray( UNIDEC, 431 ) = "8333" : CharArray( DISP, 431 ) = "("          : CharArray( SRCH, 431 ) = "OM"
+CharArray( UNIDEC, 432 ) = "8334" : CharArray( DISP, 432 ) = ")"          : CharArray( SRCH, 432 ) = "OM"
+CharArray( UNIDEC, 433 ) = "8364" : CharArray( DISP, 433 ) = Chr$( 160 )  : CharArray( SRCH, 433 ) = "SP"
+CharArray( UNIDEC, 434 ) = "8471" : CharArray( DISP, 434 ) = Chr$( 203 )  : CharArray( SRCH, 434 ) = "OM" 'SOUND RECORDING COPYRIGHT
+CharArray( UNIDEC, 435 ) = "9837" : CharArray( DISP, 435 ) = Chr$( 169 )  : CharArray( SRCH, 435 ) = "SP" 'MUSIC FLAT SIGN
+CharArray( UNIDEC, 436 ) = "9839" : CharArray( DISP, 436 ) = Chr$( 204 )  : CharArray( SRCH, 436 ) = "SP" 'MUSIC SHARP SIGN
+
+End Sub
+
+'****************************************************************************************
+
+Sub SetupDialogBox( FormatSelection% )
+
+Select Case FormatSelection%
+  Case 0, 1, 5, 11  'Books, Mixed materials, Scores
+    DlgListBoxArray "DrpLstBoxFormOfItem",   SingleForm()
+  Case 2
+    DlgListBoxArray "DrpLstBoxFormOfItem",   ComputerForms()
+  Case 3
+    DlgListBoxArray "DrpLstBoxFormOfItem",   ContingResForms()
+  Case 4
+    DlgListBoxArray "DrpLstBoxFormOfItem",   MapsForms()
+  Case 6, 7  'Music and non-music sound recordings
+    DlgListBoxArray "DrpLstBoxFormOfItem",   SoundRecForms()
+  Case 8
+    DlgListBoxArray "DrpLstBoxFormOfItem",   NonProjForms()
+  Case 9
+    DlgListBoxArray "DrpLstBoxFormOfItem",   ProjForms()
+  Case 10
+    DlgListBoxArray "DrpLstBoxFormOfItem",   RealiaForms()
+End Select
+
+End Sub
+
+'****************************************************************************************
+
+Function CopyField() As String
+
+' This function gets the content of the Clipboard as Unicode text.
+
+Const UNICODE_TEXT        As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim CharToAdd$
+Dim ClipboardCharsDim%
+Dim ClipboardClose
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim FailMsg1$
+Dim FailMsg2$
+Dim FailMsg3$
+Dim FieldData$
+Dim LengthOfField%
+
+Dim i As Integer, j As Integer, k As Integer
+
+Dim ClipboardChars() As Integer
+
+FailMsg3$ = "Simply running the macro again may be successful. Clearing the contents of the Clipboard (press [WIN-V] to access its content) may also be helpful."
+FailMsg1$ = "Sorry, the contents of the Clipboard could not be accessed. " & FailMsg3$
+FailMsg2$ = "Sorry, the macro failed to get Clipboard data. " & FailMsg3$
+
+CS.CopyField
+
+' Use Windows API to access the Clipboard.
+
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    ClipboardFailure$ = FailMsg1$
+    ClipboardClose    = CloseClipboard()
+    Exit Function
+End If
+
+ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+If ClipboardDataHandle = 0& Then
+    ClipboardFailure$ = FailMsg2$
+    ClipboardClose    = CloseClipboard()
+    Exit Function
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+  Else
+    Exit Function
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", the
+' numbers range from -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters,
+' which are added to the string as themselves. For the rest of the integer range, all
+' combining characters are ignored, and the precomposed characters in the Windows-1252
+' set are decomposed to their base characters only. Other precomposed characters that
+' also can be decomposed to the basic Latin alphabet are included, too. All other
+' characters, with a few exceptions, can't be shown in the dialog box, which is limited
+' to the display of the ISO/IEC 8859-1 character set; and even though some of them may be
+' approximated by ASCII characters, those approximations can't be searched. When those
+' characters are encountered, the macro has to quit: A NOGO situation has been reached.
+
+j = 0
+For i = 0 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+  If CodePoint% = 0 Then
+      Exit For
+    ElseIf CodePoint% = 450 Then
+      CharToAdd$ = Chr$( 223 )
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$ = Chr$( CodePoint% )
+    ElseIf CodePoint% > 767 And CodePoint% < 880 Then
+      CharToAdd$ = ""
+      j = j - 1
+    ElseIf CodePoint% > -481 And CodePoint% < -476 Then 'Combining ligature and tilde
+      CharToAdd$ = ""
+      j = j - 1
+    ElseIf CodePoint% > 127 And CodePoint% < 9839 Then
+      For k = 0 To UB_CHARARRAY
+        If CodePoint% = Val( CharArray( UNIDEC, k ) ) Then
+            CharToAdd$ = CharArray( DISP, k )
+            Exit For
+        End If
+      Next k
+      If CharToAdd$ = "" Then
+          CopyField = "NOGO"
+          Exit Function
+      End If
+    Else
+      CopyField = "NOGO"
+      Exit Function
+  End If
+  FieldData$ = FieldData$ & CharToAdd$
+  CharToAdd$ = ""
+  j          = j + 1
+Next i
+
+CopyField = FieldData$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeSearchable( InString$ ) As String
+
+' This function governs the treatment of non-alphanumeric characters in the search
+' string sent to this function. All the characters in the string are examined, from
+' beginning to end, and looked up in the third dimension of the character array.
+' Alphanumeric characters are added to (or kept in) the search string. Certain other
+' characters are converted to spaces, and the others are simply ignored. The treatment
+' of each character is given in OCLC's instructions in "Special characters in Latin
+' script searches" <https://help.oclc.org/Librarian_Toolbox/Searching_WorldCat_Indexes/
+' Get_started/Searching_WorldCat_indexes_guidelines_and_requirements>, viewed the date
+' of this macro revision.
+
+Dim Action$
+Dim CharT$
+Dim OutString$
+Dim TempString$
+
+Dim i As Integer, j As Integer, p As Integer
+
+TempString$ = InString$
+
+For i = 1 To Len( TempString$ )
+  CharT$ = Mid$( TempString$, i, 1 )
+  For j = 0 To UB_CHARARRAY
+    If CharT$ = CharArray( DISP, j ) Then
+        Action$ = CharArray( SRCH, j )
+        If Action$ = "IN" Then
+            OutString$ = OutString$ & CharT$
+            Exit For
+          ElseIf Action$ = "SP" Then
+            OutString$ = OutString$ & " "
+            Exit For
+        End If
+    End If
+  Next j
+Next i
+
+Do
+  p = InStr( OutString$, "  " )
+  If p > 0 Then
+      OutString$ = Left$( OutString$, p - 1 ) & Mid$( OutString$, p + 1 )
+  End If
+Loop Until p = 0
+
+MakeSearchable = OutString$
+
+End Function
+
+'****************************************************************************************
+
+Function ProcessImprint( InString$ ) As String
+
+' Clean up imprint subfields. If non-Latin characters are found, or place or publisher
+' aren't identified, the function returns an empty string, so nothing is displayed in the
+' dialog box.
+
+Dim SubfieldCode$
+Dim TempString$
+
+SubfieldCode$ = Left$( InString$, 2 )
+TempString$   = Trim$( Mid$( InString$, 3 ) )
+
+If InStr( TempString$, "&#x" ) > 0 Then
+    ProcessImprint = "[Text cannot be displayed]"
+    Exit Function
+End If
+
+If InStr( TempString$, "not identified" ) Then
+    ProcessImprint = ""
+    Exit Function
+End If
+
+If Right$( TempString$, 1 ) Like "[.,;:]" Then
+    TempString$ = Trim$( Left$( TempString$, Len( TempString$ ) - 1 ) )
+End If
+
+If SubfieldCode$ = "a" Then
+    If InStr( TempString$, "s.l." ) > 0 Or InStr( TempString$, "n.p." ) > 0 Then
+        TempString$ = ""
+    End If
+  Else
+    If InStr( TempString$, "s.n." ) > 0  Then
+        TempString$ = ""
+    End If
+End If
+If TempString$ <> "" Then
+    If Right$( TempString$, 1 ) Like "[.,;]" Then
+        TempString$ = Left$( TempString$, Len( TempString$ ) - 1 )
+    End If
+End If
+
+ProcessImprint = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function QuoteOperators( InString$ ) As String
+
+' Words ordinarily considered by Connexion to be proximity operators must be put in
+' quotation marks to be considered search terms.
+
+Dim Operator$
+Dim Start%
+Dim TempString$
+
+Dim i As Integer, p As Integer
+
+TempString$ = InString$
+
+For i = 1 To 7
+  Select Case i
+    Case 1
+      Operator$ = " and "
+    Case 2
+      Operator$ = " or "
+    Case 3
+      Operator$ = " not "
+    Case 4
+      Operator$ = " w "
+    Case 5
+      Operator$ = " with "
+    Case 6
+      Operator$ = " n "
+    Case 7
+      Operator$ = " near "
+  End Select
+  Start% = 1
+  Do
+    p = InStr( Start%, TempString$, Operator$ )
+    If p > 0 Then
+        TempString$ = Left$( TempString$, p ) & DOUBLE_QUOTE & Trim$( Operator$ ) & DOUBLE_QUOTE & Mid$( TempString$, p + Len( Operator$ ) - 1 )
+    End If
+    Start% = p + 1
+  Loop Until p = 0
+Next i
+
+QuoteOperators = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE  As Integer = 2
+Const DISABLED        As Integer = 0
+Const ENABLED         As Integer = 1
+Const IDLE_STATE      As Integer = 5
+Const INVISIBLE       As Integer = 0
+Const KEEP_DLG_OPEN   As Integer = -1
+Const UNCHECKED       As Integer = 0
+
+Const WARNING_MESSAGE As Integer = 48
+
+Const ANY_FORMAT      As Integer = 0
+Const AS_DISPLAYED    As Integer = 0
+Const AS_SELECTED     As Integer = 3
+Const EXCLUDE_ALL     As Integer = 2
+Const INCLUDE_ALL     As Integer = 1
+
+Static TitleWarning          : TitleWarning = FALSE
+
+Dim DialogCtrlID%
+Dim TitleBoxText$
+
+Dim i As Integer, p As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText         "TxtBoxCtry",            FFCtry$
+    DlgText         "TxtBoxDate",            FFDate$
+    DlgText         "TxtBoxName",            NameHeading$
+    DlgText         "TxtBoxPlace",           PubPlace$
+    DlgText         "TxtBoxPub",             PubName$
+    DlgText         "TxtBoxTitle",           TitleSubfA$
+    DlgText         "TxtBoxExtent",          Extent$
+    If NameHeading$ = "" Then
+        DlgVisible      "Clear1XXButton",        INVISIBLE
+      Else
+        DlgText         "Clear1XXButton",        "Clea&r"
+    End If
+    If TitleSubfB$ = "" Then
+        DlgEnable       "ChkBox245SubfB",        DISABLED
+    End If
+    If CatLangEng Then
+        DlgValue        "ChkBoxLang",            CHECKED
+    End If
+    SetupDialogBox( OriginalPrimaryFormatValue% )
+    DlgValue        "DrpLstBoxBraille",      OriginalBrailleValue%
+    DlgValue        "DrpLstBoxElectronic",   OriginalElectronicValue%
+    DlgValue        "DrpLstBoxFormats",      OriginalPrimaryFormatValue%
+    DlgValue        "DrpLstBoxFormOfItem",   OriginalFormOfItemValue%
+    DlgValue        "DrpLstBoxLargePrint",   OriginalLargePrintValue%
+    DlgValue        "DrpLstBoxMicroforms",   OriginalMicroformValue%
+
+
+  Case CONTROL_CHANGE
+
+' If one of the form aspects in the dialog box restricts the search to "Only" that
+' format, all the other related drop list boxes must be set to "None," because all the
+' forms are considered to be mutually exclusive if the search result MUST be in a
+' certain form. The simplest way to change the values of the other drop list boxes this
+' is to use the numeric IDs of the drop list boxes, cycling through them to make all but
+' the chosen aspect "None."
+
+    DialogCtrlID% = DlgControlID( Id$ )
+    If DialogCtrlID% > 27 And DialogCtrlID% < 35 Then
+        If DlgValue( DialogCtrlID% ) = ONLY_THIS_FORMAT Then
+            DlgValue        "DrpLstBoxAllAspects",   AS_SELECTED
+            For i = 28 To 34 Step 2
+              If i <> DialogCtrlID% Then
+                  DlgValue        i,                       NOT_THIS_FORMAT
+              End If
+            Next i
+        End If
+    End If
+
+' Similarly, if one of the form aspects in the dialog box is set to "Only," and another
+' drop list box is set to "Yes" or "Any," the first drop list box must change to match
+' (that is, if another aspect is permissible in the search results, then no aspect can be
+' the "only" aspect to include in the search).
+
+    If DialogCtrlID% > 27 And DialogCtrlID% < 35 Then
+        If DlgValue( DialogCtrlID% ) = ANY_FORMAT Then
+            For i = 28 To 34 Step 2
+              If i <> DialogCtrlID% Then
+                  If DlgValue( i ) = ONLY_THIS_FORMAT Then
+                      DlgValue        i,                       ANY_FORMAT
+                  End If
+              End If
+            Next i
+        End If
+    End If
+
+    Select Case Id$
+
+      Case "DrpLstBoxFormats"
+
+        SetupDialogBox( DlgValue( "DrpLstBoxFormats" ) )
+        DlgValue        "DrpLstBoxBraille",      ANY_FORMAT
+        DlgValue        "DrpLstBoxElectronic",   ANY_FORMAT
+        DlgValue        "DrpLstBoxFormOfItem",   ANY_FORMAT
+        DlgValue        "DrpLstBoxLargePrint",   ANY_FORMAT
+        DlgValue        "DrpLstBoxMicroforms",   ANY_FORMAT
+        DlgValue        "DrpLstBoxAllAspects",   AS_SELECTED
+
+      Case "ChkBoxSelectAll"
+
+        If DlgValue( "ChkBoxSelectAll" ) = CHECKED Then
+            DlgValue        "ChkBoxCtry",            CHECKED
+            DlgValue        "ChkBoxDate",            CHECKED
+            DlgValue        "ChkBoxExtent",          CHECKED
+            DlgValue        "ChkBoxPlace",           CHECKED
+            DlgValue        "ChkBoxPub",             CHECKED
+          Else
+            DlgValue        "ChkBoxCtry",            UNCHECKED
+            DlgValue        "ChkBoxDate",            UNCHECKED
+            DlgValue        "ChkBoxExtent",          UNCHECKED
+            DlgValue        "ChkBoxPlace",           UNCHECKED
+            DlgValue        "ChkBoxPub",             UNCHECKED
+        End If
+
+      Case "DrpLstBoxAllAspects"
+
+' This drop list box allows for quickly changing all the drop list boxes of the different
+' aspects, either to their original values or to include them all or to exclude them all
+' in the search.
+
+        Select Case DlgValue( "DrpLstBoxAllAspects" )
+
+          Case AS_DISPLAYED
+            DlgValue        "DrpLstBoxBraille",      OriginalBrailleValue%
+            DlgValue        "DrpLstBoxElectronic",   OriginalElectronicValue%
+            DlgValue        "DrpLstBoxFormats",      OriginalPrimaryFormatValue%
+            DlgValue        "DrpLstBoxMicroforms",   OriginalMicroformValue%
+          Case INCLUDE_ALL
+            DlgValue        "DrpLstBoxBraille",      ANY_FORMAT
+            DlgValue        "DrpLstBoxElectronic",   ANY_FORMAT
+            DlgValue        "DrpLstBoxLargePrint",   ANY_FORMAT
+            DlgValue        "DrpLstBoxMicroforms",   ANY_FORMAT
+          Case EXCLUDE_ALL
+            DlgValue        "DrpLstBoxBraille",      NOT_THIS_FORMAT
+            DlgValue        "DrpLstBoxElectronic",   NOT_THIS_FORMAT
+            DlgValue        "DrpLstBoxLargePrint",   NOT_THIS_FORMAT
+            DlgValue        "DrpLstBoxMicroforms",   NOT_THIS_FORMAT
+        End Select
+
+' If the drop list boxes of the different aspects contain selections different from their
+' original values, the collective drop list box must show "As selected" if it has not
+' been previously set to "Include all".
+
+      Case "DrpLstBoxElectronic", "DrpLstBoxMicroforms", "DrpLstBoxBraille", "DrpLstBoxLargePrint"
+
+        If ( DlgValue( "DrpLstBoxElectronic" ) <> OriginalElectronicValue%   OR _
+             DlgValue( "DrpLstBoxMicroforms" ) <> OriginalMicroformValue%    OR _
+             DlgValue( "DrpLstBoxBraille" )    <> OriginalBrailleValue%      OR _
+             DlgValue( "DrpLstBoxLargePrint" ) <> OriginalLargePrintValue% ) AND _
+             DlgValue( "DrpLstBoxAllAspects" ) <> 1 Then
+            DlgValue        "DrpLstBoxAllAspects",   AS_SELECTED
+        End If
+
+      Case "DrpLstBoxFormOfItem"
+
+        If DlgValue( "DrpLstBoxFormOfItem" ) > 0 Then
+            DlgValue        "DrpLstBoxMicroforms",   NOT_THIS_FORMAT
+            DlgValue        "DrpLstBoxElectronic",   NOT_THIS_FORMAT
+          Else
+            DlgValue        "DrpLstBoxMicroforms",   ANY_FORMAT
+            DlgValue        "DrpLstBoxElectronic",   ANY_FORMAT
+        End If
+
+      Case "Clear1XXButton"
+
+        If DlgText( "Clear1XXButton" ) = "Clea&r" Then
+            DlgText         "TxtBoxName",            ""
+            If NameHeading$ <> "" Then
+                DlgText         "Clear1XXButton",        "&Restore"
+              Else
+                DlgVisible      "Clear1XXButton",        INVISIBLE
+            End If
+          Else
+            DlgText         "Clear1XXButton",        "Clea&r"
+            DlgText         "TxtBoxName",            NameHeading$
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "ChkBox245SubfB"
+        TitleBoxText$ = DlgText( "TxtBoxTitle" )
+        If DlgValue( "ChkBox245SubfB" ) = CHECKED Then
+            DlgText         "TxtBoxTitle",           TitleBoxText$ & TitleSubfB$
+          Else
+            p = InStr( TitleBoxText$, TitleSubfB$ )
+            If ( p > 0 ) And ( Len( TitleBoxText$ ) ) = Len( TitleSubfB$ ) + p - 1 Then
+                DlgText         "TxtBoxTitle",           Trim$( Left$( TitleBoxText$, p - 1 ) )
+            End If
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+
+  Case IDLE_STATE
+
+    If Trim$( DlgText( "TxtBoxCtry" ) ) <> FFCtry$ Then
+        If DlgValue( "ChkBoxCtry" ) = UNCHECKED Then
+            DlgValue        "ChkBoxCtry",            CHECKED
+        End If
+    End If
+
+    If Trim$( DlgText( "TxtBoxTitle" ) ) = "" Then
+        If DlgEnable( "OK" ) Then
+            DlgEnable       "OK",                    DISABLED
+            If TitleWarning = FALSE Then
+                MsgBox "This macro needs at least a title to search with!", WARNING_MESSAGE, WaltsMacros$
+                TitleWarning = TRUE
+            End If
+        End If
+      Else
+        If DlgEnable( "OK" ) = DISABLED Then
+            DlgEnable       "OK",                    ENABLED
+        End If
+    End If
+
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog3ControlFunction( Id$, Action%, SVal& )
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText         "TextBox1",              Trim$( AAPSegment$ )
+
+    If Trim$( BibInfoSegment$ ) <> "" Then
+        If Left$( BibInfoSegment$, 5 ) = " AND " Then
+            BibInfoSegment$ = Mid$( BibInfoSegment$, 6 )
+        End If
+    End If
+    DlgText         "TextBox2",              BibInfoSegment$
+
+    If Trim$( BibQualitiesSegment$ ) <> "" Then
+        If Left$( BibQualitiesSegment$, 5 ) = " AND " Then
+            BibQualitiesSegment$ = Mid$( BibQualitiesSegment$, 6 )
+        End If
+    End If
+    DlgText         "TextBox3",              BibQualitiesSegment$
+
+    If Trim$( FormatSegment$ ) <> "" Then
+        If Left$( FormatSegment$, 5 ) = " AND " Then
+            FormatSegment$ = Mid$( FormatSegment$, 6 )
+        End If
+    End If
+    DlgText         "TextBox4",              FormatSegment$
+
+End Select
+
+End Function
+'2451123656

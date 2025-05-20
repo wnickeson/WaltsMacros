@@ -1,0 +1,479 @@
+' MacroName:RDANotIdentified.2025.02
+' MacroDescription:Adds the standard RDA "not identified" phrases to 260/264 subfields
+' that lack information.
+'
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Place the cursor anywhere in a subfield $a, $b, or $c in a 260/264 field
+' in a bibliographic record and run the macro to add the appropriate phrase from RDA to
+' describe missing or unknown information:
+'
+'  + [Place of publication not identified] for subfield $a
+'  + [Publisher not identified] for subfield $b
+'  + [Date of publication not identified] for subfield $c
+'
+' This macro was designed for use primarily in a workform, in which it immediately adds
+' the correct phrase to the empty subfield in which the cursor is positioned, then moves
+' the cursor to the next subfield and quits. However, it will also work in a field
+' containing descriptive information, as when you are editing a cloned record and you
+' need to replace the original record's description because the manifestation in hand
+' lacks that information. In that case, the macro will ask for confirmation that you
+' indeed want to replace the data already there with the RDA phrase.
+'
+' The prescribed phrases are from RDA 2.8.2.6.5, 2.4.8.7, and 2.8.6.6, although the
+' LC-PCC PS for the latter strongly urges supplying a date rather than using the phrase.
+'
+' The macro assumes the existence of subfield $a even if "$a" is not present (Connexion
+' omits the delimiter and subfield code when subfield $a is the first subfield in the
+' field). When adding the RDA phrase to subfield $a, if subfield $b is empty or not
+' explicitly coded in the field, the macro automatically adds the code for subfield $b
+' but leaves it empty. It takes similar action when adding information to subfield $b and
+' subfield $c is absent. However, the macro will fill only one subfield at a time.
+' Additional subfields in the field, such as $e, $f, and $g, that contain information
+' regarding manufacture, are ignored.
+'
+' The macro won't run at all (and will tell you so) if any of the three subfields $a, $b,
+' or $c in the 260/264 field are repeated.
+'
+' The macro uses ISBD punctuation when adding information to the field, so incorrect
+' coding will produce odd-looking results. However, the macro does not check the code in
+' the fixed field element "Desc", which states whether the item has been cataloged
+' according to the provisions of ISBD; nor does it check that the record is cataloged
+' according to RDA (indicated by subfield $e "rda" in field 040). It completely
+' disregards the language of cataloging of the record (which should be "eng" in field
+' 040, subfield $b). It also does not bother with anything in the fixed field--"Ctry",
+' "DtSt", and "Dates", even though all those elements may be affected by the changes made
+' by the macro. All those parts of the record must be checked after the macro has
+' finished its operation. The reason the macro is so limited is that in workforms, its
+' intended primary arena, the fixed field and the 040 field may not have been completely
+' edited or may not be ready for editing.
+'
+' If the existing content in the subfield in which the cursor is placed is a pre-RDA
+' abbreviation indicating that no information was available, the macro will silently
+' replace it with the RDA phrase. These abbreviations are "[S.l.]" and "[N.p.]" for "Sine
+' loco" and "No place" (used in subfield $a), "[s.n.]" for "sine nomine" (no name, used
+' in subfield $b), and "[N.d.]" ("no date", used in subfield $c). The macro ignores the
+' case of the abbreviation, but requires that the brackets be included for swift and
+' automatic replacement. If they are absent, the macro must receive confirmation before
+' it will replace the abbreviation.
+'
+' If the subfield already contains the RDA phrase, the macro simply notifies you that
+' there is nothing for it to do, and ends.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Text
+
+'----------------------------------------------------------------------------------------
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal uFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal lpString As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal hMem As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal hMem As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal HWND As Long ) As Long
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE    As Integer = 16
+Const INFORMATION_MESSAGE As Integer = 64
+Const MSGBOX_ANSWER_YES   As Integer = 6
+Const SET_MSGBOX_BUTTONS  As Integer = 291 'Yes, No, Cancel =   3
+'                                          'Warning query   =  32
+'                                          '"No" as default = 256/Total = 291
+
+Const SUBF_A As Integer = 0
+Const SUBF_B As Integer = 1
+Const SUBF_C As Integer = 2
+
+Dim DELIMITER_OCLC As String*1 : DELIMITER_OCLC = Chr$( 223 )
+Dim DELIMITER_UNI  As String*8 : DELIMITER_UNI  = "&#x01C2;"
+Dim DOUBLE_QUOTE   As String*1 : DOUBLE_QUOTE   = Chr$( 034 )
+
+Dim CharToAdd$
+Dim Col%
+Dim FieldData$
+Dim NewField$
+Dim NoDate$
+Dim NoName$
+Dim NoPlace$
+Dim Remainder$
+Dim RemainderPos%
+Dim ReplacePhrase$
+Dim Row%
+Dim SelectedSubfield$
+Dim SubfieldBeingBuilt$
+Dim SubfieldString$
+Dim Tag$
+Dim TempString$
+Dim TypeOfWindow%
+Dim WaltsMacros$               : WaltsMacros$   = "[Walt's macros] Extras2:RDANotIdentified"
+
+Dim DelimiterFound             : DelimiterFound = FALSE
+
+Dim i As Integer, p As Integer
+
+Dim SubfieldsABC( 2 ) As String
+
+'----------------------------------------------------------------------------------------
+Const INTEGER_RANGE       As Long = 65536 '-32,768 to 32,767
+Const UNICODE_TEXT        As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim ClipboardCharsDim%
+Dim ClipboardClose
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim LengthOfField%
+Dim UniCodePoint$
+
+Dim ClipboardChars() As Integer
+'----------------------------------------------------------------------------------------
+
+NoDate$        = "[Date of publication not identified]"
+NoName$        = "[Publisher not identified],"
+NoPlace$       = "[Place of publication not identified] :"
+ReplacePhrase$ = "Replace existing content of subfield $"
+
+' First, make sure a bibliographic record is displayed.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 3 To 16, 18, 20 To 26
+  MsgBox "Sorry, this macro works only in a bibliographic record!", CRITICAL_MESSAGE, WaltsMacros$
+  Exit Sub
+End Select
+
+' Find the current cursor position, so we know which subfield to add or change.
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+' Then check that the field is for "Publication, Distribution, Etc. (Imprint)" (260) or
+' for "Production, Publication, Distribution, Manufacture, and Copyright Notice." With
+' this check, also determine if the field consists only of tag and indicators, as in a
+' newly added field. In this case, immediately add subfield $a with the RDA phrase.
+
+If CS.GetFieldUnicode( "...", Row%, FieldData$ ) Then
+    If Left$( FieldData$, 3 ) Like "26[04]" Then
+        Tag$ = Left$( FieldData$, 5 )
+        If Len( FieldData$ ) = 5 Then
+            SelectedSubfield$ = "a"
+            GoTo NewEmptyField:
+        End If
+      Else
+        MsgBox "Please place the cursor in a 260 or 264 field to run this macro!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+    FieldData$ = ""
+End If
+
+' The cursor must be in a data cell, not the cells for tag and indicators.
+
+If Col% < 6 Then
+    MsgBox "Please place the cursor in a subfield $a, $b, or $c to run this macro!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If all seems OK, start the work of the macro by retrieving the contents of the field
+' in which the cursor is placed. Use the Windows API rather than the OML "GetField"
+' commands because those commands are unreliable when pasting information back into the
+' record, especially when precomposed characters are present.
+
+CS.CopyField
+
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    MsgBox "Sorry, the contents of the Clipboard could not be accessed.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+
+ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+If ClipboardDataHandle = 0& Then
+    MsgBox "Sorry, the macro failed to get Clipboard data.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+  Else
+    Exit Sub
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", they
+' range from -32,768 to 32,767. Numbers 32 to 127 encode plain ASCII characters, which
+' are added to the string as themselves. All other numbers are converted to hexadecimal
+' by means of the BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly
+' converted to hexadecimal 0080 to 7FFF. Negative decimal numbers are made positive by
+' adding them to 65,536, so the range -32,768 to -1 becomes the range 32,768 to 65,535.
+' The "Hex" function converts those numbers to the hexadecimal range 8000 to FFFF.
+' Finally, the hexadecimal numbers are transformed into Numeric Character References,
+' with strings of two or three digits padded with leading zeros to make each string four
+' characters in length; then that NCR is added to the character string.
+
+For i = 5 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+
+  If CodePoint% = 0 Then
+
+' If the code point is zero, the end of the Clipboard contents has been reached, and all
+' the appropriate strings have been built.
+
+      CharToAdd$ = ""
+      Select Case SubfieldBeingBuilt$
+        Case "a"
+          If SubfieldsABC( SUBF_A ) = "" Then
+              SubfieldsABC( SUBF_A ) = Trim$( TempString$ )
+          End If
+        Case "b"
+          If SubfieldsABC( SUBF_B ) = "" Then
+              SubfieldsABC( SUBF_B ) = Trim$( TempString$ )
+          End If
+        Case "c"
+          If SubfieldsABC( SUBF_C ) = "" Then
+              SubfieldsABC( SUBF_C ) = Trim$( TempString$ )
+          End If
+      End Select
+      Exit For
+
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$ = Chr$( CodePoint% )
+
+    Else
+      If CodePoint% > 127 Then
+          UniCodePoint$ = Hex( ClipboardChars( i ) )
+          If Len( UniCodePoint$ ) < 4 Then
+             UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+          End If
+        Else
+          UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+      End If
+      CharToAdd$ = "&#x" & UniCodePoint$ & ";"
+  End If
+
+' Build each subfield string separately while traversing the array. If the strings have
+' already been built for subfields $a, $b, and $c, any additional characters are
+' concatentated to the Remainder string, which is not further analyzed.
+
+  If i = 5 Then
+      SubfieldBeingBuilt$ = "a"
+      SubfieldString$     = "a"
+      If CharToAdd$ = DELIMITER_UNI Then
+          DelimiterFound = TRUE
+        Else
+          TempString$    = TempString$ & CharToAdd$
+      End If
+    Else
+      If Remainder$ <> "" Then
+          Remainder$ = Remainder$ & CharToAdd$
+        Else
+
+' All characters are added to the subfield strings except the pair composed of the
+' delimiter and its immediately following subfield code. (The surrounding spaces
+' normally added by Connexion are added, but will get trimmed away when they are
+' stored in the array.)
+
+          If CharToAdd$ <> DELIMITER_UNI Then
+              If DelimiterFound Then
+                  If CharToAdd$ Like "[abc]" Then
+                      If InStr( SubfieldString$, CharToAdd$ ) = 0 Then
+                          SubfieldBeingBuilt$ = CharToAdd$
+                          SubfieldString$     = SubfieldString$ & SubfieldBeingBuilt$
+                        Else
+                          MsgBox "Duplicate"
+                          Exit Sub
+                      End If
+                    Else
+                      SubfieldBeingBuilt$ = CharToAdd$
+                      TempString$         = TempString$ & CharToAdd$
+                      DelimiterFound      = FALSE
+                  End If
+                  DelimiterFound = FALSE
+                Else
+                  TempString$    = TempString$ & CharToAdd$
+              End If
+            Else
+              DelimiterFound = TRUE
+              Select Case SubfieldBeingBuilt$
+                Case "a"
+                  SubfieldsABC( SUBF_A ) = Trim$( TempString$ )
+                Case "b"
+                  SubfieldsABC( SUBF_B ) = Trim$( TempString$ )
+                Case "c"
+                  SubfieldsABC( SUBF_C ) = Trim$( TempString$ )
+
+' If subfields $a, $b, and $c have been dealt with, the remainder of the string, if any,
+' is left as is. Characters from the array are added to it without any further testing or
+' options. If it is discovered here that the cursor has been placed outside of subfields
+' $a, $b, and $c, display a warning and quit.
+
+                  Remainder$    = CharToAdd$
+                  RemainderPos% = LengthOfField% - i
+                  If Col% > i + 1 Then
+                      MsgBox "Please place the cursor in subfields $a, $b, or $c to run this macro.", CRITICAL_MESSAGE, WaltsMacros$
+                      Exit Sub
+                  End If
+              End Select
+              TempString$ = ""
+          End If
+      End If
+  End If
+
+  CharToAdd$ = ""
+
+' As the subfield strings are being built, when the cursor position has been reached (if
+' the cursor has been properly placed), the subfield in which the cursor is placed can be
+' identified.
+
+  If Col% = i + 1 Then
+      SelectedSubfield$ = SubfieldBeingBuilt$
+  End If
+Next i
+
+' If the cursor position is the end of the string, it won't have been accounted for
+' during the preceding loop, so if it wasn't reached after the array of characters has
+' been completely gone through, it must be at the end of the last subfield or not in the
+' string of subfields $a, $b, and $c.
+
+If Col% > i Then
+    SelectedSubfield$ = SubfieldBeingBuilt$
+End If
+
+' Test the contents of the subfields: Replace absent information with the appropriate RDA
+' phrase, or ask permission to change existing text.
+
+NewEmptyField:
+
+Select Case SelectedSubfield$
+
+  Case "a"
+    If SubfieldsABC( SUBF_A ) = "" Or InStr( 1, SubfieldsABC( SUBF_A ), "s.l." ) > 0 Or InStr( 1, SubfieldsABC( SUBF_A ), "n.p." ) > 0 Then
+        SubfieldsABC( SUBF_A ) = NoPlace$
+      ElseIf InStr( SubfieldsABC( SUBF_A ), "place of publication not identified" ) Then
+        MsgBox "Subfield $a already contains the "  & DOUBLE_QUOTE & "place not identified" & DOUBLE_QUOTE & " phrase!", INFORMATION_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        If MsgBox( ReplacePhrase$ & SelectedSubfield$ & " with phrase " & DOUBLE_QUOTE & "Place of publication not identified" & DOUBLE_QUOTE & "?", SET_MSGBOX_BUTTONS, WaltsMacros$ ) = MSGBOX_ANSWER_YES Then
+            SubfieldsABC( SUBF_A ) = NoPlace$
+          Else
+            Exit Sub
+        End If
+    End If
+
+  Case "b"
+    If SubfieldsABC( SUBF_B ) = "" Or InStr( 1, SubfieldsABC( SUBF_B ), "s.n." ) > 0 Then
+        SubfieldsABC( SUBF_B ) = NoName$
+      ElseIf InStr( SubfieldsABC( SUBF_B ), "publisher not identified" ) Then
+        MsgBox "Subfield $b already contains the "  & DOUBLE_QUOTE & "publisher not identified" & DOUBLE_QUOTE & " phrase!", INFORMATION_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        If MsgBox( ReplacePhrase$ & SelectedSubfield$ & " with phrase " & DOUBLE_QUOTE & "Publisher not identified" & DOUBLE_QUOTE & "?", SET_MSGBOX_BUTTONS, WaltsMacros$ ) = MSGBOX_ANSWER_YES Then
+            SubfieldsABC( SUBF_B ) = NoName$
+          Else
+            Exit Sub
+        End If
+    End If
+
+  Case "c"
+    If SubfieldsABC( SUBF_C ) = "" Or InStr( 1, SubfieldsABC( SUBF_C ), "n.d." ) > 0 Then
+        SubfieldsABC( SUBF_C ) = NoDate$
+      ElseIf InStr( SubfieldsABC( SUBF_C ), "date of publication not identified" ) Then
+        MsgBox "Subfield $c already contains the "  & DOUBLE_QUOTE & "date not identified" & DOUBLE_QUOTE & " phrase!", INFORMATION_MESSAGE, WaltsMacros$
+        Exit Sub
+      Else
+        If MsgBox( ReplacePhrase$ & SelectedSubfield$ & " with phrase " & DOUBLE_QUOTE & "Date of publication not identified" & DOUBLE_QUOTE & "?", SET_MSGBOX_BUTTONS ) = MSGBOX_ANSWER_YES Then
+            SubfieldsABC( SUBF_C ) = NoDate$
+          Else
+            Exit Sub
+        End If
+    End If
+
+End Select
+
+' Put all the modified subfields together, in order, following the tag and preceding any
+' remaining string, and replace the existing field.
+
+NewField$ = Tag$ & SubfieldsABC( SUBF_A ) & " " & DELIMITER_UNI & "b " & _
+            SubfieldsABC( SUBF_B ) & " " & DELIMITER_UNI & "c " & SubfieldsABC( SUBF_C ) & " " & Remainder$
+
+If CS.SetFieldLine( Row%, NewField$ ) Then
+
+' After replacing the field, move the cursor to the subfield following the selected
+' subfield, or to the very end of the field if subfield $c is the one that has been
+' modified and it is the last subfield. The "GetFieldUnicode" command can be used here
+' because the characters it retrieves aren't going to be pasted back into the record.
+
+    If CS.GetFieldUnicode( "...", Row%, FieldData$ ) Then
+        Select Case SelectedSubfield$
+          Case "a"
+            CS.CursorColumn = InStr( FieldData$, DELIMITER_OCLC & "b" ) + 3
+          Case "b"
+            CS.CursorColumn = InStr( FieldData$, DELIMITER_OCLC & "c" ) + 3
+          Case "c"
+            If RemainderPos% = 0 Then
+                CS.CursorColumn = 6
+                CS.EndCell
+              Else
+                CS.CursorColumn = Len( FieldData$ ) - RemainderPos% + 4
+            End If
+        End Select
+      Else
+        CS.CursorColumn = 6
+        CS.EndCell
+    End If
+  Else
+    MsgBox "Sorry, the macro could not change the field.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'48021325

@@ -1,0 +1,1966 @@
+' MacroName:MakeListFromSaveFile.2025.21
+' MacroDescription:Creates a tab-delimited list of selected columns from online and local
+' bibliographic and authority save files, and from constant data record lists.
+'
+' This macro was written by Walter F. Nickeson and last updated 15 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro while viewing a list of records in a local save file, or
+' one of the lists of constant data records. Select up to three columns to include in the
+' list by clicking on the name of a column in the macro's dialog box. (Hidden columns are
+' not shown in the list of available columns.) The column name clicked on is copied to
+' the selection box, where it appears at the end of the list of selected column names. If
+' the selection box already contains three names, the third name is replaced by the
+' latest selection. Clicking on a name in the selection box removes it. This is a very
+' simple macro, written somewhat in haste, so to properly order the columns selected, you
+' may have to do several clicks, adding and removing column names, to get what you want.
+' The resulting list retains the order of records in the displayed list, no matter which
+' columns are selected; the macro does no sorting whatsoever.
+'
+' Optionally, the macro can ignore a row if the cell in the first column selected is
+' empty.
+'
+' The macro seems to take its time to execute, and the only sign it is running is a
+' flickering of the screen as it reads each line. When it is done, it displays a message
+' box announcing the number of lines in the list. Paste the list into a document to view
+' it.
+'
+' The macro begins by trying to read the "Options.xml" file in the "MyProfile" folder in
+' the OCLC AppData path. This file contains the status of the columns in the list views--
+' their display order and whether or not they are hidden. If the file can't be read, the
+' macro quits. Otherwise, it displays in its dialog box the columns that aren't hidden in
+' the order stored in the file. If the user hasn't customized the list view, all columns
+' are shown in their default order. The macro then looks for the contents of the cells of
+' the selected columns in each row and adds them to a string, separated by the tab
+' character. Each row of up to three cells ends with the standard Window end-of-line
+' sequence of carriage return and line feed characters. After going through the whole
+' list, the macro puts the string on the Windows Clipboard. Characters outside the
+' ISO/IEC 8859-1:1998 character set may not display properly, although the macro will try
+' to supply equivalents for some of them.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillUnicodeArray
+
+Declare Function ConvertToISO88591    ( InputString$ ) As String
+Declare Function FindUnicodeEquivalent( InputString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const UNICODE_CHARACTER_COUNT As Integer = 898
+
+Global ColTitle1$
+Global ColTitle2$
+Global ColTitle3$
+Global TypeOfWindow%
+
+Global CombiningCharOmitted
+Global EquivalentCharSubstituted
+Global IncorrectEncoding
+Global UndisplayableChars
+
+Global AvailableTerms()          As String
+Global LocalAuthCD   ( 1 )  As String
+Global LocalAuthSave ( 13 ) As String
+Global LocalBibCD    ( 1 )  As String
+Global LocalBibSave  ( 22 ) As String
+Global OnlineAuthCD  ( 0 )  As String
+Global OnlineAuthSave( 5 )  As String
+Global OnlineBibCD   ( 1 )  As String
+Global OnlineBibSave ( 15 ) As String
+Global UnicodeEquiv( UNICODE_CHARACTER_COUNT ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const INFORMATION_MESSAGE  As Integer = 64
+Const MAX_ATTEMPTS_ENVIRON As Integer = 128
+Const NORMAL_FILE          As Integer = 0
+Const NORMAL_FILE_ARCHIVE  As Integer = 32
+
+Dim CR As String*2 : CR = Chr$( 013 ) & Chr$( 010 )
+Dim TB As String*1 : TB = Chr$( 009 )
+
+' The following strings are the first five characters in the strings relating to list
+' settings in the "Options.xml" file.
+
+Dim COLUMN_ORDER As String*5 : COLUMN_ORDER = "ColOR"
+Dim COLUMN_SHOW  As String*5 : COLUMN_SHOW  = "ColSH"
+
+Dim AppData$
+Dim ArraySize%
+Dim Attributes%
+Dim CellData$
+Dim ColData1$
+Dim ColData2$
+Dim ColData3$
+Dim ColumnID$
+Dim DataLine$
+Dim EnvironmentString$
+Dim FileNum%
+Dim Instruction$
+Dim ItemKey$
+Dim LineCount%
+Dim OptionsFilePath$
+Dim OrderString$
+Dim OutputList$
+Dim ShowString$
+Dim TitleList$
+Dim WaltsMacros$   : WaltsMacros$ = "[Walt's macros] Extras3:CreateListFromSaveFile"
+
+Dim CellFound
+Dim FoundLine
+
+Dim i As Integer, j As Integer, p As Integer, q As Integer, pq As Integer
+
+Dim TempArray( ) As String
+
+OnlineBibSave( 0  ) = "Save #"
+OnlineBibSave( 1  ) = "Contributor/Creator"
+OnlineBibSave( 2  ) = "Title"
+OnlineBibSave( 3  ) = "Modified"
+OnlineBibSave( 4  ) = "Expires"
+OnlineBibSave( 5  ) = "Workflow"
+OnlineBibSave( 6  ) = "Source"
+OnlineBibSave( 7  ) = "Delete Holdings"
+OnlineBibSave( 8  ) = "Export"
+OnlineBibSave( 9  ) = "Label"
+OnlineBibSave( 10 ) = "Produce"
+OnlineBibSave( 11 ) = "Update Holdings"
+OnlineBibSave( 12 ) = "Validate"
+OnlineBibSave( 13 ) = "My Status"
+OnlineBibSave( 14 ) = "Review"
+OnlineBibSave( 15 ) = "Reviewing Institutions"
+
+LocalBibSave( 0  )  = "Save #"
+LocalBibSave( 1  )  = "Contributor/Creator"
+LocalBibSave( 2  )  = "Title"
+LocalBibSave( 3  )  = "Control #"
+LocalBibSave( 4  )  = "Date"
+LocalBibSave( 5  )  = "Call Number"
+LocalBibSave( 6  )  = "Date/Time Added"
+LocalBibSave( 7  )  = "Held"
+LocalBibSave( 8  )  = "Code"
+LocalBibSave( 9  )  = "Format"
+LocalBibSave( 10 )  = "Library"
+LocalBibSave( 11 )  = "Workflow"
+LocalBibSave( 12 )  = "Source"
+LocalBibSave( 13 )  = "Delete Holdings"
+LocalBibSave( 14 )  = "Export"
+LocalBibSave( 15 )  = "Label"
+LocalBibSave( 16 )  = "Produce"
+LocalBibSave( 17 )  = "Replace"
+LocalBibSave( 18 )  = "Update Holdings"
+LocalBibSave( 19 )  = "Validate"
+LocalBibSave( 20 )  = "Submit"
+LocalBibSave( 21 )  = "My Status"
+LocalBibSave( 22 )  = "CatL"
+
+OnlineAuthSave( 0 ) = "Save #"
+OnlineAuthSave( 1 ) = "Main Entry"
+OnlineAuthSave( 2 ) = "Expires"
+OnlineAuthSave( 3 ) = "Workflow"
+OnlineAuthSave( 4 ) = "Review"
+OnlineAuthSave( 5 ) = "Reviewing Institutions"
+
+LocalAuthSave( 0  ) = "Save #"
+LocalAuthSave( 1  ) = "Main Entry"
+LocalAuthSave( 2  ) = "Control #"
+LocalAuthSave( 3  ) = "Date/Time Added"
+LocalAuthSave( 4  ) = "Code"
+LocalAuthSave( 5  ) = "Locked"
+LocalAuthSave( 6  ) = "Lock Expiration"
+LocalAuthSave( 7  ) = "Workflow"
+LocalAuthSave( 8  ) = "Add"
+LocalAuthSave( 9  ) = "Export"
+LocalAuthSave( 10 ) = "Replace"
+LocalAuthSave( 11 ) = "Validate"
+LocalAuthSave( 12 ) = "Submit"
+LocalAuthSave( 13 ) = "My Status"
+
+OnlineBibCD( 0 )    = "Name"
+OnlineBibCD( 1 )    = "My Status"
+
+LocalBibCD( 0 )     = "Name"
+LocalBibCD( 1 )     = "My Status"
+
+OnlineAuthCD( 0 )   = "Name"
+
+LocalAuthCD( 0 )    = "Name"
+LocalAuthCD( 1 )    = "My Status"
+
+ColTitle1$ = ""
+ColTitle2$ = ""
+ColTitle3$ = ""
+
+Instruction$ = "Click on a column title to copy it to, or remove it from, the selection box."
+
+' Find out what type of save file is displayed.
+
+TypeOfWindow% = CS.ItemType
+
+Select Case TypeOfWindow%
+
+  Case 7 'Online bibliographic save file list
+    ColumnID$    = "CSave"
+    ArraySize% = UBound( OnlineBibSave )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = OnlineBibSave( i )
+    Next i
+
+  Case 8 'Online bibliographic constant data list
+    ColumnID$    = "Const"
+    ArraySize% = UBound( OnlineBibCD )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = OnlineBibCD( i )
+    Next i
+
+  Case 13 'Online authority save file list
+    ColumnID$    = "ASave"
+    ArraySize% = UBound( OnlineAuthSave )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = OnlineAuthSave( i )
+    Next i
+
+  Case 15 'Online authority constant data list
+    ColumnID$    = "AutCD"
+    ArraySize% = UBound( OnlineAuthCD )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = OnlineAuthCD( i )
+    Next i
+
+  Case 21 'Local bibliographic save file list
+    ColumnID$    = "LFBib"
+    ArraySize% = UBound( LocalBibSave )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = LocalBibSave( i )
+    Next i
+
+  Case 22 'Local authority save file list
+    ColumnID$    = "LFAth"
+    ArraySize% = UBound( LocalAuthSave )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = LocalAuthSave( i )
+    Next i
+
+  Case 23 'Local bibliographic constant data list
+    ColumnID$    = "LFBCD"
+    ArraySize% = UBound( LocalBibCD )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = LocalBibCD( i )
+    Next i
+
+  Case 24 'Local authority constant data list
+    ColumnID$    = "LFACD"
+    ArraySize% = UBound( LocalAuthCD )
+    ReDim TempArray( ArraySize% )
+    For i = 0 To ArraySize%
+      TempArray( i ) = LocalAuthCD( i )
+    Next i
+
+  Case Else
+    MsgBox "Sorry, this macro works only while viewing a list from a save file or a constant data record list.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+
+End Select
+
+' Find the path to "Options.xml".
+
+i = 1
+Do
+  EnvironmentString$ = Environ( i )
+  If Left$( EnvironmentString$, 8 ) = "APPDATA=" Then
+      AppData$ = Mid$( EnvironmentString$, 9 )
+      Exit Do
+  End If
+  i = i + 1
+Loop Until EnvironmentString$ = "" Or i > MAX_ATTEMPTS_ENVIRON
+
+OptionsFilePath$  = AppData$ & "\OCLC\Connex\Profiles\MyProfile\Options.xml"
+
+On Error GoTo FileProblem:
+Attributes% = GetAttr( OptionsFilePath$ )
+
+If Attributes% = NORMAL_FILE Or Attributes% = NORMAL_FILE_ARCHIVE Then
+    FileNum% = FreeFile
+    On Error GoTo FileProblem:
+    Open OptionsFilePath$ For Input As #FileNum%
+    Do Until Eof( FileNum% )
+      Line Input #FileNum%, ItemKey$
+      p = InStr( ItemKey$, ColumnID$ )
+      If p > 0 Then
+          q = InStr( ItemKey$, COLUMN_SHOW )
+          If q > 0 Then
+              pq = InStr( ItemKey$, "value=" )
+              If pq > 0 Then
+                  ShowString$ = Mid$( ItemKey$, pq + 7 )
+                  ShowString$ = Left$( ShowString$, Len( ShowString$ ) - 4 )
+              End If
+              If OrderString$ <> "" Then Exit Do
+          End If
+          q = InStr( ItemKey$, COLUMN_ORDER )
+          If q > 0 Then
+              pq = InStr( ItemKey$, "value=" )
+              If pq > 0 Then
+                  OrderString$ = Mid$( ItemKey$, pq + 7 )
+                  OrderString$ = Left$( OrderString$, Len( OrderString$ ) - 4 )
+              End If
+              If ShowString$ <> "" Then Exit Do
+          End If
+      End If
+    Loop
+    Close
+    Reset
+    If OrderString$ = "" And ShowString$ = "" Then GoTo FileProblem:
+
+    For i = 0 To ArraySize%
+      If GetField( ShowString$, i + 1, "|" ) = "1" Then
+          ReDim Preserve AvailableTerms( LineCount% )
+          AvailableTerms( LineCount% ) = TempArray( i )
+          LineCount%                   = LineCount% + 1
+      End If
+    Next i
+End If
+
+Begin Dialog Dialog1Definition  252, 168, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      130, 144,  52,  14
+  CancelButton  190, 144,  52,  14
+  ListBox        10,  28, 112, 138, AvailableTerms(),                     .LstBoxAll
+  ListBox       130,  28, 112,  32, "",                                   .LstBoxSel
+  CheckBox      130,  58, 112,  12, "Skip row if cell in first selected", .ChkBoxSkip
+  Text          142,  68,  80,   8, "column is empty"
+  Text           10,   6, 232,   8, Instruction$
+  Text           10,  18, 108,   8, "Available columns:"
+  Text          130,  18, 108,   8, "Selected columns (maximum of 3):"
+  Text          130,  82, 112,  16, "",                                   .Already
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+FoundLine = TRUE
+i = 1
+LineCount% = 0
+Do
+  CellFound = CS.GetListCellData( i, ColTitle1$, ColData1$ )
+  If CellFound Then
+      ColData1$ = Trim$( ColData1$ )
+      If ColData1$ = "" And Dialog1.ChkBoxSkip = 1 Then
+          GoTo Increment:
+      End If
+      If ColTitle2$ <> "" Then
+          If CS.GetListCellData( i, ColTitle2$, ColData2$ ) Then
+              ColData2$ = Trim$( ColData2$ )
+              If ColTitle3$ <> "" Then
+                  If CS.GetListCellData( i, ColTitle3$, ColData3$ ) Then
+                      DataLine$ = ColData1$ & TB & ColData2$ & TB & Trim$( ColData3$ )
+                  End If
+                Else
+                  DataLine$ = ColData1$ & TB & ColData2$
+              End If
+          End If
+        Else
+          DataLine$ = ColData1$
+      End If
+  End If
+  If DataLine$ <> "" Then
+      DataLine$   = ConvertToISO88591( DataLine$ )
+      OutputList$ = OutputList$ & DataLine$ & CR
+      LineCount%  = LineCount% + 1
+  End If
+
+Increment:
+
+  i = i + 1
+  DataLine$ = ""
+  ColData1$ = ""
+  ColData2$ = ""
+  ColData3$ = ""
+Loop Until CellFound = FALSE
+
+Clipboard.Clear
+Clipboard.SetText OutputList$
+
+MsgBox "A list with " & Trim$( Str$( LineCount% ) ) & " entries has been placed on the Clipboard.", INFORMATION_MESSAGE, WaltsMacros$
+
+Exit Sub
+
+FileProblem:
+
+MsgBox "Sorry, there was an error accessing the Options.xml file.", CRITICAL_MESSAGE, WaltsMacros$
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillUnicodeArray
+
+' These are all the Unicode characters that exactly match the ISO/IEC 8859-1:1998 set or
+' visually approximate those characters, and so may serve as appropriate substitutes for
+' them. The first part of the string is the four-character Unicode code point; this is
+' followed by one to three sets of decimal codes for the ASCII equivalent (encoding a
+' string of one to three characters).
+
+UnicodeEquiv( 0   ) = "0020 032" '
+UnicodeEquiv( 1   ) = "0021 033" '!
+UnicodeEquiv( 2   ) = "0022 034" '"
+UnicodeEquiv( 3   ) = "0023 035" '#
+UnicodeEquiv( 4   ) = "0024 036" '[dollar sign]
+UnicodeEquiv( 5   ) = "0025 037" '[per cent sign]
+UnicodeEquiv( 6   ) = "0026 038" '&
+UnicodeEquiv( 7   ) = "0027 039" ''
+UnicodeEquiv( 8   ) = "0028 040" '(
+UnicodeEquiv( 9   ) = "0029 041" ')
+UnicodeEquiv( 10  ) = "002A 042" '*
+UnicodeEquiv( 11  ) = "002B 043" '+
+UnicodeEquiv( 12  ) = "002C 044" ',
+UnicodeEquiv( 13  ) = "002D 045" '-
+UnicodeEquiv( 14  ) = "002E 046" '.
+UnicodeEquiv( 15  ) = "002F 047" '/
+UnicodeEquiv( 16  ) = "0030 048" '0
+UnicodeEquiv( 17  ) = "0031 049" '1
+UnicodeEquiv( 18  ) = "0032 050" '2
+UnicodeEquiv( 19  ) = "0033 051" '3
+UnicodeEquiv( 20  ) = "0034 052" '4
+UnicodeEquiv( 21  ) = "0035 053" '5
+UnicodeEquiv( 22  ) = "0036 054" '6
+UnicodeEquiv( 23  ) = "0037 055" '7
+UnicodeEquiv( 24  ) = "0038 056" '8
+UnicodeEquiv( 25  ) = "0039 057" '9
+UnicodeEquiv( 26  ) = "003A 058" ':
+UnicodeEquiv( 27  ) = "003B 059" ';
+UnicodeEquiv( 28  ) = "003C 060" '<
+UnicodeEquiv( 29  ) = "003D 061" '=
+UnicodeEquiv( 30  ) = "003E 062" '>
+UnicodeEquiv( 31  ) = "003F 063" '?
+UnicodeEquiv( 32  ) = "0040 064" '@
+UnicodeEquiv( 33  ) = "0041 065" 'A
+UnicodeEquiv( 34  ) = "0042 066" 'B
+UnicodeEquiv( 35  ) = "0043 067" 'C
+UnicodeEquiv( 36  ) = "0044 068" 'D
+UnicodeEquiv( 37  ) = "0045 069" 'E
+UnicodeEquiv( 38  ) = "0046 070" 'F
+UnicodeEquiv( 39  ) = "0047 071" 'G
+UnicodeEquiv( 40  ) = "0048 072" 'H
+UnicodeEquiv( 41  ) = "0049 073" 'I
+UnicodeEquiv( 42  ) = "004A 074" 'J
+UnicodeEquiv( 43  ) = "004B 075" 'K
+UnicodeEquiv( 44  ) = "004C 076" 'L
+UnicodeEquiv( 45  ) = "004D 077" 'M
+UnicodeEquiv( 46  ) = "004E 078" 'N
+UnicodeEquiv( 47  ) = "004F 079" 'O
+UnicodeEquiv( 48  ) = "0050 080" 'P
+UnicodeEquiv( 49  ) = "0051 081" 'Q
+UnicodeEquiv( 50  ) = "0052 082" 'R
+UnicodeEquiv( 51  ) = "0053 083" 'S
+UnicodeEquiv( 52  ) = "0054 084" 'T
+UnicodeEquiv( 53  ) = "0055 085" 'U
+UnicodeEquiv( 54  ) = "0056 086" 'V
+UnicodeEquiv( 55  ) = "0057 087" 'W
+UnicodeEquiv( 56  ) = "0058 088" 'X
+UnicodeEquiv( 57  ) = "0059 089" 'Y
+UnicodeEquiv( 58  ) = "005A 090" 'Z
+UnicodeEquiv( 59  ) = "005B 091" '[
+UnicodeEquiv( 60  ) = "005C 092" '\
+UnicodeEquiv( 61  ) = "005D 093" ']
+UnicodeEquiv( 62  ) = "005E 094" '^
+UnicodeEquiv( 63  ) = "005F 095" '_
+UnicodeEquiv( 64  ) = "0060 096" '`
+UnicodeEquiv( 65  ) = "0061 097" 'a
+UnicodeEquiv( 66  ) = "0062 098" 'b
+UnicodeEquiv( 67  ) = "0063 099" 'c
+UnicodeEquiv( 68  ) = "0064 100" 'd
+UnicodeEquiv( 69  ) = "0065 101" 'e
+UnicodeEquiv( 70  ) = "0066 102" 'f
+UnicodeEquiv( 71  ) = "0067 103" 'g
+UnicodeEquiv( 72  ) = "0068 104" 'h
+UnicodeEquiv( 73  ) = "0069 105" 'i
+UnicodeEquiv( 74  ) = "006A 106" 'j
+UnicodeEquiv( 75  ) = "006B 107" 'k
+UnicodeEquiv( 76  ) = "006C 108" 'l
+UnicodeEquiv( 77  ) = "006D 109" 'm
+UnicodeEquiv( 78  ) = "006E 110" 'n
+UnicodeEquiv( 79  ) = "006F 111" 'o
+UnicodeEquiv( 80  ) = "0070 112" 'p
+UnicodeEquiv( 81  ) = "0071 113" 'q
+UnicodeEquiv( 82  ) = "0072 114" 'r
+UnicodeEquiv( 83  ) = "0073 115" 's
+UnicodeEquiv( 84  ) = "0074 116" 't
+UnicodeEquiv( 85  ) = "0075 117" 'u
+UnicodeEquiv( 86  ) = "0076 118" 'v
+UnicodeEquiv( 87  ) = "0077 119" 'w
+UnicodeEquiv( 88  ) = "0078 120" 'x
+UnicodeEquiv( 89  ) = "0079 121" 'y
+UnicodeEquiv( 90  ) = "007A 122" 'z
+UnicodeEquiv( 91  ) = "007B 123" '{
+UnicodeEquiv( 92  ) = "007C 124" '|
+UnicodeEquiv( 93  ) = "007D 125" '}
+UnicodeEquiv( 94  ) = "007E 126" '~
+UnicodeEquiv( 95  ) = "00A1 161" '¡
+UnicodeEquiv( 96  ) = "00A2 162" '¢
+UnicodeEquiv( 97  ) = "00A3 163" '£
+UnicodeEquiv( 98  ) = "00A4 164" '¤
+UnicodeEquiv( 99  ) = "00A5 165" '¥
+UnicodeEquiv( 100 ) = "00A6 166" '¤
+UnicodeEquiv( 101 ) = "00A7 167" '§
+UnicodeEquiv( 102 ) = "00A8 168" '¨
+UnicodeEquiv( 103 ) = "00A9 169" '©
+UnicodeEquiv( 104 ) = "00AA 170" 'ª
+UnicodeEquiv( 105 ) = "00AB 171" '«
+UnicodeEquiv( 106 ) = "00AC 172" '¬
+UnicodeEquiv( 107 ) = "00AD 173" '­
+UnicodeEquiv( 108 ) = "00AE 174" '®
+UnicodeEquiv( 109 ) = "00AF 175" '¯
+UnicodeEquiv( 110 ) = "00B0 176" '°
+UnicodeEquiv( 111 ) = "00B1 177" '±
+UnicodeEquiv( 112 ) = "00B2 178" '²
+UnicodeEquiv( 113 ) = "00B3 179" '³
+UnicodeEquiv( 114 ) = "00B4 180" '´
+UnicodeEquiv( 115 ) = "00B5 181" 'µ
+UnicodeEquiv( 116 ) = "00B6 182" '¶
+UnicodeEquiv( 117 ) = "00B7 183" '·
+UnicodeEquiv( 118 ) = "00B8 184" '¸
+UnicodeEquiv( 119 ) = "00B9 185" '¹
+UnicodeEquiv( 120 ) = "00BA 186" 'º
+UnicodeEquiv( 121 ) = "00BB 187" '»
+UnicodeEquiv( 122 ) = "00BC 188" '¼
+UnicodeEquiv( 123 ) = "00BD 189" '½
+UnicodeEquiv( 124 ) = "00BE 190" '¾
+UnicodeEquiv( 125 ) = "00BF 191" '¿
+UnicodeEquiv( 126 ) = "00C0 192" 'À
+UnicodeEquiv( 127 ) = "00C1 193" 'Á
+UnicodeEquiv( 128 ) = "00C2 194" 'Â
+UnicodeEquiv( 129 ) = "00C3 195" 'Ã
+UnicodeEquiv( 130 ) = "00C4 196" 'Ä
+UnicodeEquiv( 131 ) = "00C5 197" 'Å
+UnicodeEquiv( 132 ) = "00C6 198" 'Æ
+UnicodeEquiv( 133 ) = "00C7 199" 'Ç
+UnicodeEquiv( 134 ) = "00C8 200" 'È
+UnicodeEquiv( 135 ) = "00C9 201" 'É
+UnicodeEquiv( 136 ) = "00CA 202" 'Ê
+UnicodeEquiv( 137 ) = "00CB 203" 'Ë
+UnicodeEquiv( 138 ) = "00CC 204" 'Ì
+UnicodeEquiv( 139 ) = "00CD 205" 'Í
+UnicodeEquiv( 140 ) = "00CE 206" 'Î
+UnicodeEquiv( 141 ) = "00CF 207" 'Ï
+UnicodeEquiv( 142 ) = "00D0 208" 'Ð
+UnicodeEquiv( 143 ) = "00D1 209" 'Ñ
+UnicodeEquiv( 144 ) = "00D2 210" 'Ò
+UnicodeEquiv( 145 ) = "00D3 211" 'Ó
+UnicodeEquiv( 146 ) = "00D4 212" 'Ô
+UnicodeEquiv( 147 ) = "00D5 213" 'Õ
+UnicodeEquiv( 148 ) = "00D6 214" 'Ö
+UnicodeEquiv( 149 ) = "00D7 215" '×
+UnicodeEquiv( 150 ) = "00D8 216" 'Ø
+UnicodeEquiv( 151 ) = "00D9 217" 'Ù
+UnicodeEquiv( 152 ) = "00DA 218" 'Ú
+UnicodeEquiv( 153 ) = "00DB 219" 'Û
+UnicodeEquiv( 154 ) = "00DC 220" 'Ü
+UnicodeEquiv( 155 ) = "00DD 221" 'Ý
+UnicodeEquiv( 156 ) = "00DE 222" 'Þ
+UnicodeEquiv( 157 ) = "00DF 223" 'ß
+UnicodeEquiv( 158 ) = "00E0 224" 'à
+UnicodeEquiv( 159 ) = "00E1 225" 'á
+UnicodeEquiv( 160 ) = "00E2 226" 'â
+UnicodeEquiv( 161 ) = "00E3 227" 'ã
+UnicodeEquiv( 162 ) = "00E4 228" 'ä
+UnicodeEquiv( 163 ) = "00E5 229" 'å
+UnicodeEquiv( 164 ) = "00E6 230" 'æ
+UnicodeEquiv( 165 ) = "00E7 231" 'ç
+UnicodeEquiv( 166 ) = "00E8 232" 'è
+UnicodeEquiv( 167 ) = "00E9 233" 'é
+UnicodeEquiv( 168 ) = "00EA 234" 'ê
+UnicodeEquiv( 169 ) = "00EB 235" 'ë
+UnicodeEquiv( 170 ) = "00EC 236" 'ì
+UnicodeEquiv( 171 ) = "00ED 237" 'í
+UnicodeEquiv( 172 ) = "00EE 238" 'î
+UnicodeEquiv( 173 ) = "00EF 239" 'ï
+UnicodeEquiv( 174 ) = "00F0 240" 'ð
+UnicodeEquiv( 175 ) = "00F1 241" 'ñ
+UnicodeEquiv( 176 ) = "00F2 242" 'ò
+UnicodeEquiv( 177 ) = "00F3 243" 'ó
+UnicodeEquiv( 178 ) = "00F4 244" 'ô
+UnicodeEquiv( 179 ) = "00F5 245" 'õ
+UnicodeEquiv( 180 ) = "00F6 246" 'ö
+UnicodeEquiv( 181 ) = "00F7 247" '÷
+UnicodeEquiv( 182 ) = "00F8 248" 'ø
+UnicodeEquiv( 183 ) = "00F9 249" 'ù
+UnicodeEquiv( 184 ) = "00FA 250" 'ú
+UnicodeEquiv( 185 ) = "00FB 251" 'û
+UnicodeEquiv( 186 ) = "00FC 252" 'ü
+UnicodeEquiv( 187 ) = "00FD 253" 'ý
+UnicodeEquiv( 188 ) = "00FE 254" 'þ
+UnicodeEquiv( 189 ) = "00FF 255" 'ÿ
+UnicodeEquiv( 190 ) = "0100 065" 'A
+UnicodeEquiv( 191 ) = "0101 097" 'a
+UnicodeEquiv( 192 ) = "0102 065" 'A
+UnicodeEquiv( 193 ) = "0103 097" 'a
+UnicodeEquiv( 194 ) = "0104 065" 'A
+UnicodeEquiv( 195 ) = "0105 097" 'a
+UnicodeEquiv( 196 ) = "0106 067" 'C
+UnicodeEquiv( 197 ) = "0107 099" 'c
+UnicodeEquiv( 198 ) = "0108 067" 'C
+UnicodeEquiv( 199 ) = "0109 099" 'c
+UnicodeEquiv( 200 ) = "010A 067" 'C
+UnicodeEquiv( 201 ) = "010B 099" 'c
+UnicodeEquiv( 202 ) = "010C 067" 'C
+UnicodeEquiv( 203 ) = "010D 099" 'c
+UnicodeEquiv( 204 ) = "010E 068" 'D
+UnicodeEquiv( 205 ) = "010F 100" 'd
+UnicodeEquiv( 206 ) = "0110 208" 'Ð
+UnicodeEquiv( 207 ) = "0111 100" 'd
+UnicodeEquiv( 208 ) = "0112 069" 'E
+UnicodeEquiv( 209 ) = "0113 101" 'e
+UnicodeEquiv( 210 ) = "0114 069" 'E
+UnicodeEquiv( 211 ) = "0115 101" 'e
+UnicodeEquiv( 212 ) = "0116 069" 'E
+UnicodeEquiv( 213 ) = "0117 101" 'e
+UnicodeEquiv( 214 ) = "0118 069" 'E
+UnicodeEquiv( 215 ) = "0119 101" 'e
+UnicodeEquiv( 216 ) = "011A 069" 'E
+UnicodeEquiv( 217 ) = "011B 101" 'e
+UnicodeEquiv( 218 ) = "011C 071" 'G
+UnicodeEquiv( 219 ) = "011D 103" 'g
+UnicodeEquiv( 220 ) = "011E 071" 'G
+UnicodeEquiv( 221 ) = "011F 103" 'g
+UnicodeEquiv( 222 ) = "0120 071" 'G
+UnicodeEquiv( 223 ) = "0121 103" 'g
+UnicodeEquiv( 224 ) = "0122 071" 'G
+UnicodeEquiv( 225 ) = "0123 103" 'g
+UnicodeEquiv( 226 ) = "0124 072" 'H
+UnicodeEquiv( 227 ) = "0125 104" 'h
+UnicodeEquiv( 228 ) = "0126 072" 'H
+UnicodeEquiv( 229 ) = "0127 104" 'h
+UnicodeEquiv( 230 ) = "0128 073" 'I
+UnicodeEquiv( 231 ) = "0129 105" 'i
+UnicodeEquiv( 232 ) = "012A 073" 'I
+UnicodeEquiv( 233 ) = "012B 105" 'i
+UnicodeEquiv( 234 ) = "012C 073" 'I
+UnicodeEquiv( 235 ) = "012D 105" 'i
+UnicodeEquiv( 236 ) = "012E 073" 'I
+UnicodeEquiv( 237 ) = "012F 105" 'i
+UnicodeEquiv( 238 ) = "0130 073" 'I
+UnicodeEquiv( 239 ) = "0131 105" 'i
+UnicodeEquiv( 240 ) = "0132 073 074" 'IJ
+UnicodeEquiv( 241 ) = "0133 105 106" 'ij
+UnicodeEquiv( 242 ) = "0134 074" 'J
+UnicodeEquiv( 243 ) = "0135 106" 'j
+UnicodeEquiv( 244 ) = "0136 075" 'K
+UnicodeEquiv( 245 ) = "0137 107" 'k
+UnicodeEquiv( 246 ) = "0138 107" 'k
+UnicodeEquiv( 247 ) = "0139 076" 'L
+UnicodeEquiv( 248 ) = "013A 108" 'l
+UnicodeEquiv( 249 ) = "013B 076" 'L
+UnicodeEquiv( 250 ) = "013C 108" 'l
+UnicodeEquiv( 251 ) = "013D 076" 'L
+UnicodeEquiv( 252 ) = "013E 108" 'l
+UnicodeEquiv( 253 ) = "013F 076" 'L
+UnicodeEquiv( 254 ) = "0140 108" 'l
+UnicodeEquiv( 255 ) = "0141 076" 'L
+UnicodeEquiv( 256 ) = "0142 108" 'l
+UnicodeEquiv( 257 ) = "0143 078" 'N
+UnicodeEquiv( 258 ) = "0144 110" 'n
+UnicodeEquiv( 259 ) = "0145 078" 'N
+UnicodeEquiv( 260 ) = "0146 110" 'n
+UnicodeEquiv( 261 ) = "0147 078" 'N
+UnicodeEquiv( 262 ) = "0148 110" 'n
+UnicodeEquiv( 263 ) = "0149 039 110" 'n
+UnicodeEquiv( 264 ) = "014C 079" 'O
+UnicodeEquiv( 265 ) = "014D 111" 'o
+UnicodeEquiv( 266 ) = "014E 079" 'O
+UnicodeEquiv( 267 ) = "014F 111" 'o
+UnicodeEquiv( 268 ) = "0150 079" 'O
+UnicodeEquiv( 269 ) = "0151 111" 'o
+UnicodeEquiv( 270 ) = "0152 079 069" 'OE
+UnicodeEquiv( 271 ) = "0153 111 101" 'oe
+UnicodeEquiv( 272 ) = "0154 082" 'R
+UnicodeEquiv( 273 ) = "0155 114" 'r
+UnicodeEquiv( 274 ) = "0156 082" 'R
+UnicodeEquiv( 275 ) = "0157 114" 'r
+UnicodeEquiv( 276 ) = "0158 082" 'R
+UnicodeEquiv( 277 ) = "0159 114" 'r
+UnicodeEquiv( 278 ) = "015A 083" 'S
+UnicodeEquiv( 279 ) = "015B 115" 's
+UnicodeEquiv( 280 ) = "015C 083" 'S
+UnicodeEquiv( 281 ) = "015D 115" 's
+UnicodeEquiv( 282 ) = "015E 083" 'S
+UnicodeEquiv( 283 ) = "015F 115" 's
+UnicodeEquiv( 284 ) = "0160 083" 'S
+UnicodeEquiv( 285 ) = "0161 115" 's
+UnicodeEquiv( 286 ) = "0162 084" 'T
+UnicodeEquiv( 287 ) = "0163 116" 't
+UnicodeEquiv( 288 ) = "0164 084" 'T
+UnicodeEquiv( 289 ) = "0165 116" 't
+UnicodeEquiv( 290 ) = "0166 084" 'T
+UnicodeEquiv( 291 ) = "0167 116" 't
+UnicodeEquiv( 292 ) = "0168 085" 'U
+UnicodeEquiv( 293 ) = "0169 117" 'u
+UnicodeEquiv( 294 ) = "016A 085" 'U
+UnicodeEquiv( 295 ) = "016B 117" 'u
+UnicodeEquiv( 296 ) = "016C 085" 'U
+UnicodeEquiv( 297 ) = "016D 117" 'u
+UnicodeEquiv( 298 ) = "016E 085" 'U
+UnicodeEquiv( 299 ) = "016F 117" 'u
+UnicodeEquiv( 300 ) = "0170 085" 'U
+UnicodeEquiv( 301 ) = "0171 117" 'u
+UnicodeEquiv( 302 ) = "0172 085" 'U
+UnicodeEquiv( 303 ) = "0173 117" 'u
+UnicodeEquiv( 304 ) = "0174 087" 'W
+UnicodeEquiv( 305 ) = "0175 119" 'w
+UnicodeEquiv( 306 ) = "0176 089" 'Y
+UnicodeEquiv( 307 ) = "0177 121" 'y
+UnicodeEquiv( 308 ) = "0178 089" 'Y
+UnicodeEquiv( 309 ) = "0179 090" 'Z
+UnicodeEquiv( 310 ) = "017A 122" 'z
+UnicodeEquiv( 311 ) = "017B 090" 'Z
+UnicodeEquiv( 312 ) = "017C 122" 'z
+UnicodeEquiv( 313 ) = "017D 090" 'Z
+UnicodeEquiv( 314 ) = "017E 122" 'z
+UnicodeEquiv( 315 ) = "017F 115" 's
+UnicodeEquiv( 316 ) = "0180 098" 'b
+UnicodeEquiv( 317 ) = "0181 066" 'B
+UnicodeEquiv( 318 ) = "0182 066" 'B
+UnicodeEquiv( 319 ) = "0183 098" 'b
+UnicodeEquiv( 320 ) = "0187 067" 'C
+UnicodeEquiv( 321 ) = "0188 099" 'c
+UnicodeEquiv( 322 ) = "0189 208" 'Ð
+UnicodeEquiv( 323 ) = "018A 068" 'D
+UnicodeEquiv( 324 ) = "018B 068" 'D
+UnicodeEquiv( 325 ) = "018C 100" 'd
+UnicodeEquiv( 326 ) = "0191 070" 'F
+UnicodeEquiv( 327 ) = "0192 102" 'f
+UnicodeEquiv( 328 ) = "0193 071" 'G
+UnicodeEquiv( 329 ) = "0197 073" 'I
+UnicodeEquiv( 330 ) = "0198 075" 'K
+UnicodeEquiv( 331 ) = "0199 107" 'k
+UnicodeEquiv( 332 ) = "019A 108" 'l
+UnicodeEquiv( 333 ) = "019D 078" 'N
+UnicodeEquiv( 334 ) = "019E 110" 'n
+UnicodeEquiv( 335 ) = "019F 213" 'Õ
+UnicodeEquiv( 336 ) = "01A0 079" 'O
+UnicodeEquiv( 337 ) = "01A1 111" 'o
+UnicodeEquiv( 338 ) = "01A4 080" 'P
+UnicodeEquiv( 339 ) = "01A5 112" 'p
+UnicodeEquiv( 340 ) = "01AB 116" 't
+UnicodeEquiv( 341 ) = "01AC 084" 'T
+UnicodeEquiv( 342 ) = "01AD 116" 't
+UnicodeEquiv( 343 ) = "01AE 084" 'T
+UnicodeEquiv( 344 ) = "01AF 085" 'U
+UnicodeEquiv( 345 ) = "01B0 117" 'u
+UnicodeEquiv( 346 ) = "01B2 086" 'V
+UnicodeEquiv( 347 ) = "01B3 089" 'Y
+UnicodeEquiv( 348 ) = "01B4 121" 'y
+UnicodeEquiv( 349 ) = "01B5 090" 'Z
+UnicodeEquiv( 350 ) = "01B6 122" 'z
+UnicodeEquiv( 351 ) = "01C0 124" '|
+UnicodeEquiv( 352 ) = "01C2 036" '[dollar sign]
+UnicodeEquiv( 353 ) = "01C3 033" '!
+UnicodeEquiv( 354 ) = "01C4 068 090" 'DZ
+UnicodeEquiv( 355 ) = "01C5 068 122" 'Dz
+UnicodeEquiv( 356 ) = "01C6 100 122" 'dz
+UnicodeEquiv( 357 ) = "01C7 076 074" 'LJ
+UnicodeEquiv( 358 ) = "01C8 076 106" 'Lj
+UnicodeEquiv( 359 ) = "01C9 108 106" 'lj
+UnicodeEquiv( 360 ) = "01CA 078 074" 'NJ
+UnicodeEquiv( 361 ) = "01CB 078 106" 'Nj
+UnicodeEquiv( 362 ) = "01CC 110 106" 'nj
+UnicodeEquiv( 363 ) = "01CD 065" 'A
+UnicodeEquiv( 364 ) = "01CE 097" 'a
+UnicodeEquiv( 365 ) = "01CF 073" 'I
+UnicodeEquiv( 366 ) = "01D0 105" 'i
+UnicodeEquiv( 367 ) = "01D1 079" 'O
+UnicodeEquiv( 368 ) = "01D2 111" 'o
+UnicodeEquiv( 369 ) = "01D3 085" 'U
+UnicodeEquiv( 370 ) = "01D4 117" 'u
+UnicodeEquiv( 371 ) = "01D5 220" 'Ü
+UnicodeEquiv( 372 ) = "01D6 252" 'ü
+UnicodeEquiv( 373 ) = "01D7 220" 'Ü
+UnicodeEquiv( 374 ) = "01D8 252" 'ü
+UnicodeEquiv( 375 ) = "01D9 220" 'Ü
+UnicodeEquiv( 376 ) = "01DA 252" 'ü
+UnicodeEquiv( 377 ) = "01DB 220" 'Ü
+UnicodeEquiv( 378 ) = "01DC 252" 'ü
+UnicodeEquiv( 379 ) = "01DE 196" 'Ä
+UnicodeEquiv( 380 ) = "01DF 228" 'ä
+UnicodeEquiv( 381 ) = "01E0 065" 'A
+UnicodeEquiv( 382 ) = "01E1 097" 'a
+UnicodeEquiv( 383 ) = "01E2 065 069" 'AE
+UnicodeEquiv( 384 ) = "01E3 097 101" 'ae
+UnicodeEquiv( 385 ) = "01E4 071" 'G
+UnicodeEquiv( 386 ) = "01E5 103" 'g
+UnicodeEquiv( 387 ) = "01E6 071" 'G
+UnicodeEquiv( 388 ) = "01E7 103" 'g
+UnicodeEquiv( 389 ) = "01E8 075" 'K
+UnicodeEquiv( 390 ) = "01E9 107" 'k
+UnicodeEquiv( 391 ) = "01EA 079" 'O
+UnicodeEquiv( 392 ) = "01EB 111" 'o
+UnicodeEquiv( 393 ) = "01EC 079" 'O
+UnicodeEquiv( 394 ) = "01ED 111" 'o
+UnicodeEquiv( 395 ) = "01F0 106" 'j
+UnicodeEquiv( 396 ) = "01F1 068 090" 'DZ
+UnicodeEquiv( 397 ) = "01F2 068 122" 'Dz
+UnicodeEquiv( 398 ) = "01F3 100 122" 'dz
+UnicodeEquiv( 399 ) = "01F4 071" 'G
+UnicodeEquiv( 400 ) = "01F5 103" 'g
+UnicodeEquiv( 401 ) = "01F8 078" 'N
+UnicodeEquiv( 402 ) = "01F9 110" 'n
+UnicodeEquiv( 403 ) = "01FA 197" 'Å
+UnicodeEquiv( 404 ) = "01FB 229" 'å
+UnicodeEquiv( 405 ) = "01FC 065 201" 'AE
+UnicodeEquiv( 406 ) = "01FD 097 101" 'ae
+UnicodeEquiv( 407 ) = "01FE 216" 'Ø
+UnicodeEquiv( 408 ) = "01FF 248" 'ø
+UnicodeEquiv( 409 ) = "0200 065" 'A
+UnicodeEquiv( 410 ) = "0201 097" 'a
+UnicodeEquiv( 411 ) = "0202 065" 'A
+UnicodeEquiv( 412 ) = "0203 097" 'a
+UnicodeEquiv( 413 ) = "0204 069" 'E
+UnicodeEquiv( 414 ) = "0205 101" 'e
+UnicodeEquiv( 415 ) = "0206 069" 'E
+UnicodeEquiv( 416 ) = "0207 101" 'e
+UnicodeEquiv( 417 ) = "0208 073" 'I
+UnicodeEquiv( 418 ) = "0209 105" 'i
+UnicodeEquiv( 419 ) = "020A 073" 'I
+UnicodeEquiv( 420 ) = "020B 105" 'i
+UnicodeEquiv( 421 ) = "020C 079" 'O
+UnicodeEquiv( 422 ) = "020D 111" 'o
+UnicodeEquiv( 423 ) = "020E 079" 'O
+UnicodeEquiv( 424 ) = "020F 111" 'o
+UnicodeEquiv( 425 ) = "0210 082" 'R
+UnicodeEquiv( 426 ) = "0211 114" 'r
+UnicodeEquiv( 427 ) = "0212 082" 'R
+UnicodeEquiv( 428 ) = "0213 114" 'r
+UnicodeEquiv( 429 ) = "0214 085" 'U
+UnicodeEquiv( 430 ) = "0215 117" 'u
+UnicodeEquiv( 431 ) = "0216 085" 'U
+UnicodeEquiv( 432 ) = "0217 117" 'u
+UnicodeEquiv( 433 ) = "0218 083" 'S
+UnicodeEquiv( 434 ) = "0219 115" 's
+UnicodeEquiv( 435 ) = "021A 084" 'T
+UnicodeEquiv( 436 ) = "021B 116" 't
+UnicodeEquiv( 437 ) = "021E 072" 'H
+UnicodeEquiv( 438 ) = "021F 104" 'h
+UnicodeEquiv( 439 ) = "0220 078" 'N
+UnicodeEquiv( 440 ) = "0221 100" 'd
+UnicodeEquiv( 441 ) = "0224 090" 'Z
+UnicodeEquiv( 442 ) = "0225 122" 'z
+UnicodeEquiv( 443 ) = "0226 065" 'A
+UnicodeEquiv( 444 ) = "0227 097" 'a
+UnicodeEquiv( 445 ) = "0228 069" 'E
+UnicodeEquiv( 446 ) = "0229 101" 'e
+UnicodeEquiv( 447 ) = "022A 214" 'Ö
+UnicodeEquiv( 448 ) = "022B 246" 'ö
+UnicodeEquiv( 449 ) = "022C 213" 'Õ
+UnicodeEquiv( 450 ) = "022D 245" 'õ
+UnicodeEquiv( 451 ) = "022E 079" 'O
+UnicodeEquiv( 452 ) = "022F 111" 'o
+UnicodeEquiv( 453 ) = "0230 079" 'O
+UnicodeEquiv( 454 ) = "0231 111" 'o
+UnicodeEquiv( 455 ) = "0232 089" 'Y
+UnicodeEquiv( 456 ) = "0233 121" 'y
+UnicodeEquiv( 457 ) = "0234 108" 'l
+UnicodeEquiv( 458 ) = "0235 110" 'n
+UnicodeEquiv( 459 ) = "0236 121" 'y
+UnicodeEquiv( 460 ) = "0237 106" 'j
+UnicodeEquiv( 461 ) = "023A 065" 'A
+UnicodeEquiv( 462 ) = "023B 067" 'C
+UnicodeEquiv( 463 ) = "023C 099" 'c
+UnicodeEquiv( 464 ) = "023D 076" 'L
+UnicodeEquiv( 465 ) = "023E 084" 'T
+UnicodeEquiv( 466 ) = "023F 115" 's
+UnicodeEquiv( 467 ) = "0240 122" 'z
+UnicodeEquiv( 468 ) = "0243 066" 'B
+UnicodeEquiv( 469 ) = "0244 085" 'U
+UnicodeEquiv( 470 ) = "0246 069" 'E
+UnicodeEquiv( 471 ) = "0247 101" 'e
+UnicodeEquiv( 472 ) = "0248 074" 'J
+UnicodeEquiv( 473 ) = "0249 106" 'j
+UnicodeEquiv( 474 ) = "024A 081" 'Q
+UnicodeEquiv( 475 ) = "024B 113" 'q
+UnicodeEquiv( 476 ) = "024C 082" 'R
+UnicodeEquiv( 477 ) = "024D 114" 'r
+UnicodeEquiv( 478 ) = "024E 089" 'Y
+UnicodeEquiv( 479 ) = "024F 121" 'y
+UnicodeEquiv( 480 ) = "02B9 039" ''
+UnicodeEquiv( 481 ) = "02BA 034" '"
+UnicodeEquiv( 482 ) = "02BB 039" ''
+UnicodeEquiv( 483 ) = "02BC 039" ''
+UnicodeEquiv( 484 ) = "02BD 039" ''
+UnicodeEquiv( 485 ) = "02C6 094" 'ˆ
+UnicodeEquiv( 486 ) = "02C8 039" ''
+UnicodeEquiv( 487 ) = "02C9 175" '¯
+UnicodeEquiv( 488 ) = "02CA 180" '´
+UnicodeEquiv( 489 ) = "02CB 096" '`
+UnicodeEquiv( 490 ) = "02D6 043" '+
+UnicodeEquiv( 491 ) = "02D7 045" '-
+UnicodeEquiv( 492 ) = "02DA 176" '°
+UnicodeEquiv( 493 ) = "02DC 126" '~
+UnicodeEquiv( 494 ) = "02DD 034" '"
+UnicodeEquiv( 495 ) = "02EE 034" '"
+UnicodeEquiv( 496 ) = "02F4 096" '`
+UnicodeEquiv( 497 ) = "02F6 034" '"
+UnicodeEquiv( 498 ) = "1E00 065" 'A
+UnicodeEquiv( 499 ) = "1E01 097" 'a
+UnicodeEquiv( 500 ) = "1E02 066" 'B
+UnicodeEquiv( 501 ) = "1E03 098" 'b
+UnicodeEquiv( 502 ) = "1E04 066" 'B
+UnicodeEquiv( 503 ) = "1E05 098" 'b
+UnicodeEquiv( 504 ) = "1E06 066" 'B
+UnicodeEquiv( 505 ) = "1E07 098" 'b
+UnicodeEquiv( 506 ) = "1E08 199" 'Ç
+UnicodeEquiv( 507 ) = "1E09 231" 'ç
+UnicodeEquiv( 508 ) = "1E0A 068" 'D
+UnicodeEquiv( 509 ) = "1E0B 100" 'd
+UnicodeEquiv( 510 ) = "1E0C 068" 'D
+UnicodeEquiv( 511 ) = "1E0D 100" 'd
+UnicodeEquiv( 512 ) = "1E0E 068" 'D
+UnicodeEquiv( 513 ) = "1E0F 100" 'd
+UnicodeEquiv( 514 ) = "1E10 199" 'Ç
+UnicodeEquiv( 515 ) = "1E11 100" 'd
+UnicodeEquiv( 516 ) = "1E12 068" 'D
+UnicodeEquiv( 517 ) = "1E13 100" 'd
+UnicodeEquiv( 518 ) = "1E14 200" 'È
+UnicodeEquiv( 519 ) = "1E15 232" 'è
+UnicodeEquiv( 520 ) = "1E16 201" 'É
+UnicodeEquiv( 521 ) = "1E17 233" 'é
+UnicodeEquiv( 522 ) = "1E18 069" 'E
+UnicodeEquiv( 523 ) = "1E19 101" 'e
+UnicodeEquiv( 524 ) = "1E1A 069" 'E
+UnicodeEquiv( 525 ) = "1E1B 101" 'e
+UnicodeEquiv( 526 ) = "1E1C 069" 'E
+UnicodeEquiv( 527 ) = "1E1D 232" 'è
+UnicodeEquiv( 528 ) = "1E1E 070" 'F
+UnicodeEquiv( 529 ) = "1E1F 102" 'f
+UnicodeEquiv( 530 ) = "1E20 071" 'G
+UnicodeEquiv( 531 ) = "1E21 103" 'g
+UnicodeEquiv( 532 ) = "1E22 072" 'H
+UnicodeEquiv( 533 ) = "1E23 104" 'h
+UnicodeEquiv( 534 ) = "1E24 072" 'H
+UnicodeEquiv( 535 ) = "1E25 104" 'h
+UnicodeEquiv( 536 ) = "1E26 072" 'H
+UnicodeEquiv( 537 ) = "1E27 104" 'h
+UnicodeEquiv( 538 ) = "1E28 072" 'H
+UnicodeEquiv( 539 ) = "1E29 104" 'h
+UnicodeEquiv( 540 ) = "1E2A 072" 'H
+UnicodeEquiv( 541 ) = "1E2B 104" 'h
+UnicodeEquiv( 542 ) = "1E2C 073" 'I
+UnicodeEquiv( 543 ) = "1E2D 105" 'i
+UnicodeEquiv( 544 ) = "1E2E 207" 'Ï
+UnicodeEquiv( 545 ) = "1E2F 239" 'ï
+UnicodeEquiv( 546 ) = "1E30 075" 'K
+UnicodeEquiv( 547 ) = "1E31 107" 'k
+UnicodeEquiv( 548 ) = "1E32 075" 'K
+UnicodeEquiv( 549 ) = "1E33 107" 'k
+UnicodeEquiv( 550 ) = "1E34 075" 'K
+UnicodeEquiv( 551 ) = "1E35 107" 'k
+UnicodeEquiv( 552 ) = "1E36 076" 'L
+UnicodeEquiv( 553 ) = "1E37 108" 'l
+UnicodeEquiv( 554 ) = "1E38 076" 'L
+UnicodeEquiv( 555 ) = "1E39 108" 'l
+UnicodeEquiv( 556 ) = "1E3A 076" 'L
+UnicodeEquiv( 557 ) = "1E3B 108" 'l
+UnicodeEquiv( 558 ) = "1E3C 076" 'L
+UnicodeEquiv( 559 ) = "1E3D 108" 'l
+UnicodeEquiv( 560 ) = "1E3E 077" 'M
+UnicodeEquiv( 561 ) = "1E3F 109" 'm
+UnicodeEquiv( 562 ) = "1E40 077" 'M
+UnicodeEquiv( 563 ) = "1E41 109" 'm
+UnicodeEquiv( 564 ) = "1E42 077" 'M
+UnicodeEquiv( 565 ) = "1E43 109" 'm
+UnicodeEquiv( 566 ) = "1E44 078" 'N
+UnicodeEquiv( 567 ) = "1E45 110" 'n
+UnicodeEquiv( 568 ) = "1E46 078" 'N
+UnicodeEquiv( 569 ) = "1E47 110" 'n
+UnicodeEquiv( 570 ) = "1E48 078" 'N
+UnicodeEquiv( 571 ) = "1E49 110" 'n
+UnicodeEquiv( 572 ) = "1E4A 078" 'N
+UnicodeEquiv( 573 ) = "1E4B 110" 'n
+UnicodeEquiv( 574 ) = "1E4C 213" 'Õ
+UnicodeEquiv( 575 ) = "1E4D 245" 'õ
+UnicodeEquiv( 576 ) = "1E4E 213" 'Õ
+UnicodeEquiv( 577 ) = "1E4F 245" 'õ
+UnicodeEquiv( 578 ) = "1E50 210" 'Ò
+UnicodeEquiv( 579 ) = "1E51 242" 'ò
+UnicodeEquiv( 580 ) = "1E52 211" 'Ó
+UnicodeEquiv( 581 ) = "1E53 243" 'ó
+UnicodeEquiv( 582 ) = "1E54 080" 'P
+UnicodeEquiv( 583 ) = "1E55 112" 'p
+UnicodeEquiv( 584 ) = "1E56 080" 'P
+UnicodeEquiv( 585 ) = "1E57 112" 'p
+UnicodeEquiv( 586 ) = "1E58 082" 'R
+UnicodeEquiv( 587 ) = "1E59 114" 'r
+UnicodeEquiv( 588 ) = "1E5A 082" 'R
+UnicodeEquiv( 589 ) = "1E5B 114" 'r
+UnicodeEquiv( 590 ) = "1E5C 082" 'R
+UnicodeEquiv( 591 ) = "1E5D 114" 'r
+UnicodeEquiv( 592 ) = "1E5E 082" 'R
+UnicodeEquiv( 593 ) = "1E5F 114" 'r
+UnicodeEquiv( 594 ) = "1E60 083" 'S
+UnicodeEquiv( 595 ) = "1E61 115" 's
+UnicodeEquiv( 596 ) = "1E62 083" 'S
+UnicodeEquiv( 597 ) = "1E63 115" 's
+UnicodeEquiv( 598 ) = "1E64 083" 'S
+UnicodeEquiv( 599 ) = "1E65 115" 's
+UnicodeEquiv( 600 ) = "1E66 083" 'S
+UnicodeEquiv( 601 ) = "1E67 115" 's
+UnicodeEquiv( 602 ) = "1E68 083" 'S
+UnicodeEquiv( 603 ) = "1E69 115" 's
+UnicodeEquiv( 604 ) = "1E6A 084" 'T
+UnicodeEquiv( 605 ) = "1E6B 116" 't
+UnicodeEquiv( 606 ) = "1E6C 084" 'T
+UnicodeEquiv( 607 ) = "1E6D 116" 't
+UnicodeEquiv( 608 ) = "1E6E 084" 'T
+UnicodeEquiv( 609 ) = "1E6F 116" 't
+UnicodeEquiv( 610 ) = "1E70 084" 'T
+UnicodeEquiv( 611 ) = "1E71 116" 't
+UnicodeEquiv( 612 ) = "1E72 085" 'U
+UnicodeEquiv( 613 ) = "1E73 117" 'u
+UnicodeEquiv( 614 ) = "1E74 085" 'U
+UnicodeEquiv( 615 ) = "1E75 117" 'u
+UnicodeEquiv( 616 ) = "1E76 085" 'U
+UnicodeEquiv( 617 ) = "1E77 117" 'u
+UnicodeEquiv( 618 ) = "1E78 218" 'Ú
+UnicodeEquiv( 619 ) = "1E79 250" 'ú
+UnicodeEquiv( 620 ) = "1E7A 220" 'Ü
+UnicodeEquiv( 621 ) = "1E7B 252" 'ü
+UnicodeEquiv( 622 ) = "1E7C 086" 'V
+UnicodeEquiv( 623 ) = "1E7D 118" 'v
+UnicodeEquiv( 624 ) = "1E7E 086" 'V
+UnicodeEquiv( 625 ) = "1E7F 118" 'v
+UnicodeEquiv( 626 ) = "1E80 087" 'W
+UnicodeEquiv( 627 ) = "1E81 119" 'w
+UnicodeEquiv( 628 ) = "1E82 087" 'W
+UnicodeEquiv( 629 ) = "1E83 119" 'w
+UnicodeEquiv( 630 ) = "1E84 087" 'W
+UnicodeEquiv( 631 ) = "1E85 119" 'w
+UnicodeEquiv( 632 ) = "1E86 087" 'W
+UnicodeEquiv( 633 ) = "1E87 119" 'w
+UnicodeEquiv( 634 ) = "1E88 087" 'W
+UnicodeEquiv( 635 ) = "1E89 119" 'w
+UnicodeEquiv( 636 ) = "1E8A 088" 'X
+UnicodeEquiv( 637 ) = "1E8B 120" 'x
+UnicodeEquiv( 638 ) = "1E8C 088" 'X
+UnicodeEquiv( 639 ) = "1E8D 120" 'x
+UnicodeEquiv( 640 ) = "1E8E 089" 'Y
+UnicodeEquiv( 641 ) = "1E8F 121" 'y
+UnicodeEquiv( 642 ) = "1E90 090" 'Z
+UnicodeEquiv( 643 ) = "1E91 122" 'z
+UnicodeEquiv( 644 ) = "1E92 090" 'Z
+UnicodeEquiv( 645 ) = "1E93 122" 'z
+UnicodeEquiv( 646 ) = "1E94 090" 'Z
+UnicodeEquiv( 647 ) = "1E95 122" 'z
+UnicodeEquiv( 648 ) = "1E96 104" 'h
+UnicodeEquiv( 649 ) = "1E97 116" 't
+UnicodeEquiv( 650 ) = "1E98 119" 'w
+UnicodeEquiv( 651 ) = "1E99 121" 'y
+UnicodeEquiv( 652 ) = "1E9A 097" 'a
+UnicodeEquiv( 653 ) = "1E9B 115" 's
+UnicodeEquiv( 654 ) = "1E9C 115" 's
+UnicodeEquiv( 655 ) = "1E9D 115" 's
+UnicodeEquiv( 656 ) = "1E9E 223" 'ß
+UnicodeEquiv( 657 ) = "1EA0 065" 'A
+UnicodeEquiv( 658 ) = "1EA1 097" 'a
+UnicodeEquiv( 659 ) = "1EA2 065" 'A
+UnicodeEquiv( 660 ) = "1EA3 097" 'a
+UnicodeEquiv( 661 ) = "1EA4 194" 'Â
+UnicodeEquiv( 662 ) = "1EA5 226" 'â
+UnicodeEquiv( 663 ) = "1EA6 194" 'Â
+UnicodeEquiv( 664 ) = "1EA7 226" 'â
+UnicodeEquiv( 665 ) = "1EA8 194" 'Â
+UnicodeEquiv( 666 ) = "1EA9 226" 'â
+UnicodeEquiv( 667 ) = "1EAA 194" 'Â
+UnicodeEquiv( 668 ) = "1EAB 226" 'â
+UnicodeEquiv( 669 ) = "1EAC 194" 'Â
+UnicodeEquiv( 670 ) = "1EAD 226" 'â
+UnicodeEquiv( 671 ) = "1EAE 193" 'Á
+UnicodeEquiv( 672 ) = "1EAF 224" 'à
+UnicodeEquiv( 673 ) = "1EB0 192" 'À
+UnicodeEquiv( 674 ) = "1EB1 224" 'à
+UnicodeEquiv( 675 ) = "1EB2 065" 'A
+UnicodeEquiv( 676 ) = "1EB3 224" 'à
+UnicodeEquiv( 677 ) = "1EB4 195" 'Ã
+UnicodeEquiv( 678 ) = "1EB5 224" 'à
+UnicodeEquiv( 679 ) = "1EB6 065" 'A
+UnicodeEquiv( 680 ) = "1EB7 224" 'à
+UnicodeEquiv( 681 ) = "1EB8 069" 'E
+UnicodeEquiv( 682 ) = "1EB9 101" 'e
+UnicodeEquiv( 683 ) = "1EBA 069" 'E
+UnicodeEquiv( 684 ) = "1EBB 101" 'e
+UnicodeEquiv( 685 ) = "1EBC 069" 'E
+UnicodeEquiv( 686 ) = "1EBD 101" 'e
+UnicodeEquiv( 687 ) = "1EBE 202" 'Ê
+UnicodeEquiv( 688 ) = "1EBF 234" 'ê
+UnicodeEquiv( 689 ) = "1EC0 202" 'Ê
+UnicodeEquiv( 690 ) = "1EC1 234" 'ê
+UnicodeEquiv( 691 ) = "1EC2 202" 'Ê
+UnicodeEquiv( 692 ) = "1EC3 234" 'ê
+UnicodeEquiv( 693 ) = "1EC4 202" 'Ê
+UnicodeEquiv( 694 ) = "1EC5 234" 'ê
+UnicodeEquiv( 695 ) = "1EC6 202" 'Ê
+UnicodeEquiv( 696 ) = "1EC7 234" 'ê
+UnicodeEquiv( 697 ) = "1EC8 073" 'I
+UnicodeEquiv( 698 ) = "1EC9 105" 'i
+UnicodeEquiv( 699 ) = "1ECA 073" 'I
+UnicodeEquiv( 700 ) = "1ECB 105" 'i
+UnicodeEquiv( 701 ) = "1ECC 079" 'O
+UnicodeEquiv( 702 ) = "1ECD 111" 'o
+UnicodeEquiv( 703 ) = "1ECE 079" 'O
+UnicodeEquiv( 704 ) = "1ECF 111" 'o
+UnicodeEquiv( 705 ) = "1ED0 212" 'Ô
+UnicodeEquiv( 706 ) = "1ED1 244" 'ô
+UnicodeEquiv( 707 ) = "1ED2 212" 'Ô
+UnicodeEquiv( 708 ) = "1ED3 244" 'ô
+UnicodeEquiv( 709 ) = "1ED4 212" 'Ô
+UnicodeEquiv( 710 ) = "1ED5 244" 'ô
+UnicodeEquiv( 711 ) = "1ED6 212" 'Ô
+UnicodeEquiv( 712 ) = "1ED7 244" 'ô
+UnicodeEquiv( 713 ) = "1ED8 212" 'Ô
+UnicodeEquiv( 714 ) = "1ED9 244" 'ô
+UnicodeEquiv( 715 ) = "1EDA 211" 'Ó
+UnicodeEquiv( 716 ) = "1EDB 243" 'ó
+UnicodeEquiv( 717 ) = "1EDC 210" 'Ò
+UnicodeEquiv( 718 ) = "1EDD 242" 'ò
+UnicodeEquiv( 719 ) = "1EDE 079" 'O
+UnicodeEquiv( 720 ) = "1EDF 111" 'o
+UnicodeEquiv( 721 ) = "1EE0 213" 'Õ
+UnicodeEquiv( 722 ) = "1EE1 245" 'õ
+UnicodeEquiv( 723 ) = "1EE2 079" 'O
+UnicodeEquiv( 724 ) = "1EE3 111" 'o
+UnicodeEquiv( 725 ) = "1EE4 085" 'U
+UnicodeEquiv( 726 ) = "1EE5 117" 'u
+UnicodeEquiv( 727 ) = "1EE6 085" 'U
+UnicodeEquiv( 728 ) = "1EE7 117" 'u
+UnicodeEquiv( 729 ) = "1EE8 218" 'Ú
+UnicodeEquiv( 730 ) = "1EE9 250" 'ú
+UnicodeEquiv( 731 ) = "1EEA 217" 'Ù
+UnicodeEquiv( 732 ) = "1EEB 249" 'ù
+UnicodeEquiv( 733 ) = "1EEC 085" 'U
+UnicodeEquiv( 734 ) = "1EED 117" 'u
+UnicodeEquiv( 735 ) = "1EEE 085" 'U
+UnicodeEquiv( 736 ) = "1EEF 117" 'u
+UnicodeEquiv( 737 ) = "1EF0 085" 'U
+UnicodeEquiv( 738 ) = "1EF1 117" 'u
+UnicodeEquiv( 739 ) = "1EF2 089" 'Y
+UnicodeEquiv( 740 ) = "1EF3 121" 'y
+UnicodeEquiv( 741 ) = "1EF4 089" 'Y
+UnicodeEquiv( 742 ) = "1EF5 121" 'y
+UnicodeEquiv( 743 ) = "1EF6 089" 'Y
+UnicodeEquiv( 744 ) = "1EF7 121" 'y
+UnicodeEquiv( 745 ) = "1EF8 089" 'Y
+UnicodeEquiv( 746 ) = "1EF9 121" 'y
+UnicodeEquiv( 747 ) = "1EFA 076 076" 'LL
+UnicodeEquiv( 748 ) = "1EFB 108 108" 'll
+UnicodeEquiv( 749 ) = "1EFE 089" 'Y
+UnicodeEquiv( 750 ) = "1EFF 121" 'y
+UnicodeEquiv( 751 ) = "2010 045" '-
+UnicodeEquiv( 752 ) = "2011 045" '-
+UnicodeEquiv( 753 ) = "2013 045" '-
+UnicodeEquiv( 754 ) = "2014 045 & 045" '--
+UnicodeEquiv( 755 ) = "2015 045" '-
+UnicodeEquiv( 756 ) = "2018 039" ''
+UnicodeEquiv( 757 ) = "2019 039" ''
+UnicodeEquiv( 758 ) = "201A 044" ',
+UnicodeEquiv( 759 ) = "201B 039" ''
+UnicodeEquiv( 760 ) = "201C 034" '"
+UnicodeEquiv( 761 ) = "201D 034" '"
+UnicodeEquiv( 762 ) = "201E 034" '"
+UnicodeEquiv( 763 ) = "201F 034" '"
+UnicodeEquiv( 764 ) = "2022 183" '•
+UnicodeEquiv( 765 ) = "2026 046 046 046" '...
+UnicodeEquiv( 766 ) = "2032 039" ''
+UnicodeEquiv( 767 ) = "2033 034" '"
+UnicodeEquiv( 768 ) = "2035 039" ''
+UnicodeEquiv( 769 ) = "2036 034" '"
+UnicodeEquiv( 770 ) = "2039 039" ''
+UnicodeEquiv( 771 ) = "203A 039" ''
+UnicodeEquiv( 772 ) = "203C 033 033" '!!
+UnicodeEquiv( 773 ) = "203D 063 033" '?!
+UnicodeEquiv( 774 ) = "2044 047" '/
+UnicodeEquiv( 775 ) = "2047 063 063" '??
+UnicodeEquiv( 776 ) = "2048 063 033" '?!
+UnicodeEquiv( 777 ) = "2049 033 063" '!?
+UnicodeEquiv( 778 ) = "204B 182" '¶
+UnicodeEquiv( 779 ) = "204E 042" '*
+UnicodeEquiv( 780 ) = "204F 049" ';
+UnicodeEquiv( 781 ) = "2053 126" '~
+UnicodeEquiv( 782 ) = "2055 042" '*
+UnicodeEquiv( 783 ) = "205A 058" ':
+UnicodeEquiv( 784 ) = "2C60 076" 'L
+UnicodeEquiv( 785 ) = "2C61 108" 'l
+UnicodeEquiv( 786 ) = "2C62 076" 'L
+UnicodeEquiv( 787 ) = "2C63 080" 'P
+UnicodeEquiv( 788 ) = "2C64 082" 'R
+UnicodeEquiv( 789 ) = "2C65 097" 'a
+UnicodeEquiv( 790 ) = "2C66 116" 't
+UnicodeEquiv( 791 ) = "2C67 072" 'H
+UnicodeEquiv( 792 ) = "2C68 072" 'H
+UnicodeEquiv( 793 ) = "2C69 107" 'k
+UnicodeEquiv( 794 ) = "2C6A 107" 'k
+UnicodeEquiv( 795 ) = "2C6B 090" 'Z
+UnicodeEquiv( 796 ) = "2C6C 122" 'z
+UnicodeEquiv( 797 ) = "2C6E 077" 'M
+UnicodeEquiv( 798 ) = "2C71 118" 'v
+UnicodeEquiv( 799 ) = "2C72 087" 'W
+UnicodeEquiv( 800 ) = "2C73 119" 'w
+UnicodeEquiv( 801 ) = "2C74 118" 'v
+UnicodeEquiv( 802 ) = "2C7E 083" 'S
+UnicodeEquiv( 803 ) = "2C7F 090" 'Z
+UnicodeEquiv( 804 ) = "A728 084 090" 'TZ
+UnicodeEquiv( 805 ) = "A729 116 122" 'tz
+UnicodeEquiv( 806 ) = "A730 070" 'F
+UnicodeEquiv( 807 ) = "A731 083" 'S
+UnicodeEquiv( 808 ) = "A732 065 065" 'AA
+UnicodeEquiv( 809 ) = "A733 097 097" 'aa
+UnicodeEquiv( 810 ) = "A734 065 079" 'AO
+UnicodeEquiv( 811 ) = "A735 097 111" 'ao
+UnicodeEquiv( 812 ) = "A736 065 085" 'AU
+UnicodeEquiv( 813 ) = "A737 097 117" 'au
+UnicodeEquiv( 814 ) = "A738 065 086" 'AV
+UnicodeEquiv( 815 ) = "A739 097 118" 'av
+UnicodeEquiv( 816 ) = "A73A 065 086" 'AV
+UnicodeEquiv( 817 ) = "A73B 097 118" 'av
+UnicodeEquiv( 818 ) = "A73C 065 089" 'AY
+UnicodeEquiv( 819 ) = "A73D 097 121" 'ay
+UnicodeEquiv( 820 ) = "A740 075" 'K
+UnicodeEquiv( 821 ) = "A743 107" 'k
+UnicodeEquiv( 822 ) = "A744 075" 'K
+UnicodeEquiv( 823 ) = "A748 076" 'L
+UnicodeEquiv( 824 ) = "A749 108" 'l
+UnicodeEquiv( 825 ) = "A74A 079" 'O
+UnicodeEquiv( 826 ) = "A74B 111" 'o
+UnicodeEquiv( 827 ) = "A74C 079" 'O
+UnicodeEquiv( 828 ) = "A74D 111" 'o
+UnicodeEquiv( 829 ) = "A74E 079 079" 'OO
+UnicodeEquiv( 830 ) = "A74F 111 111" 'oo
+UnicodeEquiv( 831 ) = "A750 080" 'P
+UnicodeEquiv( 832 ) = "A751 112" 'p
+UnicodeEquiv( 833 ) = "A752 080" 'P
+UnicodeEquiv( 834 ) = "A753 112" 'p
+UnicodeEquiv( 835 ) = "A754 080" 'P
+UnicodeEquiv( 836 ) = "A755 112" 'p
+UnicodeEquiv( 837 ) = "A756 081" 'Q
+UnicodeEquiv( 838 ) = "A757 113" 'q
+UnicodeEquiv( 839 ) = "A758 081" 'Q
+UnicodeEquiv( 840 ) = "A759 113" 'q
+UnicodeEquiv( 841 ) = "A75E 086" 'V
+UnicodeEquiv( 842 ) = "A75F 118" 'v
+UnicodeEquiv( 843 ) = "A760 086 089" 'VY
+UnicodeEquiv( 844 ) = "A761 118 121" 'vy
+UnicodeEquiv( 845 ) = "A764 222" 'Þ
+UnicodeEquiv( 846 ) = "A765 254" 'þ
+UnicodeEquiv( 847 ) = "A766 222" 'Þ
+UnicodeEquiv( 848 ) = "A767 254" 'þ
+UnicodeEquiv( 849 ) = "A790 078" 'N
+UnicodeEquiv( 850 ) = "A791 110" 'n
+UnicodeEquiv( 851 ) = "A792 067" 'C
+UnicodeEquiv( 852 ) = "A793 099" 'c
+UnicodeEquiv( 853 ) = "A794 099" 'c
+UnicodeEquiv( 854 ) = "A795 104" 'h
+UnicodeEquiv( 855 ) = "A796 066" 'B
+UnicodeEquiv( 856 ) = "A797 098" 'b
+UnicodeEquiv( 857 ) = "A798 070" 'F
+UnicodeEquiv( 858 ) = "A799 102" 'f
+UnicodeEquiv( 859 ) = "A7A0 071" 'G
+UnicodeEquiv( 860 ) = "A7A1 103" 'g
+UnicodeEquiv( 861 ) = "A7A2 075" 'K
+UnicodeEquiv( 862 ) = "A7A3 107" 'k
+UnicodeEquiv( 863 ) = "A7A4 078" 'N
+UnicodeEquiv( 864 ) = "A7A5 110" 'n
+UnicodeEquiv( 865 ) = "A7A6 082" 'R
+UnicodeEquiv( 866 ) = "A7A7 114" 'r
+UnicodeEquiv( 867 ) = "A7A8 083" 'S
+UnicodeEquiv( 868 ) = "A7A9 115" 's
+UnicodeEquiv( 869 ) = "A7AA 072" 'H
+UnicodeEquiv( 870 ) = "A7AC 071" 'G
+UnicodeEquiv( 871 ) = "A7AD 076" 'L
+UnicodeEquiv( 872 ) = "A7AE 073" 'I
+UnicodeEquiv( 873 ) = "A7AF 081" 'Q
+UnicodeEquiv( 874 ) = "A7B8 085" 'U
+UnicodeEquiv( 875 ) = "A7B9 117" 'u
+UnicodeEquiv( 876 ) = "AB33 101" 'e
+UnicodeEquiv( 877 ) = "AB34 101" 'e
+UnicodeEquiv( 878 ) = "AB35 102" 'f
+UnicodeEquiv( 879 ) = "AB36 103" 'g
+UnicodeEquiv( 880 ) = "AB37 108" 'l
+UnicodeEquiv( 881 ) = "AB38 108" 'l
+UnicodeEquiv( 882 ) = "AB39 108" 'l
+UnicodeEquiv( 883 ) = "AB3A 109" 'm
+UnicodeEquiv( 884 ) = "AB3B 109" 'm
+UnicodeEquiv( 885 ) = "AB46 082" 'R
+UnicodeEquiv( 886 ) = "AB47 114" 'r
+UnicodeEquiv( 887 ) = "AB48 114 114" 'rr
+UnicodeEquiv( 888 ) = "AB49 114" 'r
+UnicodeEquiv( 889 ) = "AB4A 114 114" 'rr
+UnicodeEquiv( 890 ) = "AB4E 117" 'u
+UnicodeEquiv( 891 ) = "AB4F 117" 'u
+UnicodeEquiv( 892 ) = "AB50 117 105" 'ui
+UnicodeEquiv( 893 ) = "AB52 117" 'u
+UnicodeEquiv( 894 ) = "AB56 120" 'x
+UnicodeEquiv( 895 ) = "AB57 120" 'x
+UnicodeEquiv( 896 ) = "AB58 120" 'x
+UnicodeEquiv( 897 ) = "AB59 120" 'x
+UnicodeEquiv( 898 ) = "AB5A 121" 'y
+
+End Sub
+
+'****************************************************************************************
+
+Function ConvertToISO88591( InputString$ ) As String
+
+' This function converts the MARC21 string to characters in ISO/IEC 8859-1:1998, making
+' appropriate conversions where possible (and noting that that was done), and
+' substituting the vertical bar "|" where an appropriate conversion is not possible. It
+' works on a line of the record at a time. Unicode strings are sent to the function for
+' conversion.
+
+Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The differences between OCLC-MARC encodings of subscript and
+Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  ' superscript numbers and ISO/IEC 8859-1:1998 encodings of those numbers.
+
+Const ACUTE       As Integer = 226
+Const CEDILLA     As Integer = 240
+Const CIRCUMFLEX  As Integer = 227
+Const DIAERESIS   As Integer = 232
+Const GRAVE       As Integer = 225
+Const RING_ABOVE  As Integer = 234
+Const TILDE       As Integer = 228
+
+Dim CURRENCY_SIGN As String*1 : CURRENCY_SIGN  = "¤"
+Dim VERTICAL_BAR  As String*1 : VERTICAL_BAR   = "|"
+
+Dim Advance%
+Dim Character$                : Character$     = " "
+Dim CharNext%
+Dim CharRead%
+Dim CodePoint$
+Dim NextCharPos%
+Dim TempString$
+Dim UnicodeString$            : UnicodeString$ = "&[#]x????;"
+
+Dim i As Integer
+
+Advance%     = 1
+InputString$ = InputString$ & Character$
+
+' Read the current character in the line, but also the next one, because diacritics
+' follow their base characters; if the next character is a diacritic there may be a
+' precomposed equivalent for the base + combining character in the character set. (Only
+' the first combining character following a base character can be considered, as there
+' are no precomposed characters incorporating two or more diacritics.) Test the next
+' character for an NCR. Only pay attention to it if it is a combining character.
+
+For i = 1 To Len( InputString$ ) - 1
+
+  CharRead% = Asc( Mid$( InputString$, i, 1 ) )
+
+  If i < Len( InputString$ ) - 7 Then
+      CharNext% = Asc( Mid$( InputString$, i + Advance%, 1 ) )
+      If Mid$( InputString$, i, 8 ) Like UnicodeString$ Then
+          Advance% = 7
+        Else
+          Advance% = 1
+      End If
+      NextCharPos% = i + Advance%
+      If Mid$( InputString$, NextCharPos%, 8 ) Like UnicodeString$ Then
+          CodePoint$ = Mid$( InputString$, NextCharPos% + 3, 4 )
+          Select Case CodePoint$
+            Case "0300"
+              CharNext% = GRAVE
+            Case "0301"
+              CharNext% = ACUTE
+            Case "0302"
+              CharNext% = CIRCUMFLEX
+            Case "0303"
+              CharNext% = TILDE
+            Case "0308"
+              CharNext% = DIAERESIS
+            Case "030A"
+              CharNext% = RING_ABOVE
+            Case "0327"
+              CharNext% = CEDILLA
+            Case Else
+              CombiningCharOmitted = TRUE
+          End Select
+          If Left$( CodePoint$, 2 ) = "03" Then
+              Advance% = 8
+            Else
+              Advance% = 1
+          End If
+      End If
+    Else
+      CharNext% = Asc( Mid$( InputString$, i + 1, 1 ) )
+  End If
+
+  Select Case CharRead%
+
+    Case 38   '&: This could be the start of a Numeric Code Reference (NCR), that is, a Unicode character.
+      If Mid$( InputString$, i, 8 ) Like UnicodeString$ Then
+          CodePoint$ = Mid( InputString$, i + 3, 4 )
+          Character$ = FindUnicodeEquivalent( CodePoint$ )
+          i = i + Advance%
+        Else
+          Character$ = Chr$( CharRead% )
+      End If
+
+    Case 0 To 8, 11 To 12, 13 To 31   'These characters should never appear, but ...
+      Character$ = CURRENCY_SIGN
+
+    Case 32 To 37, 39 To 64   'Numbers and symbols
+      Character$ = Chr$( CharRead% )
+
+    Case 66, 68, 70 To 72, 74 To 77, 80 To 82, 84, 86 To 88, 91 To 96   'Uppercase letters and punctuation.
+      Character$ = Chr$( CharRead% )
+
+    Case 98, 100, 102 To 104, 106 To 109, 112 To 114, 116, 118 To 120, 123 To 128   'Lowercase letters and punctuation.
+      Character$ = Chr$( CharRead% )
+
+' OCLC-MARC modified letters are turned into precomposed characters, when possible.
+
+    Case 65, 97   'A, a
+      Select Case CharNext%
+        Case GRAVE
+          Character$ = Chr$( CharRead% + 127 ) : i = i + Advance%
+        Case ACUTE
+          Character$ = Chr$( CharRead% + 128 ) : i = i + Advance%
+        Case CIRCUMFLEX
+          Character$ = Chr$( CharRead% + 129 ) : i = i + Advance%
+        Case TILDE
+          Character$ = Chr$( CharRead% + 130 ) : i = i + Advance%
+        Case DIAERESIS
+          Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
+        Case RING_ABOVE
+          Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
+        Case 224, 229 To 231, 233, 235 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 67, 99   'C, c
+      Select Case CharNext%
+        Case CEDILLA
+          Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
+        Case 224 To 239, 241 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 69, 101  'E, e
+      Select Case CharNext%
+        Case GRAVE
+          Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
+        Case ACUTE
+          Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
+        Case CIRCUMFLEX
+          Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
+        Case DIAERESIS
+          Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 73, 105  'I, i
+      Select Case CharNext%
+        Case GRAVE
+          Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
+        Case ACUTE
+          Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
+        Case CIRCUMFLEX
+          Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
+        Case DIAERESIS
+          Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 78, 110  'N, n
+      Select Case CharNext%
+        Case TILDE
+          Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
+        Case 224 To 227, 229 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 79, 111  'O, o
+      Select Case CharNext%
+        Case GRAVE
+          Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
+        Case ACUTE
+          Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
+        Case CIRCUMFLEX
+          Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
+        Case TILDE
+          Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
+        Case DIAERESIS
+          Character$ = Chr$( CharRead% + 135 ) : i = i + Advance%
+        Case 224, 229 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 83, 115  'S, s
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 85, 117  'U, u
+      Select Case CharNext%
+        Case GRAVE
+          Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
+        Case ACUTE
+          Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
+        Case CIRCUMFLEX
+          Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
+        Case DIAERESIS
+          Character$ = Chr$( CharRead% + 135 ) : i = i + Advance%
+        Case 224, 228 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 89, 121  'Y, y
+      Select Case CharNext%
+        Case ACUTE
+          Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
+        Case DIAERESIS
+          If CharRead% = 121 Then
+              Character$ = Chr$( 255 )
+            Else
+              Character$ = Chr$( CharRead% )
+          End If
+          i = i + Advance%
+        Case 224 To 225, 227 To 231, 233 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 90, 122  'Z, z
+      Select Case CharNext%
+        Case 224 To 251
+          Character$ = Chr$( CharRead% ) : i = i + Advance%
+          CombiningCharOmitted = TRUE
+        Case Else
+          Character$ = Chr$( CharRead% )
+      End Select
+
+    Case 128 To 157  'subscript and superscript numbers
+      EquivalentCharSubstituted = TRUE
+      Select Case CharRead%
+        Case 128 to 137  'superscript numbers
+          Character$ = Chr$( CharRead% - ASCII_DIFF_SUPERSCRIPT )
+        Case 144 to 153  'subscript numbers
+          Character$ = Chr$( CharRead% - ASCII_DIFF_SUBSCRIPT )
+        Case 138 To 139  'superscript parentheses
+          Character$ = Chr$( CharRead% - 98 )
+        Case 154 To 155  'subscript parentheses
+          Character$ = Chr$( CharRead% - 114 )
+        Case 140, 156    'superscript, subscript plus
+          Character$ = Chr$( 43 )
+        Case 141, 157    'superscript, subscript minus
+          Character$ = Chr$( 45 )
+      End Select
+
+    Case 158   'degree sign
+      Character$ = Chr$( 176 )
+    Case 159   'eszett
+      Character$ = Chr$( 223 )
+    Case 160   'euro
+      Character$ = Chr$( 128 )
+    Case 161   'crossed L
+      Character$ = "L"
+      EquivalentCharSubstituted = TRUE
+    Case 162   'crossed O
+      Character$ = Chr$( 216 )
+    Case 163   'Eth
+      Character$ = Chr$( 208 )
+    Case 164   'Thorn
+      Character$ = Chr$( 222 )
+    Case 165   'AE Ligature
+      Character$ = Chr$( 198 )
+    Case 166   'OE Ligature
+      Character$ = "Oe"
+      EquivalentCharSubstituted = TRUE
+    Case 167   'prime
+      Character$ = Chr$( 039 )
+      EquivalentCharSubstituted = TRUE
+    Case 168   'middle dot
+      Character$ = Chr$( 183 )
+    Case 169   'musical flat
+      Character$ = "[flat]"
+      EquivalentCharSubstituted = TRUE
+    Case 170   'registered trade mark sign
+      Character$ = Chr$( 174 )
+    Case 171   'plus-or-minus
+      Character$ = Chr$( 177 )
+    Case 172   'O with hook
+      Character$ = "O"
+      EquivalentCharSubstituted = TRUE
+    Case 173   'U with hook
+      Character$ = "O"
+      EquivalentCharSubstituted = TRUE
+    Case 174   'alif
+      Character$ = Chr$( 039 )
+      EquivalentCharSubstituted = TRUE
+    Case 176   'ayn
+      Character$ = Chr$( 039 )
+      EquivalentCharSubstituted = TRUE
+    Case 177   'crossed l
+      Character$ = "l"
+      EquivalentCharSubstituted = TRUE
+    Case 178   'crossed o
+      Character$ = Chr$( 248 )
+    Case 179   'd with crossbar
+      Character$ = Chr$( 240 )
+    Case 180   'thorn
+      Character$ = Chr$( 254 )
+    Case 181   'ae ligature
+      Character$ = Chr$( 230 )
+    Case 182   'oe ligature
+      Character$ = "oe"
+      EquivalentCharSubstituted = TRUE
+    Case 183   'double prime
+      Character$ = Chr$( 034 )
+      EquivalentCharSubstituted = TRUE
+    Case 184   'Turkish i
+      Character$ = "i"
+      EquivalentCharSubstituted = TRUE
+    Case 185   'pound
+      Character$ = Chr$( 163 )
+    Case 186   'eth
+      Character$ = Chr$( 240 )
+    Case 188   'o with hook
+      Character$ = "o"
+      EquivalentCharSubstituted = TRUE
+    Case 189   'u with hook
+      Character$ = "u"
+      EquivalentCharSubstituted = TRUE
+    Case 190   'script l
+      Character$ = "l"
+      EquivalentCharSubstituted = TRUE
+    Case 200   'inverted question mark
+      Character$ = Chr$( 191 )
+    Case 201   'inverted exclamation mark
+      Character$ = Chr$( 161 )
+    Case 202   'copyright
+      Character$ = Chr$( 169 )
+    Case 203   'sound recording copyright
+      Character$ = "p"
+      EquivalentCharSubstituted = TRUE
+    Case 204   'musical sharp
+      Character$ = "#"
+      EquivalentCharSubstituted = TRUE
+    Case 223   'delimiter
+      If Character$ = " " And Mid$( InputString$, i + 1, 2 ) Like "[a-z0-9] " Then
+          Character$ = "$"
+        Else
+          Character$ = Chr$( 223 )
+      End If
+    Case 252   'fill character
+      Character$ = "*"
+      EquivalentCharSubstituted = TRUE
+    Case 224 To 234, 237 To 251, 245 To 255  'diacritical marks
+      CombiningCharOmitted = TRUE
+      If CharNext% < 223 Then
+          Character$ = Chr$( CharNext% ) : i = i + Advance%
+      End If
+    Case Else   'everything not already accounted for
+      If CharNext% > 223 Then
+          Character$ = VERTICAL_BAR : i = i + Advance%
+        Else
+          Character$ = Chr$( CharRead% )
+      End If
+
+  End Select
+
+  TempString$ = TempString$ & Character$
+  If Character$ = VERTICAL_BAR Then
+      UndisplayableChars = TRUE
+    ElseIf Character$ = CURRENCY_SIGN Then
+      IncorrectEncoding  = TRUE
+  End If
+
+Next i
+
+ConvertToISO88591 = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function FindUnicodeEquivalent( InputString$ ) As String
+
+' This function searches for an ISO/IEC 8859-1:1998 character (or character string) that
+' matches or corresponds to a Unicode code point.
+
+Dim CandidateString$
+Dim Char1$
+Dim Char2$
+Dim Char3$
+Dim CodePoint$
+Dim LenCandidateString%
+Dim LowerBound%
+Dim Middle%
+Dim UpperBound%
+
+Dim CharFound                : CharFound = FALSE
+
+' A code point that indicates a combining character is rejected right away, as ISO-8859-1
+' contains only precomposed characters. There are no separate combining characters in the
+' set.
+
+If InputString$ >= "0300" And InputString$ <= "036F" Or _
+   InputString$ >= "FE20" And InputString$ <= "FE2F" Then
+    FindUnicodeEquivalent = ""
+    CombiningCharOmitted  = TRUE
+    Exit Function
+End If
+
+' Do a binary search in the table.
+
+LowerBound% = 0
+UpperBound% = UNICODE_CHARACTER_COUNT
+
+Do While LowerBound% <= UpperBound%
+  Middle%          = ( LowerBound% + UpperBound% ) \ 2
+  CandidateString$ = UnicodeEquiv( Middle% )
+  CodePoint$       = Left$( CandidateString$, 4 )
+  If CodePoint$ = InputString$ Then
+      CharFound = TRUE
+      Exit Do
+    ElseIf InputString$ < CodePoint$ Then
+      UpperBound% = Middle% - 1
+    Else
+      LowerBound% = Middle% + 1
+  End If
+Loop
+
+' A matching code point consists of one to three characters which are concatenated, if
+' necessary, to output the converted Unicode character. If no match was found, the
+' vertical bar symbol shows that.
+
+If CharFound Then
+    LenCandidateString% = Len( CandidateString$ )
+    Char1$              = Chr$( Val( Mid$( CandidateString$, 6, 3 ) ) )
+    If LenCandidateString% > 8 Then
+        Char2$ = Chr$( Val( Mid$( CandidateString$, 10, 3 ) ) )
+    End If
+    If LenCandidateString% > 12 Then
+        Char3$ = Chr$( Val( Mid$( CandidateString$, 14, 3 ) ) )
+    End If
+    If CodePoint$ > "00BF" Then EquivalentCharSubstituted = TRUE
+  Else
+    Char1$ = "|"
+End If
+
+FindUnicodeEquivalent = Char1$ & Char2$ & Char3$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const IDLE_STATE     As Integer = 5
+Const INITIALIZE     As Integer = 1
+Const KEEP_DLG_OPEN  As Integer = -1
+
+Const MSG_DURATION   As Integer = 3  'The number of seconds the warning message in the dialog box is to remain visible.
+
+Static SelectedTerms() As String
+Static StartCountdown%
+Static StartTimer&
+
+Dim ElapsedSeconds%
+Dim SecondsRemaining%
+Dim SelectedTerm$
+Dim SelectionA%
+Dim SelectionB%
+Dim UBSelectedArray%
+
+Dim AlreadySelected
+
+Dim i As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    ReDim SelectedTerms( 0 )
+
+
+  Case CONTROL_CHANGE
+
+' If a term was already selected, and the warning message is still being displayed,
+' dismiss the message if any control is changed before the countdown delay has passed.
+
+    StartCountdown% = 0
+    DlgText         "Already",   ""
+
+    Select Case Id$
+
+      Case "LstBoxAll"
+
+        SelectionA%   = DlgValue( "LstBoxAll" )
+        SelectedTerm$ = AvailableTerms( SelectionA% )
+        UBSelectedArray% = UBound( SelectedTerms )
+        AlreadySelected = FALSE
+        For i = 0 To UBSelectedArray%
+          If SelectedTerm$ = SelectedTerms( i ) Then
+              AlreadySelected = TRUE
+              DlgText "Already", "The term has already been selected."
+              StartTimer&     = Timer
+              StartCountdown% = 1
+              Exit For
+          End If
+        Next i
+        If AlreadySelected = FALSE Then
+        Select Case UBSelectedArray%
+          Case 0
+            If SelectedTerms( 0 ) = "" Then
+                SelectedTerms( 0 ) = SelectedTerm$
+              Else
+                ReDim Preserve SelectedTerms( 1 )
+                SelectedTerms( 1 ) = SelectedTerm$
+            End If
+            ColTitle1$ = SelectedTerms( 0 )
+          Case 1
+            ReDim Preserve SelectedTerms( 2 )
+            SelectedTerms( 2 ) = SelectedTerm$
+            ColTitle2$         = SelectedTerms( 1 )
+            ColTitle3$         = SelectedTerms( 2 )
+          Case 2
+            SelectedTerms( 2 ) = SelectedTerm$
+            ColTitle3$         = SelectedTerms( 2 )
+        End Select
+        DlgListBoxArray "LstBoxSel", SelectedTerms()
+        End If
+
+      Case "LstBoxSel"
+
+        SelectionB% = DlgValue( "LstBoxSel" )
+        UBSelectedArray% = UBound( SelectedTerms )
+        Select Case SelectionB%
+          Case 0
+            If UBSelectedArray% = 0 Then
+                SelectedTerms( 0 ) = ""
+              Else
+                For i = 1 To UBSelectedArray%
+                  SelectedTerms( i - 1 ) = SelectedTerms( i )
+                Next i
+                ReDim Preserve SelectedTerms( UBSelectedArray% - 1 )
+            End If
+          Case 1
+            If UBSelectedArray% = 1 Then
+                ReDim Preserve SelectedTerms( 0 )
+              Else
+                SelectedTerms( 1 ) = SelectedTerms( 2 )
+                ReDim Preserve SelectedTerms( 1 )
+                ColTitle1$ = SelectedTerms( 1 )
+            End If
+          Case 2
+            ReDim Preserve SelectedTerms( 1 )
+        End Select
+        DlgListBoxArray "LstBoxSel", SelectedTerms()
+
+    End Select
+
+    Select Case UBound( SelectedTerms )
+      Case 0
+        ColTitle1$ = SelectedTerms( 0 )
+        ColTitle2$ = ""
+        ColTitle3$ = ""
+      Case 1
+        ColTitle1$ = SelectedTerms( 0 )
+        ColTitle2$ = SelectedTerms( 1 )
+        ColTitle3$ = ""
+      Case 2
+        ColTitle1$ = SelectedTerms( 0 )
+        ColTitle2$ = SelectedTerms( 1 )
+        ColTitle3$ = SelectedTerms( 2 )
+    End Select
+
+
+  Case IDLE_STATE
+
+' If a term is selected that already appears in the selected terms array, display a
+' warning to that effect, but make it disappear in three seconds.
+
+    If StartCountdown% = 1 Then
+        ElapsedSeconds%   = Timer - StartTimer&
+        SecondsRemaining% = MSG_DURATION - ElapsedSeconds%
+        If SecondsRemaining% <= 0 Then
+            If DlgText( "Already" ) <> "" Then
+                DlgText         "Already",   ""
+                StartCountdown% = 0
+            End If
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+    End If
+
+End Select
+
+End Function
+'196770174

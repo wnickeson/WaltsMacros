@@ -1,0 +1,357 @@
+' MacroName:FormatCurrentDate.2025.04
+' MacroDescription:Creates a string containing the current date, formats it according to
+' the user's choice, and places it on the Windows Clipboard.
+'
+' This macro was written by Walter F. Nickeson and last updated 18 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro and select a format to create a string containing the
+' current date, which gets placed on the Windows Clipboard. You do not need to be logged
+' on to use this macro.
+'****************************************************************************************
+
+Option Base 1
+Option Explicit
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Global Const WARNING_MESSAGE As Integer = 48
+
+Global DayLong$
+Global DayNoZero$
+Global DayShort$
+Global DayZero$
+Global MonthLong$
+Global MonthNoZero$
+Global MonthShort$
+Global MonthZero$
+Global WaltsMacros$
+Global YearLong$
+
+'****************************************************************************************
+
+Sub Main
+
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Dim CR As String*1
+
+Dim DMoY$
+Dim DMY$
+Dim FormattedDate$
+Dim Header$
+Dim InstructionsL$
+Dim InstructionsR$
+Dim MDY$
+Dim MoDY$
+Dim MonDY$
+Dim OptionGroup%
+Dim WDayMonDY$
+Dim YMD$
+Dim YMoD$
+
+Dim Months( 12 ) As String
+Months( 1  )  = "January"
+Months( 2  )  = "February"
+Months( 3  )  = "March"
+Months( 4  )  = "April"
+Months( 5  )  = "May"
+Months( 6  )  = "June"
+Months( 7  )  = "July"
+Months( 8  )  = "August"
+Months( 9  )  = "September"
+Months( 10 )  = "October"
+Months( 11 )  = "November"
+Months( 12 )  = "December"
+
+Dim Weekdays( 7 ) As String
+Weekdays( 1 ) = "Sunday"
+Weekdays( 2 ) = "Monday"
+Weekdays( 3 ) = "Tuesday"
+Weekdays( 4 ) = "Wednesday"
+Weekdays( 5 ) = "Thursday"
+Weekdays( 6 ) = "Friday"
+Weekdays( 7 ) = "Saturday"
+
+CR             = Chr$( 013 )
+
+WaltsMacros$   = "[Walt's macros] InsertCurrentDate"
+
+Header$        = "Select a format or create a custom format, and click OK to put that date on the Windows Clipboard."
+
+InstructionsL$ = "d" & CR & "dd" & CR & "ddd" & CR & "dddd" & CR
+InstructionsL$ = InstructionsL$ & "m" & CR & "mm" & CR & "mmm" & CR & "mmmm" & CR
+InstructionsL$ = InstructionsL$ & "y" & CR & "Separators:"
+
+InstructionsR$ = "Day, 1-31" & CR
+InstructionsR$ = InstructionsR$ & "Day, 01-31"              & CR
+InstructionsR$ = InstructionsR$ & "Day, Sun-Mon"            & CR
+InstructionsR$ = InstructionsR$ & "Day, Sunday-Monday"      & CR
+InstructionsR$ = InstructionsR$ & "Month, 1-12"             & CR
+InstructionsR$ = InstructionsR$ & "Month, 01-12"            & CR
+InstructionsR$ = InstructionsR$ & "Month, Jan-Dec"          & CR
+InstructionsR$ = InstructionsR$ & "Month, January-December" & CR
+InstructionsR$ = InstructionsR$ & "Year in four digits"     & CR
+InstructionsR$ = InstructionsR$ & "Slash, comma, hyphen, space"
+
+DayNoZero$   = Day( Date$ )
+If Len( DayNoZero$ ) = 1 Then
+    DayZero$ = "0" & DayNoZero$
+  Else
+    DayZero$ = DayNoZero$
+End If
+DayLong$     = Weekdays( Weekday( Date$ ) )
+DayShort$    = Left$( DayLong$, 3 )
+MonthNoZero$ = Month( Date$ )
+If Len( MonthNoZero$ ) = 1 Then
+    MonthZero$ = "0" & MonthNoZero$
+  Else
+    MonthZero$ = MonthNoZero$
+End If
+MonthLong$   = Months( Val( MonthNoZero$ ) )
+MonthShort$  = Left$( MonthLong$, 3 )
+YearLong$    = Year( Date$ )
+YMD$         = YearLong$ & "/" & MonthZero$ & "/" & DayZero$
+DMY$         = DayZero$ & "/" & MonthZero$ & "/" & YearLong$
+MDY$         = MonthZero$ & "/" & DayZero$ & "/" & YearLong$
+DMoY$        = DayZero$ & " " & MonthShort$ & " " & YearLong$
+MoDY$        = MonthShort$ & " " & DayZero$ & " " & YearLong$
+MonDY$       = MonthLong$ & " " & DayZero$ & ", " & YearLong$
+WDayMonDY$   = DayLong$ & ", " & MonthLong$ & " " & DayZero$ & ", " & YearLong$
+YMoD$        = YearLong$ & " " & MonthShort$ & " " & DayZero$
+
+Begin Dialog Dialog1Definition  192, 278, WaltsMacros$, .Dialog1ControlFunction
+  OkButton        70, 254,  52,  14
+  CancelButton   130, 254,  52,  14
+  OptionGroup                                         .OptGrp
+   OptionButton    4,  28,   4,   4, "Dummy",         .OptBtn0
+   OptionButton   10,  30,  80,  12, MDY$,            .OptBtn1
+   OptionButton   96,  30,  80,  12, MonDY$,          .OptBtn2
+   OptionButton   10,  46,  80,  12, DMY$,            .OptBtn3
+   OptionButton   96,  46,  80,  12, DMoY$,           .OptBtn4
+   OptionButton   10,  62,  80,  12, YMD$,            .OptBtn5
+   OptionButton   96,  62,  80,  12, YMoD$,           .OptBtn6
+   OptionButton   10,  78,  96,  12, WDayMonDY$,      .OptBtn7
+  TextBox         68, 107, 102,  12,                  .TxtBoxInput
+   PushButton     22, 223,  38,  12, "&Result:",      .Calculate
+  TextBox         68, 223, 102,  12,                  .TxtBoxOutput
+  Text            10,   6, 172,  16, Header$
+  Text            22, 108,  40,   8, "Enter codes:"
+  Text            26, 130,  38,  80, InstructionsL$
+  Text            68, 130,  96,  80, InstructionsR$
+  GroupBox        10,  94, 172, 152, "Custom format"
+  GroupBox        20, 122, 152,  92, ""
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+OptionGroup% = Dialog1.OptGrp
+If OptionGroup% > 0 Then
+
+    Select Case OptionGroup%
+      Case 1
+        FormattedDate$ = MDY$
+      Case 2
+        FormattedDate$ = MonDY$
+      Case 3
+        FormattedDate$ = DMY$
+      Case 4
+        FormattedDate$ = DMoY$
+      Case 5
+        FormattedDate$ = YMD$
+      Case 6
+        FormattedDate$ = YMoD$
+      Case 7
+        FormattedDate$ = WDayMonDY$
+    End Select
+
+  ElseIf Trim$( Dialog1.TxtBoxOutput ) <> "" Then
+    FormattedDate$ = Trim$( Dialog1.TxtBoxOutput )
+
+End If
+
+Clipboard.Clear
+ClipBoard.SetText FormattedDate$
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const DISABLED       As Integer = 0
+Const ENABLED        As Integer = 1
+Const FOCUS_CHANGE   As Integer = 4
+Const IDLE_STATE     As Integer = 5
+Const INITIALIZE     As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const KEEP_DLG_OPEN  As Integer = -1
+
+Static PrevInput$
+
+Dim DOUBLE_QUOTE As String*1 : DOUBLE_QUOTE = Chr$( 034 )
+
+Dim CharT$
+Dim CurrInput$
+Dim DateString$
+Dim Element$
+Dim InputString$
+Dim InputWarning$
+Dim LenInputString%
+Dim TempString$
+
+Dim Done                     : Done = FALSE
+
+Dim i As Integer, j As Integer
+
+InputWarning$ = "Please input only the formatting codes " & DOUBLE_QUOTE & "d," & DOUBLE_QUOTE & " " & DOUBLE_QUOTE & "m," & DOUBLE_QUOTE & " and " & DOUBLE_QUOTE & "y," & DOUBLE_QUOTE & " and appropriate separators!"
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgValue   "OptGrp",       0
+    DlgVisible "OptBtn0",      INVISIBLE
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "Calculate"
+        InputString$ = LCase$( Trim$( DlgText( "TxtBoxInput" ) ) )
+        If InputString$ = "" Then
+            MsgBox "Please input formatting codes!", WARNING_MESSAGE, WaltsMacros$
+            DlgFocus "TxtBoxInput"
+          Else
+        LenInputString% = Len( InputString$ )
+        For i = 1 To LenInputString%
+          CharT$ = Mid$( InputString$, i, 1 )
+          If CharT$ Like "[dmy]" Then
+              If TempString$ = "" Then
+                  TempString$ = CharT$
+                  Done        = FALSE
+                Else
+                  If CharT$ = Right$( TempString$, 1 ) Then
+                      TempString$ = TempString$ & CharT$
+                    Else
+                      Done = TRUE
+                  End If
+              End If
+            Else
+              Done = TRUE
+          End If
+          If i = LenInputString% Then
+              Done = TRUE
+          End If
+          If Done Then
+              Select Case TempString$
+                Case "d"
+                  Element$ = DayNoZero$
+                Case "dd"
+                  Element$ = DayZero$
+                Case "ddd"
+                  Element$ = DayShort$
+                Case "dddd"
+                  Element$ = DayLong$
+                Case "m"
+                  Element$ = MonthNoZero$
+                Case "mm"
+                  Element$ = MonthZero$
+                Case "mmm"
+                  Element$ = MonthShort$
+                Case "mmmm"
+                  Element$ = MonthLong$
+                Case "y"
+                  Element$ = YearLong$
+              End Select
+              DateString$ = DateString$ & Element$
+              If i < LenInputString% Then
+                  DateString$ = DateString$ & CharT$
+              End If
+              Element$    = ""
+              TempString$ = ""
+              Done        = FALSE
+          End If
+        Next i
+        DlgText    "TxtBoxOutput", DateString$
+        DlgEnable  "OK",           ENABLED
+        DlgFocus   "OK"
+        End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "OptBtn1", "OptBtn2", "OptBtn3", "OptBtn4", "OptBtn5", "OptBtn6", "OptBtn7"
+        DlgText    "TxtBoxInput",  ""
+        DlgText    "TxtBoxoutput",  ""
+
+      Case "OK"
+        If DlgValue( "OptGrp" ) = 0 And DlgText( "TxtBoxInput" ) = "" Then
+            MsgBox "Please select or create a format for today's date!", WARNING_MESSAGE, WaltsMacros$
+            Dialog1ControlFunction = KEEP_DLG_OPEN
+        End If
+
+    End Select
+
+
+  Case FOCUS_CHANGE
+
+    If Id$ = "TxtBoxOutput" Or Id$ = "OptBtn8" Then
+        DlgFocus   "TxtBoxInput"
+        DlgEnable  "OK",           DISABLED
+      Else
+        DlgEnable  "OK",           ENABLED
+    End If
+    If DlgFocus() = "TxtBoxInput" Then
+        DlgEnable  "OK",           DISABLED
+        DlgValue   "OptGrp",       0
+      Else
+        DlgEnable  "OK",           ENABLED
+    End If
+
+
+  Case IDLE_STATE
+
+    CurrInput$ = DlgText( "TxtBoxInput" )
+    If CurrInput$ <> PrevInput$ Then
+        For j = 1 To Len( CurrInput$ )
+          If Mid$( CurrInput$, j, 1 ) Like "[!- dmy,/]" Then
+              MsgBox InputWarning$, WARNING_MESSAGE, WaltsMacros$
+              CurrInput$ = PrevInput$
+              DlgText    "TxtBoxInput",  CurrInput$
+          End If
+        Next j
+        PrevInput$ = CurrInput$
+    End If
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'35811966

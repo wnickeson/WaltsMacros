@@ -1,0 +1,128 @@
+' MacroName:DynamicDialogBoxEntry.2025.03
+' MacroDescription: Demonstrates how to dynamically change user input in a dialog box by
+' formatting a 7- or 10-digit phone number as it is being input.
+'
+' This macro was written by Walter F. Nickeson and last updated 17 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro and begin entering a U.S. telephone number of seven or ten
+' digits. When the fourth digit is typed, the macro inserts a hyphen preceding it in the
+' input box. If an eighth digit is typed, the macro removes the hyphen, places
+' parentheses around the first three digits, inserts a space after the right parenthesis,
+' and adds a hyphen before the seventh digit.
+'
+' The macro uses the Windows Script Shell to implement a "SendKeys" command. "SendKeys"
+' seems to be broken in the OCLC macro language; at least, it has not worked for me as
+' documented. However, as a method of the WScript object, the SendKeys "END" command does
+' what it ought to, and moves the cursor to the end of the entry in the input box after
+' it has been set by the macro. Ordinarily, when the macro sets text in a text box, the
+' cursor appears at the beginning of the text.
+'****************************************************************************************
+
+Option Explicit
+
+Global WshShell As Object
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SVal& )
+
+Const IDLE_STATE    As Integer = 5
+Const INITIALIZE    As Integer = 1
+Const KEEP_DLG_OPEN As Integer = -1
+
+Dim CurrentInput$
+Dim LengthOfCurrentInput%
+
+Static PastInput$
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgFocus "InputBox"
+
+
+  Case IDLE_STATE
+
+    CurrentInput$ = DlgText( "InputBox" )
+    If CurrentInput$ <> "" Then
+        If Right$( CurrentInput$, 1 ) Like "[!0-9]" Then
+            CurrentInput$ = Left$( CurrentInput$, Len( CurrentInput$ ) - 1 )
+        End If
+    End If
+    If CurrentInput$ <> PastInput$ Then
+        LengthOfCurrentInput% = Len( CurrentInput$ )
+        Select Case LengthOfCurrentInput%
+          Case 4 To 8
+            If InStr( CurrentInput$, "-" ) = 0 Then
+                CurrentInput$ = Left$( CurrentInput$, 3 ) & "-" & Mid$( CurrentInput$, 4 )
+            End If
+          Case 9
+            CurrentInput$ = "(" & Left$( CurrentInput$, 3 ) & ") " & Mid$( CurrentInput$, 5, 3 ) & "-" & Mid$( CurrentInput$, 8 )
+        End Select
+        DlgText "InputBox", CurrentInput$
+        WshShell.SendKeys "{END}", -1
+    End If
+    PastInput$             = DlgText( "InputBox" )
+    LengthOfCurrentInput%  = Len( PastInput$ )
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Dim Instructions$
+Dim WaltsMacros$:            : WaltsMacros$ = "[Walt's macros] DynamicDialogBoxEntry"
+
+Set WshShell = CreateObject("WScript.Shell")
+
+Instructions$ = "Enter a telephone number as a string of up to ten digits,"
+Instructions$ = Instructions$ & " and the macro will add punctuation to properly format it:"
+
+Begin Dialog Dialog1Definition  200,  52, WaltsMacros$, .Dialog1ControlFunction
+  OkButton       80,  29,  52,  14
+  CancelButton  140,  29,  52,  14
+  TextBox         8,  30,  64,  12,                .InputBox
+  Text            8,   6, 184,  16, Instructions$
+End Dialog
+
+Dim DialogBox as Dialog1Definition
+On Error Resume Next
+Dialog DialogBox
+
+End Sub
+'1295146

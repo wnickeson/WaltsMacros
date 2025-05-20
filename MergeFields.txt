@@ -1,18 +1,30 @@
-'MacroName:MergeFields.2024.07
-'MacroDescription:Merges two consecutive fields in a bibliographic record.
+' MacroName:MergeFields.2025.02
+' MacroDescription:Merges two consecutive fields in a bibliographic record.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 2 August 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: This macro combines two consecutive variable fields in a bibliographic
@@ -20,7 +32,8 @@
 ' them to be in only one. Click anywhere in the first field to be merged and run the
 ' macro. It combines that field with the field immediately following, and the resulting
 ' merged field replaces the first one, keeping its tag and indicators. The second field
-' is deleted.
+' is deleted. The last three characters of the original field are highlighted, making it
+' easy to see where the fields were joined.
 '
 ' Subfield coding in both fields is preserved. This means that if the first subfield of
 ' the second field is subfield $a (which Connexion normally does not display), and the
@@ -64,7 +77,9 @@ Dim DELIMITER   As String*1  : DELIMITER    = Chr$( 223 )
 Dim DELIMITER_A As String*2  : DELIMITER_A  = DELIMITER & "a"
 
 Dim ButtonSet%
+Dim EndOfField1Pos%
 Dim Field1$
+Dim Field1LastChars$
 Dim Field1Row%
 Dim Field1Tag$
 Dim Field2$
@@ -146,6 +161,13 @@ If CS.GetField( "...", Field1Row%, Field1$ ) Then
         If MsgBox( MergeQuery, ButtonSet%, WaltsMacros$ ) = MSGBOX_RETURN_CANCEL Then
             Exit Sub
           Else
+
+' Get the last three characters of the first field; after the fields are merged, they
+' will be selected, or highlighted, to help quickly find the end of the field in case
+' editing is needed, such as to delete punctuation.
+
+            EndOfField1Pos%  = Len( Field1$ )
+            Field1LastChars$ = Right$( Field1$, 3 )
             If Field1Tag$ = "505" and Field2Tag$ = "505" Then
                 If Right$( Trim$( Field1$ ), 3 ) <> " --" Then
                     Field1$ = Field1$ & " -- "
@@ -169,7 +191,12 @@ If CS.DeleteFieldLine( Field1Row% + 1 ) = FALSE Then
     MsgBox "Sorry, something went wrong when trying to delete the merged field.", CRITICAL_MESSAGE, WaltsMacros$
 End If
 
-CS.CursorRow = Field1Row%
+' Highlight or select the end of the original first field.
+
+CS.CursorRow    = Field1Row%
+CS.CursorColumn = EndOfField1Pos% - 4
+If CS.FindText( Field1LastChars, TRUE ) Then
+End If
 
 End Sub
-'1767248
+'2038782

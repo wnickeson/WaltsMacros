@@ -1,19 +1,31 @@
-'MacroName:CollationCheck.2024.01
-'MacroDescription:Compares leaf and page counts in the statement of extent (300 subfield
+' MacroName:CollationCheck.2025.01
+' MacroDescription:Compares leaf and page counts in the statement of extent (300 subfield
 ' $a) and a standard signature statement.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 11 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: This macro compares the pagination count given explicitly in a
@@ -54,11 +66,11 @@
 '
 ' The macro recognizes signatures using the standard 23-letter Latin and the 24-letter
 ' Greek (transliterated) alphabets, numbers, and most other characters and bracketed
-' terms. Some signatures will stump the macro (e.g., "A[para]-G[para]²"). A number
+' terms. Some signatures will stump the macro (e.g., "A[para]-G[para]Â²"). A number
 ' indicating a doubled, etc. signature must be carried over into the second half of a
 ' range: "3A-G" is seen as mistake (although "A-3G" or "3A-5G" isn't); the macro will
 ' suggest prefixing the "G" with "3". Brackets indicating supplied signings must not
-' surround a range, e.g., the macro can understand "[a]-[g]²" but not "[a-g]²". Index
+' surround a range, e.g., the macro can understand "[a]-[g]Â²" but not "[a-g]Â²". Index
 ' figures that are not even numbers generate a warning, although their leaf counts will
 ' be calculated. Superscript numbers that indicate duplicated signings are ignored
 ' unless two of them in a sequence don't match. The macro can generally figure out
@@ -74,7 +86,7 @@
 ' it can't tell when more than one leaf is being described. Counts for signings that use
 ' parentheses should be checked manually. Temporarily editing the field by replacing
 ' problem signature characters, or by adding or removing parentheses and brackets, may be
-' necessary to get good results. For example, changing "A[para]-G[para]²" to "A-G²" will
+' necessary to get good results. For example, changing "A[para]-G[para]Â²" to "A-GÂ²" will
 ' enable the macro to calculate the leaf count.
 '****************************************************************************************
 
@@ -820,7 +832,7 @@ For i = 1 To Len( SignatureString$ )
 
 ' If the right parenthesis is now closing a parenthetical expression, determine whether
 ' it is a modifying (e.g., "( -E4)", meaning leaf E4 is absent) or an explanatory (e.g.,
-' "(²O4 blank)", meaning leaf O4 in the second signing "O" is blank) element by looking
+' "(Â²O4 blank)", meaning leaf O4 in the second signing "O" is blank) element by looking
 ' for plus and minus signs. If a hyphen follows any character other than a number, assume
 ' it means a missing or removed leaf. Otherwise, assume it is a hyphen indicating a
 ' range. Determining how many missing leaves are being described is impossible for this
@@ -1669,7 +1681,7 @@ Const INITIALIZE     As Integer = 1
 Const INVISIBLE      As Integer = 0
 Const VISIBLE        As Integer = 1
 
-Dim z As Integer
+Dim LstBoxSelection%
 
 Select Case Action%
 
@@ -1715,13 +1727,13 @@ Select Case Action%
     Select Case Id$
 
       Case "ListBox1"
-        z = DlgValue( "ListBox1" )
-        DlgText    "PageWarning", PagePieces( z )
+        LstBoxSelection% = DlgValue( "ListBox1" )
+        DlgText    "PageWarning", PagePieces( LstBoxSelection% )
         DlgVisible "PageWarning", VISIBLE
 
       Case "ListBox2"
-        z = DlgValue( "ListBox2" )
-        DlgText    "SigWarning",  SigErrors( z )
+        LstBoxSelection% = DlgValue( "ListBox2" )
+        DlgText    "SigWarning",  SigErrors( LstBoxSelection% )
         DlgVisible "SigWarning",  VISIBLE
 
     End Select
@@ -1729,4 +1741,4 @@ Select Case Action%
 End Select
 
 End Function
-'173364487
+'174565436

@@ -1,20 +1,31 @@
-'MacroName:FixedFieldChecker.2024.01
-'MacroDescription:Fills in various elements of the fixed field from data in the variable
-' fields of a bibliographic record. UNDER DEVELOPMENT
-
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' MacroName:FixedFieldChecker.2025.01
+' MacroDescription:Fills in various elements of the fixed field from data in the variable
+' fields of a bibliographic record. BETA VERSION
 '
-' Last updated: 9 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' This macro works for me (so far, but it is still a draft being worked on) with
-' Connexion client 3.1 and Windows 11 Enterprise & 64-bit Windows 10 Pro, but no
-' guarantees are promised or implied.
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record for a book to extract certain
@@ -237,6 +248,14 @@ If CS.GetField( "111", 1, FieldData$ ) Then
             Replace$ = Replace$ & "Fixed field 'Conf' changed. "
         End If
     End If
+  ElseIf CS.GetField( "110", 1, FieldData$ ) Then
+    If InStr( FieldData$, DELIMITER & "n" ) > 0 Or InStr( FieldData$, DELIMITER & "d" ) > 0 Then
+        If FFConf$ = "0" Then
+            If CS.SetFixedField( "Conf", "1" ) Then
+                Replace$ = Replace$ & "Fixed field 'Conf' changed. "
+            End If
+        End If
+    End If
   Else
     If FFConf$ = "1" Then
         If CS.SetFixedField( "Conf", "0" ) Then
@@ -313,6 +332,18 @@ Do
               p = InStr( FieldData$, "short stories" )
               If p <> 0 Then
                   LitFCode$ = "j"
+              End If
+              p = InStr( FieldData$, "speeches" )
+              If p <> 0 Then
+                  LitFCode$ = "s"
+              End If
+              p = InStr( FieldData$, "addresses" )
+              If p <> 0 Then
+                  LitFCode$ = "s"
+              End If
+              p = InStr( FieldData$, "humor" )
+              If p <> 0 Then
+                  LitFCode$ = "h"
               End If
 
 ' Various terms for "Cont" codes.
@@ -475,4 +506,4 @@ If Replace$ = "" Then
 End If
 
 End Sub
-'47915325
+'51016911

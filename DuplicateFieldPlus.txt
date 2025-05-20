@@ -1,20 +1,32 @@
-'MacroName:DuplicateFieldPlus.2024.01
-'MacroDescription:Copies a field in a bibliographic record and pastes it in a new field
+' MacroName:DuplicateFieldPlus.2025.02
+' MacroDescription:Copies a field in a bibliographic record and pastes it in a new field
 ' directly below the original, automatically making some useful changes in tag,
 ' indicators, and content.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 6 February 2023.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: While viewing a bibliographic record with the cursor in the field to be
@@ -76,6 +88,22 @@ Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
 Global Century%
 
+'----------------------------------------------------------------------------------------
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal uFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal lpString As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal hMem As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal hMem As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal HWND As Long ) As Long
+
 '****************************************************************************************
 
 Sub Main
@@ -120,7 +148,7 @@ Dim TestString$
 Dim TypeOfWindow%
 Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Essentials:DuplicateFieldPlus"
 
-Dim p As Integer, q As Integer
+Dim i As Integer, p As Integer, q As Integer
 
 Dim Centuries( 11 ) As String
 Centuries( 0  ) = "10th century"
@@ -136,6 +164,23 @@ Centuries( 9  ) = "19th century"
 Centuries( 10 ) = "20th century"
 Centuries( 11 ) = "21st century"
 
+'----------------------------------------------------------------------------------------
+Const INTEGER_RANGE       As Long = 65536 '-32,768 to 32,767
+Const UNICODE_TEXT        As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim CharToAdd$
+Dim ClipboardCharsDim%
+Dim ClipboardClose
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim LengthOfField%
+Dim UniCodePoint$
+
+Dim ClipboardChars() As Integer
+'----------------------------------------------------------------------------------------
+
 Row% = CS.CursorRow
 Col% = CS.CursorColumn
 
@@ -147,10 +192,74 @@ Select Case TypeOfWindow%
 End Select
 
 If Col% > FIXED_FIELD_COLUMN Then
-    If CS.GetFieldUnicode( "...", Row%, FieldData$ ) = FALSE Then
-        MsgBox "Sorry, this macro can't proceed.", CRITICAL_MESSAGE, WaltsMacros$
+    CS.CopyField
+
+' Use Windows API to access the Clipboard.
+
+    ActiveWindowHandle = GetActiveWindow()
+    If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+        MsgBox "Sorry, the contents of the Clipboard could not be accessed.", CRITICAL_MESSAGE, WaltsMacros$
+        ClipboardClose = CloseClipboard()
         Exit Sub
     End If
+
+    ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+    If ClipboardDataHandle = 0& Then
+        MsgBox "Sorry, the macro failed to get Clipboard data.", CRITICAL_MESSAGE, WaltsMacros$
+        ClipboardClose = CloseClipboard()
+        Exit Sub
+    End If
+    ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+    LengthOfField% = GetStringLength( ClipboardDataLocation )
+    If LengthOfField% > 0 Then
+        ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+        ReDim ClipboardChars( ClipboardCharsDim% )
+        CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+      Else
+        Exit Sub
+    End If
+
+    GlobalUnlock( ClipboardDataHandle )
+    ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", they
+' range from -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters, which are
+' added to the string as themselves. All other numbers are converted to hexadecimal by
+' means of the BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly
+' converted to hexadecimal 0080 to 7FFF. Negative decimal numbers are made positive by
+' adding them to 65,536, so the range -32,768 to -1 becomes the range 32,768 to 65,535.
+' The "Hex" function converts those numbers to the hexadecimal range 8000 to FFFF.
+' Finally, the hexadecimal numbers are transformed into Numeric Character References,
+' with strings of two or three digits padded with leading zeros to make each string four
+' characters in length; then that NCR is added to the character string. The exception is
+' the delimiter, which is converted to its standard OCLC-MARC character.
+
+    For i = 0 To ClipboardCharsDim%
+      CodePoint% = ClipboardChars( i )
+      If CodePoint% = 0 Then
+          CharToAdd$ = ""
+        ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+          CharToAdd$ = Chr$( CodePoint% )
+        ElseIf CodePoint% = 450 Then
+          CharToAdd$ = Chr$( 223 )
+        Else
+          If CodePoint% > 127 Then
+              UniCodePoint$ = Hex( ClipboardChars( i ) )
+              If Len( UniCodePoint$ ) < 4 Then
+                 UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+              End If
+            Else
+              UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+          End If
+          CharToAdd$ = "&#x" & UniCodePoint$ & ";"
+      End If
+      FieldData$ = FieldData$ & CharToAdd$
+      CharToAdd$ = ""
+    Next i
+
   Else
     MsgBox "This macro can only duplicate a variable field!", CRITICAL_MESSAGE, WaltsMacros$
     Exit Sub
@@ -556,4 +665,4 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'56022512
+'66927940

@@ -1,20 +1,31 @@
-'MacroName:SubjectSubfieldsTool.2024.01
-'MacroDescription:Helps in adding subdivision strings to, or removing them from, LC
-' subject heading fields. UNDER DEVELOPMENT
+' MacroName:SubjectSubfieldsTool.2025.01
+' MacroDescription:Helps in adding subdivision strings to, or removing them from, LC
+' subject heading fields. BETA VERSION
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 9 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me (so far, but it is still a draft being worked on) with
-' Connexion client 3.1 and Windows 11 Enterprise & 64-bit Windows 10 Pro, but no
-' guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works. In a bibliographic record, place the cursor in a 6XX field containing an
@@ -140,7 +151,6 @@ Const LCSH                As String  = "0"
 Dim DELIMITER    As String*1 : DELIMITER    = Chr$( 223 )
 Dim UNDETERMINED As String*1 : UNDETERMINED = "?"
 
-Dim a As String
 Dim CandidateTag$
 Dim CountOfAllNames%            'Total count of names as subject headings, including the current heading.
 Dim CountOfAllOther6XX%         'Make sure "all" means values that include the current heading.
@@ -178,28 +188,11 @@ Dim SkipLine
 Dim i As Integer, p As Integer, x As Integer
 
 COPY                      = "C"
-DBID%                     = 0
-NameTypes$                = ""
-NoOptionButtonsText$      = ""
-NoOptionButtonsText$      = ""
-Operation$                = ""
-OptionButton1Tag$         = ""
-OptionButton1Text$        = ""
-OptionButton1Text$        = ""
-OptionButton2Tag$         = ""
-OptionButton2Text$        = ""
-OptionButton2Text$        = ""
-OptionButton3Text$        = ""
-OptionButton3Text$        = ""
 QUIT                      = "Q"
 QUOTE                     = Chr$( 034 )
 REMOVE                    = "R"
-SourceTag$                = ""
-SubdivisionDisplayString$ = ""
 SwitchButtonVisible       = TRUE
-TagTypes$                 = ""
 WaltsMacros$              = "[Walt's macros] Extras1:SubjectSubfieldsTool"
-WhichDialogBox%           = 0
 
 Switched = FALSE
 
@@ -1179,4 +1172,4 @@ Select Case Action%
 End Select
 
 End Function
-'118351225
+'117651488

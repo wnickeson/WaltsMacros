@@ -1,35 +1,47 @@
-'MacroName:CopyLastSubfieldDown.2024.25
-'MacroDescription:Copies the last subdivision(s) of an LC subject heading, or the relator
-' codes or terms from a 700 name heading, to the immediately following heading in a
-' bibliographic record.
+' MacroName:CopyLastSubfieldDown.2025.02
+' MacroDescription:Copies the last subdivision(s) of an LC subject heading, or the
+' relator codes or terms from a 700/710 name heading, to the immediately following
+' heading in a bibliographic record.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 1 July 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: In a bibliographic record, run this macro to quickly copy the last
-' subdivision in a subject heading field, or the relator terms or codes in a personal
-' name added entry, to the immediately following field. Or, if a subject heading field
-' lacks subdivisions, or a personal name added entry lacks relationship information, run
-' the macro to copy these subfields from the immediately preceding field. This macro can
-' be quite useful, for example, when adding the same geographic information to several
-' topical subject headings, or when adding many names to a record for a movie, and they
-' must all be labeled "actor."
+' subdivision in a subject heading field, or the relator terms or codes in a personal or
+' corporate name added entry, to the immediately following field. Or, if a subject
+' heading field lacks subdivisions, or a name added entry lacks relationship information,
+' run the macro to copy these subfields from the immediately preceding field. This macro
+' can be quite useful, for example, when adding the same geographic information to
+' several topical subject headings, or when adding many names to a record for a movie,
+' and they must all be labeled "actor."
 '
-' Begin by placing the cursor in either of two adjacent 6XX or 700 fields. If the cursor
-' is in the first of the fields, the macro copies subfields to the next field; otherwise,
-' the macro copies the subfields from the preceding field. For example, in this pair of
-' headings:
+' Begin by placing the cursor in either of two adjacent 6XX or 700/710 fields. If the
+' cursor is in the first of the fields, the macro copies subfields to the next field;
+' otherwise, the macro copies the subfields from the preceding field. For example, in
+' this pair of headings:
 '
 '   650  0  Excavations (Archaeology) $z Syria.
 '   650  0  Iron age.
@@ -50,7 +62,7 @@
 ' subdivision--one of subfields $v, $x, $y, and $z; but if the last two subdivisions are
 ' geographic, consisting of a larger entity subdivided by a smaller, as in "$z Utah $z
 ' Tooele", the two subdivisions will be copied together. (But if the recipient field
-' already has "$z Utah" the macro copies only "$z Tooele"). The copied information is
+' already has "$z Utah" the macro copies only "$z Tooele".) The copied information is
 ' added at the end of the next field, except if the next field ends with a form
 ' subdivision--in which case it gets pasted in before that last subfield. The macro
 ' won't paste a geographic subdivision (or subdivision pair) into a geographic heading
@@ -59,13 +71,13 @@
 ' The macro can't determine if, after pasting, the resulting subdivision string is
 ' actually correct, or appropriate for that heading.
 '
-' For name fields, the headings in both rows must be personal names (field 700). The
-' macro copies a relator term or code, or both, in subfields $e or $4, respectively. The
-' rules for copying this information are quite similar to those for copying subject
-' subdivisions: the macro will add the copied term or code to the next field only if that
-' field is also a personal name heading and it doesn't already contain the copied
-' information. If other subfields follow the relator term or code, such as control
-' subfields, the macro pastes the copied subfields before them.
+' For name fields, the headings in both rows must be names of persons (field 700) or
+' corporate bodies (710). The macro copies a relator term or code, or both, in subfields
+' $e or $4, respectively. The rules for copying this information are quite similar to
+' those for copying subject subdivisions: the macro will add the copied term or code to
+' the next field only if that field is also a suitable name heading and it doesn't
+' already contain the copied information. If other subfields follow the relator term or
+' code, such as control subfields, the macro pastes the copied subfields before them.
 '
 ' This macro is somewhat similar in function to my macros "SubjectSubfieldTool" and
 ' "RelatorHelper," but is less sophisticated. "SubjectSubfieldTool" can add or delete
@@ -158,7 +170,7 @@ Select Case CopiedSubfield1$
 
   Case INVALID_FIELD
 
-    ErrorMessage$ = "Please place the cursor in a 6XX or 700 field to run this macro!"
+    ErrorMessage$ = "Please place the cursor in a 6XX, 700, or 710 field to run this macro!"
     GoTo ShowError:
 
   Case NON_LATIN
@@ -328,7 +340,7 @@ If CS.GetField( "...", RecipientField%, FieldData$ ) Then
 ' anything copied to it. But if a name field is eligible, determine the presence of
 ' control fields; relator terms and codes must precede subfields $0-$3 and $5.
 
-        If Left$( FieldData$, 3 ) = "700" Then
+        If Left$( FieldData$, 3 ) Like "7[01]0" Then
             If InStr( FieldData$, DELIMITER & "t" ) = 0 Then
                 Start%            = 1
                 LastDelimiterPos% = 0
@@ -514,7 +526,7 @@ If TypeOfField$ = SUBJ_ Then
 ' and a term are present. It is also possible that relationship information is not in the
 ' final subfield, as some control codes may follow the relationship designation.
 
-  ElseIf Left$( Tag$, 3 ) = "700" Then
+  ElseIf Left$( Tag$, 3 ) Like "7[01]0" Then
     TypeOfField$ = NAME_
     p = InStr( FieldData$, DELIMITER & "e" )
     q = InStr( FieldData$, DELIMITER & "4" )
@@ -537,4 +549,4 @@ End If
 GetLastSubfields = TempString$
 
 End Function
-'54120154
+'55321096

@@ -1,19 +1,31 @@
-'MacroName:WadeGilesToPinyin.2024.02
-'MacroDescription:Converts a Wade-Giles string to a Pinyin string, following LC
+' MacroName:WadeGilesToPinyin.2025.01
+' MacroDescription:Converts a Wade-Giles string to a Pinyin string, following LC
 ' practice.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 11 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Run the macro to convert a string of Chinese syllables in Wade-Giles
@@ -21,14 +33,14 @@
 ' Conversion Project of 2000. The conversion takes place as the string is typed into the
 ' macro's input box, but the macro will also instantly convert text copied and pasted
 ' into that box. For all input, use the apostrophe for the ayn character, and enter the
-' letter "ü" ("u" with umlaut) as it appears. Input a hyphen used to join two syllables.
+' letter "Ã¼" ("u" with umlaut) as it appears. Input a hyphen used to join two syllables.
 ' Don't input any other diacritical marks (the breve and circumflex are the only ones
 ' likely to be encountered) or special characters. The macro retains in the output
 ' string any characters it doesn't recognize as part of a Wade-Giles syllable, so
 ' extraneous characters may produce strange results. When entering an inverted personal
 ' name, retain the comma to properly browse for that name.
 '
-' The letter "ü" may be entered in a number of ways. One is by using the pushbutton at
+' The letter "Ã¼" may be entered in a number of ways. One is by using the pushbutton at
 ' the end of the input box. Unfortunately, the pushbutton can only add the "u" at the
 ' end of the string, regardless of the cursor position in the input box. If the letter
 ' must be added inside the string, another entry method is to hold down the [ALT] key and
@@ -160,7 +172,7 @@ WorldCatSearches( 8 )  = "Search corporate author keywords"
 
 ' The Windows Scripting Host (WSH) seems to provide a more stable environment for using
 ' the SendKeys method than OML. SendKeys will be used in the text input box when the
-' character "ü" needs to be inserted.
+' character "Ã¼" needs to be inserted.
 
 Set WshShell = CreateObject("WScript.Shell")
 
@@ -234,12 +246,12 @@ Select Case DialogChoice%
 ' and keyword searches. It needs to be transformed, however, for the author and title
 ' derived searches.
 
-' First, any "ü" must be converted to plain "u", for both searching and browsing, and the
+' First, any "Ã¼" must be converted to plain "u", for both searching and browsing, and the
 ' whole string converted to lower case.
 
     tOutputString$ = LCase$( tOutputString$ )
     Do
-      p = InStr( tOutputString$, "ü" )
+      p = InStr( tOutputString$, "Ã¼" )
       If p > 0 Then
           Mid$( tOutputString$, p, 1 ) = "u"
       End If
@@ -430,10 +442,10 @@ ConversionTable( 24,  WG_WORD ) = "ch'uang" : ConversionTable( 24,  PY_WORD ) = 
 ConversionTable( 25,  WG_WORD ) = "ch'ui"   : ConversionTable( 25,  PY_WORD ) = "chui"
 ConversionTable( 26,  WG_WORD ) = "ch'un"   : ConversionTable( 26,  PY_WORD ) = "chun"
 ConversionTable( 27,  WG_WORD ) = "ch'ung"  : ConversionTable( 27,  PY_WORD ) = "chong"
-ConversionTable( 28,  WG_WORD ) = "ch'ü"    : ConversionTable( 28,  PY_WORD ) = "qu"
-ConversionTable( 29,  WG_WORD ) = "ch'üan"  : ConversionTable( 29,  PY_WORD ) = "quan"
-ConversionTable( 30,  WG_WORD ) = "ch'üeh"  : ConversionTable( 30,  PY_WORD ) = "que"
-ConversionTable( 31,  WG_WORD ) = "ch'ün"   : ConversionTable( 31,  PY_WORD ) = "qun"
+ConversionTable( 28,  WG_WORD ) = "ch'Ã¼"    : ConversionTable( 28,  PY_WORD ) = "qu"
+ConversionTable( 29,  WG_WORD ) = "ch'Ã¼an"  : ConversionTable( 29,  PY_WORD ) = "quan"
+ConversionTable( 30,  WG_WORD ) = "ch'Ã¼eh"  : ConversionTable( 30,  PY_WORD ) = "que"
+ConversionTable( 31,  WG_WORD ) = "ch'Ã¼n"   : ConversionTable( 31,  PY_WORD ) = "qun"
 ConversionTable( 32,  WG_WORD ) = "cha"     : ConversionTable( 32,  PY_WORD ) = "zha"
 ConversionTable( 33,  WG_WORD ) = "chai"    : ConversionTable( 33,  PY_WORD ) = "zhai"
 ConversionTable( 34,  WG_WORD ) = "chan"    : ConversionTable( 34,  PY_WORD ) = "zhan"
@@ -463,10 +475,10 @@ ConversionTable( 57,  WG_WORD ) = "chuang"  : ConversionTable( 57,  PY_WORD ) = 
 ConversionTable( 58,  WG_WORD ) = "chui"    : ConversionTable( 58,  PY_WORD ) = "zhui"
 ConversionTable( 59,  WG_WORD ) = "chun"    : ConversionTable( 59,  PY_WORD ) = "zhun"
 ConversionTable( 60,  WG_WORD ) = "chung"   : ConversionTable( 60,  PY_WORD ) = "zhong"
-ConversionTable( 61,  WG_WORD ) = "chü"     : ConversionTable( 61,  PY_WORD ) = "ju"
-ConversionTable( 62,  WG_WORD ) = "chüan"   : ConversionTable( 62,  PY_WORD ) = "juan"
-ConversionTable( 63,  WG_WORD ) = "chüeh"   : ConversionTable( 63,  PY_WORD ) = "jue"
-ConversionTable( 64,  WG_WORD ) = "chün"    : ConversionTable( 64,  PY_WORD ) = "jun"
+ConversionTable( 61,  WG_WORD ) = "chÃ¼"     : ConversionTable( 61,  PY_WORD ) = "ju"
+ConversionTable( 62,  WG_WORD ) = "chÃ¼an"   : ConversionTable( 62,  PY_WORD ) = "juan"
+ConversionTable( 63,  WG_WORD ) = "chÃ¼eh"   : ConversionTable( 63,  PY_WORD ) = "jue"
+ConversionTable( 64,  WG_WORD ) = "chÃ¼n"    : ConversionTable( 64,  PY_WORD ) = "jun"
 ConversionTable( 65,  WG_WORD ) = "erh"     : ConversionTable( 65,  PY_WORD ) = "er"
 ConversionTable( 66,  WG_WORD ) = "ho"      : ConversionTable( 66,  PY_WORD ) = "he"
 ConversionTable( 67,  WG_WORD ) = "hsi"     : ConversionTable( 67,  PY_WORD ) = "xi"
@@ -479,10 +491,10 @@ ConversionTable( 73,  WG_WORD ) = "hsin"    : ConversionTable( 73,  PY_WORD ) = 
 ConversionTable( 74,  WG_WORD ) = "hsing"   : ConversionTable( 74,  PY_WORD ) = "xing"
 ConversionTable( 75,  WG_WORD ) = "hsiu"    : ConversionTable( 75,  PY_WORD ) = "xiu"
 ConversionTable( 76,  WG_WORD ) = "hsiung"  : ConversionTable( 76,  PY_WORD ) = "xiong"
-ConversionTable( 77,  WG_WORD ) = "hsü"     : ConversionTable( 77,  PY_WORD ) = "xu"
-ConversionTable( 78,  WG_WORD ) = "hsüan"   : ConversionTable( 78,  PY_WORD ) = "xuan"
-ConversionTable( 79,  WG_WORD ) = "hsüeh"   : ConversionTable( 79,  PY_WORD ) = "xue"
-ConversionTable( 80,  WG_WORD ) = "hsün"    : ConversionTable( 80,  PY_WORD ) = "xun"
+ConversionTable( 77,  WG_WORD ) = "hsÃ¼"     : ConversionTable( 77,  PY_WORD ) = "xu"
+ConversionTable( 78,  WG_WORD ) = "hsÃ¼an"   : ConversionTable( 78,  PY_WORD ) = "xuan"
+ConversionTable( 79,  WG_WORD ) = "hsÃ¼eh"   : ConversionTable( 79,  PY_WORD ) = "xue"
+ConversionTable( 80,  WG_WORD ) = "hsÃ¼n"    : ConversionTable( 80,  PY_WORD ) = "xun"
 ConversionTable( 81,  WG_WORD ) = "hung"    : ConversionTable( 81,  PY_WORD ) = "hong"
 ConversionTable( 82,  WG_WORD ) = "i"       : ConversionTable( 82,  PY_WORD ) = "yi"
 ConversionTable( 83,  WG_WORD ) = "jan"     : ConversionTable( 83,  PY_WORD ) = "ran"
@@ -539,15 +551,15 @@ ConversionTable( 133, WG_WORD ) = "lieh"    : ConversionTable( 133, PY_WORD ) = 
 ConversionTable( 134, WG_WORD ) = "lien"    : ConversionTable( 134, PY_WORD ) = "lian"
 ConversionTable( 135, WG_WORD ) = "lo"      : ConversionTable( 135, PY_WORD ) = "luo"
 ConversionTable( 136, WG_WORD ) = "lung"    : ConversionTable( 136, PY_WORD ) = "long"
-ConversionTable( 137, WG_WORD ) = "lüan"    : ConversionTable( 137, PY_WORD ) = "luan"
-ConversionTable( 138, WG_WORD ) = "lüeh"    : ConversionTable( 138, PY_WORD ) = "lue"
+ConversionTable( 137, WG_WORD ) = "lÃ¼an"    : ConversionTable( 137, PY_WORD ) = "luan"
+ConversionTable( 138, WG_WORD ) = "lÃ¼eh"    : ConversionTable( 138, PY_WORD ) = "lue"
 ConversionTable( 139, WG_WORD ) = "mieh"    : ConversionTable( 139, PY_WORD ) = "mie"
 ConversionTable( 140, WG_WORD ) = "mien"    : ConversionTable( 140, PY_WORD ) = "mian"
 ConversionTable( 141, WG_WORD ) = "nieh"    : ConversionTable( 141, PY_WORD ) = "nie"
 ConversionTable( 142, WG_WORD ) = "nien"    : ConversionTable( 142, PY_WORD ) = "nian"
 ConversionTable( 143, WG_WORD ) = "no"      : ConversionTable( 143, PY_WORD ) = "nuo"
 ConversionTable( 144, WG_WORD ) = "nung"    : ConversionTable( 144, PY_WORD ) = "nong"
-ConversionTable( 145, WG_WORD ) = "nüeh"    : ConversionTable( 145, PY_WORD ) = "nue"
+ConversionTable( 145, WG_WORD ) = "nÃ¼eh"    : ConversionTable( 145, PY_WORD ) = "nue"
 ConversionTable( 146, WG_WORD ) = "o"       : ConversionTable( 146, PY_WORD ) = "e"
 ConversionTable( 147, WG_WORD ) = "p'a"     : ConversionTable( 147, PY_WORD ) = "pa"
 ConversionTable( 148, WG_WORD ) = "p'ai"    : ConversionTable( 148, PY_WORD ) = "pai"
@@ -662,10 +674,10 @@ ConversionTable( 256, WG_WORD ) = "yeh"     : ConversionTable( 256, PY_WORD ) = 
 ConversionTable( 257, WG_WORD ) = "yen"     : ConversionTable( 257, PY_WORD ) = "yan"
 ConversionTable( 258, WG_WORD ) = "yu"      : ConversionTable( 258, PY_WORD ) = "you"
 ConversionTable( 259, WG_WORD ) = "yung"    : ConversionTable( 259, PY_WORD ) = "yong"
-ConversionTable( 260, WG_WORD ) = "yü"      : ConversionTable( 260, PY_WORD ) = "yu"
-ConversionTable( 261, WG_WORD ) = "yüan"    : ConversionTable( 261, PY_WORD ) = "yuan"
-ConversionTable( 262, WG_WORD ) = "yüeh"    : ConversionTable( 262, PY_WORD ) = "yue"
-ConversionTable( 263, WG_WORD ) = "yün"     : ConversionTable( 263, PY_WORD ) = "yun"
+ConversionTable( 260, WG_WORD ) = "yÃ¼"      : ConversionTable( 260, PY_WORD ) = "yu"
+ConversionTable( 261, WG_WORD ) = "yÃ¼an"    : ConversionTable( 261, PY_WORD ) = "yuan"
+ConversionTable( 262, WG_WORD ) = "yÃ¼eh"    : ConversionTable( 262, PY_WORD ) = "yue"
+ConversionTable( 263, WG_WORD ) = "yÃ¼n"     : ConversionTable( 263, PY_WORD ) = "yun"
 
 End Sub
 
@@ -739,7 +751,7 @@ For i = 1 To Len( InString$ )
 Next i
 
 ' The macro will try to fix some character input, such as the spacing grave and single
-' quotation marks used for the apostrophe, and letters "ê" and "û" (with the circumflex).
+' quotation marks used for the apostrophe, and letters "Ãª" and "Ã»" (with the circumflex).
 
 For i = 1 To Len( InString$ )
   CharA% = Asc( Mid$( InString$, i, 1 ) )
@@ -872,18 +884,18 @@ Select Case Action%
         DlgText   "TextBoxInput",       CurrentInputString$ & Chr$( 252 )
         DlgFocus  "TextBoxInput"
 
-' Adding the letter "ü" to the input string poses some challenges. Perhaps the easiest
+' Adding the letter "Ã¼" to the input string poses some challenges. Perhaps the easiest
 ' way to insert that character when typing input is to use the numeric keypad (by holding
 ' down the [ALT] key and pressing either [1][2][9] or [0][2][5][2]). But because that
 ' knowledge may not be in everyone's head, the macro offers a pushbutton to use to enter
-' the "ü". The first drawback of this method is that the character must be added to the
+' the "Ã¼". The first drawback of this method is that the character must be added to the
 ' end of the input string; OML has no way to tell where the cursor is in a text input
 ' box, so it can't put the character into the string at the current cursor position. The
 ' second drawback is that after the macro sets the text of the dialog box with the new
 ' string, the pushbutton still has the focus. Nothing more can be added to the input box
 ' until it gets the focus back, and that is done by using the "DlgFocus" command. Which
 ' adds a further drawback, because when the focus is returned to the text input box, the
-' cursor appears at the beginning of the input string. This isn't helpful if the "ü" is
+' cursor appears at the beginning of the input string. This isn't helpful if the "Ã¼" is
 ' being added in the middle of the string. This last drawback can be partially overcome
 ' by using the SendKeys command "{END}" to move the cursor to the end of the input
 ' string. This action makes sense if the character was just added as the last character

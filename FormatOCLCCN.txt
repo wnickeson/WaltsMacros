@@ -1,0 +1,77 @@
+' MacroName:FormatOCLCCN.2025.01
+' MacroDescription:Shows the displayed bibliographic record's OCLC control number,
+' formatted with commas separating thousands.
+
+' This macro was written by Walter F. Nickeson and last updated 11 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro while viewing a bibliographic record to see its control
+' number displayed, formatted with commas separating thousands, to give you a better idea
+' at a glance of its magnitude.
+'****************************************************************************************
+
+Option Explicit
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE    As Integer = 16
+Const INFORMATION_MESSAGE As Integer = 64
+
+Dim CN$
+Dim TempString$
+Dim WaltsMacros$             : WaltsMacros$ = "[WaltsMacros] FormatOCLCCN"
+
+Dim i As Integer, x As Integer
+
+Select Case CS.ItemType
+  Case -1, 3 To 16, 18, 20 To 26
+    MsgBox "This macro works only in bibliographic records!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+If CS.GetFixedField( "OCLC", CN$ ) Then
+    x = Len( CN$ )
+    For i = x To 1 Step -1
+      TempString$ = Mid$( CN$, i, 1 ) & TempString$
+      If ( x - i ) Mod 3 = 2 And i > 1 Then
+          TempString$ = "," & TempString$
+      End If
+    Next i
+    MsgBox TempString$, INFORMATION_MESSAGE, WaltsMacros$
+  Else
+    MsgBox "Sorry, the macro failed.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+'783091

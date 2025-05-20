@@ -1,7 +1,13 @@
-'MacroName:CopyRecordToClipboard.2024.02
-'MacroDescription:Copies the displayed record, or a selection of fields in that record,
+' MacroName:CopyRecordToClipboard.2025.01
+' MacroDescription:Copies the displayed record, or a selection of fields in that record,
 ' to the Windows Clipboard in the classic layout, using only characters in ISO/IEC
 ' 8859-1:1998.
+'
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
 ' This macro was originally written by OCLC for its Passport for Windows software with
 ' the name "SaveScreen." It was converted for the Connexion client by Joel Hahn, Niles
@@ -9,18 +15,24 @@
 ' record to a text file. I re-wrote Joel's version of 4 February 2004 to be able to copy
 ' a record to the Windows Clipboard for easy printing or emailing.
 '
-' This macro originally by Joel Hahn was re-written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' Copyright 2025 Walter F. Nickeson.
 '
-' Last updated: 28 June 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Run the macro with a bibliographic or authority record displayed. The
@@ -51,7 +63,7 @@
 ' "|" is used to represent characters for which no appropriate substitute is available.
 ' Conversions or substitutions made by this macro include:
 '
-'  + Delimiters are represented to dollar signs. The dollar sign in subfield $c in the
+'  + Delimiters are represented by dollar signs. The dollar sign in subfield $c in the
 '    066 field, part of a code indicating the presence of Chinese, Japanese, or Korean
 '    script, is doubled, as otherwise it would look like subfield "one". Elsewhere, the
 '    context should make it apparent which dollar signs actually represent themselves.
@@ -132,7 +144,7 @@ Global EquivalentCharSubstituted
 Global IncorrectEncoding
 Global UndisplayableChars
 
-Global UnicodeChar( UNICODE_CHARACTER_COUNT ) As String
+Global UnicodeEquiv( UNICODE_CHARACTER_COUNT ) As String
 
 '****************************************************************************************
 
@@ -605,905 +617,905 @@ Sub FillUnicodeArray
 ' followed by one to three sets of decimal codes for the ASCII equivalent (encoding a
 ' string of one to three characters).
 
-UnicodeChar( 0   ) = "0020 032" '
-UnicodeChar( 1   ) = "0021 033" '!
-UnicodeChar( 2   ) = "0022 034" '"
-UnicodeChar( 3   ) = "0023 035" '#
-UnicodeChar( 4   ) = "0024 036" '[dollar sign]
-UnicodeChar( 5   ) = "0025 037" '[per cent sign]
-UnicodeChar( 6   ) = "0026 038" '&
-UnicodeChar( 7   ) = "0027 039" ''
-UnicodeChar( 8   ) = "0028 040" '(
-UnicodeChar( 9   ) = "0029 041" ')
-UnicodeChar( 10  ) = "002A 042" '*
-UnicodeChar( 11  ) = "002B 043" '+
-UnicodeChar( 12  ) = "002C 044" ',
-UnicodeChar( 13  ) = "002D 045" '-
-UnicodeChar( 14  ) = "002E 046" '.
-UnicodeChar( 15  ) = "002F 047" '/
-UnicodeChar( 16  ) = "0030 048" '0
-UnicodeChar( 17  ) = "0031 049" '1
-UnicodeChar( 18  ) = "0032 050" '2
-UnicodeChar( 19  ) = "0033 051" '3
-UnicodeChar( 20  ) = "0034 052" '4
-UnicodeChar( 21  ) = "0035 053" '5
-UnicodeChar( 22  ) = "0036 054" '6
-UnicodeChar( 23  ) = "0037 055" '7
-UnicodeChar( 24  ) = "0038 056" '8
-UnicodeChar( 25  ) = "0039 057" '9
-UnicodeChar( 26  ) = "003A 058" ':
-UnicodeChar( 27  ) = "003B 059" ';
-UnicodeChar( 28  ) = "003C 060" '<
-UnicodeChar( 29  ) = "003D 061" '=
-UnicodeChar( 30  ) = "003E 062" '>
-UnicodeChar( 31  ) = "003F 063" '?
-UnicodeChar( 32  ) = "0040 064" '@
-UnicodeChar( 33  ) = "0041 065" 'A
-UnicodeChar( 34  ) = "0042 066" 'B
-UnicodeChar( 35  ) = "0043 067" 'C
-UnicodeChar( 36  ) = "0044 068" 'D
-UnicodeChar( 37  ) = "0045 069" 'E
-UnicodeChar( 38  ) = "0046 070" 'F
-UnicodeChar( 39  ) = "0047 071" 'G
-UnicodeChar( 40  ) = "0048 072" 'H
-UnicodeChar( 41  ) = "0049 073" 'I
-UnicodeChar( 42  ) = "004A 074" 'J
-UnicodeChar( 43  ) = "004B 075" 'K
-UnicodeChar( 44  ) = "004C 076" 'L
-UnicodeChar( 45  ) = "004D 077" 'M
-UnicodeChar( 46  ) = "004E 078" 'N
-UnicodeChar( 47  ) = "004F 079" 'O
-UnicodeChar( 48  ) = "0050 080" 'P
-UnicodeChar( 49  ) = "0051 081" 'Q
-UnicodeChar( 50  ) = "0052 082" 'R
-UnicodeChar( 51  ) = "0053 083" 'S
-UnicodeChar( 52  ) = "0054 084" 'T
-UnicodeChar( 53  ) = "0055 085" 'U
-UnicodeChar( 54  ) = "0056 086" 'V
-UnicodeChar( 55  ) = "0057 087" 'W
-UnicodeChar( 56  ) = "0058 088" 'X
-UnicodeChar( 57  ) = "0059 089" 'Y
-UnicodeChar( 58  ) = "005A 090" 'Z
-UnicodeChar( 59  ) = "005B 091" '[
-UnicodeChar( 60  ) = "005C 092" '\
-UnicodeChar( 61  ) = "005D 093" ']
-UnicodeChar( 62  ) = "005E 094" '^
-UnicodeChar( 63  ) = "005F 095" '_
-UnicodeChar( 64  ) = "0060 096" '`
-UnicodeChar( 65  ) = "0061 097" 'a
-UnicodeChar( 66  ) = "0062 098" 'b
-UnicodeChar( 67  ) = "0063 099" 'c
-UnicodeChar( 68  ) = "0064 100" 'd
-UnicodeChar( 69  ) = "0065 101" 'e
-UnicodeChar( 70  ) = "0066 102" 'f
-UnicodeChar( 71  ) = "0067 103" 'g
-UnicodeChar( 72  ) = "0068 104" 'h
-UnicodeChar( 73  ) = "0069 105" 'i
-UnicodeChar( 74  ) = "006A 106" 'j
-UnicodeChar( 75  ) = "006B 107" 'k
-UnicodeChar( 76  ) = "006C 108" 'l
-UnicodeChar( 77  ) = "006D 109" 'm
-UnicodeChar( 78  ) = "006E 110" 'n
-UnicodeChar( 79  ) = "006F 111" 'o
-UnicodeChar( 80  ) = "0070 112" 'p
-UnicodeChar( 81  ) = "0071 113" 'q
-UnicodeChar( 82  ) = "0072 114" 'r
-UnicodeChar( 83  ) = "0073 115" 's
-UnicodeChar( 84  ) = "0074 116" 't
-UnicodeChar( 85  ) = "0075 117" 'u
-UnicodeChar( 86  ) = "0076 118" 'v
-UnicodeChar( 87  ) = "0077 119" 'w
-UnicodeChar( 88  ) = "0078 120" 'x
-UnicodeChar( 89  ) = "0079 121" 'y
-UnicodeChar( 90  ) = "007A 122" 'z
-UnicodeChar( 91  ) = "007B 123" '{
-UnicodeChar( 92  ) = "007C 124" '|
-UnicodeChar( 93  ) = "007D 125" '}
-UnicodeChar( 94  ) = "007E 126" '~
-UnicodeChar( 95  ) = "00A1 161" '¡
-UnicodeChar( 96  ) = "00A2 162" '¢
-UnicodeChar( 97  ) = "00A3 163" '£
-UnicodeChar( 98  ) = "00A4 164" '¤
-UnicodeChar( 99  ) = "00A5 165" '¥
-UnicodeChar( 100 ) = "00A6 166" '¤
-UnicodeChar( 101 ) = "00A7 167" '§
-UnicodeChar( 102 ) = "00A8 168" '¨
-UnicodeChar( 103 ) = "00A9 169" '©
-UnicodeChar( 104 ) = "00AA 170" 'ª
-UnicodeChar( 105 ) = "00AB 171" '«
-UnicodeChar( 106 ) = "00AC 172" '¬
-UnicodeChar( 107 ) = "00AD 173" '­
-UnicodeChar( 108 ) = "00AE 174" '®
-UnicodeChar( 109 ) = "00AF 175" '¯
-UnicodeChar( 110 ) = "00B0 176" '°
-UnicodeChar( 111 ) = "00B1 177" '±
-UnicodeChar( 112 ) = "00B2 178" '²
-UnicodeChar( 113 ) = "00B3 179" '³
-UnicodeChar( 114 ) = "00B4 180" '´
-UnicodeChar( 115 ) = "00B5 181" 'µ
-UnicodeChar( 116 ) = "00B6 182" '¶
-UnicodeChar( 117 ) = "00B7 183" '·
-UnicodeChar( 118 ) = "00B8 184" '¸
-UnicodeChar( 119 ) = "00B9 185" '¹
-UnicodeChar( 120 ) = "00BA 186" 'º
-UnicodeChar( 121 ) = "00BB 187" '»
-UnicodeChar( 122 ) = "00BC 188" '¼
-UnicodeChar( 123 ) = "00BD 189" '½
-UnicodeChar( 124 ) = "00BE 190" '¾
-UnicodeChar( 125 ) = "00BF 191" '¿
-UnicodeChar( 126 ) = "00C0 192" 'À
-UnicodeChar( 127 ) = "00C1 193" 'Á
-UnicodeChar( 128 ) = "00C2 194" 'Â
-UnicodeChar( 129 ) = "00C3 195" 'Ã
-UnicodeChar( 130 ) = "00C4 196" 'Ä
-UnicodeChar( 131 ) = "00C5 197" 'Å
-UnicodeChar( 132 ) = "00C6 198" 'Æ
-UnicodeChar( 133 ) = "00C7 199" 'Ç
-UnicodeChar( 134 ) = "00C8 200" 'È
-UnicodeChar( 135 ) = "00C9 201" 'É
-UnicodeChar( 136 ) = "00CA 202" 'Ê
-UnicodeChar( 137 ) = "00CB 203" 'Ë
-UnicodeChar( 138 ) = "00CC 204" 'Ì
-UnicodeChar( 139 ) = "00CD 205" 'Í
-UnicodeChar( 140 ) = "00CE 206" 'Î
-UnicodeChar( 141 ) = "00CF 207" 'Ï
-UnicodeChar( 142 ) = "00D0 208" 'Ð
-UnicodeChar( 143 ) = "00D1 209" 'Ñ
-UnicodeChar( 144 ) = "00D2 210" 'Ò
-UnicodeChar( 145 ) = "00D3 211" 'Ó
-UnicodeChar( 146 ) = "00D4 212" 'Ô
-UnicodeChar( 147 ) = "00D5 213" 'Õ
-UnicodeChar( 148 ) = "00D6 214" 'Ö
-UnicodeChar( 149 ) = "00D7 215" '×
-UnicodeChar( 150 ) = "00D8 216" 'Ø
-UnicodeChar( 151 ) = "00D9 217" 'Ù
-UnicodeChar( 152 ) = "00DA 218" 'Ú
-UnicodeChar( 153 ) = "00DB 219" 'Û
-UnicodeChar( 154 ) = "00DC 220" 'Ü
-UnicodeChar( 155 ) = "00DD 221" 'Ý
-UnicodeChar( 156 ) = "00DE 222" 'Þ
-UnicodeChar( 157 ) = "00DF 223" 'ß
-UnicodeChar( 158 ) = "00E0 224" 'à
-UnicodeChar( 159 ) = "00E1 225" 'á
-UnicodeChar( 160 ) = "00E2 226" 'â
-UnicodeChar( 161 ) = "00E3 227" 'ã
-UnicodeChar( 162 ) = "00E4 228" 'ä
-UnicodeChar( 163 ) = "00E5 229" 'å
-UnicodeChar( 164 ) = "00E6 230" 'æ
-UnicodeChar( 165 ) = "00E7 231" 'ç
-UnicodeChar( 166 ) = "00E8 232" 'è
-UnicodeChar( 167 ) = "00E9 233" 'é
-UnicodeChar( 168 ) = "00EA 234" 'ê
-UnicodeChar( 169 ) = "00EB 235" 'ë
-UnicodeChar( 170 ) = "00EC 236" 'ì
-UnicodeChar( 171 ) = "00ED 237" 'í
-UnicodeChar( 172 ) = "00EE 238" 'î
-UnicodeChar( 173 ) = "00EF 239" 'ï
-UnicodeChar( 174 ) = "00F0 240" 'ð
-UnicodeChar( 175 ) = "00F1 241" 'ñ
-UnicodeChar( 176 ) = "00F2 242" 'ò
-UnicodeChar( 177 ) = "00F3 243" 'ó
-UnicodeChar( 178 ) = "00F4 244" 'ô
-UnicodeChar( 179 ) = "00F5 245" 'õ
-UnicodeChar( 180 ) = "00F6 246" 'ö
-UnicodeChar( 181 ) = "00F7 247" '÷
-UnicodeChar( 182 ) = "00F8 248" 'ø
-UnicodeChar( 183 ) = "00F9 249" 'ù
-UnicodeChar( 184 ) = "00FA 250" 'ú
-UnicodeChar( 185 ) = "00FB 251" 'û
-UnicodeChar( 186 ) = "00FC 252" 'ü
-UnicodeChar( 187 ) = "00FD 253" 'ý
-UnicodeChar( 188 ) = "00FE 254" 'þ
-UnicodeChar( 189 ) = "00FF 255" 'ÿ
-UnicodeChar( 190 ) = "0100 065" 'A
-UnicodeChar( 191 ) = "0101 097" 'a
-UnicodeChar( 192 ) = "0102 065" 'A
-UnicodeChar( 193 ) = "0103 097" 'a
-UnicodeChar( 194 ) = "0104 065" 'A
-UnicodeChar( 195 ) = "0105 097" 'a
-UnicodeChar( 196 ) = "0106 067" 'C
-UnicodeChar( 197 ) = "0107 099" 'c
-UnicodeChar( 198 ) = "0108 067" 'C
-UnicodeChar( 199 ) = "0109 099" 'c
-UnicodeChar( 200 ) = "010A 067" 'C
-UnicodeChar( 201 ) = "010B 099" 'c
-UnicodeChar( 202 ) = "010C 067" 'C
-UnicodeChar( 203 ) = "010D 099" 'c
-UnicodeChar( 204 ) = "010E 068" 'D
-UnicodeChar( 205 ) = "010F 100" 'd
-UnicodeChar( 206 ) = "0110 208" 'Ð
-UnicodeChar( 207 ) = "0111 100" 'd
-UnicodeChar( 208 ) = "0112 069" 'E
-UnicodeChar( 209 ) = "0113 101" 'e
-UnicodeChar( 210 ) = "0114 069" 'E
-UnicodeChar( 211 ) = "0115 101" 'e
-UnicodeChar( 212 ) = "0116 069" 'E
-UnicodeChar( 213 ) = "0117 101" 'e
-UnicodeChar( 214 ) = "0118 069" 'E
-UnicodeChar( 215 ) = "0119 101" 'e
-UnicodeChar( 216 ) = "011A 069" 'E
-UnicodeChar( 217 ) = "011B 101" 'e
-UnicodeChar( 218 ) = "011C 071" 'G
-UnicodeChar( 219 ) = "011D 103" 'g
-UnicodeChar( 220 ) = "011E 071" 'G
-UnicodeChar( 221 ) = "011F 103" 'g
-UnicodeChar( 222 ) = "0120 071" 'G
-UnicodeChar( 223 ) = "0121 103" 'g
-UnicodeChar( 224 ) = "0122 071" 'G
-UnicodeChar( 225 ) = "0123 103" 'g
-UnicodeChar( 226 ) = "0124 072" 'H
-UnicodeChar( 227 ) = "0125 104" 'h
-UnicodeChar( 228 ) = "0126 072" 'H
-UnicodeChar( 229 ) = "0127 104" 'h
-UnicodeChar( 230 ) = "0128 073" 'I
-UnicodeChar( 231 ) = "0129 105" 'i
-UnicodeChar( 232 ) = "012A 073" 'I
-UnicodeChar( 233 ) = "012B 105" 'i
-UnicodeChar( 234 ) = "012C 073" 'I
-UnicodeChar( 235 ) = "012D 105" 'i
-UnicodeChar( 236 ) = "012E 073" 'I
-UnicodeChar( 237 ) = "012F 105" 'i
-UnicodeChar( 238 ) = "0130 073" 'I
-UnicodeChar( 239 ) = "0131 105" 'i
-UnicodeChar( 240 ) = "0132 073 074" 'IJ
-UnicodeChar( 241 ) = "0133 105 106" 'ij
-UnicodeChar( 242 ) = "0134 074" 'J
-UnicodeChar( 243 ) = "0135 106" 'j
-UnicodeChar( 244 ) = "0136 075" 'K
-UnicodeChar( 245 ) = "0137 107" 'k
-UnicodeChar( 246 ) = "0138 107" 'k
-UnicodeChar( 247 ) = "0139 076" 'L
-UnicodeChar( 248 ) = "013A 108" 'l
-UnicodeChar( 249 ) = "013B 076" 'L
-UnicodeChar( 250 ) = "013C 108" 'l
-UnicodeChar( 251 ) = "013D 076" 'L
-UnicodeChar( 252 ) = "013E 108" 'l
-UnicodeChar( 253 ) = "013F 076" 'L
-UnicodeChar( 254 ) = "0140 108" 'l
-UnicodeChar( 255 ) = "0141 076" 'L
-UnicodeChar( 256 ) = "0142 108" 'l
-UnicodeChar( 257 ) = "0143 078" 'N
-UnicodeChar( 258 ) = "0144 110" 'n
-UnicodeChar( 259 ) = "0145 078" 'N
-UnicodeChar( 260 ) = "0146 110" 'n
-UnicodeChar( 261 ) = "0147 078" 'N
-UnicodeChar( 262 ) = "0148 110" 'n
-UnicodeChar( 263 ) = "0149 039 110" 'n
-UnicodeChar( 264 ) = "014C 079" 'O
-UnicodeChar( 265 ) = "014D 111" 'o
-UnicodeChar( 266 ) = "014E 079" 'O
-UnicodeChar( 267 ) = "014F 111" 'o
-UnicodeChar( 268 ) = "0150 079" 'O
-UnicodeChar( 269 ) = "0151 111" 'o
-UnicodeChar( 270 ) = "0152 079 069" 'OE
-UnicodeChar( 271 ) = "0153 111 101" 'oe
-UnicodeChar( 272 ) = "0154 082" 'R
-UnicodeChar( 273 ) = "0155 114" 'r
-UnicodeChar( 274 ) = "0156 082" 'R
-UnicodeChar( 275 ) = "0157 114" 'r
-UnicodeChar( 276 ) = "0158 082" 'R
-UnicodeChar( 277 ) = "0159 114" 'r
-UnicodeChar( 278 ) = "015A 083" 'S
-UnicodeChar( 279 ) = "015B 115" 's
-UnicodeChar( 280 ) = "015C 083" 'S
-UnicodeChar( 281 ) = "015D 115" 's
-UnicodeChar( 282 ) = "015E 083" 'S
-UnicodeChar( 283 ) = "015F 115" 's
-UnicodeChar( 284 ) = "0160 083" 'S
-UnicodeChar( 285 ) = "0161 115" 's
-UnicodeChar( 286 ) = "0162 084" 'T
-UnicodeChar( 287 ) = "0163 116" 't
-UnicodeChar( 288 ) = "0164 084" 'T
-UnicodeChar( 289 ) = "0165 116" 't
-UnicodeChar( 290 ) = "0166 084" 'T
-UnicodeChar( 291 ) = "0167 116" 't
-UnicodeChar( 292 ) = "0168 085" 'U
-UnicodeChar( 293 ) = "0169 117" 'u
-UnicodeChar( 294 ) = "016A 085" 'U
-UnicodeChar( 295 ) = "016B 117" 'u
-UnicodeChar( 296 ) = "016C 085" 'U
-UnicodeChar( 297 ) = "016D 117" 'u
-UnicodeChar( 298 ) = "016E 085" 'U
-UnicodeChar( 299 ) = "016F 117" 'u
-UnicodeChar( 300 ) = "0170 085" 'U
-UnicodeChar( 301 ) = "0171 117" 'u
-UnicodeChar( 302 ) = "0172 085" 'U
-UnicodeChar( 303 ) = "0173 117" 'u
-UnicodeChar( 304 ) = "0174 087" 'W
-UnicodeChar( 305 ) = "0175 119" 'w
-UnicodeChar( 306 ) = "0176 089" 'Y
-UnicodeChar( 307 ) = "0177 121" 'y
-UnicodeChar( 308 ) = "0178 089" 'Y
-UnicodeChar( 309 ) = "0179 090" 'Z
-UnicodeChar( 310 ) = "017A 122" 'z
-UnicodeChar( 311 ) = "017B 090" 'Z
-UnicodeChar( 312 ) = "017C 122" 'z
-UnicodeChar( 313 ) = "017D 090" 'Z
-UnicodeChar( 314 ) = "017E 122" 'z
-UnicodeChar( 315 ) = "017F 115" 's
-UnicodeChar( 316 ) = "0180 098" 'b
-UnicodeChar( 317 ) = "0181 066" 'B
-UnicodeChar( 318 ) = "0182 066" 'B
-UnicodeChar( 319 ) = "0183 098" 'b
-UnicodeChar( 320 ) = "0187 067" 'C
-UnicodeChar( 321 ) = "0188 099" 'c
-UnicodeChar( 322 ) = "0189 208" 'Ð
-UnicodeChar( 323 ) = "018A 068" 'D
-UnicodeChar( 324 ) = "018B 068" 'D
-UnicodeChar( 325 ) = "018C 100" 'd
-UnicodeChar( 326 ) = "0191 070" 'F
-UnicodeChar( 327 ) = "0192 102" 'f
-UnicodeChar( 328 ) = "0193 071" 'G
-UnicodeChar( 329 ) = "0197 073" 'I
-UnicodeChar( 330 ) = "0198 075" 'K
-UnicodeChar( 331 ) = "0199 107" 'k
-UnicodeChar( 332 ) = "019A 108" 'l
-UnicodeChar( 333 ) = "019D 078" 'N
-UnicodeChar( 334 ) = "019E 110" 'n
-UnicodeChar( 335 ) = "019F 213" 'Õ
-UnicodeChar( 336 ) = "01A0 079" 'O
-UnicodeChar( 337 ) = "01A1 111" 'o
-UnicodeChar( 338 ) = "01A4 080" 'P
-UnicodeChar( 339 ) = "01A5 112" 'p
-UnicodeChar( 340 ) = "01AB 116" 't
-UnicodeChar( 341 ) = "01AC 084" 'T
-UnicodeChar( 342 ) = "01AD 116" 't
-UnicodeChar( 343 ) = "01AE 084" 'T
-UnicodeChar( 344 ) = "01AF 085" 'U
-UnicodeChar( 345 ) = "01B0 117" 'u
-UnicodeChar( 346 ) = "01B2 086" 'V
-UnicodeChar( 347 ) = "01B3 089" 'Y
-UnicodeChar( 348 ) = "01B4 121" 'y
-UnicodeChar( 349 ) = "01B5 090" 'Z
-UnicodeChar( 350 ) = "01B6 122" 'z
-UnicodeChar( 351 ) = "01C0 124" '|
-UnicodeChar( 352 ) = "01C2 036" '[dollar sign]
-UnicodeChar( 353 ) = "01C3 033" '!
-UnicodeChar( 354 ) = "01C4 068 090" 'DZ
-UnicodeChar( 355 ) = "01C5 068 122" 'Dz
-UnicodeChar( 356 ) = "01C6 100 122" 'dz
-UnicodeChar( 357 ) = "01C7 076 074" 'LJ
-UnicodeChar( 358 ) = "01C8 076 106" 'Lj
-UnicodeChar( 359 ) = "01C9 108 106" 'lj
-UnicodeChar( 360 ) = "01CA 078 074" 'NJ
-UnicodeChar( 361 ) = "01CB 078 106" 'Nj
-UnicodeChar( 362 ) = "01CC 110 106" 'nj
-UnicodeChar( 363 ) = "01CD 065" 'A
-UnicodeChar( 364 ) = "01CE 097" 'a
-UnicodeChar( 365 ) = "01CF 073" 'I
-UnicodeChar( 366 ) = "01D0 105" 'i
-UnicodeChar( 367 ) = "01D1 079" 'O
-UnicodeChar( 368 ) = "01D2 111" 'o
-UnicodeChar( 369 ) = "01D3 085" 'U
-UnicodeChar( 370 ) = "01D4 117" 'u
-UnicodeChar( 371 ) = "01D5 220" 'Ü
-UnicodeChar( 372 ) = "01D6 252" 'ü
-UnicodeChar( 373 ) = "01D7 220" 'Ü
-UnicodeChar( 374 ) = "01D8 252" 'ü
-UnicodeChar( 375 ) = "01D9 220" 'Ü
-UnicodeChar( 376 ) = "01DA 252" 'ü
-UnicodeChar( 377 ) = "01DB 220" 'Ü
-UnicodeChar( 378 ) = "01DC 252" 'ü
-UnicodeChar( 379 ) = "01DE 196" 'Ä
-UnicodeChar( 380 ) = "01DF 228" 'ä
-UnicodeChar( 381 ) = "01E0 065" 'A
-UnicodeChar( 382 ) = "01E1 097" 'a
-UnicodeChar( 383 ) = "01E2 065 069" 'AE
-UnicodeChar( 384 ) = "01E3 097 101" 'ae
-UnicodeChar( 385 ) = "01E4 071" 'G
-UnicodeChar( 386 ) = "01E5 103" 'g
-UnicodeChar( 387 ) = "01E6 071" 'G
-UnicodeChar( 388 ) = "01E7 103" 'g
-UnicodeChar( 389 ) = "01E8 075" 'K
-UnicodeChar( 390 ) = "01E9 107" 'k
-UnicodeChar( 391 ) = "01EA 079" 'O
-UnicodeChar( 392 ) = "01EB 111" 'o
-UnicodeChar( 393 ) = "01EC 079" 'O
-UnicodeChar( 394 ) = "01ED 111" 'o
-UnicodeChar( 395 ) = "01F0 106" 'j
-UnicodeChar( 396 ) = "01F1 068 090" 'DZ
-UnicodeChar( 397 ) = "01F2 068 122" 'Dz
-UnicodeChar( 398 ) = "01F3 100 122" 'dz
-UnicodeChar( 399 ) = "01F4 071" 'G
-UnicodeChar( 400 ) = "01F5 103" 'g
-UnicodeChar( 401 ) = "01F8 078" 'N
-UnicodeChar( 402 ) = "01F9 110" 'n
-UnicodeChar( 403 ) = "01FA 197" 'Å
-UnicodeChar( 404 ) = "01FB 229" 'å
-UnicodeChar( 405 ) = "01FC 065 201" 'AE
-UnicodeChar( 406 ) = "01FD 097 101" 'ae
-UnicodeChar( 407 ) = "01FE 216" 'Ø
-UnicodeChar( 408 ) = "01FF 248" 'ø
-UnicodeChar( 409 ) = "0200 065" 'A
-UnicodeChar( 410 ) = "0201 097" 'a
-UnicodeChar( 411 ) = "0202 065" 'A
-UnicodeChar( 412 ) = "0203 097" 'a
-UnicodeChar( 413 ) = "0204 069" 'E
-UnicodeChar( 414 ) = "0205 101" 'e
-UnicodeChar( 415 ) = "0206 069" 'E
-UnicodeChar( 416 ) = "0207 101" 'e
-UnicodeChar( 417 ) = "0208 073" 'I
-UnicodeChar( 418 ) = "0209 105" 'i
-UnicodeChar( 419 ) = "020A 073" 'I
-UnicodeChar( 420 ) = "020B 105" 'i
-UnicodeChar( 421 ) = "020C 079" 'O
-UnicodeChar( 422 ) = "020D 111" 'o
-UnicodeChar( 423 ) = "020E 079" 'O
-UnicodeChar( 424 ) = "020F 111" 'o
-UnicodeChar( 425 ) = "0210 082" 'R
-UnicodeChar( 426 ) = "0211 114" 'r
-UnicodeChar( 427 ) = "0212 082" 'R
-UnicodeChar( 428 ) = "0213 114" 'r
-UnicodeChar( 429 ) = "0214 085" 'U
-UnicodeChar( 430 ) = "0215 117" 'u
-UnicodeChar( 431 ) = "0216 085" 'U
-UnicodeChar( 432 ) = "0217 117" 'u
-UnicodeChar( 433 ) = "0218 083" 'S
-UnicodeChar( 434 ) = "0219 115" 's
-UnicodeChar( 435 ) = "021A 084" 'T
-UnicodeChar( 436 ) = "021B 116" 't
-UnicodeChar( 437 ) = "021E 072" 'H
-UnicodeChar( 438 ) = "021F 104" 'h
-UnicodeChar( 439 ) = "0220 078" 'N
-UnicodeChar( 440 ) = "0221 100" 'd
-UnicodeChar( 441 ) = "0224 090" 'Z
-UnicodeChar( 442 ) = "0225 122" 'z
-UnicodeChar( 443 ) = "0226 065" 'A
-UnicodeChar( 444 ) = "0227 097" 'a
-UnicodeChar( 445 ) = "0228 069" 'E
-UnicodeChar( 446 ) = "0229 101" 'e
-UnicodeChar( 447 ) = "022A 214" 'Ö
-UnicodeChar( 448 ) = "022B 246" 'ö
-UnicodeChar( 449 ) = "022C 213" 'Õ
-UnicodeChar( 450 ) = "022D 245" 'õ
-UnicodeChar( 451 ) = "022E 079" 'O
-UnicodeChar( 452 ) = "022F 111" 'o
-UnicodeChar( 453 ) = "0230 079" 'O
-UnicodeChar( 454 ) = "0231 111" 'o
-UnicodeChar( 455 ) = "0232 089" 'Y
-UnicodeChar( 456 ) = "0233 121" 'y
-UnicodeChar( 457 ) = "0234 108" 'l
-UnicodeChar( 458 ) = "0235 110" 'n
-UnicodeChar( 459 ) = "0236 121" 'y
-UnicodeChar( 460 ) = "0237 106" 'j
-UnicodeChar( 461 ) = "023A 065" 'A
-UnicodeChar( 462 ) = "023B 067" 'C
-UnicodeChar( 463 ) = "023C 099" 'c
-UnicodeChar( 464 ) = "023D 076" 'L
-UnicodeChar( 465 ) = "023E 084" 'T
-UnicodeChar( 466 ) = "023F 115" 's
-UnicodeChar( 467 ) = "0240 122" 'z
-UnicodeChar( 468 ) = "0243 066" 'B
-UnicodeChar( 469 ) = "0244 085" 'U
-UnicodeChar( 470 ) = "0246 069" 'E
-UnicodeChar( 471 ) = "0247 101" 'e
-UnicodeChar( 472 ) = "0248 074" 'J
-UnicodeChar( 473 ) = "0249 106" 'j
-UnicodeChar( 474 ) = "024A 081" 'Q
-UnicodeChar( 475 ) = "024B 113" 'q
-UnicodeChar( 476 ) = "024C 082" 'R
-UnicodeChar( 477 ) = "024D 114" 'r
-UnicodeChar( 478 ) = "024E 089" 'Y
-UnicodeChar( 479 ) = "024F 121" 'y
-UnicodeChar( 480 ) = "02B9 039" ''
-UnicodeChar( 481 ) = "02BA 034" '"
-UnicodeChar( 482 ) = "02BB 039" ''
-UnicodeChar( 483 ) = "02BC 039" ''
-UnicodeChar( 484 ) = "02BD 039" ''
-UnicodeChar( 485 ) = "02C6 094" 'ˆ
-UnicodeChar( 486 ) = "02C8 039" ''
-UnicodeChar( 487 ) = "02C9 175" '¯
-UnicodeChar( 488 ) = "02CA 180" '´
-UnicodeChar( 489 ) = "02CB 096" '`
-UnicodeChar( 490 ) = "02D6 043" '+
-UnicodeChar( 491 ) = "02D7 045" '-
-UnicodeChar( 492 ) = "02DA 176" '°
-UnicodeChar( 493 ) = "02DC 126" '~
-UnicodeChar( 494 ) = "02DD 034" '"
-UnicodeChar( 495 ) = "02EE 034" '"
-UnicodeChar( 496 ) = "02F4 096" '`
-UnicodeChar( 497 ) = "02F6 034" '"
-UnicodeChar( 498 ) = "1E00 065" 'A
-UnicodeChar( 499 ) = "1E01 097" 'a
-UnicodeChar( 500 ) = "1E02 066" 'B
-UnicodeChar( 501 ) = "1E03 098" 'b
-UnicodeChar( 502 ) = "1E04 066" 'B
-UnicodeChar( 503 ) = "1E05 098" 'b
-UnicodeChar( 504 ) = "1E06 066" 'B
-UnicodeChar( 505 ) = "1E07 098" 'b
-UnicodeChar( 506 ) = "1E08 199" 'Ç
-UnicodeChar( 507 ) = "1E09 231" 'ç
-UnicodeChar( 508 ) = "1E0A 068" 'D
-UnicodeChar( 509 ) = "1E0B 100" 'd
-UnicodeChar( 510 ) = "1E0C 068" 'D
-UnicodeChar( 511 ) = "1E0D 100" 'd
-UnicodeChar( 512 ) = "1E0E 068" 'D
-UnicodeChar( 513 ) = "1E0F 100" 'd
-UnicodeChar( 514 ) = "1E10 199" 'Ç
-UnicodeChar( 515 ) = "1E11 100" 'd
-UnicodeChar( 516 ) = "1E12 068" 'D
-UnicodeChar( 517 ) = "1E13 100" 'd
-UnicodeChar( 518 ) = "1E14 200" 'È
-UnicodeChar( 519 ) = "1E15 232" 'è
-UnicodeChar( 520 ) = "1E16 201" 'É
-UnicodeChar( 521 ) = "1E17 233" 'é
-UnicodeChar( 522 ) = "1E18 069" 'E
-UnicodeChar( 523 ) = "1E19 101" 'e
-UnicodeChar( 524 ) = "1E1A 069" 'E
-UnicodeChar( 525 ) = "1E1B 101" 'e
-UnicodeChar( 526 ) = "1E1C 069" 'E
-UnicodeChar( 527 ) = "1E1D 232" 'è
-UnicodeChar( 528 ) = "1E1E 070" 'F
-UnicodeChar( 529 ) = "1E1F 102" 'f
-UnicodeChar( 530 ) = "1E20 071" 'G
-UnicodeChar( 531 ) = "1E21 103" 'g
-UnicodeChar( 532 ) = "1E22 072" 'H
-UnicodeChar( 533 ) = "1E23 104" 'h
-UnicodeChar( 534 ) = "1E24 072" 'H
-UnicodeChar( 535 ) = "1E25 104" 'h
-UnicodeChar( 536 ) = "1E26 072" 'H
-UnicodeChar( 537 ) = "1E27 104" 'h
-UnicodeChar( 538 ) = "1E28 072" 'H
-UnicodeChar( 539 ) = "1E29 104" 'h
-UnicodeChar( 540 ) = "1E2A 072" 'H
-UnicodeChar( 541 ) = "1E2B 104" 'h
-UnicodeChar( 542 ) = "1E2C 073" 'I
-UnicodeChar( 543 ) = "1E2D 105" 'i
-UnicodeChar( 544 ) = "1E2E 207" 'Ï
-UnicodeChar( 545 ) = "1E2F 239" 'ï
-UnicodeChar( 546 ) = "1E30 075" 'K
-UnicodeChar( 547 ) = "1E31 107" 'k
-UnicodeChar( 548 ) = "1E32 075" 'K
-UnicodeChar( 549 ) = "1E33 107" 'k
-UnicodeChar( 550 ) = "1E34 075" 'K
-UnicodeChar( 551 ) = "1E35 107" 'k
-UnicodeChar( 552 ) = "1E36 076" 'L
-UnicodeChar( 553 ) = "1E37 108" 'l
-UnicodeChar( 554 ) = "1E38 076" 'L
-UnicodeChar( 555 ) = "1E39 108" 'l
-UnicodeChar( 556 ) = "1E3A 076" 'L
-UnicodeChar( 557 ) = "1E3B 108" 'l
-UnicodeChar( 558 ) = "1E3C 076" 'L
-UnicodeChar( 559 ) = "1E3D 108" 'l
-UnicodeChar( 560 ) = "1E3E 077" 'M
-UnicodeChar( 561 ) = "1E3F 109" 'm
-UnicodeChar( 562 ) = "1E40 077" 'M
-UnicodeChar( 563 ) = "1E41 109" 'm
-UnicodeChar( 564 ) = "1E42 077" 'M
-UnicodeChar( 565 ) = "1E43 109" 'm
-UnicodeChar( 566 ) = "1E44 078" 'N
-UnicodeChar( 567 ) = "1E45 110" 'n
-UnicodeChar( 568 ) = "1E46 078" 'N
-UnicodeChar( 569 ) = "1E47 110" 'n
-UnicodeChar( 570 ) = "1E48 078" 'N
-UnicodeChar( 571 ) = "1E49 110" 'n
-UnicodeChar( 572 ) = "1E4A 078" 'N
-UnicodeChar( 573 ) = "1E4B 110" 'n
-UnicodeChar( 574 ) = "1E4C 213" 'Õ
-UnicodeChar( 575 ) = "1E4D 245" 'õ
-UnicodeChar( 576 ) = "1E4E 213" 'Õ
-UnicodeChar( 577 ) = "1E4F 245" 'õ
-UnicodeChar( 578 ) = "1E50 210" 'Ò
-UnicodeChar( 579 ) = "1E51 242" 'ò
-UnicodeChar( 580 ) = "1E52 211" 'Ó
-UnicodeChar( 581 ) = "1E53 243" 'ó
-UnicodeChar( 582 ) = "1E54 080" 'P
-UnicodeChar( 583 ) = "1E55 112" 'p
-UnicodeChar( 584 ) = "1E56 080" 'P
-UnicodeChar( 585 ) = "1E57 112" 'p
-UnicodeChar( 586 ) = "1E58 082" 'R
-UnicodeChar( 587 ) = "1E59 114" 'r
-UnicodeChar( 588 ) = "1E5A 082" 'R
-UnicodeChar( 589 ) = "1E5B 114" 'r
-UnicodeChar( 590 ) = "1E5C 082" 'R
-UnicodeChar( 591 ) = "1E5D 114" 'r
-UnicodeChar( 592 ) = "1E5E 082" 'R
-UnicodeChar( 593 ) = "1E5F 114" 'r
-UnicodeChar( 594 ) = "1E60 083" 'S
-UnicodeChar( 595 ) = "1E61 115" 's
-UnicodeChar( 596 ) = "1E62 083" 'S
-UnicodeChar( 597 ) = "1E63 115" 's
-UnicodeChar( 598 ) = "1E64 083" 'S
-UnicodeChar( 599 ) = "1E65 115" 's
-UnicodeChar( 600 ) = "1E66 083" 'S
-UnicodeChar( 601 ) = "1E67 115" 's
-UnicodeChar( 602 ) = "1E68 083" 'S
-UnicodeChar( 603 ) = "1E69 115" 's
-UnicodeChar( 604 ) = "1E6A 084" 'T
-UnicodeChar( 605 ) = "1E6B 116" 't
-UnicodeChar( 606 ) = "1E6C 084" 'T
-UnicodeChar( 607 ) = "1E6D 116" 't
-UnicodeChar( 608 ) = "1E6E 084" 'T
-UnicodeChar( 609 ) = "1E6F 116" 't
-UnicodeChar( 610 ) = "1E70 084" 'T
-UnicodeChar( 611 ) = "1E71 116" 't
-UnicodeChar( 612 ) = "1E72 085" 'U
-UnicodeChar( 613 ) = "1E73 117" 'u
-UnicodeChar( 614 ) = "1E74 085" 'U
-UnicodeChar( 615 ) = "1E75 117" 'u
-UnicodeChar( 616 ) = "1E76 085" 'U
-UnicodeChar( 617 ) = "1E77 117" 'u
-UnicodeChar( 618 ) = "1E78 218" 'Ú
-UnicodeChar( 619 ) = "1E79 250" 'ú
-UnicodeChar( 620 ) = "1E7A 220" 'Ü
-UnicodeChar( 621 ) = "1E7B 252" 'ü
-UnicodeChar( 622 ) = "1E7C 086" 'V
-UnicodeChar( 623 ) = "1E7D 118" 'v
-UnicodeChar( 624 ) = "1E7E 086" 'V
-UnicodeChar( 625 ) = "1E7F 118" 'v
-UnicodeChar( 626 ) = "1E80 087" 'W
-UnicodeChar( 627 ) = "1E81 119" 'w
-UnicodeChar( 628 ) = "1E82 087" 'W
-UnicodeChar( 629 ) = "1E83 119" 'w
-UnicodeChar( 630 ) = "1E84 087" 'W
-UnicodeChar( 631 ) = "1E85 119" 'w
-UnicodeChar( 632 ) = "1E86 087" 'W
-UnicodeChar( 633 ) = "1E87 119" 'w
-UnicodeChar( 634 ) = "1E88 087" 'W
-UnicodeChar( 635 ) = "1E89 119" 'w
-UnicodeChar( 636 ) = "1E8A 088" 'X
-UnicodeChar( 637 ) = "1E8B 120" 'x
-UnicodeChar( 638 ) = "1E8C 088" 'X
-UnicodeChar( 639 ) = "1E8D 120" 'x
-UnicodeChar( 640 ) = "1E8E 089" 'Y
-UnicodeChar( 641 ) = "1E8F 121" 'y
-UnicodeChar( 642 ) = "1E90 090" 'Z
-UnicodeChar( 643 ) = "1E91 122" 'z
-UnicodeChar( 644 ) = "1E92 090" 'Z
-UnicodeChar( 645 ) = "1E93 122" 'z
-UnicodeChar( 646 ) = "1E94 090" 'Z
-UnicodeChar( 647 ) = "1E95 122" 'z
-UnicodeChar( 648 ) = "1E96 104" 'h
-UnicodeChar( 649 ) = "1E97 116" 't
-UnicodeChar( 650 ) = "1E98 119" 'w
-UnicodeChar( 651 ) = "1E99 121" 'y
-UnicodeChar( 652 ) = "1E9A 097" 'a
-UnicodeChar( 653 ) = "1E9B 115" 's
-UnicodeChar( 654 ) = "1E9C 115" 's
-UnicodeChar( 655 ) = "1E9D 115" 's
-UnicodeChar( 656 ) = "1E9E 223" 'ß
-UnicodeChar( 657 ) = "1EA0 065" 'A
-UnicodeChar( 658 ) = "1EA1 097" 'a
-UnicodeChar( 659 ) = "1EA2 065" 'A
-UnicodeChar( 660 ) = "1EA3 097" 'a
-UnicodeChar( 661 ) = "1EA4 194" 'Â
-UnicodeChar( 662 ) = "1EA5 226" 'â
-UnicodeChar( 663 ) = "1EA6 194" 'Â
-UnicodeChar( 664 ) = "1EA7 226" 'â
-UnicodeChar( 665 ) = "1EA8 194" 'Â
-UnicodeChar( 666 ) = "1EA9 226" 'â
-UnicodeChar( 667 ) = "1EAA 194" 'Â
-UnicodeChar( 668 ) = "1EAB 226" 'â
-UnicodeChar( 669 ) = "1EAC 194" 'Â
-UnicodeChar( 670 ) = "1EAD 226" 'â
-UnicodeChar( 671 ) = "1EAE 193" 'Á
-UnicodeChar( 672 ) = "1EAF 224" 'à
-UnicodeChar( 673 ) = "1EB0 192" 'À
-UnicodeChar( 674 ) = "1EB1 224" 'à
-UnicodeChar( 675 ) = "1EB2 065" 'A
-UnicodeChar( 676 ) = "1EB3 224" 'à
-UnicodeChar( 677 ) = "1EB4 195" 'Ã
-UnicodeChar( 678 ) = "1EB5 224" 'à
-UnicodeChar( 679 ) = "1EB6 065" 'A
-UnicodeChar( 680 ) = "1EB7 224" 'à
-UnicodeChar( 681 ) = "1EB8 069" 'E
-UnicodeChar( 682 ) = "1EB9 101" 'e
-UnicodeChar( 683 ) = "1EBA 069" 'E
-UnicodeChar( 684 ) = "1EBB 101" 'e
-UnicodeChar( 685 ) = "1EBC 069" 'E
-UnicodeChar( 686 ) = "1EBD 101" 'e
-UnicodeChar( 687 ) = "1EBE 202" 'Ê
-UnicodeChar( 688 ) = "1EBF 234" 'ê
-UnicodeChar( 689 ) = "1EC0 202" 'Ê
-UnicodeChar( 690 ) = "1EC1 234" 'ê
-UnicodeChar( 691 ) = "1EC2 202" 'Ê
-UnicodeChar( 692 ) = "1EC3 234" 'ê
-UnicodeChar( 693 ) = "1EC4 202" 'Ê
-UnicodeChar( 694 ) = "1EC5 234" 'ê
-UnicodeChar( 695 ) = "1EC6 202" 'Ê
-UnicodeChar( 696 ) = "1EC7 234" 'ê
-UnicodeChar( 697 ) = "1EC8 073" 'I
-UnicodeChar( 698 ) = "1EC9 105" 'i
-UnicodeChar( 699 ) = "1ECA 073" 'I
-UnicodeChar( 700 ) = "1ECB 105" 'i
-UnicodeChar( 701 ) = "1ECC 079" 'O
-UnicodeChar( 702 ) = "1ECD 111" 'o
-UnicodeChar( 703 ) = "1ECE 079" 'O
-UnicodeChar( 704 ) = "1ECF 111" 'o
-UnicodeChar( 705 ) = "1ED0 212" 'Ô
-UnicodeChar( 706 ) = "1ED1 244" 'ô
-UnicodeChar( 707 ) = "1ED2 212" 'Ô
-UnicodeChar( 708 ) = "1ED3 244" 'ô
-UnicodeChar( 709 ) = "1ED4 212" 'Ô
-UnicodeChar( 710 ) = "1ED5 244" 'ô
-UnicodeChar( 711 ) = "1ED6 212" 'Ô
-UnicodeChar( 712 ) = "1ED7 244" 'ô
-UnicodeChar( 713 ) = "1ED8 212" 'Ô
-UnicodeChar( 714 ) = "1ED9 244" 'ô
-UnicodeChar( 715 ) = "1EDA 211" 'Ó
-UnicodeChar( 716 ) = "1EDB 243" 'ó
-UnicodeChar( 717 ) = "1EDC 210" 'Ò
-UnicodeChar( 718 ) = "1EDD 242" 'ò
-UnicodeChar( 719 ) = "1EDE 079" 'O
-UnicodeChar( 720 ) = "1EDF 111" 'o
-UnicodeChar( 721 ) = "1EE0 213" 'Õ
-UnicodeChar( 722 ) = "1EE1 245" 'õ
-UnicodeChar( 723 ) = "1EE2 079" 'O
-UnicodeChar( 724 ) = "1EE3 111" 'o
-UnicodeChar( 725 ) = "1EE4 085" 'U
-UnicodeChar( 726 ) = "1EE5 117" 'u
-UnicodeChar( 727 ) = "1EE6 085" 'U
-UnicodeChar( 728 ) = "1EE7 117" 'u
-UnicodeChar( 729 ) = "1EE8 218" 'Ú
-UnicodeChar( 730 ) = "1EE9 250" 'ú
-UnicodeChar( 731 ) = "1EEA 217" 'Ù
-UnicodeChar( 732 ) = "1EEB 249" 'ù
-UnicodeChar( 733 ) = "1EEC 085" 'U
-UnicodeChar( 734 ) = "1EED 117" 'u
-UnicodeChar( 735 ) = "1EEE 085" 'U
-UnicodeChar( 736 ) = "1EEF 117" 'u
-UnicodeChar( 737 ) = "1EF0 085" 'U
-UnicodeChar( 738 ) = "1EF1 117" 'u
-UnicodeChar( 739 ) = "1EF2 089" 'Y
-UnicodeChar( 740 ) = "1EF3 121" 'y
-UnicodeChar( 741 ) = "1EF4 089" 'Y
-UnicodeChar( 742 ) = "1EF5 121" 'y
-UnicodeChar( 743 ) = "1EF6 089" 'Y
-UnicodeChar( 744 ) = "1EF7 121" 'y
-UnicodeChar( 745 ) = "1EF8 089" 'Y
-UnicodeChar( 746 ) = "1EF9 121" 'y
-UnicodeChar( 747 ) = "1EFA 076 076" 'LL
-UnicodeChar( 748 ) = "1EFB 108 108" 'll
-UnicodeChar( 749 ) = "1EFE 089" 'Y
-UnicodeChar( 750 ) = "1EFF 121" 'y
-UnicodeChar( 751 ) = "2010 045" '-
-UnicodeChar( 752 ) = "2011 045" '-
-UnicodeChar( 753 ) = "2013 045" '-
-UnicodeChar( 754 ) = "2014 045 & 045" '--
-UnicodeChar( 755 ) = "2015 045" '-
-UnicodeChar( 756 ) = "2018 039" ''
-UnicodeChar( 757 ) = "2019 039" ''
-UnicodeChar( 758 ) = "201A 044" ',
-UnicodeChar( 759 ) = "201B 039" ''
-UnicodeChar( 760 ) = "201C 034" '"
-UnicodeChar( 761 ) = "201D 034" '"
-UnicodeChar( 762 ) = "201E 034" '"
-UnicodeChar( 763 ) = "201F 034" '"
-UnicodeChar( 764 ) = "2022 183" '•
-UnicodeChar( 765 ) = "2026 046 046 046" '...
-UnicodeChar( 766 ) = "2032 039" ''
-UnicodeChar( 767 ) = "2033 034" '"
-UnicodeChar( 768 ) = "2035 039" ''
-UnicodeChar( 769 ) = "2036 034" '"
-UnicodeChar( 770 ) = "2039 039" ''
-UnicodeChar( 771 ) = "203A 039" ''
-UnicodeChar( 772 ) = "203C 033 033" '!!
-UnicodeChar( 773 ) = "203D 063 033" '?!
-UnicodeChar( 774 ) = "2044 047" '/
-UnicodeChar( 775 ) = "2047 063 063" '??
-UnicodeChar( 776 ) = "2048 063 033" '?!
-UnicodeChar( 777 ) = "2049 033 063" '!?
-UnicodeChar( 778 ) = "204B 182" '¶
-UnicodeChar( 779 ) = "204E 042" '*
-UnicodeChar( 780 ) = "204F 049" ';
-UnicodeChar( 781 ) = "2053 126" '~
-UnicodeChar( 782 ) = "2055 042" '*
-UnicodeChar( 783 ) = "205A 058" ':
-UnicodeChar( 784 ) = "2C60 076" 'L
-UnicodeChar( 785 ) = "2C61 108" 'l
-UnicodeChar( 786 ) = "2C62 076" 'L
-UnicodeChar( 787 ) = "2C63 080" 'P
-UnicodeChar( 788 ) = "2C64 082" 'R
-UnicodeChar( 789 ) = "2C65 097" 'a
-UnicodeChar( 790 ) = "2C66 116" 't
-UnicodeChar( 791 ) = "2C67 072" 'H
-UnicodeChar( 792 ) = "2C68 072" 'H
-UnicodeChar( 793 ) = "2C69 107" 'k
-UnicodeChar( 794 ) = "2C6A 107" 'k
-UnicodeChar( 795 ) = "2C6B 090" 'Z
-UnicodeChar( 796 ) = "2C6C 122" 'z
-UnicodeChar( 797 ) = "2C6E 077" 'M
-UnicodeChar( 798 ) = "2C71 118" 'v
-UnicodeChar( 799 ) = "2C72 087" 'W
-UnicodeChar( 800 ) = "2C73 119" 'w
-UnicodeChar( 801 ) = "2C74 118" 'v
-UnicodeChar( 802 ) = "2C7E 083" 'S
-UnicodeChar( 803 ) = "2C7F 090" 'Z
-UnicodeChar( 804 ) = "A728 084 090" 'TZ
-UnicodeChar( 805 ) = "A729 116 122" 'tz
-UnicodeChar( 806 ) = "A730 070" 'F
-UnicodeChar( 807 ) = "A731 083" 'S
-UnicodeChar( 808 ) = "A732 065 065" 'AA
-UnicodeChar( 809 ) = "A733 097 097" 'aa
-UnicodeChar( 810 ) = "A734 065 079" 'AO
-UnicodeChar( 811 ) = "A735 097 111" 'ao
-UnicodeChar( 812 ) = "A736 065 085" 'AU
-UnicodeChar( 813 ) = "A737 097 117" 'au
-UnicodeChar( 814 ) = "A738 065 086" 'AV
-UnicodeChar( 815 ) = "A739 097 118" 'av
-UnicodeChar( 816 ) = "A73A 065 086" 'AV
-UnicodeChar( 817 ) = "A73B 097 118" 'av
-UnicodeChar( 818 ) = "A73C 065 089" 'AY
-UnicodeChar( 819 ) = "A73D 097 121" 'ay
-UnicodeChar( 820 ) = "A740 075" 'K
-UnicodeChar( 821 ) = "A743 107" 'k
-UnicodeChar( 822 ) = "A744 075" 'K
-UnicodeChar( 823 ) = "A748 076" 'L
-UnicodeChar( 824 ) = "A749 108" 'l
-UnicodeChar( 825 ) = "A74A 079" 'O
-UnicodeChar( 826 ) = "A74B 111" 'o
-UnicodeChar( 827 ) = "A74C 079" 'O
-UnicodeChar( 828 ) = "A74D 111" 'o
-UnicodeChar( 829 ) = "A74E 079 079" 'OO
-UnicodeChar( 830 ) = "A74F 111 111" 'oo
-UnicodeChar( 831 ) = "A750 080" 'P
-UnicodeChar( 832 ) = "A751 112" 'p
-UnicodeChar( 833 ) = "A752 080" 'P
-UnicodeChar( 834 ) = "A753 112" 'p
-UnicodeChar( 835 ) = "A754 080" 'P
-UnicodeChar( 836 ) = "A755 112" 'p
-UnicodeChar( 837 ) = "A756 081" 'Q
-UnicodeChar( 838 ) = "A757 113" 'q
-UnicodeChar( 839 ) = "A758 081" 'Q
-UnicodeChar( 840 ) = "A759 113" 'q
-UnicodeChar( 841 ) = "A75E 086" 'V
-UnicodeChar( 842 ) = "A75F 118" 'v
-UnicodeChar( 843 ) = "A760 086 089" 'VY
-UnicodeChar( 844 ) = "A761 118 121" 'vy
-UnicodeChar( 845 ) = "A764 222" 'Þ
-UnicodeChar( 846 ) = "A765 254" 'þ
-UnicodeChar( 847 ) = "A766 222" 'Þ
-UnicodeChar( 848 ) = "A767 254" 'þ
-UnicodeChar( 849 ) = "A790 078" 'N
-UnicodeChar( 850 ) = "A791 110" 'n
-UnicodeChar( 851 ) = "A792 067" 'C
-UnicodeChar( 852 ) = "A793 099" 'c
-UnicodeChar( 853 ) = "A794 099" 'c
-UnicodeChar( 854 ) = "A795 104" 'h
-UnicodeChar( 855 ) = "A796 066" 'B
-UnicodeChar( 856 ) = "A797 098" 'b
-UnicodeChar( 857 ) = "A798 070" 'F
-UnicodeChar( 858 ) = "A799 102" 'f
-UnicodeChar( 859 ) = "A7A0 071" 'G
-UnicodeChar( 860 ) = "A7A1 103" 'g
-UnicodeChar( 861 ) = "A7A2 075" 'K
-UnicodeChar( 862 ) = "A7A3 107" 'k
-UnicodeChar( 863 ) = "A7A4 078" 'N
-UnicodeChar( 864 ) = "A7A5 110" 'n
-UnicodeChar( 865 ) = "A7A6 082" 'R
-UnicodeChar( 866 ) = "A7A7 114" 'r
-UnicodeChar( 867 ) = "A7A8 083" 'S
-UnicodeChar( 868 ) = "A7A9 115" 's
-UnicodeChar( 869 ) = "A7AA 072" 'H
-UnicodeChar( 870 ) = "A7AC 071" 'G
-UnicodeChar( 871 ) = "A7AD 076" 'L
-UnicodeChar( 872 ) = "A7AE 073" 'I
-UnicodeChar( 873 ) = "A7AF 081" 'Q
-UnicodeChar( 874 ) = "A7B8 085" 'U
-UnicodeChar( 875 ) = "A7B9 117" 'u
-UnicodeChar( 876 ) = "AB33 101" 'e
-UnicodeChar( 877 ) = "AB34 101" 'e
-UnicodeChar( 878 ) = "AB35 102" 'f
-UnicodeChar( 879 ) = "AB36 103" 'g
-UnicodeChar( 880 ) = "AB37 108" 'l
-UnicodeChar( 881 ) = "AB38 108" 'l
-UnicodeChar( 882 ) = "AB39 108" 'l
-UnicodeChar( 883 ) = "AB3A 109" 'm
-UnicodeChar( 884 ) = "AB3B 109" 'm
-UnicodeChar( 885 ) = "AB46 082" 'R
-UnicodeChar( 886 ) = "AB47 114" 'r
-UnicodeChar( 887 ) = "AB48 114 114" 'rr
-UnicodeChar( 888 ) = "AB49 114" 'r
-UnicodeChar( 889 ) = "AB4A 114 114" 'rr
-UnicodeChar( 890 ) = "AB4E 117" 'u
-UnicodeChar( 891 ) = "AB4F 117" 'u
-UnicodeChar( 892 ) = "AB50 117 105" 'ui
-UnicodeChar( 893 ) = "AB52 117" 'u
-UnicodeChar( 894 ) = "AB56 120" 'x
-UnicodeChar( 895 ) = "AB57 120" 'x
-UnicodeChar( 896 ) = "AB58 120" 'x
-UnicodeChar( 897 ) = "AB59 120" 'x
-UnicodeChar( 898 ) = "AB5A 121" 'y
+UnicodeEquiv( 0   ) = "0020 032" '
+UnicodeEquiv( 1   ) = "0021 033" '!
+UnicodeEquiv( 2   ) = "0022 034" '"
+UnicodeEquiv( 3   ) = "0023 035" '#
+UnicodeEquiv( 4   ) = "0024 036" '[dollar sign]
+UnicodeEquiv( 5   ) = "0025 037" '[per cent sign]
+UnicodeEquiv( 6   ) = "0026 038" '&
+UnicodeEquiv( 7   ) = "0027 039" ''
+UnicodeEquiv( 8   ) = "0028 040" '(
+UnicodeEquiv( 9   ) = "0029 041" ')
+UnicodeEquiv( 10  ) = "002A 042" '*
+UnicodeEquiv( 11  ) = "002B 043" '+
+UnicodeEquiv( 12  ) = "002C 044" ',
+UnicodeEquiv( 13  ) = "002D 045" '-
+UnicodeEquiv( 14  ) = "002E 046" '.
+UnicodeEquiv( 15  ) = "002F 047" '/
+UnicodeEquiv( 16  ) = "0030 048" '0
+UnicodeEquiv( 17  ) = "0031 049" '1
+UnicodeEquiv( 18  ) = "0032 050" '2
+UnicodeEquiv( 19  ) = "0033 051" '3
+UnicodeEquiv( 20  ) = "0034 052" '4
+UnicodeEquiv( 21  ) = "0035 053" '5
+UnicodeEquiv( 22  ) = "0036 054" '6
+UnicodeEquiv( 23  ) = "0037 055" '7
+UnicodeEquiv( 24  ) = "0038 056" '8
+UnicodeEquiv( 25  ) = "0039 057" '9
+UnicodeEquiv( 26  ) = "003A 058" ':
+UnicodeEquiv( 27  ) = "003B 059" ';
+UnicodeEquiv( 28  ) = "003C 060" '<
+UnicodeEquiv( 29  ) = "003D 061" '=
+UnicodeEquiv( 30  ) = "003E 062" '>
+UnicodeEquiv( 31  ) = "003F 063" '?
+UnicodeEquiv( 32  ) = "0040 064" '@
+UnicodeEquiv( 33  ) = "0041 065" 'A
+UnicodeEquiv( 34  ) = "0042 066" 'B
+UnicodeEquiv( 35  ) = "0043 067" 'C
+UnicodeEquiv( 36  ) = "0044 068" 'D
+UnicodeEquiv( 37  ) = "0045 069" 'E
+UnicodeEquiv( 38  ) = "0046 070" 'F
+UnicodeEquiv( 39  ) = "0047 071" 'G
+UnicodeEquiv( 40  ) = "0048 072" 'H
+UnicodeEquiv( 41  ) = "0049 073" 'I
+UnicodeEquiv( 42  ) = "004A 074" 'J
+UnicodeEquiv( 43  ) = "004B 075" 'K
+UnicodeEquiv( 44  ) = "004C 076" 'L
+UnicodeEquiv( 45  ) = "004D 077" 'M
+UnicodeEquiv( 46  ) = "004E 078" 'N
+UnicodeEquiv( 47  ) = "004F 079" 'O
+UnicodeEquiv( 48  ) = "0050 080" 'P
+UnicodeEquiv( 49  ) = "0051 081" 'Q
+UnicodeEquiv( 50  ) = "0052 082" 'R
+UnicodeEquiv( 51  ) = "0053 083" 'S
+UnicodeEquiv( 52  ) = "0054 084" 'T
+UnicodeEquiv( 53  ) = "0055 085" 'U
+UnicodeEquiv( 54  ) = "0056 086" 'V
+UnicodeEquiv( 55  ) = "0057 087" 'W
+UnicodeEquiv( 56  ) = "0058 088" 'X
+UnicodeEquiv( 57  ) = "0059 089" 'Y
+UnicodeEquiv( 58  ) = "005A 090" 'Z
+UnicodeEquiv( 59  ) = "005B 091" '[
+UnicodeEquiv( 60  ) = "005C 092" '\
+UnicodeEquiv( 61  ) = "005D 093" ']
+UnicodeEquiv( 62  ) = "005E 094" '^
+UnicodeEquiv( 63  ) = "005F 095" '_
+UnicodeEquiv( 64  ) = "0060 096" '`
+UnicodeEquiv( 65  ) = "0061 097" 'a
+UnicodeEquiv( 66  ) = "0062 098" 'b
+UnicodeEquiv( 67  ) = "0063 099" 'c
+UnicodeEquiv( 68  ) = "0064 100" 'd
+UnicodeEquiv( 69  ) = "0065 101" 'e
+UnicodeEquiv( 70  ) = "0066 102" 'f
+UnicodeEquiv( 71  ) = "0067 103" 'g
+UnicodeEquiv( 72  ) = "0068 104" 'h
+UnicodeEquiv( 73  ) = "0069 105" 'i
+UnicodeEquiv( 74  ) = "006A 106" 'j
+UnicodeEquiv( 75  ) = "006B 107" 'k
+UnicodeEquiv( 76  ) = "006C 108" 'l
+UnicodeEquiv( 77  ) = "006D 109" 'm
+UnicodeEquiv( 78  ) = "006E 110" 'n
+UnicodeEquiv( 79  ) = "006F 111" 'o
+UnicodeEquiv( 80  ) = "0070 112" 'p
+UnicodeEquiv( 81  ) = "0071 113" 'q
+UnicodeEquiv( 82  ) = "0072 114" 'r
+UnicodeEquiv( 83  ) = "0073 115" 's
+UnicodeEquiv( 84  ) = "0074 116" 't
+UnicodeEquiv( 85  ) = "0075 117" 'u
+UnicodeEquiv( 86  ) = "0076 118" 'v
+UnicodeEquiv( 87  ) = "0077 119" 'w
+UnicodeEquiv( 88  ) = "0078 120" 'x
+UnicodeEquiv( 89  ) = "0079 121" 'y
+UnicodeEquiv( 90  ) = "007A 122" 'z
+UnicodeEquiv( 91  ) = "007B 123" '{
+UnicodeEquiv( 92  ) = "007C 124" '|
+UnicodeEquiv( 93  ) = "007D 125" '}
+UnicodeEquiv( 94  ) = "007E 126" '~
+UnicodeEquiv( 95  ) = "00A1 161" '¡
+UnicodeEquiv( 96  ) = "00A2 162" '¢
+UnicodeEquiv( 97  ) = "00A3 163" '£
+UnicodeEquiv( 98  ) = "00A4 164" '¤
+UnicodeEquiv( 99  ) = "00A5 165" '¥
+UnicodeEquiv( 100 ) = "00A6 166" '¤
+UnicodeEquiv( 101 ) = "00A7 167" '§
+UnicodeEquiv( 102 ) = "00A8 168" '¨
+UnicodeEquiv( 103 ) = "00A9 169" '©
+UnicodeEquiv( 104 ) = "00AA 170" 'ª
+UnicodeEquiv( 105 ) = "00AB 171" '«
+UnicodeEquiv( 106 ) = "00AC 172" '¬
+UnicodeEquiv( 107 ) = "00AD 173" '­
+UnicodeEquiv( 108 ) = "00AE 174" '®
+UnicodeEquiv( 109 ) = "00AF 175" '¯
+UnicodeEquiv( 110 ) = "00B0 176" '°
+UnicodeEquiv( 111 ) = "00B1 177" '±
+UnicodeEquiv( 112 ) = "00B2 178" '²
+UnicodeEquiv( 113 ) = "00B3 179" '³
+UnicodeEquiv( 114 ) = "00B4 180" '´
+UnicodeEquiv( 115 ) = "00B5 181" 'µ
+UnicodeEquiv( 116 ) = "00B6 182" '¶
+UnicodeEquiv( 117 ) = "00B7 183" '·
+UnicodeEquiv( 118 ) = "00B8 184" '¸
+UnicodeEquiv( 119 ) = "00B9 185" '¹
+UnicodeEquiv( 120 ) = "00BA 186" 'º
+UnicodeEquiv( 121 ) = "00BB 187" '»
+UnicodeEquiv( 122 ) = "00BC 188" '¼
+UnicodeEquiv( 123 ) = "00BD 189" '½
+UnicodeEquiv( 124 ) = "00BE 190" '¾
+UnicodeEquiv( 125 ) = "00BF 191" '¿
+UnicodeEquiv( 126 ) = "00C0 192" 'À
+UnicodeEquiv( 127 ) = "00C1 193" 'Á
+UnicodeEquiv( 128 ) = "00C2 194" 'Â
+UnicodeEquiv( 129 ) = "00C3 195" 'Ã
+UnicodeEquiv( 130 ) = "00C4 196" 'Ä
+UnicodeEquiv( 131 ) = "00C5 197" 'Å
+UnicodeEquiv( 132 ) = "00C6 198" 'Æ
+UnicodeEquiv( 133 ) = "00C7 199" 'Ç
+UnicodeEquiv( 134 ) = "00C8 200" 'È
+UnicodeEquiv( 135 ) = "00C9 201" 'É
+UnicodeEquiv( 136 ) = "00CA 202" 'Ê
+UnicodeEquiv( 137 ) = "00CB 203" 'Ë
+UnicodeEquiv( 138 ) = "00CC 204" 'Ì
+UnicodeEquiv( 139 ) = "00CD 205" 'Í
+UnicodeEquiv( 140 ) = "00CE 206" 'Î
+UnicodeEquiv( 141 ) = "00CF 207" 'Ï
+UnicodeEquiv( 142 ) = "00D0 208" 'Ð
+UnicodeEquiv( 143 ) = "00D1 209" 'Ñ
+UnicodeEquiv( 144 ) = "00D2 210" 'Ò
+UnicodeEquiv( 145 ) = "00D3 211" 'Ó
+UnicodeEquiv( 146 ) = "00D4 212" 'Ô
+UnicodeEquiv( 147 ) = "00D5 213" 'Õ
+UnicodeEquiv( 148 ) = "00D6 214" 'Ö
+UnicodeEquiv( 149 ) = "00D7 215" '×
+UnicodeEquiv( 150 ) = "00D8 216" 'Ø
+UnicodeEquiv( 151 ) = "00D9 217" 'Ù
+UnicodeEquiv( 152 ) = "00DA 218" 'Ú
+UnicodeEquiv( 153 ) = "00DB 219" 'Û
+UnicodeEquiv( 154 ) = "00DC 220" 'Ü
+UnicodeEquiv( 155 ) = "00DD 221" 'Ý
+UnicodeEquiv( 156 ) = "00DE 222" 'Þ
+UnicodeEquiv( 157 ) = "00DF 223" 'ß
+UnicodeEquiv( 158 ) = "00E0 224" 'à
+UnicodeEquiv( 159 ) = "00E1 225" 'á
+UnicodeEquiv( 160 ) = "00E2 226" 'â
+UnicodeEquiv( 161 ) = "00E3 227" 'ã
+UnicodeEquiv( 162 ) = "00E4 228" 'ä
+UnicodeEquiv( 163 ) = "00E5 229" 'å
+UnicodeEquiv( 164 ) = "00E6 230" 'æ
+UnicodeEquiv( 165 ) = "00E7 231" 'ç
+UnicodeEquiv( 166 ) = "00E8 232" 'è
+UnicodeEquiv( 167 ) = "00E9 233" 'é
+UnicodeEquiv( 168 ) = "00EA 234" 'ê
+UnicodeEquiv( 169 ) = "00EB 235" 'ë
+UnicodeEquiv( 170 ) = "00EC 236" 'ì
+UnicodeEquiv( 171 ) = "00ED 237" 'í
+UnicodeEquiv( 172 ) = "00EE 238" 'î
+UnicodeEquiv( 173 ) = "00EF 239" 'ï
+UnicodeEquiv( 174 ) = "00F0 240" 'ð
+UnicodeEquiv( 175 ) = "00F1 241" 'ñ
+UnicodeEquiv( 176 ) = "00F2 242" 'ò
+UnicodeEquiv( 177 ) = "00F3 243" 'ó
+UnicodeEquiv( 178 ) = "00F4 244" 'ô
+UnicodeEquiv( 179 ) = "00F5 245" 'õ
+UnicodeEquiv( 180 ) = "00F6 246" 'ö
+UnicodeEquiv( 181 ) = "00F7 247" '÷
+UnicodeEquiv( 182 ) = "00F8 248" 'ø
+UnicodeEquiv( 183 ) = "00F9 249" 'ù
+UnicodeEquiv( 184 ) = "00FA 250" 'ú
+UnicodeEquiv( 185 ) = "00FB 251" 'û
+UnicodeEquiv( 186 ) = "00FC 252" 'ü
+UnicodeEquiv( 187 ) = "00FD 253" 'ý
+UnicodeEquiv( 188 ) = "00FE 254" 'þ
+UnicodeEquiv( 189 ) = "00FF 255" 'ÿ
+UnicodeEquiv( 190 ) = "0100 065" 'A
+UnicodeEquiv( 191 ) = "0101 097" 'a
+UnicodeEquiv( 192 ) = "0102 065" 'A
+UnicodeEquiv( 193 ) = "0103 097" 'a
+UnicodeEquiv( 194 ) = "0104 065" 'A
+UnicodeEquiv( 195 ) = "0105 097" 'a
+UnicodeEquiv( 196 ) = "0106 067" 'C
+UnicodeEquiv( 197 ) = "0107 099" 'c
+UnicodeEquiv( 198 ) = "0108 067" 'C
+UnicodeEquiv( 199 ) = "0109 099" 'c
+UnicodeEquiv( 200 ) = "010A 067" 'C
+UnicodeEquiv( 201 ) = "010B 099" 'c
+UnicodeEquiv( 202 ) = "010C 067" 'C
+UnicodeEquiv( 203 ) = "010D 099" 'c
+UnicodeEquiv( 204 ) = "010E 068" 'D
+UnicodeEquiv( 205 ) = "010F 100" 'd
+UnicodeEquiv( 206 ) = "0110 208" 'Ð
+UnicodeEquiv( 207 ) = "0111 100" 'd
+UnicodeEquiv( 208 ) = "0112 069" 'E
+UnicodeEquiv( 209 ) = "0113 101" 'e
+UnicodeEquiv( 210 ) = "0114 069" 'E
+UnicodeEquiv( 211 ) = "0115 101" 'e
+UnicodeEquiv( 212 ) = "0116 069" 'E
+UnicodeEquiv( 213 ) = "0117 101" 'e
+UnicodeEquiv( 214 ) = "0118 069" 'E
+UnicodeEquiv( 215 ) = "0119 101" 'e
+UnicodeEquiv( 216 ) = "011A 069" 'E
+UnicodeEquiv( 217 ) = "011B 101" 'e
+UnicodeEquiv( 218 ) = "011C 071" 'G
+UnicodeEquiv( 219 ) = "011D 103" 'g
+UnicodeEquiv( 220 ) = "011E 071" 'G
+UnicodeEquiv( 221 ) = "011F 103" 'g
+UnicodeEquiv( 222 ) = "0120 071" 'G
+UnicodeEquiv( 223 ) = "0121 103" 'g
+UnicodeEquiv( 224 ) = "0122 071" 'G
+UnicodeEquiv( 225 ) = "0123 103" 'g
+UnicodeEquiv( 226 ) = "0124 072" 'H
+UnicodeEquiv( 227 ) = "0125 104" 'h
+UnicodeEquiv( 228 ) = "0126 072" 'H
+UnicodeEquiv( 229 ) = "0127 104" 'h
+UnicodeEquiv( 230 ) = "0128 073" 'I
+UnicodeEquiv( 231 ) = "0129 105" 'i
+UnicodeEquiv( 232 ) = "012A 073" 'I
+UnicodeEquiv( 233 ) = "012B 105" 'i
+UnicodeEquiv( 234 ) = "012C 073" 'I
+UnicodeEquiv( 235 ) = "012D 105" 'i
+UnicodeEquiv( 236 ) = "012E 073" 'I
+UnicodeEquiv( 237 ) = "012F 105" 'i
+UnicodeEquiv( 238 ) = "0130 073" 'I
+UnicodeEquiv( 239 ) = "0131 105" 'i
+UnicodeEquiv( 240 ) = "0132 073 074" 'IJ
+UnicodeEquiv( 241 ) = "0133 105 106" 'ij
+UnicodeEquiv( 242 ) = "0134 074" 'J
+UnicodeEquiv( 243 ) = "0135 106" 'j
+UnicodeEquiv( 244 ) = "0136 075" 'K
+UnicodeEquiv( 245 ) = "0137 107" 'k
+UnicodeEquiv( 246 ) = "0138 107" 'k
+UnicodeEquiv( 247 ) = "0139 076" 'L
+UnicodeEquiv( 248 ) = "013A 108" 'l
+UnicodeEquiv( 249 ) = "013B 076" 'L
+UnicodeEquiv( 250 ) = "013C 108" 'l
+UnicodeEquiv( 251 ) = "013D 076" 'L
+UnicodeEquiv( 252 ) = "013E 108" 'l
+UnicodeEquiv( 253 ) = "013F 076" 'L
+UnicodeEquiv( 254 ) = "0140 108" 'l
+UnicodeEquiv( 255 ) = "0141 076" 'L
+UnicodeEquiv( 256 ) = "0142 108" 'l
+UnicodeEquiv( 257 ) = "0143 078" 'N
+UnicodeEquiv( 258 ) = "0144 110" 'n
+UnicodeEquiv( 259 ) = "0145 078" 'N
+UnicodeEquiv( 260 ) = "0146 110" 'n
+UnicodeEquiv( 261 ) = "0147 078" 'N
+UnicodeEquiv( 262 ) = "0148 110" 'n
+UnicodeEquiv( 263 ) = "0149 039 110" 'n
+UnicodeEquiv( 264 ) = "014C 079" 'O
+UnicodeEquiv( 265 ) = "014D 111" 'o
+UnicodeEquiv( 266 ) = "014E 079" 'O
+UnicodeEquiv( 267 ) = "014F 111" 'o
+UnicodeEquiv( 268 ) = "0150 079" 'O
+UnicodeEquiv( 269 ) = "0151 111" 'o
+UnicodeEquiv( 270 ) = "0152 079 069" 'OE
+UnicodeEquiv( 271 ) = "0153 111 101" 'oe
+UnicodeEquiv( 272 ) = "0154 082" 'R
+UnicodeEquiv( 273 ) = "0155 114" 'r
+UnicodeEquiv( 274 ) = "0156 082" 'R
+UnicodeEquiv( 275 ) = "0157 114" 'r
+UnicodeEquiv( 276 ) = "0158 082" 'R
+UnicodeEquiv( 277 ) = "0159 114" 'r
+UnicodeEquiv( 278 ) = "015A 083" 'S
+UnicodeEquiv( 279 ) = "015B 115" 's
+UnicodeEquiv( 280 ) = "015C 083" 'S
+UnicodeEquiv( 281 ) = "015D 115" 's
+UnicodeEquiv( 282 ) = "015E 083" 'S
+UnicodeEquiv( 283 ) = "015F 115" 's
+UnicodeEquiv( 284 ) = "0160 083" 'S
+UnicodeEquiv( 285 ) = "0161 115" 's
+UnicodeEquiv( 286 ) = "0162 084" 'T
+UnicodeEquiv( 287 ) = "0163 116" 't
+UnicodeEquiv( 288 ) = "0164 084" 'T
+UnicodeEquiv( 289 ) = "0165 116" 't
+UnicodeEquiv( 290 ) = "0166 084" 'T
+UnicodeEquiv( 291 ) = "0167 116" 't
+UnicodeEquiv( 292 ) = "0168 085" 'U
+UnicodeEquiv( 293 ) = "0169 117" 'u
+UnicodeEquiv( 294 ) = "016A 085" 'U
+UnicodeEquiv( 295 ) = "016B 117" 'u
+UnicodeEquiv( 296 ) = "016C 085" 'U
+UnicodeEquiv( 297 ) = "016D 117" 'u
+UnicodeEquiv( 298 ) = "016E 085" 'U
+UnicodeEquiv( 299 ) = "016F 117" 'u
+UnicodeEquiv( 300 ) = "0170 085" 'U
+UnicodeEquiv( 301 ) = "0171 117" 'u
+UnicodeEquiv( 302 ) = "0172 085" 'U
+UnicodeEquiv( 303 ) = "0173 117" 'u
+UnicodeEquiv( 304 ) = "0174 087" 'W
+UnicodeEquiv( 305 ) = "0175 119" 'w
+UnicodeEquiv( 306 ) = "0176 089" 'Y
+UnicodeEquiv( 307 ) = "0177 121" 'y
+UnicodeEquiv( 308 ) = "0178 089" 'Y
+UnicodeEquiv( 309 ) = "0179 090" 'Z
+UnicodeEquiv( 310 ) = "017A 122" 'z
+UnicodeEquiv( 311 ) = "017B 090" 'Z
+UnicodeEquiv( 312 ) = "017C 122" 'z
+UnicodeEquiv( 313 ) = "017D 090" 'Z
+UnicodeEquiv( 314 ) = "017E 122" 'z
+UnicodeEquiv( 315 ) = "017F 115" 's
+UnicodeEquiv( 316 ) = "0180 098" 'b
+UnicodeEquiv( 317 ) = "0181 066" 'B
+UnicodeEquiv( 318 ) = "0182 066" 'B
+UnicodeEquiv( 319 ) = "0183 098" 'b
+UnicodeEquiv( 320 ) = "0187 067" 'C
+UnicodeEquiv( 321 ) = "0188 099" 'c
+UnicodeEquiv( 322 ) = "0189 208" 'Ð
+UnicodeEquiv( 323 ) = "018A 068" 'D
+UnicodeEquiv( 324 ) = "018B 068" 'D
+UnicodeEquiv( 325 ) = "018C 100" 'd
+UnicodeEquiv( 326 ) = "0191 070" 'F
+UnicodeEquiv( 327 ) = "0192 102" 'f
+UnicodeEquiv( 328 ) = "0193 071" 'G
+UnicodeEquiv( 329 ) = "0197 073" 'I
+UnicodeEquiv( 330 ) = "0198 075" 'K
+UnicodeEquiv( 331 ) = "0199 107" 'k
+UnicodeEquiv( 332 ) = "019A 108" 'l
+UnicodeEquiv( 333 ) = "019D 078" 'N
+UnicodeEquiv( 334 ) = "019E 110" 'n
+UnicodeEquiv( 335 ) = "019F 213" 'Õ
+UnicodeEquiv( 336 ) = "01A0 079" 'O
+UnicodeEquiv( 337 ) = "01A1 111" 'o
+UnicodeEquiv( 338 ) = "01A4 080" 'P
+UnicodeEquiv( 339 ) = "01A5 112" 'p
+UnicodeEquiv( 340 ) = "01AB 116" 't
+UnicodeEquiv( 341 ) = "01AC 084" 'T
+UnicodeEquiv( 342 ) = "01AD 116" 't
+UnicodeEquiv( 343 ) = "01AE 084" 'T
+UnicodeEquiv( 344 ) = "01AF 085" 'U
+UnicodeEquiv( 345 ) = "01B0 117" 'u
+UnicodeEquiv( 346 ) = "01B2 086" 'V
+UnicodeEquiv( 347 ) = "01B3 089" 'Y
+UnicodeEquiv( 348 ) = "01B4 121" 'y
+UnicodeEquiv( 349 ) = "01B5 090" 'Z
+UnicodeEquiv( 350 ) = "01B6 122" 'z
+UnicodeEquiv( 351 ) = "01C0 124" '|
+UnicodeEquiv( 352 ) = "01C2 036" '[dollar sign]
+UnicodeEquiv( 353 ) = "01C3 033" '!
+UnicodeEquiv( 354 ) = "01C4 068 090" 'DZ
+UnicodeEquiv( 355 ) = "01C5 068 122" 'Dz
+UnicodeEquiv( 356 ) = "01C6 100 122" 'dz
+UnicodeEquiv( 357 ) = "01C7 076 074" 'LJ
+UnicodeEquiv( 358 ) = "01C8 076 106" 'Lj
+UnicodeEquiv( 359 ) = "01C9 108 106" 'lj
+UnicodeEquiv( 360 ) = "01CA 078 074" 'NJ
+UnicodeEquiv( 361 ) = "01CB 078 106" 'Nj
+UnicodeEquiv( 362 ) = "01CC 110 106" 'nj
+UnicodeEquiv( 363 ) = "01CD 065" 'A
+UnicodeEquiv( 364 ) = "01CE 097" 'a
+UnicodeEquiv( 365 ) = "01CF 073" 'I
+UnicodeEquiv( 366 ) = "01D0 105" 'i
+UnicodeEquiv( 367 ) = "01D1 079" 'O
+UnicodeEquiv( 368 ) = "01D2 111" 'o
+UnicodeEquiv( 369 ) = "01D3 085" 'U
+UnicodeEquiv( 370 ) = "01D4 117" 'u
+UnicodeEquiv( 371 ) = "01D5 220" 'Ü
+UnicodeEquiv( 372 ) = "01D6 252" 'ü
+UnicodeEquiv( 373 ) = "01D7 220" 'Ü
+UnicodeEquiv( 374 ) = "01D8 252" 'ü
+UnicodeEquiv( 375 ) = "01D9 220" 'Ü
+UnicodeEquiv( 376 ) = "01DA 252" 'ü
+UnicodeEquiv( 377 ) = "01DB 220" 'Ü
+UnicodeEquiv( 378 ) = "01DC 252" 'ü
+UnicodeEquiv( 379 ) = "01DE 196" 'Ä
+UnicodeEquiv( 380 ) = "01DF 228" 'ä
+UnicodeEquiv( 381 ) = "01E0 065" 'A
+UnicodeEquiv( 382 ) = "01E1 097" 'a
+UnicodeEquiv( 383 ) = "01E2 065 069" 'AE
+UnicodeEquiv( 384 ) = "01E3 097 101" 'ae
+UnicodeEquiv( 385 ) = "01E4 071" 'G
+UnicodeEquiv( 386 ) = "01E5 103" 'g
+UnicodeEquiv( 387 ) = "01E6 071" 'G
+UnicodeEquiv( 388 ) = "01E7 103" 'g
+UnicodeEquiv( 389 ) = "01E8 075" 'K
+UnicodeEquiv( 390 ) = "01E9 107" 'k
+UnicodeEquiv( 391 ) = "01EA 079" 'O
+UnicodeEquiv( 392 ) = "01EB 111" 'o
+UnicodeEquiv( 393 ) = "01EC 079" 'O
+UnicodeEquiv( 394 ) = "01ED 111" 'o
+UnicodeEquiv( 395 ) = "01F0 106" 'j
+UnicodeEquiv( 396 ) = "01F1 068 090" 'DZ
+UnicodeEquiv( 397 ) = "01F2 068 122" 'Dz
+UnicodeEquiv( 398 ) = "01F3 100 122" 'dz
+UnicodeEquiv( 399 ) = "01F4 071" 'G
+UnicodeEquiv( 400 ) = "01F5 103" 'g
+UnicodeEquiv( 401 ) = "01F8 078" 'N
+UnicodeEquiv( 402 ) = "01F9 110" 'n
+UnicodeEquiv( 403 ) = "01FA 197" 'Å
+UnicodeEquiv( 404 ) = "01FB 229" 'å
+UnicodeEquiv( 405 ) = "01FC 065 201" 'AE
+UnicodeEquiv( 406 ) = "01FD 097 101" 'ae
+UnicodeEquiv( 407 ) = "01FE 216" 'Ø
+UnicodeEquiv( 408 ) = "01FF 248" 'ø
+UnicodeEquiv( 409 ) = "0200 065" 'A
+UnicodeEquiv( 410 ) = "0201 097" 'a
+UnicodeEquiv( 411 ) = "0202 065" 'A
+UnicodeEquiv( 412 ) = "0203 097" 'a
+UnicodeEquiv( 413 ) = "0204 069" 'E
+UnicodeEquiv( 414 ) = "0205 101" 'e
+UnicodeEquiv( 415 ) = "0206 069" 'E
+UnicodeEquiv( 416 ) = "0207 101" 'e
+UnicodeEquiv( 417 ) = "0208 073" 'I
+UnicodeEquiv( 418 ) = "0209 105" 'i
+UnicodeEquiv( 419 ) = "020A 073" 'I
+UnicodeEquiv( 420 ) = "020B 105" 'i
+UnicodeEquiv( 421 ) = "020C 079" 'O
+UnicodeEquiv( 422 ) = "020D 111" 'o
+UnicodeEquiv( 423 ) = "020E 079" 'O
+UnicodeEquiv( 424 ) = "020F 111" 'o
+UnicodeEquiv( 425 ) = "0210 082" 'R
+UnicodeEquiv( 426 ) = "0211 114" 'r
+UnicodeEquiv( 427 ) = "0212 082" 'R
+UnicodeEquiv( 428 ) = "0213 114" 'r
+UnicodeEquiv( 429 ) = "0214 085" 'U
+UnicodeEquiv( 430 ) = "0215 117" 'u
+UnicodeEquiv( 431 ) = "0216 085" 'U
+UnicodeEquiv( 432 ) = "0217 117" 'u
+UnicodeEquiv( 433 ) = "0218 083" 'S
+UnicodeEquiv( 434 ) = "0219 115" 's
+UnicodeEquiv( 435 ) = "021A 084" 'T
+UnicodeEquiv( 436 ) = "021B 116" 't
+UnicodeEquiv( 437 ) = "021E 072" 'H
+UnicodeEquiv( 438 ) = "021F 104" 'h
+UnicodeEquiv( 439 ) = "0220 078" 'N
+UnicodeEquiv( 440 ) = "0221 100" 'd
+UnicodeEquiv( 441 ) = "0224 090" 'Z
+UnicodeEquiv( 442 ) = "0225 122" 'z
+UnicodeEquiv( 443 ) = "0226 065" 'A
+UnicodeEquiv( 444 ) = "0227 097" 'a
+UnicodeEquiv( 445 ) = "0228 069" 'E
+UnicodeEquiv( 446 ) = "0229 101" 'e
+UnicodeEquiv( 447 ) = "022A 214" 'Ö
+UnicodeEquiv( 448 ) = "022B 246" 'ö
+UnicodeEquiv( 449 ) = "022C 213" 'Õ
+UnicodeEquiv( 450 ) = "022D 245" 'õ
+UnicodeEquiv( 451 ) = "022E 079" 'O
+UnicodeEquiv( 452 ) = "022F 111" 'o
+UnicodeEquiv( 453 ) = "0230 079" 'O
+UnicodeEquiv( 454 ) = "0231 111" 'o
+UnicodeEquiv( 455 ) = "0232 089" 'Y
+UnicodeEquiv( 456 ) = "0233 121" 'y
+UnicodeEquiv( 457 ) = "0234 108" 'l
+UnicodeEquiv( 458 ) = "0235 110" 'n
+UnicodeEquiv( 459 ) = "0236 121" 'y
+UnicodeEquiv( 460 ) = "0237 106" 'j
+UnicodeEquiv( 461 ) = "023A 065" 'A
+UnicodeEquiv( 462 ) = "023B 067" 'C
+UnicodeEquiv( 463 ) = "023C 099" 'c
+UnicodeEquiv( 464 ) = "023D 076" 'L
+UnicodeEquiv( 465 ) = "023E 084" 'T
+UnicodeEquiv( 466 ) = "023F 115" 's
+UnicodeEquiv( 467 ) = "0240 122" 'z
+UnicodeEquiv( 468 ) = "0243 066" 'B
+UnicodeEquiv( 469 ) = "0244 085" 'U
+UnicodeEquiv( 470 ) = "0246 069" 'E
+UnicodeEquiv( 471 ) = "0247 101" 'e
+UnicodeEquiv( 472 ) = "0248 074" 'J
+UnicodeEquiv( 473 ) = "0249 106" 'j
+UnicodeEquiv( 474 ) = "024A 081" 'Q
+UnicodeEquiv( 475 ) = "024B 113" 'q
+UnicodeEquiv( 476 ) = "024C 082" 'R
+UnicodeEquiv( 477 ) = "024D 114" 'r
+UnicodeEquiv( 478 ) = "024E 089" 'Y
+UnicodeEquiv( 479 ) = "024F 121" 'y
+UnicodeEquiv( 480 ) = "02B9 039" ''
+UnicodeEquiv( 481 ) = "02BA 034" '"
+UnicodeEquiv( 482 ) = "02BB 039" ''
+UnicodeEquiv( 483 ) = "02BC 039" ''
+UnicodeEquiv( 484 ) = "02BD 039" ''
+UnicodeEquiv( 485 ) = "02C6 094" 'ˆ
+UnicodeEquiv( 486 ) = "02C8 039" ''
+UnicodeEquiv( 487 ) = "02C9 175" '¯
+UnicodeEquiv( 488 ) = "02CA 180" '´
+UnicodeEquiv( 489 ) = "02CB 096" '`
+UnicodeEquiv( 490 ) = "02D6 043" '+
+UnicodeEquiv( 491 ) = "02D7 045" '-
+UnicodeEquiv( 492 ) = "02DA 176" '°
+UnicodeEquiv( 493 ) = "02DC 126" '~
+UnicodeEquiv( 494 ) = "02DD 034" '"
+UnicodeEquiv( 495 ) = "02EE 034" '"
+UnicodeEquiv( 496 ) = "02F4 096" '`
+UnicodeEquiv( 497 ) = "02F6 034" '"
+UnicodeEquiv( 498 ) = "1E00 065" 'A
+UnicodeEquiv( 499 ) = "1E01 097" 'a
+UnicodeEquiv( 500 ) = "1E02 066" 'B
+UnicodeEquiv( 501 ) = "1E03 098" 'b
+UnicodeEquiv( 502 ) = "1E04 066" 'B
+UnicodeEquiv( 503 ) = "1E05 098" 'b
+UnicodeEquiv( 504 ) = "1E06 066" 'B
+UnicodeEquiv( 505 ) = "1E07 098" 'b
+UnicodeEquiv( 506 ) = "1E08 199" 'Ç
+UnicodeEquiv( 507 ) = "1E09 231" 'ç
+UnicodeEquiv( 508 ) = "1E0A 068" 'D
+UnicodeEquiv( 509 ) = "1E0B 100" 'd
+UnicodeEquiv( 510 ) = "1E0C 068" 'D
+UnicodeEquiv( 511 ) = "1E0D 100" 'd
+UnicodeEquiv( 512 ) = "1E0E 068" 'D
+UnicodeEquiv( 513 ) = "1E0F 100" 'd
+UnicodeEquiv( 514 ) = "1E10 199" 'Ç
+UnicodeEquiv( 515 ) = "1E11 100" 'd
+UnicodeEquiv( 516 ) = "1E12 068" 'D
+UnicodeEquiv( 517 ) = "1E13 100" 'd
+UnicodeEquiv( 518 ) = "1E14 200" 'È
+UnicodeEquiv( 519 ) = "1E15 232" 'è
+UnicodeEquiv( 520 ) = "1E16 201" 'É
+UnicodeEquiv( 521 ) = "1E17 233" 'é
+UnicodeEquiv( 522 ) = "1E18 069" 'E
+UnicodeEquiv( 523 ) = "1E19 101" 'e
+UnicodeEquiv( 524 ) = "1E1A 069" 'E
+UnicodeEquiv( 525 ) = "1E1B 101" 'e
+UnicodeEquiv( 526 ) = "1E1C 069" 'E
+UnicodeEquiv( 527 ) = "1E1D 232" 'è
+UnicodeEquiv( 528 ) = "1E1E 070" 'F
+UnicodeEquiv( 529 ) = "1E1F 102" 'f
+UnicodeEquiv( 530 ) = "1E20 071" 'G
+UnicodeEquiv( 531 ) = "1E21 103" 'g
+UnicodeEquiv( 532 ) = "1E22 072" 'H
+UnicodeEquiv( 533 ) = "1E23 104" 'h
+UnicodeEquiv( 534 ) = "1E24 072" 'H
+UnicodeEquiv( 535 ) = "1E25 104" 'h
+UnicodeEquiv( 536 ) = "1E26 072" 'H
+UnicodeEquiv( 537 ) = "1E27 104" 'h
+UnicodeEquiv( 538 ) = "1E28 072" 'H
+UnicodeEquiv( 539 ) = "1E29 104" 'h
+UnicodeEquiv( 540 ) = "1E2A 072" 'H
+UnicodeEquiv( 541 ) = "1E2B 104" 'h
+UnicodeEquiv( 542 ) = "1E2C 073" 'I
+UnicodeEquiv( 543 ) = "1E2D 105" 'i
+UnicodeEquiv( 544 ) = "1E2E 207" 'Ï
+UnicodeEquiv( 545 ) = "1E2F 239" 'ï
+UnicodeEquiv( 546 ) = "1E30 075" 'K
+UnicodeEquiv( 547 ) = "1E31 107" 'k
+UnicodeEquiv( 548 ) = "1E32 075" 'K
+UnicodeEquiv( 549 ) = "1E33 107" 'k
+UnicodeEquiv( 550 ) = "1E34 075" 'K
+UnicodeEquiv( 551 ) = "1E35 107" 'k
+UnicodeEquiv( 552 ) = "1E36 076" 'L
+UnicodeEquiv( 553 ) = "1E37 108" 'l
+UnicodeEquiv( 554 ) = "1E38 076" 'L
+UnicodeEquiv( 555 ) = "1E39 108" 'l
+UnicodeEquiv( 556 ) = "1E3A 076" 'L
+UnicodeEquiv( 557 ) = "1E3B 108" 'l
+UnicodeEquiv( 558 ) = "1E3C 076" 'L
+UnicodeEquiv( 559 ) = "1E3D 108" 'l
+UnicodeEquiv( 560 ) = "1E3E 077" 'M
+UnicodeEquiv( 561 ) = "1E3F 109" 'm
+UnicodeEquiv( 562 ) = "1E40 077" 'M
+UnicodeEquiv( 563 ) = "1E41 109" 'm
+UnicodeEquiv( 564 ) = "1E42 077" 'M
+UnicodeEquiv( 565 ) = "1E43 109" 'm
+UnicodeEquiv( 566 ) = "1E44 078" 'N
+UnicodeEquiv( 567 ) = "1E45 110" 'n
+UnicodeEquiv( 568 ) = "1E46 078" 'N
+UnicodeEquiv( 569 ) = "1E47 110" 'n
+UnicodeEquiv( 570 ) = "1E48 078" 'N
+UnicodeEquiv( 571 ) = "1E49 110" 'n
+UnicodeEquiv( 572 ) = "1E4A 078" 'N
+UnicodeEquiv( 573 ) = "1E4B 110" 'n
+UnicodeEquiv( 574 ) = "1E4C 213" 'Õ
+UnicodeEquiv( 575 ) = "1E4D 245" 'õ
+UnicodeEquiv( 576 ) = "1E4E 213" 'Õ
+UnicodeEquiv( 577 ) = "1E4F 245" 'õ
+UnicodeEquiv( 578 ) = "1E50 210" 'Ò
+UnicodeEquiv( 579 ) = "1E51 242" 'ò
+UnicodeEquiv( 580 ) = "1E52 211" 'Ó
+UnicodeEquiv( 581 ) = "1E53 243" 'ó
+UnicodeEquiv( 582 ) = "1E54 080" 'P
+UnicodeEquiv( 583 ) = "1E55 112" 'p
+UnicodeEquiv( 584 ) = "1E56 080" 'P
+UnicodeEquiv( 585 ) = "1E57 112" 'p
+UnicodeEquiv( 586 ) = "1E58 082" 'R
+UnicodeEquiv( 587 ) = "1E59 114" 'r
+UnicodeEquiv( 588 ) = "1E5A 082" 'R
+UnicodeEquiv( 589 ) = "1E5B 114" 'r
+UnicodeEquiv( 590 ) = "1E5C 082" 'R
+UnicodeEquiv( 591 ) = "1E5D 114" 'r
+UnicodeEquiv( 592 ) = "1E5E 082" 'R
+UnicodeEquiv( 593 ) = "1E5F 114" 'r
+UnicodeEquiv( 594 ) = "1E60 083" 'S
+UnicodeEquiv( 595 ) = "1E61 115" 's
+UnicodeEquiv( 596 ) = "1E62 083" 'S
+UnicodeEquiv( 597 ) = "1E63 115" 's
+UnicodeEquiv( 598 ) = "1E64 083" 'S
+UnicodeEquiv( 599 ) = "1E65 115" 's
+UnicodeEquiv( 600 ) = "1E66 083" 'S
+UnicodeEquiv( 601 ) = "1E67 115" 's
+UnicodeEquiv( 602 ) = "1E68 083" 'S
+UnicodeEquiv( 603 ) = "1E69 115" 's
+UnicodeEquiv( 604 ) = "1E6A 084" 'T
+UnicodeEquiv( 605 ) = "1E6B 116" 't
+UnicodeEquiv( 606 ) = "1E6C 084" 'T
+UnicodeEquiv( 607 ) = "1E6D 116" 't
+UnicodeEquiv( 608 ) = "1E6E 084" 'T
+UnicodeEquiv( 609 ) = "1E6F 116" 't
+UnicodeEquiv( 610 ) = "1E70 084" 'T
+UnicodeEquiv( 611 ) = "1E71 116" 't
+UnicodeEquiv( 612 ) = "1E72 085" 'U
+UnicodeEquiv( 613 ) = "1E73 117" 'u
+UnicodeEquiv( 614 ) = "1E74 085" 'U
+UnicodeEquiv( 615 ) = "1E75 117" 'u
+UnicodeEquiv( 616 ) = "1E76 085" 'U
+UnicodeEquiv( 617 ) = "1E77 117" 'u
+UnicodeEquiv( 618 ) = "1E78 218" 'Ú
+UnicodeEquiv( 619 ) = "1E79 250" 'ú
+UnicodeEquiv( 620 ) = "1E7A 220" 'Ü
+UnicodeEquiv( 621 ) = "1E7B 252" 'ü
+UnicodeEquiv( 622 ) = "1E7C 086" 'V
+UnicodeEquiv( 623 ) = "1E7D 118" 'v
+UnicodeEquiv( 624 ) = "1E7E 086" 'V
+UnicodeEquiv( 625 ) = "1E7F 118" 'v
+UnicodeEquiv( 626 ) = "1E80 087" 'W
+UnicodeEquiv( 627 ) = "1E81 119" 'w
+UnicodeEquiv( 628 ) = "1E82 087" 'W
+UnicodeEquiv( 629 ) = "1E83 119" 'w
+UnicodeEquiv( 630 ) = "1E84 087" 'W
+UnicodeEquiv( 631 ) = "1E85 119" 'w
+UnicodeEquiv( 632 ) = "1E86 087" 'W
+UnicodeEquiv( 633 ) = "1E87 119" 'w
+UnicodeEquiv( 634 ) = "1E88 087" 'W
+UnicodeEquiv( 635 ) = "1E89 119" 'w
+UnicodeEquiv( 636 ) = "1E8A 088" 'X
+UnicodeEquiv( 637 ) = "1E8B 120" 'x
+UnicodeEquiv( 638 ) = "1E8C 088" 'X
+UnicodeEquiv( 639 ) = "1E8D 120" 'x
+UnicodeEquiv( 640 ) = "1E8E 089" 'Y
+UnicodeEquiv( 641 ) = "1E8F 121" 'y
+UnicodeEquiv( 642 ) = "1E90 090" 'Z
+UnicodeEquiv( 643 ) = "1E91 122" 'z
+UnicodeEquiv( 644 ) = "1E92 090" 'Z
+UnicodeEquiv( 645 ) = "1E93 122" 'z
+UnicodeEquiv( 646 ) = "1E94 090" 'Z
+UnicodeEquiv( 647 ) = "1E95 122" 'z
+UnicodeEquiv( 648 ) = "1E96 104" 'h
+UnicodeEquiv( 649 ) = "1E97 116" 't
+UnicodeEquiv( 650 ) = "1E98 119" 'w
+UnicodeEquiv( 651 ) = "1E99 121" 'y
+UnicodeEquiv( 652 ) = "1E9A 097" 'a
+UnicodeEquiv( 653 ) = "1E9B 115" 's
+UnicodeEquiv( 654 ) = "1E9C 115" 's
+UnicodeEquiv( 655 ) = "1E9D 115" 's
+UnicodeEquiv( 656 ) = "1E9E 223" 'ß
+UnicodeEquiv( 657 ) = "1EA0 065" 'A
+UnicodeEquiv( 658 ) = "1EA1 097" 'a
+UnicodeEquiv( 659 ) = "1EA2 065" 'A
+UnicodeEquiv( 660 ) = "1EA3 097" 'a
+UnicodeEquiv( 661 ) = "1EA4 194" 'Â
+UnicodeEquiv( 662 ) = "1EA5 226" 'â
+UnicodeEquiv( 663 ) = "1EA6 194" 'Â
+UnicodeEquiv( 664 ) = "1EA7 226" 'â
+UnicodeEquiv( 665 ) = "1EA8 194" 'Â
+UnicodeEquiv( 666 ) = "1EA9 226" 'â
+UnicodeEquiv( 667 ) = "1EAA 194" 'Â
+UnicodeEquiv( 668 ) = "1EAB 226" 'â
+UnicodeEquiv( 669 ) = "1EAC 194" 'Â
+UnicodeEquiv( 670 ) = "1EAD 226" 'â
+UnicodeEquiv( 671 ) = "1EAE 193" 'Á
+UnicodeEquiv( 672 ) = "1EAF 224" 'à
+UnicodeEquiv( 673 ) = "1EB0 192" 'À
+UnicodeEquiv( 674 ) = "1EB1 224" 'à
+UnicodeEquiv( 675 ) = "1EB2 065" 'A
+UnicodeEquiv( 676 ) = "1EB3 224" 'à
+UnicodeEquiv( 677 ) = "1EB4 195" 'Ã
+UnicodeEquiv( 678 ) = "1EB5 224" 'à
+UnicodeEquiv( 679 ) = "1EB6 065" 'A
+UnicodeEquiv( 680 ) = "1EB7 224" 'à
+UnicodeEquiv( 681 ) = "1EB8 069" 'E
+UnicodeEquiv( 682 ) = "1EB9 101" 'e
+UnicodeEquiv( 683 ) = "1EBA 069" 'E
+UnicodeEquiv( 684 ) = "1EBB 101" 'e
+UnicodeEquiv( 685 ) = "1EBC 069" 'E
+UnicodeEquiv( 686 ) = "1EBD 101" 'e
+UnicodeEquiv( 687 ) = "1EBE 202" 'Ê
+UnicodeEquiv( 688 ) = "1EBF 234" 'ê
+UnicodeEquiv( 689 ) = "1EC0 202" 'Ê
+UnicodeEquiv( 690 ) = "1EC1 234" 'ê
+UnicodeEquiv( 691 ) = "1EC2 202" 'Ê
+UnicodeEquiv( 692 ) = "1EC3 234" 'ê
+UnicodeEquiv( 693 ) = "1EC4 202" 'Ê
+UnicodeEquiv( 694 ) = "1EC5 234" 'ê
+UnicodeEquiv( 695 ) = "1EC6 202" 'Ê
+UnicodeEquiv( 696 ) = "1EC7 234" 'ê
+UnicodeEquiv( 697 ) = "1EC8 073" 'I
+UnicodeEquiv( 698 ) = "1EC9 105" 'i
+UnicodeEquiv( 699 ) = "1ECA 073" 'I
+UnicodeEquiv( 700 ) = "1ECB 105" 'i
+UnicodeEquiv( 701 ) = "1ECC 079" 'O
+UnicodeEquiv( 702 ) = "1ECD 111" 'o
+UnicodeEquiv( 703 ) = "1ECE 079" 'O
+UnicodeEquiv( 704 ) = "1ECF 111" 'o
+UnicodeEquiv( 705 ) = "1ED0 212" 'Ô
+UnicodeEquiv( 706 ) = "1ED1 244" 'ô
+UnicodeEquiv( 707 ) = "1ED2 212" 'Ô
+UnicodeEquiv( 708 ) = "1ED3 244" 'ô
+UnicodeEquiv( 709 ) = "1ED4 212" 'Ô
+UnicodeEquiv( 710 ) = "1ED5 244" 'ô
+UnicodeEquiv( 711 ) = "1ED6 212" 'Ô
+UnicodeEquiv( 712 ) = "1ED7 244" 'ô
+UnicodeEquiv( 713 ) = "1ED8 212" 'Ô
+UnicodeEquiv( 714 ) = "1ED9 244" 'ô
+UnicodeEquiv( 715 ) = "1EDA 211" 'Ó
+UnicodeEquiv( 716 ) = "1EDB 243" 'ó
+UnicodeEquiv( 717 ) = "1EDC 210" 'Ò
+UnicodeEquiv( 718 ) = "1EDD 242" 'ò
+UnicodeEquiv( 719 ) = "1EDE 079" 'O
+UnicodeEquiv( 720 ) = "1EDF 111" 'o
+UnicodeEquiv( 721 ) = "1EE0 213" 'Õ
+UnicodeEquiv( 722 ) = "1EE1 245" 'õ
+UnicodeEquiv( 723 ) = "1EE2 079" 'O
+UnicodeEquiv( 724 ) = "1EE3 111" 'o
+UnicodeEquiv( 725 ) = "1EE4 085" 'U
+UnicodeEquiv( 726 ) = "1EE5 117" 'u
+UnicodeEquiv( 727 ) = "1EE6 085" 'U
+UnicodeEquiv( 728 ) = "1EE7 117" 'u
+UnicodeEquiv( 729 ) = "1EE8 218" 'Ú
+UnicodeEquiv( 730 ) = "1EE9 250" 'ú
+UnicodeEquiv( 731 ) = "1EEA 217" 'Ù
+UnicodeEquiv( 732 ) = "1EEB 249" 'ù
+UnicodeEquiv( 733 ) = "1EEC 085" 'U
+UnicodeEquiv( 734 ) = "1EED 117" 'u
+UnicodeEquiv( 735 ) = "1EEE 085" 'U
+UnicodeEquiv( 736 ) = "1EEF 117" 'u
+UnicodeEquiv( 737 ) = "1EF0 085" 'U
+UnicodeEquiv( 738 ) = "1EF1 117" 'u
+UnicodeEquiv( 739 ) = "1EF2 089" 'Y
+UnicodeEquiv( 740 ) = "1EF3 121" 'y
+UnicodeEquiv( 741 ) = "1EF4 089" 'Y
+UnicodeEquiv( 742 ) = "1EF5 121" 'y
+UnicodeEquiv( 743 ) = "1EF6 089" 'Y
+UnicodeEquiv( 744 ) = "1EF7 121" 'y
+UnicodeEquiv( 745 ) = "1EF8 089" 'Y
+UnicodeEquiv( 746 ) = "1EF9 121" 'y
+UnicodeEquiv( 747 ) = "1EFA 076 076" 'LL
+UnicodeEquiv( 748 ) = "1EFB 108 108" 'll
+UnicodeEquiv( 749 ) = "1EFE 089" 'Y
+UnicodeEquiv( 750 ) = "1EFF 121" 'y
+UnicodeEquiv( 751 ) = "2010 045" '-
+UnicodeEquiv( 752 ) = "2011 045" '-
+UnicodeEquiv( 753 ) = "2013 045" '-
+UnicodeEquiv( 754 ) = "2014 045 & 045" '--
+UnicodeEquiv( 755 ) = "2015 045" '-
+UnicodeEquiv( 756 ) = "2018 039" ''
+UnicodeEquiv( 757 ) = "2019 039" ''
+UnicodeEquiv( 758 ) = "201A 044" ',
+UnicodeEquiv( 759 ) = "201B 039" ''
+UnicodeEquiv( 760 ) = "201C 034" '"
+UnicodeEquiv( 761 ) = "201D 034" '"
+UnicodeEquiv( 762 ) = "201E 034" '"
+UnicodeEquiv( 763 ) = "201F 034" '"
+UnicodeEquiv( 764 ) = "2022 183" '•
+UnicodeEquiv( 765 ) = "2026 046 046 046" '...
+UnicodeEquiv( 766 ) = "2032 039" ''
+UnicodeEquiv( 767 ) = "2033 034" '"
+UnicodeEquiv( 768 ) = "2035 039" ''
+UnicodeEquiv( 769 ) = "2036 034" '"
+UnicodeEquiv( 770 ) = "2039 039" ''
+UnicodeEquiv( 771 ) = "203A 039" ''
+UnicodeEquiv( 772 ) = "203C 033 033" '!!
+UnicodeEquiv( 773 ) = "203D 063 033" '?!
+UnicodeEquiv( 774 ) = "2044 047" '/
+UnicodeEquiv( 775 ) = "2047 063 063" '??
+UnicodeEquiv( 776 ) = "2048 063 033" '?!
+UnicodeEquiv( 777 ) = "2049 033 063" '!?
+UnicodeEquiv( 778 ) = "204B 182" '¶
+UnicodeEquiv( 779 ) = "204E 042" '*
+UnicodeEquiv( 780 ) = "204F 049" ';
+UnicodeEquiv( 781 ) = "2053 126" '~
+UnicodeEquiv( 782 ) = "2055 042" '*
+UnicodeEquiv( 783 ) = "205A 058" ':
+UnicodeEquiv( 784 ) = "2C60 076" 'L
+UnicodeEquiv( 785 ) = "2C61 108" 'l
+UnicodeEquiv( 786 ) = "2C62 076" 'L
+UnicodeEquiv( 787 ) = "2C63 080" 'P
+UnicodeEquiv( 788 ) = "2C64 082" 'R
+UnicodeEquiv( 789 ) = "2C65 097" 'a
+UnicodeEquiv( 790 ) = "2C66 116" 't
+UnicodeEquiv( 791 ) = "2C67 072" 'H
+UnicodeEquiv( 792 ) = "2C68 072" 'H
+UnicodeEquiv( 793 ) = "2C69 107" 'k
+UnicodeEquiv( 794 ) = "2C6A 107" 'k
+UnicodeEquiv( 795 ) = "2C6B 090" 'Z
+UnicodeEquiv( 796 ) = "2C6C 122" 'z
+UnicodeEquiv( 797 ) = "2C6E 077" 'M
+UnicodeEquiv( 798 ) = "2C71 118" 'v
+UnicodeEquiv( 799 ) = "2C72 087" 'W
+UnicodeEquiv( 800 ) = "2C73 119" 'w
+UnicodeEquiv( 801 ) = "2C74 118" 'v
+UnicodeEquiv( 802 ) = "2C7E 083" 'S
+UnicodeEquiv( 803 ) = "2C7F 090" 'Z
+UnicodeEquiv( 804 ) = "A728 084 090" 'TZ
+UnicodeEquiv( 805 ) = "A729 116 122" 'tz
+UnicodeEquiv( 806 ) = "A730 070" 'F
+UnicodeEquiv( 807 ) = "A731 083" 'S
+UnicodeEquiv( 808 ) = "A732 065 065" 'AA
+UnicodeEquiv( 809 ) = "A733 097 097" 'aa
+UnicodeEquiv( 810 ) = "A734 065 079" 'AO
+UnicodeEquiv( 811 ) = "A735 097 111" 'ao
+UnicodeEquiv( 812 ) = "A736 065 085" 'AU
+UnicodeEquiv( 813 ) = "A737 097 117" 'au
+UnicodeEquiv( 814 ) = "A738 065 086" 'AV
+UnicodeEquiv( 815 ) = "A739 097 118" 'av
+UnicodeEquiv( 816 ) = "A73A 065 086" 'AV
+UnicodeEquiv( 817 ) = "A73B 097 118" 'av
+UnicodeEquiv( 818 ) = "A73C 065 089" 'AY
+UnicodeEquiv( 819 ) = "A73D 097 121" 'ay
+UnicodeEquiv( 820 ) = "A740 075" 'K
+UnicodeEquiv( 821 ) = "A743 107" 'k
+UnicodeEquiv( 822 ) = "A744 075" 'K
+UnicodeEquiv( 823 ) = "A748 076" 'L
+UnicodeEquiv( 824 ) = "A749 108" 'l
+UnicodeEquiv( 825 ) = "A74A 079" 'O
+UnicodeEquiv( 826 ) = "A74B 111" 'o
+UnicodeEquiv( 827 ) = "A74C 079" 'O
+UnicodeEquiv( 828 ) = "A74D 111" 'o
+UnicodeEquiv( 829 ) = "A74E 079 079" 'OO
+UnicodeEquiv( 830 ) = "A74F 111 111" 'oo
+UnicodeEquiv( 831 ) = "A750 080" 'P
+UnicodeEquiv( 832 ) = "A751 112" 'p
+UnicodeEquiv( 833 ) = "A752 080" 'P
+UnicodeEquiv( 834 ) = "A753 112" 'p
+UnicodeEquiv( 835 ) = "A754 080" 'P
+UnicodeEquiv( 836 ) = "A755 112" 'p
+UnicodeEquiv( 837 ) = "A756 081" 'Q
+UnicodeEquiv( 838 ) = "A757 113" 'q
+UnicodeEquiv( 839 ) = "A758 081" 'Q
+UnicodeEquiv( 840 ) = "A759 113" 'q
+UnicodeEquiv( 841 ) = "A75E 086" 'V
+UnicodeEquiv( 842 ) = "A75F 118" 'v
+UnicodeEquiv( 843 ) = "A760 086 089" 'VY
+UnicodeEquiv( 844 ) = "A761 118 121" 'vy
+UnicodeEquiv( 845 ) = "A764 222" 'Þ
+UnicodeEquiv( 846 ) = "A765 254" 'þ
+UnicodeEquiv( 847 ) = "A766 222" 'Þ
+UnicodeEquiv( 848 ) = "A767 254" 'þ
+UnicodeEquiv( 849 ) = "A790 078" 'N
+UnicodeEquiv( 850 ) = "A791 110" 'n
+UnicodeEquiv( 851 ) = "A792 067" 'C
+UnicodeEquiv( 852 ) = "A793 099" 'c
+UnicodeEquiv( 853 ) = "A794 099" 'c
+UnicodeEquiv( 854 ) = "A795 104" 'h
+UnicodeEquiv( 855 ) = "A796 066" 'B
+UnicodeEquiv( 856 ) = "A797 098" 'b
+UnicodeEquiv( 857 ) = "A798 070" 'F
+UnicodeEquiv( 858 ) = "A799 102" 'f
+UnicodeEquiv( 859 ) = "A7A0 071" 'G
+UnicodeEquiv( 860 ) = "A7A1 103" 'g
+UnicodeEquiv( 861 ) = "A7A2 075" 'K
+UnicodeEquiv( 862 ) = "A7A3 107" 'k
+UnicodeEquiv( 863 ) = "A7A4 078" 'N
+UnicodeEquiv( 864 ) = "A7A5 110" 'n
+UnicodeEquiv( 865 ) = "A7A6 082" 'R
+UnicodeEquiv( 866 ) = "A7A7 114" 'r
+UnicodeEquiv( 867 ) = "A7A8 083" 'S
+UnicodeEquiv( 868 ) = "A7A9 115" 's
+UnicodeEquiv( 869 ) = "A7AA 072" 'H
+UnicodeEquiv( 870 ) = "A7AC 071" 'G
+UnicodeEquiv( 871 ) = "A7AD 076" 'L
+UnicodeEquiv( 872 ) = "A7AE 073" 'I
+UnicodeEquiv( 873 ) = "A7AF 081" 'Q
+UnicodeEquiv( 874 ) = "A7B8 085" 'U
+UnicodeEquiv( 875 ) = "A7B9 117" 'u
+UnicodeEquiv( 876 ) = "AB33 101" 'e
+UnicodeEquiv( 877 ) = "AB34 101" 'e
+UnicodeEquiv( 878 ) = "AB35 102" 'f
+UnicodeEquiv( 879 ) = "AB36 103" 'g
+UnicodeEquiv( 880 ) = "AB37 108" 'l
+UnicodeEquiv( 881 ) = "AB38 108" 'l
+UnicodeEquiv( 882 ) = "AB39 108" 'l
+UnicodeEquiv( 883 ) = "AB3A 109" 'm
+UnicodeEquiv( 884 ) = "AB3B 109" 'm
+UnicodeEquiv( 885 ) = "AB46 082" 'R
+UnicodeEquiv( 886 ) = "AB47 114" 'r
+UnicodeEquiv( 887 ) = "AB48 114 114" 'rr
+UnicodeEquiv( 888 ) = "AB49 114" 'r
+UnicodeEquiv( 889 ) = "AB4A 114 114" 'rr
+UnicodeEquiv( 890 ) = "AB4E 117" 'u
+UnicodeEquiv( 891 ) = "AB4F 117" 'u
+UnicodeEquiv( 892 ) = "AB50 117 105" 'ui
+UnicodeEquiv( 893 ) = "AB52 117" 'u
+UnicodeEquiv( 894 ) = "AB56 120" 'x
+UnicodeEquiv( 895 ) = "AB57 120" 'x
+UnicodeEquiv( 896 ) = "AB58 120" 'x
+UnicodeEquiv( 897 ) = "AB59 120" 'x
+UnicodeEquiv( 898 ) = "AB5A 121" 'y
 
 End Sub
 
@@ -1552,16 +1564,25 @@ Function ConvertToISO88591( InputString$ ) As String
 Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The differences between OCLC-MARC encodings of subscript and
 Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  ' superscript numbers and ISO/IEC 8859-1:1998 encodings of those numbers.
 
+Const ACUTE       As Integer = 226
+Const CEDILLA     As Integer = 240
+Const CIRCUMFLEX  As Integer = 227
+Const DIAERESIS   As Integer = 232
+Const GRAVE       As Integer = 225
+Const RING_ABOVE  As Integer = 234
+Const TILDE       As Integer = 228
+
+Dim CURRENCY_SIGN As String*1 : CURRENCY_SIGN  = "¤"
+Dim VERTICAL_BAR  As String*1 : VERTICAL_BAR   = "|"
+
 Dim Advance%
 Dim Character$                : Character$     = " "
 Dim CharNext%
 Dim CharRead%
 Dim CodePoint$
-Dim CURRENCY_SIGN As String*1 : CURRENCY_SIGN  = "¤"
 Dim NextCharPos%
 Dim TempString$
 Dim UnicodeString$            : UnicodeString$ = "&[#]x????;"
-Dim VERTICAL_BAR  As String*1 : VERTICAL_BAR   = "|"
 
 Dim i As Integer
 
@@ -1591,19 +1612,19 @@ For i = 1 To Len( InputString$ ) - 1
           CodePoint$ = Mid$( InputString$, NextCharPos% + 3, 4 )
           Select Case CodePoint$
             Case "0300"
-              CharNext% = 225 'grave
+              CharNext% = GRAVE
             Case "0301"
-              CharNext% = 226 'acute
+              CharNext% = ACUTE
             Case "0302"
-              CharNext% = 227 'circumflex
+              CharNext% = CIRCUMFLEX
             Case "0303"
-              CharNext% = 228 'tilde
+              CharNext% = TILDE
             Case "0308"
-              CharNext% = 232 'diaeresis
+              CharNext% = DIAERESIS
             Case "030A"
-              CharNext% = 234 'ring above
+              CharNext% = RING_ABOVE
             Case "0327"
-              CharNext% = 240 'cedilla
+              CharNext% = CEDILLA
             Case Else
               CombiningCharOmitted = TRUE
           End Select
@@ -1644,17 +1665,17 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 65, 97   'A, a
       Select Case CharNext%
-        Case 225  'grave
+        Case GRAVE
           Character$ = Chr$( CharRead% + 127 ) : i = i + Advance%
-        Case 226  'acute
+        Case ACUTE
           Character$ = Chr$( CharRead% + 128 ) : i = i + Advance%
-        Case 227  'circumflex
+        Case CIRCUMFLEX
           Character$ = Chr$( CharRead% + 129 ) : i = i + Advance%
-        Case 228  'tilde
+        Case TILDE
           Character$ = Chr$( CharRead% + 130 ) : i = i + Advance%
-        Case 232  'diaeresis
+        Case DIAERESIS
           Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
-        Case 234  'ring
+        Case RING_ABOVE
           Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
         Case 224, 229 To 231, 233, 235 To 251
           Character$ = Chr$( CharRead% ) : i = i + Advance%
@@ -1665,7 +1686,7 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 67, 99   'C, c
       Select Case CharNext%
-        Case 240  'cedilla
+        Case CEDILLA
           Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
         Case 224 To 239, 241 To 251
           Character$ = Chr$( CharRead% ) : i = i + Advance%
@@ -1676,13 +1697,13 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 69, 101  'E, e
       Select Case CharNext%
-        Case 225  'grave
+        Case GRAVE
           Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
-        Case 226  'acute
+        Case ACUTE
           Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
-        Case 227  'circumflex
+        Case CIRCUMFLEX
           Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
-        Case 232  'diaeresis
+        Case DIAERESIS
           Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
         Case 224, 228 To 231, 233 To 251
           Character$ = Chr$( CharRead% ) : i = i + Advance%
@@ -1693,13 +1714,13 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 73, 105  'I, i
       Select Case CharNext%
-        Case 225  'grave
+        Case GRAVE
           Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
-        Case 226  'acute
+        Case ACUTE
           Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
-        Case 227  'circumflex
+        Case CIRCUMFLEX
           Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
-        Case 232  'diaeresis
+        Case DIAERESIS
           Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
         Case 224, 228 To 231, 233 To 251
           Character$ = Chr$( CharRead% ) : i = i + Advance%
@@ -1710,7 +1731,7 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 78, 110  'N, n
       Select Case CharNext%
-        Case 228  'tilde
+        Case TILDE
           Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
         Case 224 To 227, 229 To 251
           Character$ = Chr$( CharRead% ) : i = i + Advance%
@@ -1721,15 +1742,15 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 79, 111  'O, o
       Select Case CharNext%
-        Case 225  'grave
+        Case GRAVE
           Character$ = Chr$( CharRead% + 131 ) : i = i + Advance%
-        Case 226  'acute
+        Case ACUTE
           Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
-        Case 227  'circumflex
+        Case CIRCUMFLEX
           Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
-        Case 228  'tilde
+        Case TILDE
           Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
-        Case 232  'diaeresis
+        Case DIAERESIS
           Character$ = Chr$( CharRead% + 135 ) : i = i + Advance%
         Case 224, 229 To 231, 233 To 251
           Character$ = Chr$( CharRead% ) : i = i + Advance%
@@ -1748,13 +1769,13 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 85, 117  'U, u
       Select Case CharNext%
-        Case 225  'grave
+        Case GRAVE
           Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
-        Case 226  'acute
+        Case ACUTE
           Character$ = Chr$( CharRead% + 133 ) : i = i + Advance%
-        Case 227  'circumflex
+        Case CIRCUMFLEX
           Character$ = Chr$( CharRead% + 134 ) : i = i + Advance%
-        Case 232  'diaeresis
+        Case DIAERESIS
           Character$ = Chr$( CharRead% + 135 ) : i = i + Advance%
         Case 224, 228 To 231, 233 To 251
           Character$ = Chr$( CharRead% ) : i = i + Advance%
@@ -1765,9 +1786,9 @@ For i = 1 To Len( InputString$ ) - 1
 
     Case 89, 121  'Y, y
       Select Case CharNext%
-        Case 226  'acute
+        Case ACUTE
           Character$ = Chr$( CharRead% + 132 ) : i = i + Advance%
-        Case 232  'diaeresis
+        Case DIAERESIS
           If CharRead% = 121 Then
               Character$ = Chr$( 255 )
             Else
@@ -1969,7 +1990,7 @@ UpperBound% = UNICODE_CHARACTER_COUNT
 
 Do While LowerBound% <= UpperBound%
   Middle%          = ( LowerBound% + UpperBound% ) \ 2
-  CandidateString$ = UnicodeChar( Middle% )
+  CandidateString$ = UnicodeEquiv( Middle% )
   CodePoint$       = Left$( CandidateString$, 4 )
   If CodePoint$ = InputString$ Then
       CharFound = TRUE
@@ -2002,4 +2023,4 @@ End If
 FindUnicodeEquivalent = Char1$ & Char2$ & Char3$
 
 End Function
-'200684909
+'202786731

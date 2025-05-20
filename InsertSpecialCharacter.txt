@@ -1,0 +1,1251 @@
+' MacroName:InsertSpecialCharacter.2025.01
+' MacroDescription:Helps in adding Unicode (that is, non-MARC-8) characters to fields in
+' Connexion records.
+'
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'***************************************************************************************#
+' How it works: Place the cursor in a data cell in a field in a Connexion record and run
+' the macro to insert a special character at that position. Select a combining character,
+' or diacritic, from the list box (you can search for that character by name or code
+' point, using the input box). Or, to insert into the field any Unicode character whose
+' code point you know, enter three to five hexadecimal digits (decimal digits 0-9 and
+' letters A-F) for a value from hex 126 to hex FFFF. The macro creates a Numeric
+' Character Reference (NCR) (e.g., "&#x030A;") for the selected character or the code
+' point you entered, adds it to the field, and replaces the whole field. Set which action
+' should be the default when the macro opens on line 158 below.
+'
+' A combining character follows the letter it modifies. A "double diacritic," that spans
+' or connects two characters, must be positioned between those characters. This macro
+' won't allow a combining character to begin a field, or follow a space or a subfield
+' code. In addition, it won't allow a Unicode character to follow the delimiter symbol.
+'
+' You can search for a combining character by typing its code point or a word or phrase
+' from the character's name. The entries in the list contain both Unicode and MARC-8
+' names, and is ordered alphabetically by the Unicode name. The list box displays fewer
+' entries as the search string becomes longer and therefore more specific, so you can,
+' for example, type "ligat" or "brev" or "36" to quickly get to the diacritical mark at
+' U+0361. As this example suggests, you probably don't need to type the whole name or the
+' complete number in order to see the character and select it. The Unicode name is given
+' in lowercase and the MARC-8 name in uppercase, but in searching, case is irrelevant.
+' Case also doesn't matter when entering the code point of any Unicode character.
+'
+' The combining characters available for selection are the 112 characters in the Unicode
+' "Combining Diacritical Marks" block. MARC-8 defines only some 27 diacritical marks,
+' which can be entered into a record by the Client's menu commands "Edit > Enter
+' Diacritics..." While any diacritical mark may be used in any situation, the characters
+' in that Unicode block are especially suited for Latin script. Other diacritical marks,
+' such as those for symbols or those specifically for certain scripts, will have to be
+' entered as Unicode code points. The Unicode standard does not restrict which combining
+' characters may follow a base character, nor the number of such marks; this macro could,
+' in theory, string an endless number of combining characters after a base character. Any
+' particular sequence of combining characters must be left up to the cataloger, who
+' should consult section 2.11.2 ("Multiple Combining Characters") of the Unicode
+' standard. I do not know of any limits or rules imposed by the Client regarding
+' application of diacritics.
+'
+' The lower endpoint of the set of characters this macro can insert, Unicode U+0126, is
+' the first non-MARC character in the Unicode repertoire--"Latin capital letter H with
+' stroke." All code points below that hexadecimal number represent characters able to be
+' entered in the Client through its "Enter Diacritics and Special Characters" popup
+' window. The upper endpoint, is U+FEFC, "Arabic ligature lam with alef final form."
+' Characters with code points above that, up to Unicode U+FFFF, are recommended not to be
+' used by OCLC. They include fullwidth and halfwidth characters, and various formatting
+' and special characters. This macro won't allow their entry.
+'
+' The greatest number able to be handled by OML (probably reflecting a 16-bit legacy) is
+' 65,536, which is the range from -32,768 to 32,767. (Later versions of BASIC greatly
+' expand the range of number type integer.) I don't believe it's possible to enter
+' characters in the Client with code points higher than 65,536, or hex FFFF. As I can't
+' test the macro with such characters, I don't know what would happen if it encountered
+' them.
+'
+' LC/PCC practice is to limit the set of transcribed characters to those defined in
+' MARC-8, whose code tables are at https://www.loc.gov/marc/specifications/specchartables.html).
+' However, in Bibliographic Formats and Standards, section 2.7, OCLC states, "With
+' exceptions ... you may enter whatever characters you need to appropriately transcribe
+' and record bibliographic data," and also, "You may disregard instructions in both [LC
+' and PCC] policy statements in cases where needed characters are available in the
+' Unicode character set. Optionally, you may follow provisions of both policy statements"
+' (https://www.oclc.org/bibformats/en/about/onlinecataloging.html#characters). This macro
+' helps in entering those characters otherwise not available for input in the Client.
+'
+' Rendering of any character inserted depends largely upon the font selected for display.
+'
+' References to the Unicode standard are to version 16.0, published 10 September 2024.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Sub FillArrayCombiChars
+Declare Sub FillBlocksArray
+
+Declare Function HexToDec( InString$ ) As Long
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+Declare Function Dialog2ControlFunction( Id$, Action%, SValue& )
+
+'----------------------------------------------------------------------------------------
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal ClipboardFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal StringLength As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal WindowHandle As Long ) As Long
+'----------------------------------------------------------------------------------------
+
+Global Const INITIALIZE    As Integer = 1
+
+Global Const COMBICHAR     As Integer = 0
+Global Const INTEGER_RANGE As Long    = 65536 '-32,768 to 32,767
+Global Const OTHERCHAR     As Integer = 1
+
+Global DELIMITER_ASC       As String*1
+Global DELIMITER_UNI       As String*8
+Global DOUBLE_QUOTE        As String*1
+
+Global BaseCharLeft$
+Global BaseCharRight$
+Global DefaultOption%
+Global SelectedChar$
+Global WaltsMacros$
+Global Which%
+
+Global BlocksArray( 335 ) As String
+Global Combining  ( 111 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+'###### SET DEFAULT OPTION ##############################################################
+'
+' Set the default option when the macro starts. For the default option to be to insert a
+' combining character, set "DefaultOption%" to 0; for the default option to be to insert
+' any Unicode character, set it to 1.
+'
+DefaultOption% = 1
+'
+'########################################################################################
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+Const SEMICOLON_ASC        As Integer = 59
+Const CF_UNICODETEXT       As Long    = 13&
+
+Dim AMPERSAND              As String*1
+Dim DOUBLE_INVERTED_BREVE  As String*8
+Dim DOUBLE_TILDE           As String*8
+Dim NCR_SEQ                As String*3
+Dim SEMICOLON              As String*1
+
+Dim ActualCharCount%
+Dim BaseChar2ErrorMsg$
+Dim BaseCharErrorMsg$
+Dim CharToAdd$
+Dim CharA%
+Dim CharT$
+Dim Col%
+Dim CombiningCharName$
+Dim FieldData$
+Dim FieldDataLeft$
+Dim FieldDataRight$
+Dim LenFieldDataLeft%
+Dim ReplacementField$
+Dim Row%
+Dim SingleCharIncrementCount%
+Dim TypeOfWindow%
+
+Dim BaseCharDec&
+Dim ClipboardClose
+Dim NCR_Found
+
+Dim i As Integer, j As Integer, p As integer, q As Integer
+
+'----------------------------------------------------------------------------------------
+Const UNICODE_TEXT As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim ClipboardCharsDim%
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim LengthOfField%
+Dim UniCodePoint$
+
+Dim ClipboardChars() As Integer
+'----------------------------------------------------------------------------------------
+
+AMPERSAND             = Chr$( 038 )
+DELIMITER_ASC         = Chr$( 223 )
+DELIMITER_UNI         = "&#x01C2;"
+DOUBLE_INVERTED_BREVE = "&#x0361;"
+DOUBLE_QUOTE          = Chr$( 034 )
+DOUBLE_TILDE          = "&#x0360;"
+NCR_SEQ               = "&#x"
+SEMICOLON             = Chr$( SEMICOLON_ASC )
+
+BaseCharErrorMsg$     = "Please position the cursor after a letter to add a combining character, or diacritical mark, to it."
+WaltsMacros$          = "[Walt's macros] Extras3:InsertSpecialCharacter"
+
+' First, make sure a record is displayed, as opposed to a list.
+
+TypeOfWindow% = CS.ItemType
+Select Case TypeOfWindow%
+  Case -1, 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only when a record is displayed!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+' Then get the cursor position.
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+' If the cursor is not positioned in a data cell, the macro quits.
+
+If Col% < 6 Then
+    MsgBox "Please position the cursor in a data cell!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' Get the contents of the field, which will be modified and then put back into the
+' record.
+
+CS.CopyField
+
+' Use Windows API to access the Clipboard.
+
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    MsgBox "Sorry, the contents of the Clipboard could not be accessed.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+
+ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+If ClipboardDataHandle = 0& Then
+    MsgBox "Sorry, the macro failed to get Clipboard data.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+  Else
+    Exit Sub
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", they
+' range from -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters, which are
+' added to the string as themselves. All other numbers are converted to hexadecimal by
+' means of the BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly
+' converted to hexadecimal 0080 to 7FFF. Negative decimal numbers are made positive by
+' adding them to 65,536, so the range -32,768 to -1 becomes the range 32,768 to 65,535.
+' The "Hex" function converts those numbers to the hexadecimal range 8000 to FFFF.
+' Finally, the hexadecimal numbers are transformed into Numeric Character References,
+' with strings of two or three digits padded with leading zeros to make each string four
+' characters in length; then that NCR is added to the character string.
+
+For i = 0 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+  If CodePoint% = 0 Then
+      CharToAdd$ = ""
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$ = Chr$( CodePoint% )
+    ElseIf CodePoint% = 450 Then
+      CharToAdd$ = DELIMITER_UNI
+    ElseIf CodePoint% <> 0 Then
+      If CodePoint% > 127 Then
+          UniCodePoint$ = Hex( ClipboardChars( i ) )
+          If Len( UniCodePoint$ ) < 4 Then
+             UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+          End If
+        Else
+          UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+      End If
+      CharToAdd$ = "&#x" & UniCodePoint$ & ";"
+  End If
+  FieldData$ = FieldData$ & CharToAdd$
+  CharToAdd$  = ""
+Next i
+
+' Account for NCRs in the left part of the string--the part up to the cursor position--in
+' order to split it correctly. NCRs in the field increase its actual length by seven or
+' eight characters (most NCRs will consist of eight characters, or seven more than
+' the single character that appears in the field) over its apparent length.
+
+Select Case Col%
+
+' If the cursor is positioned at the beginning or end of the data cell, counting
+' characters isn't necessary.
+
+  Case 6
+    FieldDataLeft$  = Left$( FieldData$, 5 )
+    BaseCharLeft$   = "0"
+    FieldDataRight$ = Mid$( FieldData$, 6 )
+    BaseCharRight$  = Left$( FieldData$, 1 )
+
+  Case Len( FieldData$ )
+    FieldDataLeft$  = FieldData$
+    BaseCharLeft$   = Right$( FieldData$, 1 )
+    FieldDataRight$ = ""
+    BaseCharRight$  = "0"
+
+  Case Else
+    ActualCharCount%          = 6
+    SingleCharIncrementCount% = 6
+    Do
+      CharT$ = Mid$( FieldData$, ActualCharCount%, 1 )
+      If CharT$ = AMPERSAND Then
+          If Mid$( FieldData$, ActualCharCount%, 3 ) = NCR_SEQ And _
+             ( Mid$( FieldData$, ActualCharCount% + 7, 1 ) = SEMICOLON Or _
+             Mid$( FieldData$, ActualCharCount% + 8, 1 ) = SEMICOLON ) Then
+              NCR_Found = TRUE
+          End If
+        ElseIf CharT$ = SEMICOLON Then
+          If NCR_Found = TRUE Then
+              NCR_Found = FALSE
+          End If
+      End If
+      ActualCharCount% = ActualCharCount% + 1
+      If NCR_Found = FALSE Then
+          SingleCharIncrementCount% = SingleCharIncrementCount% + 1
+      End If
+    Loop Until SingleCharIncrementCount% = Col%
+    ActualCharCount% = ActualCharCount% - 1
+
+' Split the field at the actual cursor position. A diacritical mark will be applied to
+' the last character of the left, or first part, or it will be applied to both that and
+' the first character of the right, or second part. Both characters are tested for
+' appropriateness. Although the Unicode standard allows any combining character to apply
+' to any base character, in any script, I have chosen to not allow combining characters
+' to follow a space or to begin a field. Similarly, a double-width combining mark, which
+' is inserted between characters, cannot precede a space. Otherwise, cataloger judgment
+' must govern placement of these characters.
+
+    FieldDataLeft$   = Left$( FieldData$, ActualCharCount% )
+    FieldDataRight$  = Mid$( FieldData$, ActualCharCount% + 1 )
+    BaseCharLeft$    = Right$( FieldDataLeft$, 1 )
+    If BaseCharLeft$ = " " Then
+        BaseCharLeft$ = "0"
+    End If
+    BaseCharRight$   = Left$( FieldDataRight$, 1 )
+    If BaseCharRight$ = " " Then
+        BaseCharRight$ = "0"
+    End If
+    CharA%           = Asc( BaseCharLeft$ )
+    If CharA% = SEMICOLON_ASC Then
+        LenFieldDataLeft% = Len( FieldDataLeft$ )
+        If LenFieldDataLeft% > 8 Then
+            p = InStr( LenFieldDataLeft% - 8, FieldDataLeft$, NCR_SEQ )
+            If p > 0 Then
+                BaseCharLeft$ = Mid$( FieldDataLeft$, p + 3, LenFieldDataLeft% - ( p + 3 ) )
+                BaseCharDec&  = HexToDec( BaseCharLeft$ )
+                If BaseCharDec& > 127 And BaseCharDec& < 191 Or _     'Control characters
+                   BaseCharDec& > 8192 And BaseCharDec& < 8303 Or _   'Unicode block for General punctuation
+                   BaseCharDec& > 11776 And BaseCharDec& < 11903 Then 'Unicode block for Supplemental punctuation
+                    BaseCharLeft$ = "0"
+                  ElseIf BaseCharDec& = 450 Then                      'Delimiter symbol
+                    BaseCharLeft$ = "9"
+                End If
+              Else
+                BaseCharLeft$ = "0"
+            End If
+        End If
+    End If
+
+End Select
+
+FillArrayCombiChars
+FillBlocksArray
+
+Begin Dialog Dialog1Definition  248, 160, WaltsMacros$, .Dialog1ControlFunction
+  OkButton       126, 136,  52,  14
+  CancelButton   186, 136,  52,  14
+  PushButton      10, 136,  52,  14, "Clea&r",               .Clear
+  PushButton     186,  12,  44,  14, "&?",                   .Help
+  OptionGroup                                                .OptionGroup
+   OptionButton   18,  15,  78,  12, "&Combining character", .OptionButton1
+   OptionButton  104,  15,  78,  12, "&Unicode character",   .OptionButton2
+  TextBox         10,  48, 228,  12,                         .SearchTextBox
+  ListBox         10,  62, 228,  72, "",                     .CharactersListBox
+  Text            10,  36, 228,   8, "",                     .Instructions
+  GroupBox        10,   4, 228,  28, "Insert..."
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then
+    Exit Sub
+  ElseIf BaseCharLeft$ = "0" Then
+    If Which% = COMBICHAR Then
+        MsgBox BaseCharErrorMsg$, CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  ElseIf BaseCharLeft$ = "9" Then
+    MsgBox "A Unicode character can't be entered as a subfield code!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+
+' If the selected character is a double diacritic, check that the two base characters are
+' valid for application.
+
+Select Case SelectedChar$
+  Case "035C"
+    CombiningCharName$ = "combining double breve below"
+  Case "035D"
+    CombiningCharName$ = "combining double breve"
+  Case "035E"
+    CombiningCharName$ = "combining double macron"
+  Case "035F"
+    CombiningCharName$ = "combining double macron below"
+  Case "0360"
+    CombiningCharName$ = "combining double tilde"
+  Case "0361"
+    CombiningCharName$ = "combining double inverted breve"
+  Case "0362"
+    CombiningCharName$ = "combining double rightwards arrow"
+End Select
+
+If CombiningCharName$ <> "" Then
+    If BaseCharRight$ = "" Or BaseCharRight$ = " " Then
+        BaseChar2ErrorMsg$ = "Please position the cursor between two letters to apply the character " & DOUBLE_QUOTE
+        BaseChar2ErrorMsg$ = BaseChar2ErrorMsg$ & CombiningCharName$ & DOUBLE_QUOTE & " to them both."
+        MsgBox BaseChar2ErrorMsg$, CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+End If
+
+' Finally, replace the modified field.
+
+ReplacementField$ = FieldDataLeft$ & NCR_SEQ & SelectedChar$ & ";" & FieldDataRight$
+
+If CS.SetFieldLine( Row%, ReplacementField$ ) Then
+    CS.CursorColumn = Col% + 1
+  Else
+    MsgBox "Sorry, the macro couldn't add the specified character.", CRITICAL_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillArrayCombiChars
+
+Combining( 0   ) = "acute accent (U+0301)"
+Combining( 1   ) = "acute accent below (U+0317)"
+Combining( 2   ) = "acute tone mark (U+0341)"
+Combining( 3   ) = "almost equal to above (U+034C)"
+Combining( 4   ) = "asterisk below (U+0359)"
+Combining( 5   ) = "breve (U+0306)"
+Combining( 6   ) = "breve below/UPADHMANIYA (U+032E)"
+Combining( 7   ) = "bridge above (U+0346)"
+Combining( 8   ) = "bridge below (U+032A)"
+Combining( 9   ) = "candrabindu (U+0310)"
+Combining( 10  ) = "caron/HACEK (U+030C)"
+Combining( 11  ) = "caron below (U+032C)"
+Combining( 12  ) = "cedilla (U+0327)"
+Combining( 13  ) = "circumflex accent (U+0302)"
+Combining( 14  ) = "circumflex accent below (U+032D)"
+Combining( 15  ) = "comma above/HIGH COMMA, CENTERED (U+0313)"
+Combining( 16  ) = "comma above right/HIGH COMMA, OFF CENTER (U+0315)"
+Combining( 17  ) = "comma below/LEFT HOOK (U+0326)"
+Combining( 18  ) = "diaeresis/UMLAUT (U+0308)"
+Combining( 19  ) = "diaeresis below/DOUBLE DOT BELOW (U+0324)"
+Combining( 20  ) = "dot above/SUPERIOR DOT (U+0307)"
+Combining( 21  ) = "dot above right (U+0358)"
+Combining( 22  ) = "dot below (U+0323)"
+Combining( 23  ) = "double acute accent (U+030B)"
+Combining( 24  ) = "double breve (U+035D)"
+Combining( 25  ) = "double breve below (U+035C)"
+Combining( 26  ) = "double grave accent (U+030F)"
+Combining( 27  ) = "double inverted breve/LIGATURE (U+0361)"
+Combining( 28  ) = "double low line/DOUBLE UNDERSCORE (U+0333)"
+Combining( 29  ) = "double macron (U+035E)"
+Combining( 30  ) = "double macron below (U+035F)"
+Combining( 31  ) = "double overline (U+033F)"
+Combining( 32  ) = "double rightwards arrow below (U+0362)"
+Combining( 33  ) = "double ring below (U+035A)"
+Combining( 34  ) = "double tilde (U+0360)"
+Combining( 35  ) = "double vertical line above (U+030E)"
+Combining( 36  ) = "double vertical line below (U+0348)"
+Combining( 37  ) = "down tack below (U+031E)"
+Combining( 38  ) = "equals sign below (U+0347)"
+Combining( 39  ) = "fermata (U+0352)"
+Combining( 40  ) = "grapheme joiner (U+034F)"
+Combining( 41  ) = "grave accent (U+0300)"
+Combining( 42  ) = "grave accent below (U+0316)"
+Combining( 43  ) = "grave tone mark (U+0340)"
+Combining( 44  ) = "greek dialytika tonos (U+0344)"
+Combining( 45  ) = "greek koronis (U+0343)"
+Combining( 46  ) = "greek perispomeni (U+0342)"
+Combining( 47  ) = "greek ypogegrammeni (U+0345)"
+Combining( 48  ) = "homothetic above (U+034B)"
+Combining( 49  ) = "hook above/PSEUDO QUESTION MARK (U+0309)"
+Combining( 50  ) = "horn (U+031B)"
+Combining( 51  ) = "inverted breve (U+0311)"
+Combining( 52  ) = "inverted breve below (U+032F)"
+Combining( 53  ) = "inverted bridge below (U+033A)"
+Combining( 54  ) = "inverted double arch below (U+032B)"
+Combining( 55  ) = "latin small letter a (U+0363)"
+Combining( 56  ) = "latin small letter c (U+0368)"
+Combining( 57  ) = "latin small letter d (U+0369)"
+Combining( 58  ) = "latin small letter e (U+0364)"
+Combining( 59  ) = "latin small letter h (U+036A)"
+Combining( 60  ) = "latin small letter i (U+0365)"
+Combining( 61  ) = "latin small letter m (U+036B)"
+Combining( 62  ) = "latin small letter o (U+0366)"
+Combining( 63  ) = "latin small letter r (U+036C)"
+Combining( 64  ) = "latin small letter t (U+036D)"
+Combining( 65  ) = "latin small letter u (U+0367)"
+Combining( 66  ) = "latin small letter v (U+036E)"
+Combining( 67  ) = "latin small letter x (U+036F)"
+Combining( 68  ) = "left angle above (U+031A)"
+Combining( 69  ) = "left angle below (U+0349)"
+Combining( 70  ) = "left arrowhead below (U+0354)"
+Combining( 71  ) = "left half ring above (U+0351)"
+Combining( 72  ) = "left half ring below/RIGHT CEDILLA (U+031C)"
+Combining( 73  ) = "left right arrow below (U+034D)"
+Combining( 74  ) = "left tack below (U+0318)"
+Combining( 75  ) = "long solidus overlay (U+0338)"
+Combining( 76  ) = "long stroke overlay (U+0336)"
+Combining( 77  ) = "low line/UNDERSCORE (U+0332)"
+Combining( 78  ) = "macron (U+0304)"
+Combining( 79  ) = "macron below (U+0331)"
+Combining( 80  ) = "minus sign below (U+0320)"
+Combining( 81  ) = "not tilde above (U+034A)"
+Combining( 82  ) = "ogonek/RIGHT HOOK (U+0328)"
+Combining( 83  ) = "overline (U+0305)"
+Combining( 84  ) = "palatalized hook below (U+0321)"
+Combining( 85  ) = "plus sign below (U+031F)"
+Combining( 86  ) = "retroflex hook below (U+0322)"
+Combining( 87  ) = "reversed comma above (U+0314)"
+Combining( 88  ) = "right arrowhead above (U+0350)"
+Combining( 89  ) = "right arrowhead and up arrowhead below (U+0356)"
+Combining( 90  ) = "right arrowhead below (U+0355)"
+Combining( 91  ) = "right half ring above (U+0357)"
+Combining( 92  ) = "right half ring below (U+0339)"
+Combining( 93  ) = "right tack below (U+0319)"
+Combining( 94  ) = "ring above/CIRCLE ABOVE, ANGSTROM (U+030A)"
+Combining( 95  ) = "ring below/CIRCLE BELOW (U+0325)"
+Combining( 96  ) = "seagull below (U+033C)"
+Combining( 97  ) = "short solidus overlay (U+0337)"
+Combining( 98  ) = "short stroke overlay (U+0335)"
+Combining( 99  ) = "square below (U+033B)"
+Combining( 100 ) = "tilde (U+0303)"
+Combining( 101 ) = "tilde below (U+0330)"
+Combining( 102 ) = "tilde overlay (U+0334)"
+Combining( 103 ) = "turned comma above (U+0312)"
+Combining( 104 ) = "up tack below (U+031D)"
+Combining( 105 ) = "upwards arrow below (U+034E)"
+Combining( 106 ) = "vertical line above (U+030D)"
+Combining( 107 ) = "vertical line below (U+0329)"
+Combining( 108 ) = "vertical tilde (U+033E)"
+Combining( 109 ) = "x above (U+033D)"
+Combining( 110 ) = "x below (U+0353)"
+Combining( 111 ) = "zigzag above (U+035B)"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillBlocksArray
+
+BlocksArray( 0   ) = "0100;017F:Latin Extended-A"
+BlocksArray( 1   ) = "0180;024F:Latin Extended-B"
+BlocksArray( 2   ) = "0250;02AF:IPA Extensions"
+BlocksArray( 3   ) = "02B0;02FF:Spacing Modifier Letters"
+BlocksArray( 4   ) = "0300;036F:Combining Diacritical Marks"
+BlocksArray( 5   ) = "0370;03FF:Greek and Coptic"
+BlocksArray( 6   ) = "0400;04FF:Cyrillic"
+BlocksArray( 7   ) = "0500;052F:Cyrillic Supplement"
+BlocksArray( 8   ) = "0530;058F:Armenian"
+BlocksArray( 9   ) = "0590;05FF:Hebrew"
+BlocksArray( 10  ) = "0600;06FF:Arabic"
+BlocksArray( 11  ) = "0700;074F:Syriac"
+BlocksArray( 12  ) = "0750;077F:Arabic Supplement"
+BlocksArray( 13  ) = "0780;07BF:Thaana"
+BlocksArray( 14  ) = "07C0;07FF:NKo"
+BlocksArray( 15  ) = "0800;083F:Samaritan"
+BlocksArray( 16  ) = "0840;085F:Mandaic"
+BlocksArray( 17  ) = "0860;086F:Syriac Supplement"
+BlocksArray( 18  ) = "0870;089F:Arabic Extended-B"
+BlocksArray( 19  ) = "08A0;08FF:Arabic Extended-A"
+BlocksArray( 20  ) = "0900;097F:Devanagari"
+BlocksArray( 21  ) = "0980;09FF:Bengali"
+BlocksArray( 22  ) = "0A00;0A7F:Gurmukhi"
+BlocksArray( 23  ) = "0A80;0AFF:Gujarati"
+BlocksArray( 24  ) = "0B00;0B7F:Oriya"
+BlocksArray( 25  ) = "0B80;0BFF:Tamil"
+BlocksArray( 26  ) = "0C00;0C7F:Telugu"
+BlocksArray( 27  ) = "0C80;0CFF:Kannada"
+BlocksArray( 28  ) = "0D00;0D7F:Malayalam"
+BlocksArray( 29  ) = "0D80;0DFF:Sinhala"
+BlocksArray( 30  ) = "0E00;0E7F:Thai"
+BlocksArray( 31  ) = "0E80;0EFF:Lao"
+BlocksArray( 32  ) = "0F00;0FFF:Tibetan"
+BlocksArray( 33  ) = "1000;109F:Myanmar"
+BlocksArray( 34  ) = "10A0;10FF:Georgian"
+BlocksArray( 35  ) = "1100;11FF:Hangul Jamo"
+BlocksArray( 36  ) = "1200;137F:Ethiopic"
+BlocksArray( 37  ) = "1380;139F:Ethiopic Supplement"
+BlocksArray( 38  ) = "13A0;13FF:Cherokee"
+BlocksArray( 39  ) = "1400;167F:Unified Canadian Aboriginal Syllabics"
+BlocksArray( 40  ) = "1680;169F:Ogham"
+BlocksArray( 41  ) = "16A0;16FF:Runic"
+BlocksArray( 42  ) = "1700;171F:Tagalog"
+BlocksArray( 43  ) = "1720;173F:Hanunoo"
+BlocksArray( 44  ) = "1740;175F:Buhid"
+BlocksArray( 45  ) = "1760;177F:Tagbanwa"
+BlocksArray( 46  ) = "1780;17FF:Khmer"
+BlocksArray( 47  ) = "1800;18AF:Mongolian"
+BlocksArray( 48  ) = "18B0;18FF:Unified Canadian Aboriginal Syllabics Extended"
+BlocksArray( 49  ) = "1900;194F:Limbu"
+BlocksArray( 50  ) = "1950;197F:Tai Le"
+BlocksArray( 51  ) = "1980;19DF:New Tai Lue"
+BlocksArray( 52  ) = "19E0;19FF:Khmer Symbols"
+BlocksArray( 53  ) = "1A00;1A1F:Buginese"
+BlocksArray( 54  ) = "1A20;1AAF:Tai Tham"
+BlocksArray( 55  ) = "1AB0;1AFF:Combining Diacritical Marks Extended"
+BlocksArray( 56  ) = "1B00;1B7F:Balinese"
+BlocksArray( 57  ) = "1B80;1BBF:Sundanese"
+BlocksArray( 58  ) = "1BC0;1BFF:Batak"
+BlocksArray( 59  ) = "1C00;1C4F:Lepcha"
+BlocksArray( 60  ) = "1C50;1C7F:Ol Chiki"
+BlocksArray( 61  ) = "1C80;1C8F:Cyrillic Extended-C"
+BlocksArray( 62  ) = "1C90;1CBF:Georgian Extended"
+BlocksArray( 63  ) = "1CC0;1CCF:Sundanese Supplement"
+BlocksArray( 64  ) = "1CD0;1CFF:Vedic Extensions"
+BlocksArray( 65  ) = "1D00;1D7F:Phonetic Extensions"
+BlocksArray( 66  ) = "1D80;1DBF:Phonetic Extensions Supplement"
+BlocksArray( 67  ) = "1DC0;1DFF:Combining Diacritical Marks Supplement"
+BlocksArray( 68  ) = "1E00;1EFF:Latin Extended Additional"
+BlocksArray( 69  ) = "1F00;1FFF:Greek Extended"
+BlocksArray( 70  ) = "2000;206F:General Punctuation"
+BlocksArray( 71  ) = "2070;209F:Superscripts and Subscripts"
+BlocksArray( 72  ) = "20A0;20CF:Currency Symbols"
+BlocksArray( 73  ) = "20D0;20FF:Combining Diacritical Marks for Symbols"
+BlocksArray( 74  ) = "2100;214F:Letterlike Symbols"
+BlocksArray( 75  ) = "2150;218F:Number Forms"
+BlocksArray( 76  ) = "2190;21FF:Arrows"
+BlocksArray( 77  ) = "2200;22FF:Mathematical Operators"
+BlocksArray( 78  ) = "2300;23FF:Miscellaneous Technical"
+BlocksArray( 79  ) = "2400;243F:Control Pictures"
+BlocksArray( 80  ) = "2440;245F:Optical Character Recognition"
+BlocksArray( 81  ) = "2460;24FF:Enclosed Alphanumerics"
+BlocksArray( 82  ) = "2500;257F:Box Drawing"
+BlocksArray( 83  ) = "2580;259F:Block Elements"
+BlocksArray( 84  ) = "25A0;25FF:Geometric Shapes"
+BlocksArray( 85  ) = "2600;26FF:Miscellaneous Symbols"
+BlocksArray( 86  ) = "2700;27BF:Dingbats"
+BlocksArray( 87  ) = "27C0;27EF:Miscellaneous Mathematical Symbols-A"
+BlocksArray( 88  ) = "27F0;27FF:Supplemental Arrows-A"
+BlocksArray( 89  ) = "2800;28FF:Braille Patterns"
+BlocksArray( 90  ) = "2900;297F:Supplemental Arrows-B"
+BlocksArray( 91  ) = "2980;29FF:Miscellaneous Mathematical Symbols-B"
+BlocksArray( 92  ) = "2A00;2AFF:Supplemental Mathematical Operators"
+BlocksArray( 93  ) = "2B00;2BFF:Miscellaneous Symbols and Arrows"
+BlocksArray( 94  ) = "2C00;2C5F:Glagolitic"
+BlocksArray( 95  ) = "2C60;2C7F:Latin Extended-C"
+BlocksArray( 96  ) = "2C80;2CFF:Coptic"
+BlocksArray( 97  ) = "2D00;2D2F:Georgian Supplement"
+BlocksArray( 98  ) = "2D30;2D7F:Tifinagh"
+BlocksArray( 99  ) = "2D80;2DDF:Ethiopic Extended"
+BlocksArray( 100 ) = "2DE0;2DFF:Cyrillic Extended-A"
+BlocksArray( 101 ) = "2E00;2E7F:Supplemental Punctuation"
+BlocksArray( 102 ) = "2E80;2EFF:CJK Radicals Supplement"
+BlocksArray( 103 ) = "2F00;2FDF:Kangxi Radicals"
+BlocksArray( 104 ) = "2FF0;2FFF:Ideographic Description Characters"
+BlocksArray( 105 ) = "3000;303F:CJK Symbols and Punctuation"
+BlocksArray( 106 ) = "3040;309F:Hiragana"
+BlocksArray( 107 ) = "30A0;30FF:Katakana"
+BlocksArray( 108 ) = "3100;312F:Bopomofo"
+BlocksArray( 109 ) = "3130;318F:Hangul Compatibility Jamo"
+BlocksArray( 110 ) = "3190;319F:Kanbun"
+BlocksArray( 111 ) = "31A0;31BF:Bopomofo Extended"
+BlocksArray( 112 ) = "31C0;31EF:CJK Strokes"
+BlocksArray( 113 ) = "31F0;31FF:Katakana Phonetic Extensions"
+BlocksArray( 114 ) = "3200;32FF:Enclosed CJK Letters and Months"
+BlocksArray( 115 ) = "3300;33FF:CJK Compatibility"
+BlocksArray( 116 ) = "3400;4DBF:CJK Unified Ideographs Extension A"
+BlocksArray( 117 ) = "4DC0;4DFF:Yijing Hexagram Symbols"
+BlocksArray( 118 ) = "4E00;9FFF:CJK Unified Ideographs"
+BlocksArray( 119 ) = "A000;A48F:Yi Syllables"
+BlocksArray( 120 ) = "A490;A4CF:Yi Radicals"
+BlocksArray( 121 ) = "A4D0;A4FF:Lisu"
+BlocksArray( 122 ) = "A500;A63F:Vai"
+BlocksArray( 123 ) = "A640;A69F:Cyrillic Extended-B"
+BlocksArray( 124 ) = "A6A0;A6FF:Bamum"
+BlocksArray( 125 ) = "A700;A71F:Modifier Tone Letters"
+BlocksArray( 126 ) = "A720;A7FF:Latin Extended-D"
+BlocksArray( 127 ) = "A800;A82F:Syloti Nagri"
+BlocksArray( 128 ) = "A830;A83F:Common Indic Number Forms"
+BlocksArray( 129 ) = "A840;A87F:Phags-pa"
+BlocksArray( 130 ) = "A880;A8DF:Saurashtra"
+BlocksArray( 131 ) = "A8E0;A8FF:Devanagari Extended"
+BlocksArray( 132 ) = "A900;A92F:Kayah Li"
+BlocksArray( 133 ) = "A930;A95F:Rejang"
+BlocksArray( 134 ) = "A960;A97F:Hangul Jamo Extended-A"
+BlocksArray( 135 ) = "A980;A9DF:Javanese"
+BlocksArray( 136 ) = "A9E0;A9FF:Myanmar Extended-B"
+BlocksArray( 137 ) = "AA00;AA5F:Cham"
+BlocksArray( 138 ) = "AA60;AA7F:Myanmar Extended-A"
+BlocksArray( 139 ) = "AA80;AADF:Tai Viet"
+BlocksArray( 140 ) = "AAE0;AAFF:Meetei Mayek Extensions"
+BlocksArray( 141 ) = "AB00;AB2F:Ethiopic Extended-A"
+BlocksArray( 142 ) = "AB30;AB6F:Latin Extended-E"
+BlocksArray( 143 ) = "AB70;ABBF:Cherokee Supplement"
+BlocksArray( 144 ) = "ABC0;ABFF:Meetei Mayek"
+BlocksArray( 145 ) = "AC00;D7AF:Hangul Syllables"
+BlocksArray( 146 ) = "D7B0;D7FF:Hangul Jamo Extended-B"
+BlocksArray( 147 ) = "D800;DB7F:High Surrogates"
+BlocksArray( 148 ) = "DB80;DBFF:High Private Use Surrogates"
+BlocksArray( 149 ) = "DC00;DFFF:Low Surrogates"
+BlocksArray( 150 ) = "E000;F8FF:Private Use Area"
+BlocksArray( 151 ) = "F900;FAFF:CJK Compatibility Ideographs"
+BlocksArray( 152 ) = "FB00;FB4F:Alphabetic Presentation Forms"
+BlocksArray( 153 ) = "FB50;FDFF:Arabic Presentation Forms-A"
+BlocksArray( 154 ) = "FE00;FE0F:Variation Selectors"
+BlocksArray( 155 ) = "FE10;FE1F:Vertical Forms"
+BlocksArray( 156 ) = "FE20;FE2F:Combining Half Marks"
+BlocksArray( 157 ) = "FE30;FE4F:CJK Compatibility Forms"
+BlocksArray( 158 ) = "FE50;FE6F:Small Form Variants"
+BlocksArray( 159 ) = "FE70;FEFF:Arabic Presentation Forms-B"
+BlocksArray( 160 ) = "FF00;FFEF:Halfwidth and Fullwidth Forms"
+BlocksArray( 161 ) = "FFF0;FFFF:Specials"
+BlocksArray( 162 ) = "10000;1007F:Linear B Syllabary"
+BlocksArray( 163 ) = "10080;100FF:Linear B Ideograms"
+BlocksArray( 164 ) = "10100;1013F:Aegean Numbers"
+BlocksArray( 165 ) = "10140;1018F:Ancient Greek Numbers"
+BlocksArray( 166 ) = "10190;101CF:Ancient Symbols"
+BlocksArray( 167 ) = "101D0;101FF:Phaistos Disc"
+BlocksArray( 168 ) = "10280;1029F:Lycian"
+BlocksArray( 169 ) = "102A0;102DF:Carian"
+BlocksArray( 170 ) = "102E0;102FF:Coptic Epact Numbers"
+BlocksArray( 171 ) = "10300;1032F:Old Italic"
+BlocksArray( 172 ) = "10330;1034F:Gothic"
+BlocksArray( 173 ) = "10350;1037F:Old Permic"
+BlocksArray( 174 ) = "10380;1039F:Ugaritic"
+BlocksArray( 175 ) = "103A0;103DF:Old Persian"
+BlocksArray( 176 ) = "10400;1044F:Deseret"
+BlocksArray( 177 ) = "10450;1047F:Shavian"
+BlocksArray( 178 ) = "10480;104AF:Osmanya"
+BlocksArray( 179 ) = "104B0;104FF:Osage"
+BlocksArray( 180 ) = "10500;1052F:Elbasan"
+BlocksArray( 181 ) = "10530;1056F:Caucasian Albanian"
+BlocksArray( 182 ) = "10570;105BF:Vithkuqi"
+BlocksArray( 183 ) = "105C0;105FF:Todhri"
+BlocksArray( 184 ) = "10600;1077F:Linear A"
+BlocksArray( 185 ) = "10780;107BF:Latin Extended-F"
+BlocksArray( 186 ) = "10800;1083F:Cypriot Syllabary"
+BlocksArray( 187 ) = "10840;1085F:Imperial Aramaic"
+BlocksArray( 188 ) = "10860;1087F:Palmyrene"
+BlocksArray( 189 ) = "10880;108AF:Nabataean"
+BlocksArray( 190 ) = "108E0;108FF:Hatran"
+BlocksArray( 191 ) = "10900;1091F:Phoenician"
+BlocksArray( 192 ) = "10920;1093F:Lydian"
+BlocksArray( 193 ) = "10980;1099F:Meroitic Hieroglyphs"
+BlocksArray( 194 ) = "109A0;109FF:Meroitic Cursive"
+BlocksArray( 195 ) = "10A00;10A5F:Kharoshthi"
+BlocksArray( 196 ) = "10A60;10A7F:Old South Arabian"
+BlocksArray( 197 ) = "10A80;10A9F:Old North Arabian"
+BlocksArray( 198 ) = "10AC0;10AFF:Manichaean"
+BlocksArray( 199 ) = "10B00;10B3F:Avestan"
+BlocksArray( 200 ) = "10B40;10B5F:Inscriptional Parthian"
+BlocksArray( 201 ) = "10B60;10B7F:Inscriptional Pahlavi"
+BlocksArray( 202 ) = "10B80;10BAF:Psalter Pahlavi"
+BlocksArray( 203 ) = "10C00;10C4F:Old Turkic"
+BlocksArray( 204 ) = "10C80;10CFF:Old Hungarian"
+BlocksArray( 205 ) = "10D00;10D3F:Hanifi Rohingya"
+BlocksArray( 206 ) = "10D40;10D8F:Garay"
+BlocksArray( 207 ) = "10E60;10E7F:Rumi Numeral Symbols"
+BlocksArray( 208 ) = "10E80;10EBF:Yezidi"
+BlocksArray( 209 ) = "10EC0;10EFF:Arabic Extended-C"
+BlocksArray( 210 ) = "10F00;10F2F:Old Sogdian"
+BlocksArray( 211 ) = "10F30;10F6F:Sogdian"
+BlocksArray( 212 ) = "10F70;10FAF:Old Uyghur"
+BlocksArray( 213 ) = "10FB0;10FDF:Chorasmian"
+BlocksArray( 214 ) = "10FE0;10FFF:Elymaic"
+BlocksArray( 215 ) = "11000;1107F:Brahmi"
+BlocksArray( 216 ) = "11080;110CF:Kaithi"
+BlocksArray( 217 ) = "110D0;110FF:Sora Sompeng"
+BlocksArray( 218 ) = "11100;1114F:Chakma"
+BlocksArray( 219 ) = "11150;1117F:Mahajani"
+BlocksArray( 220 ) = "11180;111DF:Sharada"
+BlocksArray( 221 ) = "111E0;111FF:Sinhala Archaic Numbers"
+BlocksArray( 222 ) = "11200;1124F:Khojki"
+BlocksArray( 223 ) = "11280;112AF:Multani"
+BlocksArray( 224 ) = "112B0;112FF:Khudawadi"
+BlocksArray( 225 ) = "11300;1137F:Grantha"
+BlocksArray( 226 ) = "11380;113FF:Tulu-Tigalari"
+BlocksArray( 227 ) = "11400;1147F:Newa"
+BlocksArray( 228 ) = "11480;114DF:Tirhuta"
+BlocksArray( 229 ) = "11580;115FF:Siddham"
+BlocksArray( 230 ) = "11600;1165F:Modi"
+BlocksArray( 231 ) = "11660;1167F:Mongolian Supplement"
+BlocksArray( 232 ) = "11680;116CF:Takri"
+BlocksArray( 233 ) = "116D0;116FF:Myanmar Extended-C"
+BlocksArray( 234 ) = "11700;1174F:Ahom"
+BlocksArray( 235 ) = "11800;1184F:Dogra"
+BlocksArray( 236 ) = "118A0;118FF:Warang Citi"
+BlocksArray( 237 ) = "11900;1195F:Dives Akuru"
+BlocksArray( 238 ) = "119A0;119FF:Nandinagari"
+BlocksArray( 239 ) = "11A00;11A4F:Zanabazar Square"
+BlocksArray( 240 ) = "11A50;11AAF:Soyombo"
+BlocksArray( 241 ) = "11AB0;11ABF:Unified Canadian Aboriginal Syllabics Extended-A"
+BlocksArray( 242 ) = "11AC0;11AFF:Pau Cin Hau"
+BlocksArray( 243 ) = "11B00;11B5F:Devanagari Extended-A"
+BlocksArray( 244 ) = "11BC0;11BFF:Sunuwar"
+BlocksArray( 245 ) = "11C00;11C6F:Bhaiksuki"
+BlocksArray( 246 ) = "11C70;11CBF:Marchen"
+BlocksArray( 247 ) = "11D00;11D5F:Masaram Gondi"
+BlocksArray( 248 ) = "11D60;11DAF:Gunjala Gondi"
+BlocksArray( 249 ) = "11EE0;11EFF:Makasar"
+BlocksArray( 250 ) = "11F00;11F5F:Kawi"
+BlocksArray( 251 ) = "11FB0;11FBF:Lisu Supplement"
+BlocksArray( 252 ) = "11FC0;11FFF:Tamil Supplement"
+BlocksArray( 253 ) = "12000;123FF:Cuneiform"
+BlocksArray( 254 ) = "12400;1247F:Cuneiform Numbers and Punctuation"
+BlocksArray( 255 ) = "12480;1254F:Early Dynastic Cuneiform"
+BlocksArray( 256 ) = "12F90;12FFF:Cypro-Minoan"
+BlocksArray( 257 ) = "13000;1342F:Egyptian Hieroglyphs"
+BlocksArray( 258 ) = "13430;1345F:Egyptian Hieroglyph Format Controls"
+BlocksArray( 259 ) = "13460;143FF:Egyptian Hieroglyphs Extended-A"
+BlocksArray( 260 ) = "14400;1467F:Anatolian Hieroglyphs"
+BlocksArray( 261 ) = "16100;1613F:Gurung Khema"
+BlocksArray( 262 ) = "16800;16A3F:Bamum Supplement"
+BlocksArray( 263 ) = "16A40;16A6F:Mro"
+BlocksArray( 264 ) = "16A70;16ACF:Tangsa"
+BlocksArray( 265 ) = "16AD0;16AFF:Bassa Vah"
+BlocksArray( 266 ) = "16B00;16B8F:Pahawh Hmong"
+BlocksArray( 267 ) = "16D40;16D7F:Kirat Rai"
+BlocksArray( 268 ) = "16E40;16E9F:Medefaidrin"
+BlocksArray( 269 ) = "16F00;16F9F:Miao"
+BlocksArray( 270 ) = "16FE0;16FFF:Ideographic Symbols and Punctuation"
+BlocksArray( 271 ) = "17000;187FF:Tangut"
+BlocksArray( 272 ) = "18800;18AFF:Tangut Components"
+BlocksArray( 273 ) = "18B00;18CFF:Khitan Small Script"
+BlocksArray( 274 ) = "18D00;18D7F:Tangut Supplement"
+BlocksArray( 275 ) = "1AFF0;1AFFF:Kana Extended-B"
+BlocksArray( 276 ) = "1B000;1B0FF:Kana Supplement"
+BlocksArray( 277 ) = "1B100;1B12F:Kana Extended-A"
+BlocksArray( 278 ) = "1B130;1B16F:Small Kana Extension"
+BlocksArray( 279 ) = "1B170;1B2FF:Nushu"
+BlocksArray( 280 ) = "1BC00;1BC9F:Duployan"
+BlocksArray( 281 ) = "1BCA0;1BCAF:Shorthand Format Controls"
+BlocksArray( 282 ) = "1CC00;1CEBF:Symbols for Legacy Computing Supplement"
+BlocksArray( 283 ) = "1CF00;1CFCF:Znamenny Musical Notation"
+BlocksArray( 284 ) = "1D000;1D0FF:Byzantine Musical Symbols"
+BlocksArray( 285 ) = "1D100;1D1FF:Musical Symbols"
+BlocksArray( 286 ) = "1D200;1D24F:Ancient Greek Musical Notation"
+BlocksArray( 287 ) = "1D2C0;1D2DF:Kaktovik Numerals"
+BlocksArray( 288 ) = "1D2E0;1D2FF:Mayan Numerals"
+BlocksArray( 289 ) = "1D300;1D35F:Tai Xuan Jing Symbols"
+BlocksArray( 290 ) = "1D360;1D37F:Counting Rod Numerals"
+BlocksArray( 291 ) = "1D400;1D7FF:Mathematical Alphanumeric Symbols"
+BlocksArray( 292 ) = "1D800;1DAAF:Sutton SignWriting"
+BlocksArray( 293 ) = "1DF00;1DFFF:Latin Extended-G"
+BlocksArray( 294 ) = "1E000;1E02F:Glagolitic Supplement"
+BlocksArray( 295 ) = "1E030;1E08F:Cyrillic Extended-D"
+BlocksArray( 296 ) = "1E100;1E14F:Nyiakeng Puachue Hmong"
+BlocksArray( 297 ) = "1E290;1E2BF:Toto"
+BlocksArray( 298 ) = "1E2C0;1E2FF:Wancho"
+BlocksArray( 299 ) = "1E4D0;1E4FF:Nag Mundari"
+BlocksArray( 300 ) = "1E5D0;1E5FF:Ol Onal"
+BlocksArray( 301 ) = "1E7E0;1E7FF:Ethiopic Extended-B"
+BlocksArray( 302 ) = "1E800;1E8DF:Mende Kikakui"
+BlocksArray( 303 ) = "1E900;1E95F:Adlam"
+BlocksArray( 304 ) = "1EC70;1ECBF:Indic Siyaq Numbers"
+BlocksArray( 305 ) = "1ED00;1ED4F:Ottoman Siyaq Numbers"
+BlocksArray( 306 ) = "1EE00;1EEFF:Arabic Mathematical Alphabetic Symbols"
+BlocksArray( 307 ) = "1F000;1F02F:Mahjong Tiles"
+BlocksArray( 308 ) = "1F030;1F09F:Domino Tiles"
+BlocksArray( 309 ) = "1F0A0;1F0FF:Playing Cards"
+BlocksArray( 310 ) = "1F100;1F1FF:Enclosed Alphanumeric Supplement"
+BlocksArray( 311 ) = "1F200;1F2FF:Enclosed Ideographic Supplement"
+BlocksArray( 312 ) = "1F300;1F5FF:Miscellaneous Symbols and Pictographs"
+BlocksArray( 313 ) = "1F600;1F64F:Emoticons"
+BlocksArray( 314 ) = "1F650;1F67F:Ornamental Dingbats"
+BlocksArray( 315 ) = "1F680;1F6FF:Transport and Map Symbols"
+BlocksArray( 316 ) = "1F700;1F77F:Alchemical Symbols"
+BlocksArray( 317 ) = "1F780;1F7FF:Geometric Shapes Extended"
+BlocksArray( 318 ) = "1F800;1F8FF:Supplemental Arrows-C"
+BlocksArray( 319 ) = "1F900;1F9FF:Supplemental Symbols and Pictographs"
+BlocksArray( 320 ) = "1FA00;1FA6F:Chess Symbols"
+BlocksArray( 321 ) = "1FA70;1FAFF:Symbols and Pictographs Extended-A"
+BlocksArray( 322 ) = "1FB00;1FBFF:Symbols for Legacy Computing"
+BlocksArray( 323 ) = "20000;2A6DF:CJK Unified Ideographs Extension B"
+BlocksArray( 324 ) = "2A700;2B73F:CJK Unified Ideographs Extension C"
+BlocksArray( 325 ) = "2B740;2B81F:CJK Unified Ideographs Extension D"
+BlocksArray( 326 ) = "2B820;2CEAF:CJK Unified Ideographs Extension E"
+BlocksArray( 327 ) = "2CEB0;2EBEF:CJK Unified Ideographs Extension F"
+BlocksArray( 328 ) = "2EBF0;2EE5F:CJK Unified Ideographs Extension I"
+BlocksArray( 329 ) = "2F800;2FA1F:CJK Compatibility Ideographs Supplement"
+BlocksArray( 330 ) = "30000;3134F:CJK Unified Ideographs Extension G"
+BlocksArray( 331 ) = "31350;323AF:CJK Unified Ideographs Extension H"
+BlocksArray( 332 ) = "E0000;E007F:Tags"
+BlocksArray( 333 ) = "E0100;E01EF:Variation Selectors Supplement"
+BlocksArray( 334 ) = "F0000;FFFFF:Supplementary Private Use Area-A"
+BlocksArray( 335 ) = "100000;10FFFF:Supplementary Private Use Area-B"
+
+End Sub
+
+'****************************************************************************************
+
+Function HexToDec( InString$ ) As Long
+
+' This function finds the character block that contains the input code point.
+
+Dim AbsVal&
+Dim HexVal&
+
+Dim Positive
+
+If Left$( InString$, 1 ) Like "[89A-F]" And Len( InString$ ) < 5 Then
+    Positive = FALSE
+  Else
+    Positive = TRUE
+End If
+
+HexVal& = Val( "&H" & InString$ )
+
+If Positive Then
+    HexToDec = HexVal&
+  Else
+    AbsVal&  = Abs( HexVal& )
+    HexToDec = AbsVal& + (( 32768 - AbsVal& ) * 2 )
+End If
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CASE_INSENSITIVE As Integer = 1
+Const CONTROL_CHANGE   As Integer = 2
+Const DISABLED         As Integer = 0
+Const ENABLED          As Integer = 1
+Const IDLE_STATE       As Integer = 5
+Const KEEP_DLG_OPEN    As Integer = -1
+Const WARNING_MESSAGE  As Integer = 48
+
+Const NO_SELECTION     As Integer = -1
+
+Static PrevInput$
+
+Static ValidInput
+Static Searching
+
+Dim CharT$
+Dim CurrInput$
+Dim HelpPar1$
+Dim HelpPar2$
+Dim HexVal&
+Dim Instruct1$
+Dim Instruct2$
+Dim TempString$
+Dim ValCurrInput&
+
+Dim MatchFound
+
+Dim i As Integer, j As Integer, k As Integer, p As Integer, q As Integer, z As Integer
+
+Dim MsgArray( 0 ) As String
+Dim TempArray()   As String
+
+HelpPar1$  = "Make sure the cursor is positioned where the character is to be inserted. A combining character follows the"
+HelpPar1$  = HelpPar1$ & " character it modifies; a double-width combining character is positioned between the two characters"
+HelpPar1$  = HelpPar1$ & " it modifies. This macro doesn't allow a combining character to begin a field or follow a space or a"
+HelpPar1$  = HelpPar1$ & " subfield code. It also won't permit any Unicode character to follow the delimiter symbol."
+HelpPar2$  = "Use the search box to enter a Unicode code point or to search for a combining character in the list, although"
+HelpPar2$  = HelpPar2$ & " you can also simply select the character in the list with the mouse pointer. To insert a character"
+HelpPar2$  = HelpPar2$ & "  whose Unicode code point is known, enter that value in the search box as three to five hexadecimal"
+HelpPar2$  = HelpPar2$ & " digits (decimal digits 0-9 and letters A-F; case doesn't matter, and don't enter the "
+HelpPar2$  = HelpPar2$ & DOUBLE_QUOTE & "U+" & DOUBLE_QUOTE & " part of a Unicode code point). Press [ENTER] or click "
+HelpPar2$  = HelpPar2$ & DOUBLE_QUOTE & "OK" & DOUBLE_QUOTE & " to insert that character. To search for one of the combining"
+HelpPar2$  = HelpPar2$ & " characters in the list, begin typing a word in its name, or the hexadecimal digits of its code"
+HelpPar2$  = HelpPar2$ & " point. The list box responds by showing only those characters whose names or code points contain"
+HelpPar2$  = HelpPar2$ & " the search string. Continue typing to get to the character you want. When it appears in the list,"
+HelpPar2$  = HelpPar2$ & " select it, and press [ENTER] or click " & DOUBLE_QUOTE & "OK." & DOUBLE_QUOTE
+Instruct1$ = "Select a combining character, or search its name or code point."
+Instruct2$ = "Enter a Unicode code point between hex values 125 and FFFF."
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    Which% = DefaultOption%
+    If Which% = COMBICHAR Then
+        DlgValue        "OptionGroup",       Which%
+        DlgText         "Instructions",      Instruct1$
+        DlgListBoxArray "CharactersListBox", Combining()
+      Else
+        DlgValue        "OptionGroup",       Which%
+        DlgText         "Instructions",      Instruct2$
+        DlgListBoxArray "CharactersListBox", MsgArray()
+    End If
+    DlgEnable       "Clear",             DISABLED
+    DlgEnable       "OK",                DISABLED
+    DlgFocus        "SearchTextBox"
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "OptionButton1", "OptionButton2"
+
+        If DlgValue( "OptionGroup" ) = OTHERCHAR Then
+            MsgArray( 0 ) = ""
+            DlgListBoxArray "CharactersListBox", MsgArray()
+            DlgText         "Instructions",      Instruct2$
+            Which% = OTHERCHAR
+          Else
+            If BaseCharLeft$ Like "[09]" Then
+                DlgEnd 0
+            End If
+            DlgListBoxArray "CharactersListBox", Combining()
+            DlgText         "Instructions",      Instruct1$
+            Which% = COMBICHAR
+        End If
+        DlgText         "SearchTextBox",     ""
+        DlgFocus        "SearchTextBox"
+
+      Case "CharactersListBox"
+
+        DlgText         "SearchTextBox",     DlgText( "CharactersListBox" )
+        SelectedChar$ = Trim$( DlgText( "SearchTextBox" ) )
+        p = InStr( SelectedChar$, "+" )
+        If p > 0 Then
+            SelectedChar$ = Mid$( SelectedChar$, p + 1 )
+            SelectedChar$ = Left$( SelectedChar$, Len( SelectedChar$ ) - 1 )
+            If SelectedChar$ Like "035[CDEF]" Or SelectedChar$ Like "036[012]" Then
+                If BaseCharRight$ = "0" Then
+                    DlgEnd 0
+                End If
+            End If
+        End If
+        Which% = COMBICHAR
+        DlgEnable       "OK",                ENABLED
+
+      Case "OK"
+
+        SelectedChar$ = Trim$( DlgText( "SearchTextBox" ) )
+        If SelectedChar$ = "" Then
+            If Which% = COMBICHAR Then
+                MsgBox "Please select a combining character from the list!", WARNING_MESSAGE, WaltsMacros$
+              Else
+                MsgBox "Please enter a Unicode code point!", WARNING_MESSAGE, WaltsMacros$
+            End If
+            Dialog1ControlFunction = KEEP_DLG_OPEN
+          ElseIf Which% = COMBICHAR Then
+            p = InStr( SelectedChar$, "+" )
+            If p > 0 Then
+                SelectedChar$ = Mid$( SelectedChar$, p + 1 )
+                SelectedChar$ = Left$( SelectedChar$, Len( SelectedChar$ ) - 1 )
+            End If
+        End If
+
+      Case "Clear"
+
+        DlgText         "SearchTextBox", ""
+        If Which% = COMBICHAR Then
+            DlgListBoxArray "CharactersListBox", Combining()
+            DlgValue        "CharactersListBox", NO_SELECTION
+          Else
+            MsgArray( 0 ) = ""
+            DlgListBoxArray "CharactersListBox", MsgArray()
+        End If
+        DlgFocus        "SearchTextBox"
+        DlgEnable       "OK",                DISABLED
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Help"
+
+        Begin Dialog Dialog2Definition  240, 200, WaltsMacros$, .Dialog2ControlFunction
+          OKButton      178, 176,  52,  14
+          CancelButton  178, 176,  52,  14
+          Text           10,   6, 220,  48, HelpPar1$
+          Text           10,  62, 220, 104, HelpPar2$
+        End Dialog
+        Dim Dialog2 As Dialog2Definition
+        On Error Resume Next
+        Dialog Dialog2
+
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+
+  Case IDLE_STATE
+
+' Monitor the search box for input. With each keystroke, the length of the search string
+' increases, the number of matching strings decreases, and the temporary array gets re-
+' built and re-displayed. This macro does no further sorting of entries that fill the
+' temporary array.
+
+        CurrInput$ = Trim$( DlgText( "SearchTextBox" ) )
+        If CurrInput$ = "" Then
+            DlgEnable       "Clear",             DISABLED
+          Else
+            DlgEnable       "Clear",             ENABLED
+        End If
+        If CurrInput$ <> PrevInput$ Then
+            If Which% = COMBICHAR Then
+                For i = 0 To 111
+                  If InStr( 1, Combining( i ), CurrInput$, CASE_INSENSITIVE ) > 0 Then
+                      MatchFound     = TRUE
+                      ReDim Preserve TempArray( z )
+                      TempArray( z ) = Combining( i )
+                      z              = z + 1
+                  End If
+                Next i
+                If MatchFound Then
+                    DlgListBoxArray "CharactersListBox", TempArray()
+                    DlgValue        "CharactersListBox", 0
+                    DlgEnable       "OK",                ENABLED
+                  Else
+                    MsgArray( 0 ) = "No combining character matches your search."
+                    DlgListBoxArray "CharactersListBox", MsgArray()
+                End If
+              Else
+                If Len( CurrInput$ ) > 2 Then
+                    For i = 1 To Len( CurrInput$ )
+                      CharT$ = Mid$( CurrInput$, i, 1 )
+                      If CharT$ Like "[0-9A-Fa-f]" Then
+                        HexVal& = Val( "&H" & CurrInput$ )
+                          If HexVal& > 293 Then
+                              DlgEnable       "OK",                ENABLED
+                              ValidInput = TRUE
+                            ElseIf HexVal& < 0 Then  'Characters above 7FFF are negative integers.
+                            Else
+                              DlgEnable       "OK",                DISABLED
+                              ValidInput = FALSE
+                          End If
+                        Else
+                          DlgEnable       "OK",                DISABLED
+                          ValidInput = FALSE
+                          Exit For
+                      End If
+                    Next i
+                    If ValidInput Then
+                        ValCurrInput& = Val( "&H" & CurrInput$ )
+
+' Hexadecimal numbers from 8000 through FFFF (the limits of 16-bit computing) are
+' negative decimal numbers from -32768 to -1. To convert them to positive integers, add
+' them to (or subtract their absolute value from) 65,536, the total range of integers
+' available in OML.
+
+                        If ValCurrInput& < 0 Then
+                            ValCurrInput& = INTEGER_RANGE + ValCurrInput&
+                        End If
+                        If BaseCharLeft$ = "9" Then
+                            DlgEnd 0
+                        End If
+
+' OCLC doesn't want the fullwidth and halfwidth characters to be used, no some formatting
+' characters, so the macro simply doesn't allow them to be entered. It shows the warning
+' and disables the "OK" button until the input is corrected.
+
+                        Select Case ValCurrInput&
+                          Case 65281 To 65518
+                            MsgArray( 0 ) = "This is a half- or full-width character not to be used in a record."
+                            DlgListBoxArray "CharactersListBox", MsgArray()
+                            DlgEnable       "OK",                DISABLED
+                          Case 8203, 8206, 8232 To 8239, 65279, 65532 To 65535
+                            MsgArray( 0 ) = "This is a formatting character not to be used in a record."
+                            DlgListBoxArray "CharactersListBox", MsgArray()
+                            DlgEnable       "OK",                DISABLED
+                          Case Else
+                            For i = 0 To 335
+                              TempString$ = BlocksArray( i )
+                              p = InStr( TempString$, ";" )
+                              q = InStr( TempString$, ":" )
+                              If ValCurrInput& >= HexToDec( Left$( BlocksArray( i ), p - 1 ) ) And _
+                                 ValCurrInput& <= HexToDec( Mid$( BlocksArray( i ), p + 1, ( q - p - 1 ) ) ) Then
+                                  MsgArray( 0 ) = "Character from Unicode block " & DOUBLE_QUOTE & Mid$( TempString$, q + 1 ) & "." & DOUBLE_QUOTE
+                                  DlgListBoxArray "CharactersListBox", MsgArray()
+                                  Exit For
+                              End If
+                            Next i
+                        End Select
+                    End If
+                  Else
+                    ValidInput = FALSE
+                End If
+                If ValidInput = FALSE Then
+                    MsgArray( 0 ) = ""
+                    DlgListBoxArray "CharactersListBox", MsgArray()
+                    DlgEnable       "OK",                DISABLED
+                End If
+            End If
+        End If
+        PrevInput$             = CurrInput$
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+    End Select
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog2ControlFunction( Id$, Action%, SValue& )
+
+Const INVISIBLE As Integer = 0
+
+If Action% = INITIALIZE Then
+    DlgVisible      "Cancel",            INVISIBLE
+End If
+
+End Function
+'125257411

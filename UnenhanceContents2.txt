@@ -1,29 +1,38 @@
-'MacroName:UnenhanceContents2.2024.01
-'MacroDescription:Removes subfield coding from an enhanced contents note, and optionally
+' MacroName:UnenhanceContents2.2025.02
+' MacroDescription:Removes subfield coding from an enhanced contents note, and optionally
 ' removes all instances of subfield $g.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 11 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Run the macro in a bibliographic record with an enhanced contents note to
 ' unenhance it--that is, to remove all subfield coding. If the cursor is placed in a
-' field containing such a note, the macro will enenhance the field; otherwise, the macro
-' will unenhance the first enhanced contents note it finds. It pastes the unenhanced
-' field directly following the original field for comparison, as sometimes the macro may
-' lose or garble information, depending on how the original field was input. If the
-' record contains several enhanced contents fields the macro should be run on each one
-' separately.
+' field containing such a note, the macro will unenhance the field; otherwise, the macro
+' will unenhance the first enhanced contents note it finds. The enhanced field replaces
+' the field that has been unenhanced. The macro works on only field at a time.
 '
 ' The macro removes only the subfield codes $t, $r, and $g, leaving the content of the
 ' subfields intact. However, it can also remove the contents of every subfield $g in the
@@ -31,13 +40,30 @@
 ' option to change the dashes that normally separate titles between each instance of
 ' subfield $g to semicolons, considering subfield $g to contain titles of sections.
 ' Otherwise, the macro attempts to preserve proper punctuation between titles and
-'statements of responsibility. Its success at those attempts depends in part on how the
+' statements of responsibility. Its success at those attempts depends in part on how the
 ' field was input.
 '****************************************************************************************
 
 Option Explicit
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+'----------------------------------------------------------------------------------------
+
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal uFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal lpString As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal hMem As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal hMem As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal HWND As Long ) As Long
 
 '****************************************************************************************
 
@@ -49,15 +75,15 @@ Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
-Const CHECKED              As Integer = 1
-Const CRITICAL_MESSAGE     As Integer = 16
-Const WARNING_QUERY        As Integer = 32
+Const CHECKED          As Integer = 1
+Const CRITICAL_MESSAGE As Integer = 16
+Const WARNING_QUERY    As Integer = 32
 
-Const CHANGE_DASH          As Integer = 2
-Const DELETE_G             As Integer = -1
-Const KEEP_G               As Integer = 1
+Const CHANGE_DASH      As Integer = 2
+Const DELETE_G         As Integer = -1
+Const KEEP_G           As Integer = 1
 
-Dim DELIMITER As String*1    : DELIMITER      = Chr$ ( 223 )
+Dim DELIMITER As String*1    : DELIMITER      = Chr$( 223 )
 
 Dim AddFieldByLine%
 Dim AddFieldBySequence%
@@ -78,6 +104,23 @@ Dim FoundField
 
 Dim i As Integer, p As Integer, q As Integer
 
+'----------------------------------------------------------------------------------------
+Const INTEGER_RANGE       As Long = 65536 '-32,768 to 32,767
+Const UNICODE_TEXT        As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim CharToAdd$
+Dim ClipboardCharsDim%
+Dim ClipboardClose
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim LengthOfField%
+Dim UniCodePoint$
+
+Dim ClipboardChars() As Integer
+'----------------------------------------------------------------------------------------
+
 ' First, make sure a bibliographic record is displayed.
 
 TypeOfWindow% = CS.ItemType
@@ -94,7 +137,7 @@ End Select
 ' encountered.
 
 Row% = CS.CursorRow
-If CS.GetField( "...", Row%, FieldData$ ) Then
+If CS.GetFieldUnicode( "...", Row%, FieldData$ ) Then
     If Left$( FieldData$, 3 ) = "505" Then
         If Mid$( FieldData$, 5, 1 ) <> "0" Then
             MsgBox "This field does not contain an enhanced contents note!", CRITICAL_MESSAGE, WaltsMacros$
@@ -103,15 +146,16 @@ If CS.GetField( "...", Row%, FieldData$ ) Then
       Else
         i = 1
         Do
-          FoundField = CS.GetField( "505", i, FieldData$ )
+          FoundField = CS.GetFieldUnicode( "...", i, FieldData$ )
           If FoundField Then
-              If Mid$( FieldData$, 5, 1 ) = "0" Then
-                  Exit Do
-                Else
-                  i = i + 1
+              If Left$( FieldData$, 3 ) = "505" Then
+                  If Mid$( FieldData$, 5, 1 ) = "0" Then
+                      Exit Do
+                  End If
               End If
           End If
-        Loop Until FoundField = FALSE Or i = 20
+          i = i + 1
+        Loop Until FoundField = FALSE
         If FoundField = FALSE Then
             If i = 2 Then
                 MsgBox "The contents note in this record is not enhanced!", CRITICAL_MESSAGE, WaltsMacros$
@@ -127,14 +171,85 @@ End If
 ' next 505 field, depending on how the original field was found.
 
 If i = 0 Then
-    AddFieldByLine% = Row% + 1
+    AddFieldByLine% = Row%
   Else
     If i = 1 Then
-         AddFieldBySequence% = 2
+         AddFieldBySequence% = 1
       Else
-         AddFieldBySequence% = i + 1
+         AddFieldBySequence% = i
     End If
 End If
+
+FieldData$ = ""
+CS.CursorRow% = i
+
+CS.CopyField
+
+' Use Windows API to access the Clipboard.
+
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    MsgBox "Sorry, the contents of the Clipboard could not be accessed.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+
+ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+If ClipboardDataHandle = 0& Then
+    MsgBox "Sorry, the macro failed to get Clipboard data.", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Sub
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+  Else
+    Exit Sub
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", the
+' numbers range from -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters,
+' which are added to the string as themselves. All other numbers (except the delimiter
+' symbol, whose encoding is converted to MARC-8) are converted to hexadecimal by the
+' BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly converted to
+' hexadecimal 0080 to 7FFF. Negative decimal numbers are made positive by adding them to
+' 65,536, so the range -32,768 to -1 becomes the range 32,768 to 65,535. The "Hex"
+' function converts those numbers to the hexadecimal range 8000 to FFFF. Finally, the
+' hexadecimal numbers are transformed into Numeric Character References, with strings of
+' two or three digits padded with leading zeros to make each string four characters in
+' length; then that NCR is added to the character string.
+
+For i = 0 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+  If CodePoint% = 0 Then
+      Exit For
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$ = Chr$( CodePoint% )
+    ElseIf CodePoint% = 450 Then
+      CharToAdd$ = Chr$( 223 )
+    Else
+      If CodePoint% > 127 Then
+          UniCodePoint$ = Hex( ClipboardChars( i ) )
+          If Len( UniCodePoint$ ) < 4 Then
+             UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+          End If
+        Else
+          UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+      End If
+      CharToAdd$ = "&#x" & UniCodePoint$ & ";"
+  End If
+  FieldData$ = FieldData$ & CharToAdd$
+  CharToAdd$ = ""
+Next i
 
 Indicator1$    = Mid$( FieldData$, 4, 1 )
 FieldContents$ = Mid$( FieldData$, 6 )
@@ -328,11 +443,11 @@ End If
 ' for correctness.
 
 If AddFieldByLine% > 0 Then
-    If CS.AddFieldLine( AddFieldByLine%, FieldContents$ ) = FALSE Then
+    If CS.SetFieldLine( AddFieldByLine%, FieldContents$ ) = FALSE Then
         MsgBox "Sorry, could not add the unenhanced contents note.", CRITICAL_MESSAGE, WaltsMacros$
     End If
   Else
-    If CS.AddField( AddFieldBySequence%, FieldContents$ ) = FALSE Then
+    If CS.SetField( AddFieldBySequence%, FieldContents$ ) = FALSE Then
         MsgBox "Sorry, could not add the unenhanced contents note.", CRITICAL_MESSAGE, WaltsMacros$
     End If
 End If
@@ -373,4 +488,4 @@ Select Case Action%
 End Select
 
 End Function
-'37715294
+'48019667

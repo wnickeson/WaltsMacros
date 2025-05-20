@@ -1,20 +1,32 @@
-'MacroName:MakeTitleAddedEntry.2024.04
-'MacroDescription:Helps to quickly add selected text in a bibliographic record as a title
-' added entry or uniform title heading, as well as adding a subtitle or part title as a
-' 246 field. Also checks indicators in those title fields.
+' MacroName:MakeTitleAddedEntry.2025.01
+' MacroDescription:Helps to quickly add selected text in a bibliographic record as a
+' title added entry or uniform title heading, as well as adding a subtitle or part title
+' as a 246 field. Also checks indicators in those title fields.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 5 July 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Select text in a bibliographic record to add it as a new title field
@@ -442,62 +454,64 @@ If CS.GetSelectedText( SelectedText$ ) And Col% > 5 Then
                     LenDelimiter% = 8
                 End If
             End If
-            p = InStr( FieldData$, DELIMITER & "b" )
-            If p = 0 Then
-                p = InStr( FieldData$, DELIMITER & "p" )
-                If p > 0 Then
-                    SubfieldToAdd$ = "p"
-                End If
-              Else
-                SubfieldToAdd$ = "b"
-            End If
-            If p > 0 Then
-                q = InStr( p + 1, FieldData$, DELIMITER )
-                If q > 0 Then
-                    Title1$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2, ( q - p ) - ( LenDelimiter% + 2 ) ) )
+            If Delimiter$ <> "" Then
+                p = InStr( FieldData$, Delimiter$ & "b" )
+                If p = 0 Then
+                    p = InStr( FieldData$, Delimiter$ & "p" )
+                    If p > 0 Then
+                        SubfieldToAdd$ = "p"
+                    End If
                   Else
-                    Title1$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2 ) )
+                    SubfieldToAdd$ = "b"
                 End If
+                If p > 0 Then
+                    q = InStr( p + 1, FieldData$, Delimiter$ )
+                    If q > 0 Then
+                        Title1$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2, ( q - p ) - ( LenDelimiter% + 2 ) ) )
+                      Else
+                        Title1$ = Trim$( Mid$( FieldData$, p + LenDelimiter% + 2 ) )
+                    End If
 
 ' The punctuation marks in Western languages that can end a field can be ignored:
 ' quotation marks, the exclamation point, and the question mark. Otherwise, strip the
 ' title string of other characters. This step gets rid of ISBD punctuation. It does
 ' remove a period, which may be an incorrect action, but this macro can't decide that.
 
-                If Right$( Title1$, 1 ) = Chr$( 034 ) Or Right$( Title1$, 1 ) = Chr$( 039 ) Or _
-                   Right$( Title1$, 1 ) = "!" Or Right$( Title1$, 1 ) = "?" Then
-                  ElseIf Right$( Title1$, 1 ) Like "[!0-9A-Za-z]" Then
-                    Title1$ = Trim$( Left$( Title1$, Len( Title1$ ) - 1 ) )
+                    If Right$( Title1$, 1 ) = Chr$( 034 ) Or Right$( Title1$, 1 ) = Chr$( 039 ) Or _
+                       Right$( Title1$, 1 ) = "!" Or Right$( Title1$, 1 ) = "?" Then
+                      ElseIf Right$( Title1$, 1 ) Like "[!0-9A-Za-z]" Then
+                        Title1$ = Trim$( Left$( Title1$, Len( Title1$ ) - 1 ) )
 
 ' But the last character may also be the semicolon of a Numeric Character Reference. If
 ' the beginning three characters of an NCR are found at the end of the title string,
 ' assume the semicolon was removed, and put it back.
 
-                    If InStr( Mid$( Title1$, Len( Title1$ ) - 7 ), "&#x" ) > 0 Then
-                        Title1$ = Title1$ & ";"
+                        If InStr( Mid$( Title1$, Len( Title1$ ) - 7 ), "&#x" ) > 0 Then
+                            Title1$ = Title1$ & ";"
+                        End If
                     End If
-                End If
-                Title1$ = MakeInitialCapital( RemoveInitialArticle( Title1$ ) )
-                If Len( Title2$ ) > 64 Then
-                    p = InStr( 64, Title2$, " " )
-                    If p > 0 Then
-                        Title2$ = Left$( Title2$, p - 1 ) & "... "
+                    Title1$ = MakeInitialCapital( RemoveInitialArticle( Title1$ ) )
+                    If Len( Title2$ ) > 64 Then
+                        p = InStr( 64, Title2$, " " )
+                        If p > 0 Then
+                            Title2$ = Left$( Title2$, p - 1 ) & "... "
+                        End If
                     End If
-                End If
 
 ' Get confirmation before adding the new field.
 
-                AddFrom245% = MsgBox( "Make 246 field title from this subfield $" & SubfieldToAdd$ & "?", 35, WaltsMacros$ )
-                Select Case AddFrom245%
-                  Case MSGBOX_RETURN_CANCEL
-                    Exit Sub
-                  Case MSGBOX_RETURN_YES
-                    Title1$ = "24630" & MakeInitialCapital( Title1$ )
-                    If CS.AddField( 1, Title1$ ) = FALSE Then
-                        MsgBox "Sorry, cannot create 246.", CRITICAL_MESSAGE, WaltsMacros$
-                    End If
-                    Exit Sub
-                End Select
+                    AddFrom245% = MsgBox( "Make 246 field title from this subfield $" & SubfieldToAdd$ & "?", 35, WaltsMacros$ )
+                    Select Case AddFrom245%
+                      Case MSGBOX_RETURN_CANCEL
+                        Exit Sub
+                      Case MSGBOX_RETURN_YES
+                        Title1$ = "24630" & MakeInitialCapital( Title1$ )
+                        If CS.AddField( 1, Title1$ ) = FALSE Then
+                            MsgBox "Sorry, cannot create 246.", CRITICAL_MESSAGE, WaltsMacros$
+                        End If
+                        Exit Sub
+                    End Select
+                End If
             End If
         End If
       Else
@@ -1307,10 +1321,6 @@ Select Case Action%
 
         FieldSelection% = DlgValue( "FieldList" )
         Tag$            = SetDisplayArrays( FieldSelection% )
-        DlgListBoxArray "ListBoxInd1",       Indicator1Array()
-        DlgListBoxArray "ListBoxInd2",       Indicator2Array()
-        DlgValue        "ListBoxInd1",       ListBox1Selection%
-        DlgValue        "ListBoxInd2",       ListBox2Selection%
         Select Case Tag$
 
           Case "130"
@@ -1321,6 +1331,7 @@ Select Case Action%
           Case "240"
             DlgText         "Ind1Description",   "Uniform title printed or displayed"
             DlgText         "Ind2Description",   "Nonfiling characters"
+            DlgVisible      "ListBoxInd2",       VISIBLE
 
           Case "246"
             DlgText         "Ind1Description",   "Note/added entry controller"
@@ -1330,12 +1341,19 @@ Select Case Action%
               Else
                 DlgVisible      "DisplayTextNote",   INVISIBLE
             End If
+            DlgVisible      "ListBoxInd2",       VISIBLE
 
           Case "730", "740"
             DlgText         "Ind1Description",   "Nonfiling characters"
             DlgText         "Ind2Description",   "Type of added entry"
+            DlgVisible      "ListBoxInd2",       VISIBLE
 
         End Select
+
+        DlgListBoxArray "ListBoxInd1",       Indicator1Array()
+        DlgListBoxArray "ListBoxInd2",       Indicator2Array()
+        DlgValue        "ListBoxInd1",       ListBox1Selection%
+        DlgValue        "ListBoxInd2",       ListBox2Selection%
 
       Case "ListBoxInd2"
 
@@ -1416,4 +1434,4 @@ Select Case Action%
 End Select
 
 End Function
-'142053215
+'143854508

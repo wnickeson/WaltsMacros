@@ -1,19 +1,31 @@
-'MacroName:MapCalculatorTool.2024.01
-'MacroDescription:Calculates scales and scaled lengths and areas for cataloging
+' MacroName:MapCalculatorTool.2025.01
+' MacroDescription:Calculates scales and scaled lengths and areas for cataloging
 ' cartographic resources.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 9 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works. Run the macro to calculate the scale of a map; or, given a scale, run the
@@ -86,9 +98,9 @@
 ' corrected before proceeding. Similarly, the "Calculate" button is not enabled if
 ' inappropriate units are selected. In a scale statement, either omit the colon, or enter
 ' it between the two parts, with no space on either side. Thousands separators are
-' optional in a scale statement; if included, valid separators are commas, decimal points,
-' and spaces. Figuring a scale using inputs of the same unit, or scaling a distance in the
-' same unit as the input, is not possible.
+' optional in a scale statement; if included, valid separators are commas, decimal
+' points, and spaces. Figuring a scale using inputs of the same unit, or scaling a
+' distance in the same unit as the input, is not possible.
 '
 ' The formulas for converting between units are taken from the results of basic Google
 ' searches, and although I believe the macro's calculations are adequate for most
@@ -1804,4 +1816,4 @@ ReCalc:
 End Select
 
 End Function
-'180874928
+'182075808

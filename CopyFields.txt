@@ -1,35 +1,43 @@
-'MacroName:CopyFields.2024.01
-'MacroDescription:Copies multiple fields from one bibliographic record and returns to
+' MacroName:CopyFields.2025.01
+' MacroDescription:Copies multiple fields from one bibliographic record and returns to
 ' another to paste them in. The copied fields can be a block of contiguous fields or a
 ' collection of separate, non-contiguous fields.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' The dialog box interface was inspired by the macro "CopyMultiple" by Joel Hahn, Niles
-' Public Library District, 2007, but all responsibility for the functionality of this
-' macro is mine alone.
+' Copyright 2025 Walter F. Nickeson.
 '
-' Last updated: 6 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: This macro copies, in one operation, any number of fields from one
 ' bibliographic record to another. Select a block of fields in a record with the mouse
 ' and run the macro to copy the whole block; or run the macro with nothing selected and
-' use the dialog box to choose the fields to copy. Using the dialog box to select fields
-' means the fields need not be contiguous. In both cases, the macro proceeds by showing
+' use the dialog box to choose the fields to copy. Using the dialog box means the
+' selected fields need not be contiguous. In both cases, the macro proceeds by showing
 ' all open bibliographic records, one at a time, until the correct record is found into
-' which the copied fields can be pasted; except that if only a single target record is
-' open, the copying is done immediately, without a request for confirmation. Duplicate
-' fields are not copied.
+' which the copied fields can be pasted--except that if only a single target record is
+' open, the copying is done immediately, without a request for confirmation. Fields
+' selected in the source record that also exist in the target record are not copied.
 '
 ' Begin with both source and target record(s) open. They may be tiled or pinned, and
 ' other windows of records and lists may also be open, but the source record must be on
@@ -46,7 +54,7 @@
 ' the other--initially empty--showing fields selected for copying. Click on a field in
 ' the source window to move it to the copy window; click on a field in the copy window to
 ' move it back to the source window. When selection of fields for copying is complete,
-' click the OK button.
+' click the OK button to add the fields to the target record.
 '
 ' No matter how the fields were chosen, the macro continues by either copying the fields
 ' immediately into the single candidate record, or cycling through all the windows
@@ -61,31 +69,31 @@
 ' saved first.
 '
 ' To copy fields containing non-Latin scripts, run the macro with no fields selected, so
-' as to invoke the dialog box. Selecting those fields with the mouse pointer will not
-' work unless the selection is within a field. Apart from this limitation, the macro
-' copies fields faithfully by using the "GetFieldUnicode" and "AddField" commands to copy
-' and paste. These macro commands bypass the Windows clipboard, which normally can't
-' handle all the characters that may be in a MARC record.
+' as to invoke the dialog box. Using the mouse pointer to select those fields will not
+' succeed unless the selection is within a field. Apart from this limitation, the macro
+' copies fields faithfully by using the "CopyField" command to correctly retrieve
+' information from the source record.
 '
 ' Joel Hahn's "CopyMultiple" macro, whose interface inspired the dialog box in this
-' macro, does copy fields to the clipboard, and in doing so does preserve special
-' characters.
+' macro, does copy fields to the clipboard.
 '****************************************************************************************
 
 Option Explicit
 
 Declare Sub MoveFields( Selection%, _
                         FromFieldsArray() As String, _
-                        FromLinesArray() As Integer, _
-                        ToFieldsArray() As String, _
-                        ToLinesArray() As Integer )
+                        FromLinesArray()  As Integer, _
+                        ToFieldsArray()   As String, _
+                        ToLinesArray()    As Integer )
 
-Declare Function ConvertTo8859( InputString$ ) As String
+Declare Function CopyField      ( LineNumber% )  As String
+Declare Function MakeDisplayable( InputString$ ) As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SVal& )
 Declare Function Dialog2ControlFunction( Id$, Action%, SVal& )
 
 Global Const CRITICAL_MESSAGE As Integer = 16
+Global Const INITIALIZE       As Integer = 1
 Global Const INVISIBLE        As Integer = 0
 
 Global CandidateCount%
@@ -94,26 +102,44 @@ Global WaltsMacros$
 
 Global Unicode
 
+Global CS As Object
+
 Global FieldsAvailable() As String
 Global FieldsSelected()  As String
 Global LinesAvailable()  As Integer
 Global LinesSelected()   As Integer
 
+'----------------------------------------------------------------------------------------
+
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
+
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
+
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal uFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal lpString As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal hMem As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal hMem As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal HWND As Long ) As Long
+
 '****************************************************************************************
 
 Sub Main
 
-Dim CS As Object
 On Error Resume Next
 Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
-Const CANCEL               As Integer = 102
 Const DIALOG_BUTTON_1      As Integer = 1
-Const DIALOG_BUTTON_CANCEL As Integer = 0
 Const DIALOG_BUTTON_OK     As Integer = -1
 Const DISPLAY_FF_AT_TOP    As Integer = 1
+Const DLG_FUNCTION_CANCEL  As Integer = 0
+Const DLG_STATEMENT_CANCEL As Integer = 102
 Const INFORMATION_MESSAGE  As Integer = 64
 Const WINDOW_ID            As Integer = 0
 Const WINDOW_OCLC_NO       As Integer = 2
@@ -158,11 +184,10 @@ Dim WindowTitle$
 Dim Duplicate
 Dim FoundField
 Dim SelectedUp               : SelectedUp = FALSE
-Dim Selection
 
-Dim FieldsCopied()   As String
-Dim FieldsOriginal() As String
-Dim WindowIDs()      As String
+Dim FieldsInOriginal() As String
+Dim FieldsToPaste()    As String
+Dim WindowIDs()        As String
 
 Dim i As Integer, j As Integer, p As Integer
 
@@ -179,8 +204,8 @@ If CS.GetSelectedText( SelectedText$ ) Then
     CurrentRow%    = CS.CursorRow
 End If
 
-' Before going any further, make sure the fields selected are in a bibliographic, rather
-' than an authority, record.
+' Then make sure the fields selected are in a bibliographic, rather than an authority,
+' record.
 
 TypeOfWindow% = CS.ItemType
 
@@ -206,11 +231,11 @@ Select Case TypeOfWindow%
 
 End Select
 
-If SelectedText$ <> "" And CurrentColumn% > 1 Then
+' A column position of 1 means the tag has been selected, which happens when any part of
+' it has been clicked. This is likely to mean an accidental mouse click and is ignored,
+' the macro assuming nothing has actually been selected.
 
-' A CursorColumn position of 1 means the tag has been selected, which happens when
-' clicking on any part of it. This is likely to mean an accidental mouse click and is
-' ignored, the macro assuming nothing has actually been selected.
+If SelectedText$ <> "" And CurrentColumn% > 1 Then
 
 ' If the selection has been made by dragging upward, the last characters will be the end-
 ' of-field marker (ASCII characters 013 + 010).
@@ -247,20 +272,26 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
     Difference%   = CurrentRow% - EndOfFieldCount%
     BeginningRow% = Difference%
 
-' Having established the number of fields selected, we can now copy them. Get each field
-' within the selection and store it in an array. Although appending each field to a
-' string variable and then sending that whole string to the Windows clipboard for pasting
-' would be a simpler solution, that method can't handle many special characters.
+' Having established the number of fields selected, we can now copy them. This is done
+' twice, once with the "CopyField" command, which uses the Windows Clipboard, and also
+' with the "GetFieldUnicode" command. The latter command is fast and fairly foolproof,
+' but it copies some characters incorrectly, making it unreliable for pasting
+' information. It can be used, however, in comparing fields in the two records in the
+' hunt for duplicates. The array "FieldsToPaste" holds characters correctly copied, and
+' the array "FieldsInOriginal" holds the same fields copied with the "GetFieldUnicode"
+' command.
 
-    ReDim Preserve FieldsSelected( EndOfFieldCount% )
-    For i = 0 To ( EndOfFieldCount% )
-      If CS.GetFieldUnicode( "...", BeginningRow%, FieldData$) = FALSE Then
-          MsgBox "Sorry, the macro failed to get a field.", CRITICAL_MESSAGE, WaltsMacros$
-          Exit Sub
-        Else
-          FieldsSelected( i ) = FieldData$
+    ReDim Preserve FieldsToPaste( EndOfFieldCount% )
+    ReDim Preserve LinesSelected( EndOfFieldCount% )
+    ReDim Preserve FieldsInOriginal( EndOfFieldCount% )
+    For i = 0 To EndOfFieldCount%
+      FieldsToPaste( i ) = CopyField( BeginningRow% )
+      LinesSelected( i ) = BeginningRow%
+      If CS.GetFieldUnicode( "...", BeginningRow%, FieldData$ ) Then
+          FieldsInOriginal( i ) = FieldData$
       End If
-      BeginningRow% = BeginningRow% + 1
+      BeginningRow%      = BeginningRow% + 1
+      DoEvents
     Next i
 
   Else
@@ -268,20 +299,21 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
     ReDim FieldsSelected( 0 )
     ReDim LinesSelected ( 0 )
 
-' Copy each field from the record into two parallel arrays. "FieldsOriginal" holds the
-' raw Unicode data of the fields. "FieldsAvailable" holds the same data converted for
-' display; the conversion includes changing delimiters to dollar signs and making some
-' other character substitutions. A third array, "LinesAvailable", holds the original
-' line number of each field to help keep them in order as they are switched back and
-' forth between the windows of the dialog box. The reason for using multiple arrays which
-' have to be synchronized, rather than a single array of multiple dimensions, is that in
-' this version of BASIC the ListBox control in the dialog box can only display an array
-' of one dimension.
+' Copy each field from the record into two parallel arrays; the "GetFieldUnicode"
+' command can be used because the arrays are used just for display, not for actually
+' pasting data into a record. "FieldsInOriginal" holds the raw data, and
+' "FieldsAvailable" holds the same data converted for display. The conversion includes
+' changing delimiters to dollar signs and making some other character substitutions. A
+' third array, "LinesAvailable", holds the original line number of each field to help
+' keep track of them as they are switched back and forth between the windows of the
+' dialog box. The reason for using multiple arrays which have to be synchronized, rather
+' than a single array of multiple dimensions, is that in OML the ListBox control in the
+' dialog box can only display an array of one dimension.
 
     i = 0
     Do While CS.GetFieldUnicode( "...", i + 1, FieldData$ )
-      ReDim Preserve FieldsOriginal( i )
-      FieldsOriginal( i ) = FieldData$
+      ReDim Preserve FieldsInOriginal( i )
+      FieldsInOriginal( i ) = FieldData$
 
 ' Add an extra space for each blank indicator (purely for display, to help things line
 ' up).
@@ -292,9 +324,9 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
       If Ind2$ = " " Then Ind2$ = "  "
       FieldDataConverted$ = Mid$( FieldData$, 1, 3 ) & " " & Ind1$ & Ind2$ & " " & Mid$( FieldData$, 6 )
 
-' Unicode data won't display in the dialog box. Indicate undisplayable characters with a
-' pair of brackets to more or less give the appearance of an empty box. However, do
-' convert the delimiter to the dollar sign.
+' Data outside of the Basic Latin block generally won't display nicely in the dialog box.
+' Indicate undisplayable characters with a pair of brackets to more or less give the
+' appearance of an empty box. However, do convert the delimiter to the dollar sign.
 
       If InStr( FieldDataConverted$, "&#x" ) Then
           Unicode = TRUE
@@ -315,7 +347,7 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
 ' It is possible, however, to convert or provide substitutions for some MARC21 characters
 ' for proper display.
 
-          FieldDataConverted$ = ConvertTo8859( FieldDataConverted$ )
+          FieldDataConverted$ = MakeDisplayable( FieldDataConverted$ )
       End If
 
       ReDim Preserve FieldsAvailable( i )
@@ -323,6 +355,7 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
       ReDim Preserve LinesAvailable( i )
       LinesAvailable( i )  = i
       i = i + 1
+      DoEvents
     Loop
 
     RemoveInstruction$ = "These fields will be copied to the chosen record." & Chr$( 013 ) & "Click on a field to remove it from this list:"
@@ -346,14 +379,12 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
     Dim Dialog1 as Dialog1Definition
     On Error Resume Next
     Dialog Dialog1
-    If Err = CANCEL Then Exit Sub
-
-' For pasting into the target record, use the original fields that were duplicated for
-' display and were put into the selection array.
+    If Err = DLG_STATEMENT_CANCEL Then Exit Sub
 
     CountOfCopiedFields% = UBound( FieldsSelected )
+    ReDim FieldsToPaste( CountOfCopiedFields% )
     For i = 0 To CountOfCopiedFields%
-      FieldsSelected( i ) = FieldsOriginal( LinesSelected( i ) )
+      FieldsToPaste( i ) = CopyField( LinesSelected( i ) + 1 )
     Next i
     If CountOfCopiedFields% = 0 Then
         FieldWord$ = "field"
@@ -363,10 +394,10 @@ If SelectedText$ <> "" And CurrentColumn% > 1 Then
 
 End If
 
-' With the copied fields in hand, the next step is to find a record to paste the data
-' into. Cycle through all the open windows to find bibliographic records. Store their IDs
-' in an array so they can be brought to the top, one by one, to find the one into which
-' to paste the copied fields. Exclude the source record.
+' With the copied fields in the "FieldsToPaste" array, the next step is to find a record
+' in which to paste the data. Cycle through all the open windows to find bibliographic
+' records. Store their IDs in an array so they can be brought to the top, one by one, to
+' find the one into which to paste the copied fields. Exclude the source record.
 
 Start% = 0
 
@@ -521,17 +552,20 @@ For i = Start% To CandidateCount%
 ' Add each copied field as the last (or 99th) field in that tag group, unless it
 ' duplicates a field already in the target record. Keep track of duplicate fields so a
 ' summary message can be displayed at the end. A successful paste of all copied records
-' is not acknowledged.
+' is not acknowledged. Fields in the target record are retrieved with the
+' "GetFieldUnicode" command to match how the fields in the source record were retrieved.
 
-OneOnly:
-
-      For j = 0 to UBound( FieldsSelected )
-        TempString$ = FieldsSelected( j )
-        Tag$        = Left$( TempString$, 3 )
-        Instance%   = 1
-        Duplicate   = FALSE
+      For j = 0 to UBound( LinesSelected )
+        If SelectedText$ = "" Then
+            TempString$ = FieldsInOriginal( LinesSelected( j ) )
+          Else
+            TempString$ = FieldsInOriginal( j )
+        End If
+        Tag$      = Left$( TempString$, 3 )
+        Instance% = 1
+        Duplicate = FALSE
         Do
-          FoundField = CS.GetField( Tag$, Instance%, FieldData$ )
+          FoundField = CS.GetFieldUnicode( Tag$, Instance%, FieldData$ )
           If FoundField Then
               If FieldData$       = TempString$ Then
                   Duplicate       = TRUE
@@ -540,21 +574,22 @@ OneOnly:
               End If
           End If
           Instance% = Instance% + 1
+          DoEvents
         Loop Until FoundField = FALSE
         If Duplicate = FALSE Then
-            If CS.AddField( 99, TempString$ ) = FALSE Then
+            If CS.AddField( 99, FieldsToPaste( j ) ) = FALSE Then
                 MsgBox "Sorry, could not add a field.", CRITICAL_MESSAGE, WaltsMacros$
                 Exit Sub
             End If
         End If
       Next j
-      If DuplicateCount% > 0 Then
-          If DuplicateCount% = 1 Then
-              MsgBox "1 copied field was not added because it duplicated a field already in this record.", INFORMATION_MESSAGE, WaltsMacros$
-            Else
-              MsgBox Str$( DuplicateCount% ) & " copied fields were not added because they duplicated fields already in this record.", INFORMATION_MESSAGE, WaltsMacros$
-          End If
-      End If
+'      If DuplicateCount% > 0 Then
+'          If DuplicateCount% = 1 Then
+'              MsgBox "1 copied field was not added because it duplicated a field already in this record.", INFORMATION_MESSAGE, WaltsMacros$
+'            Else
+'              MsgBox Str$( DuplicateCount% ) & " copied fields were not added because they duplicated fields already in this record.", INFORMATION_MESSAGE, WaltsMacros$
+'          End If
+'      End If
       Exit Sub
 
     Case DIALOG_BUTTON_1
@@ -572,7 +607,7 @@ OneOnly:
           GoTo Recycle:
       End If
 
-    Case DIALOG_BUTTON_CANCEL
+    Case DLG_FUNCTION_CANCEL
       Exit Sub
 
   End Select
@@ -679,10 +714,105 @@ End Sub
 
 '****************************************************************************************
 
-Function ConvertTo8859( InputString$ ) As String
+Function CopyField( LineNumber% ) As String
 
-' This function converts the MARC21 string to ISO/IEC 8859-1 encoding, to make it
-' possibly easier to read in the dialog box.
+Const INTEGER_RANGE       As Long = 65536 '-32,768 to 32,767
+Const UNICODE_TEXT        As Long = 13&
+
+Dim ActiveWindowHandle    As Long
+Dim CharToAdd$
+Dim ClipboardCharsDim%
+Dim ClipboardClose
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim FieldData$
+Dim LengthOfField%
+Dim UniCodePoint$
+
+Dim i As Integer
+
+Dim ClipboardChars() As Integer
+
+CS.CursorRow = LineNumber%
+CS.CopyField
+
+' Use Windows API to access the Clipboard.
+
+On Error Resume Next
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    MsgBox "Sorry, the contents of the Clipboard could not be accessed (line 1433, field " & Str$( LineNumber% ) & ").", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Function
+End If
+
+ClipboardDataHandle = GetClipboardData( UNICODE_TEXT )
+If ClipboardDataHandle = 0& Then
+    MsgBox "Sorry, the macro failed to get Clipboard data (line 1440, field " & Str$( LineNumber% ) & ").", CRITICAL_MESSAGE, WaltsMacros$
+    ClipboardClose = CloseClipboard()
+    Exit Function
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+  Else
+    Exit Function
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", they
+' range from -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters, which are
+' added to the string as themselves. All other numbers are converted to hexadecimal by
+' means of the BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly
+' converted to hexadecimal 0080 to 7FFF. Negative decimal numbers are made positive by
+' adding them to 65,536, so the range -32,768 to -1 becomes the range 32,768 to 65,535.
+' The "Hex" function converts those numbers to the hexadecimal range 8000 to FFFF.
+' Finally, the hexadecimal numbers are transformed into Numeric Character References,
+' with strings of two or three digits padded with leading zeros to make each string four
+' characters in length; then that NCR is added to the character string.
+
+For i = 0 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+  If CodePoint% = 0 Then
+      Exit For
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$ = Chr$( CodePoint% )
+    Else
+      If CodePoint% > 127 Then
+          UniCodePoint$ = Hex( ClipboardChars( i ) )
+          If Len( UniCodePoint$ ) < 4 Then
+             UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+          End If
+        Else
+          UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+      End If
+      CharToAdd$ = "&#x" & UniCodePoint$ & ";"
+  End If
+  FieldData$ = FieldData$ & CharToAdd$
+  CharToAdd$ = ""
+Next i
+
+CS.HomeRecord
+
+CopyField = FieldData$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeDisplayable( InputString$ ) As String
+
+' This function converts the MARC21 string to ISO/IEC 8859-1 encoding, in an attempt to
+' make it easier to read in the dialog box.
 
 Dim Character$               : Character$ = " "
 Dim CharNext%
@@ -901,7 +1031,7 @@ For i = 1 To Len( InputString$ ) - 1
 
 Next i
 
-ConvertTo8859 = TempString$
+MakeDisplayable = TempString$
 
 End Function
 
@@ -909,12 +1039,11 @@ End Function
 
 Function Dialog1ControlFunction( Id$, Action%, SVal& )
 
-' This function controls the dialog box which displays the record's fields.
+' This function controls the dialog box which displays the record's fields for selection.
 
 Const CONTROL_CHANGE  As Integer = 2
 Const DISABLED        As Integer = 0
 Const ENABLED         As Integer = 1
-Const INITIALIZE      As Integer = 1
 Const KEEP_DLG_OPEN   As Integer = -1
 Const VISIBLE         As Integer = 1
 Const WARNING_MESSAGE As Integer = 48
@@ -1042,9 +1171,7 @@ Function Dialog2ControlFunction( Id$, Action%, SVal& )
 ' This function controls the dialog box about which record into which to paste the copied
 ' fields.
 
-Const INITIALIZE As Integer = 1
-Const INVISIBLE  As Integer = 0
-Const UNCHECKED  As Integer = 0
+Const UNCHECKED As Integer = 0
 
 If Action% = INITIALIZE Then
     If CandidateCount% = 1 Then
@@ -1056,4 +1183,4 @@ If Action% = INITIALIZE Then
 End If
 
 End Function
-'106040123
+'118746089

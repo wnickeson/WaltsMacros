@@ -1,69 +1,93 @@
-'MacroName:PasteUnformattedPlus.2024.04
-'MacroDescription:Removes formatting from text placed on the Windows Clipboard for
-' pasting into a bibliographic record. Clears typographical formatting and converts many
-' Windows-1252 characters to OCLC-MARC. Allows adding a multi-line copied string to the
+' MacroName:PasteUnformattedPlus.2025.03
+' MacroDescription:Removes formatting from text placed on the Windows Clipboard for
+' pasting into a bibliographic record. Allows adding a multi-line copied string to the
 ' record as a simple string or as one or more new fields.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 4 July 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: Use this macro to paste text copied to the Windows Clipboard from outside
 ' Connexion into a Connexion bibliographic record, with some formatting removed and some
-' special characters converted. The text may be copied from the Web (as from a MARC
-' record display), a document produced by a word processor, MarcEdit's editor, and other
-' sources. In the bibliographic record, place the cursor where the copied material should
-' go, and run the macro. Or, if several lines have been copied, they can be added as
-' multiple fields to the record; in that case, cursor position is not important.
-' Unfortunately, the macro language's Clipboard object can only retrieve data in Text
-' format, so the macro can't do anything with Unicode data--it's limited to ASCII data
-' only.
+' special characters converted into simple ASCII characters. The text may be copied from
+' the Web (as from a MARC record display), a document produced by a word processor,
+' MarcEdit's editor, and other sources. In the bibliographic record, if the copied
+' material is to be inserted into a field, place the cursor at the appropriate position,
+' and run the macro. Or, if several lines have been copied, they can be added as one or
+' more new fields to the record; in that case, cursor position is irrelevant.
 '
 ' Specifically, this macro:
-'  + Collapses white space, by deleting consecutive space characters, tabs, and line
-'    breaks. Single line breaks may be changed to either spaces or dashes, or they may be
-'    retained, in order to paste in the copied text as multiple new fields.
-'  + Changes proper quotation marks (also known as "curly" or "smart" quotes) into
-'    simple, straight slashes.
-'  + Converts em and en dashes to double hyphens.
+'  + Collapses white space, by deleting consecutive space characters (of any width),
+'    tabs, and line breaks. Single line breaks may be changed to either spaces or dashes,
+'    or they may be retained, in order to paste in the copied text as multiple new
+'    fields.
+'  + Changes proper quotation marks (also known as "curly," "smart," or "typographical"
+'    quotes) into simple straight, vertical slashes.
+'  + Converts em dashes and horizontal bars to double hyphens and all other dashes to
+'    single hyphens (precisely, the "hyphen-minus" character).
 '  + Expands an ellipsis character into three dots with a space preceding and following.
-'  + Combines two single quotation marks (including the grave accent (`) used as a
-'    quotation mark) into one double quotation mark.
-'  + Converts extended ASCII characters (chiefly letters modified by diacritical marks)
-'    to OCLC-MARC.
+'  + Combines two single quotation marks (including the spacing grave accent (`) used as
+'    a quotation mark) into one double quotation mark.
+'  + Separates the typographical ligatures based on "f" ("f" combined with "i", "f", and
+'    "l"), as well as some other ligatures.
+'  + Replaces the modifier letters right and left half rings, representing the alif and
+'    ayn characters, respectively, with the modifier letters turned comma and apostrophe,
+'    following OCLC guidelines.
 '
 ' In text copied from MARC or staff views in an online catalog, the macro:
 '  + Converts the underscore, backslash, and sharp sign representations of blank
 '    indicator values to actual blank spaces.
 '  + Attempts to change delimiter characters, such as the dollar sign or pipe character,
-'    into the standard OCLC delimiter character (the "alveolar click").
+'    into the standard OCLC delimiter character (the "alveolar click," or, formerly, the
+'    "double-barred pipe").
 '
 ' Also removed by this macro: The characteristic formatting from fields copied from
-' MarcEdit's editor.
+' MarcEdit's editor, except that mnemonics in braces are retained. An exception to the
+' exception is that the mnemonic "{dollar}" is changed to the dollar character.
 '
-' The macro will probably not work well, if at all, with non-Latin characters. Also,
-' because different systems display MARC records in different ways, indicator placement
-' in the copied lines from an OPAC MARC view may be incorrect. This is likely to be the
-' case when the display doesn't distinguish between an indicator value of "blank" and a
-' space character. And because the macro expects indicators to be present, copying 00X
-' fields will probably be unsuccessful (not to mention that HTML condenses whitespace,
-' which renders a copied 008 field, for example, unreadable).
+' Fullwidth and halfwidth characters (U+FF01--U+FFEE) are not changed, even though OCLC
+' prefers that they be replaced by the corresponding ordinary width characters.
+'
+' Data retrieved from the Windows Clipboard has already had its character formatting
+' removed, such as font, color, bold and italic, and so on. Information pasted into a
+' record is strictly Unicode text.
+'
+' Because different online catalogs display MARC records in different ways, indicator
+' placement in the copied lines from an OPAC MARC view may be incorrect. This is likely
+' to be the case when the display doesn't distinguish between an indicator value of
+' "blank" and a space character. And because the macro expects indicators to be present,
+' copying 00X fields will probably be unsuccessful (not to mention that HTML condenses
+' whitespace, which renders a 008 field copied from a web source, for example,
+' unreadable). Often manual cleanup will be required after pasting such copied material
+' into the record as multiple fields.
 '
 ' When the macro runs, it presents a dialog box showing the options for adding the text
-' to the record. The unformatted text can be inserted into an existing field at the
-' cursor position as a simple string, or it can be added in one or more new fields. When
-' adding new fields, you can supply a tag and indicators for those fields in the dialog
-' box (all fields will receive the same tag and indicators). Lines copied from a MARC
+' to the record. The deformatted text can be inserted into an existing field at the
+' cursor position as a simple string, or it can be added as one or more new fields. When
+' new fields are to be added, the dialog box presents you with the option of supplying a
+' tag and indicators, which will apply to all those fields. Lines copied from a MARC
 ' record that already begin with the three digits of a tag may be pasted just as copied,
 ' except that the macro will still remove formatting from the content of the field(s).
 ' All new fields are inserted into the record by means of the OML "AddField" command,
@@ -72,82 +96,119 @@
 ' immediately following the row in which the cursor is placed, just as they were copied
 ' (minus formatting). Not entering anything in the dialog box for an indicator is the
 ' same as entering a blank space. The dialog box includes a preview of the copied,
-' modified text, but because of the limitations of OML, the preview may not display some
-' characters properly. Delimiters are shown as dollar signs, but they will appear
-' correctly when pasted into the record.
+' modified text, but because of the limitations of OML, the preview can only display
+' Latin alphabet characters, and not even all the ones available. Delimiters are shown as
+' dollar signs, but they will appear correctly when pasted into the record.
 '
 ' A line break in the copied text may be represented by different characters--typically,
 ' the carriage return (decimal character 13), the line feed (decimal 10), or the two
-' together. Use of both characters is standard in Windows, but Connexion requires only
+' together. Use of both characters is standard in Windows, but the Client requires only
 ' the carriage return to create a new field. Therefore, the macro converts any line break
-' to a single carriage return character for ease of manipulation. If line breaks are
-' found, the macro can change them, to either spaces or dashes (space-hyphen-hyphen-
-' space, as used in contents notes). Or the line breaks can be retained, in order to
-' paste the copied text in as new fields. (However, blank or empty lines are removed as
-' part of the process of cleaning up whitespace.) The dialog box is how you choose to
-' treat all line breaks. Because MARC record displays differ from system to system, how
-' fields are handled also differ, and text copied from such a display may not paste as
-' desired. Often manual cleanup will be required.
+' to a single carriage return character for ease of manipulation. After that, the macro
+' can change the line breaks to either spaces or dashes (space-hyphen-hyphen-space, as
+' used in contents notes). Or the line breaks can be retained, in order to paste the
+' copied text in as new fields. (However, blank or empty lines are removed as part of the
+' process of cleaning up whitespace.) The dialog box is how you choose to treat all line
+' breaks.
 '
 ' The delimiter character in MARC21 is decimal 31, the "unit separator." As a non-
-' printing character, it must be represented on the screen by other characters. Common
+' printing character, it must be represented on the screen by visible characters. Common
 ' representations include the pipe (decimal 124), double dagger (decimal 135), and dollar
 ' characters. The macro considers them all to be potential delimiters, as well as two
 ' consecutive dollar signs, and even the question mark, which is how the Connexion
-' delimiter is copied to the Clipboard as text. If the copied text contains such a
-' character (or characters, in the case of the double dollar) which is followed by a
-' lowercase alphanumeric character or a digit, and then a space, the macro will treat it
-' as a delimiter and convert it to the standard Connexion glyph. However, this character,
-' represented in OCLC-MARC by decimal 223 (the "sharp s" or "eszett"), can't be pasted
-' properly into a record from the Windows Clipboard. In order to add the correct
-' character to the record, the macro replaces the whole field, containing the modified
-' copied text, with the OML "SetField" command. If the macro does not properly recognize
-' a delimiter, such as if spacing around it is not present, the results may be
-' unexpected. An initial "$a" in a field will show up in the dialog box, but won't be
-' added to the record--and Connexion will eliminate it anyway upon reformatting.
+' delimiter appears when pasted from the Clipboard into a plain text context. If the
+' copied text contains such a character (or characters, in the case of the double dollar
+' common in the Alma environment) which is followed by a lowercase alphanumeric character
+' or a digit, and then a space, the macro will treat it as a delimiter and convert it to
+' the standard Connexion alveolar click glyph. If the macro does not properly recognize a
+' delimiter, such as if spacing around it is not present, the results may be unexpected.
+' An initial "$a" in a field will show up in the dialog box, but won't be added to the
+' record, and Connexion will eliminate it anyway with the Reformat command.
 '
-' To copy and paste text entirely within Connexion, use the Windows Clipboard or the
-' Client's built-in copying features. To copy multiple fields between records, use my
-' macro "CopyFields." The Client has a built-in "Paste Unformatted" menu command which
-' simply removes white space but does nothing more. To convert characters with diacritics
-' within a single line of a record, if pasting hasn't worked properly, use my macro
+' The OML "Copy" and "Paste" commands don't seem to work, so this macro copies existing
+' fields to the Clipboard with the "CopyField" command. OML is also unable to retrieve
+' Unicode information from the Clipboard, so the macro uses Windows API functions to
+' access that information. If a string is to be inserted into a field, the field is
+' actually replaced with the "SetField" command. New fields are added with the "AddField"
+' command.
+'
+' The Client has a built-in "Paste Unformatted" menu command (created after I had
+' developed my original macro of the same name) which simply removes white space.
+'
+' To convert precomposed characters (usually those with diacritics), use my macro
 ' "Decompose," which replaces, a field at a time, all Latin-1/Unicode single-character
-' letter + diacritic combinations with the proper MARC21 separate letters and diacritic
-' characters.
+' letter + diacritic combinations with the proper sequence of separate letters followed
+' by diacritics.
+'
+' References to the Unicode standard are to version 16.0, published 10 September 2024.
 '****************************************************************************************
 
 Option Explicit
 
-Declare Sub InitialDialogSetup  ( OptionButtonChoice% )
+Declare Sub FillCombinedArray
+Declare Sub FillDisplaySubArray
+Declare Sub FillUnicodeSubArray
+Declare Sub InitialDialogSetup( OptionButtonChoice% )
 
-Declare Function ChangeDelimiter( InString$, WhichDelimiter$ )          As String
-Declare Function Convert1252    ( InputString$ )                        As String
-Declare Function GetIndicator   ( WhichIndicator$ )                     As String
-Declare Function Replace        ( InputString$, Replacement$, Remove$ ) As String
+Declare Function GetIndicator    ( WhichIndicator$ )                     As String
+Declare Function GetUnicodeString()                                      As String
+Declare Function MakeDisplayable ( InString$ )                           As String
+Declare Function Replace         ( InputString$, Replacement$, Remove$ ) As String
 
 Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
 
-Global Const DISABLED        As Integer = 0
-Global Const ENABLED         As Integer = 1
+'----------------------------------------------------------------------------------------
+' The following routines declare procedures in the .dll files for retrieving data from
+' the Windows Clipboard. Initial guidance on use of this technique is due to Joel Hahn.
 
-Global Const aDASH           As Integer = 1
-Global Const aMULTI_FIELDS   As Integer = 1
-Global Const aNO_CR          As Integer = 0
-Global Const aSINGLE_FIELD   As Integer = 0
-Global Const aSPACE          As Integer = 0
-Global Const MULTI_FIELDS    As Integer = 2
-Global Const SIMPLE_STRING   As Integer = 0
-Global Const SINGLE_FIELD    As Integer = 1
+Declare Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" ( DestinationPointer As Any, _
+                                                              SourcePointer As Any, _
+                                                              ByVal SizeOfCopy As Long)
 
-Global BLANK_TAG_INDICATORS  As String*5
-Global CR                    As String*1
-Global DOLLAR_DELIMITER      As String*1
-Global DOUBLE_QUOTE          As String*1
-Global FIELD_TERMINATOR      As String*1
-Global MARC21_DELIMITER      As String*1
-Global OCLC_MARC_DELIMITER   As String*1
-Global SINGLE_QUOTE          As String*1
-Global TWO_SPACES            As String*2
+Declare Function CloseClipboard   Lib "user32"   Alias "CloseClipboard" () As Long
+Declare Function GetActiveWindow  Lib "user32"   Alias "GetActiveWindow" () As Long
+Declare Function GetClipboardData Lib "user32"   Alias "GetClipboardData" ( ByVal ClipboardFormat As Long ) As Long
+Declare Function GetStringLength  Lib "kernel32" Alias "lstrlenW" ( ByVal StringLength As Long ) As Long
+Declare Function GlobalAlloc      Lib "kernel32" ( ByVal wFlags As Long, ByVal dwBytes As Long ) As Long
+Declare Function GlobalLock       Lib "kernel32" Alias "GlobalLock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function GlobalUnlock     Lib "kernel32" Alias "GlobalUnlock" ( ByVal MemoryHandle As Long ) As Long
+Declare Function OpenClipboard    Lib "user32"   Alias "OpenClipboard" ( ByVal WindowHandle As Long ) As Long
+'----------------------------------------------------------------------------------------
+
+Global Const DISABLED         As Integer = 0
+Global Const ENABLED          As Integer = 1
+
+Global Const aDASH            As Integer = 1
+Global Const aMULTI_FIELDS    As Integer = 1
+Global Const aNO_CR           As Integer = 0
+Global Const aSINGLE_FIELD    As Integer = 0
+Global Const aSPACE           As Integer = 0
+Global Const DISPLAY_SUB_SIZE As Integer = 570
+Global Const ISO_CHAR         As Integer = 1
+Global Const MULTI_FIELDS     As Integer = 2
+Global Const SIMPLE_STRING    As Integer = 0
+Global Const SINGLE_FIELD     As Integer = 1
+Global Const UNI_CHAR         As Integer = 0
+Global Const UNI_CHAR_TEXT    As Long    = 13&
+Global Const UNI_SUB_SIZE     As Integer = 61
+
+Global BLANK_TAG_INDICATORS   As String*5
+Global CLIPBOARD_ERROR        As String*1
+Global CR                     As String*1
+Global DOLLAR_DELIMITER       As String*1
+Global DOUBLE_QUOTE           As String*1
+Global SINGLE_QUOTE           As String*1
+Global TWO_SPACES             As String*2
+Global UNI_DELIMITER          As String*8
+
+Global ACUTE                  As String*8
+Global CARON                  As String*8
+Global CEDILLA                As String*8
+Global CIRCUMFLEX             As String*8
+Global DIAERESIS              As String*8
+Global GRAVE                  As String*8
+Global RING_ABOVE             As String*8
+Global TILDE                  As String*8
 
 Global CursorPosition%
 Global DefaultAddFieldOption%
@@ -158,11 +219,15 @@ Global BlankTag
 Global CRFound
 Global TaggedFieldsLikely
 
-Global FieldStore() As String
-
+Global Combined  ( 52 )               As String
+Global DisplaySub( DISPLAY_SUB_SIZE ) As String
+Global FieldStore()                   As String
+Global UnicodeSub( UNI_SUB_SIZE )     As String
 '****************************************************************************************
 
 Sub Main
+
+PreviewString$ = ""
 
 Dim CS As Object
 On Error Resume Next
@@ -170,27 +235,28 @@ Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
-Const DLG_STATEMENT_CANCEL   As Integer = 102
-Const CRITICAL_MESSAGE       As Integer = 16
-Const MSGBOX_RETURN_YES      As Integer = 6
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
 
-Const CR_CHAR                As Integer = 13
-Const DBL_DAGGER_CHAR        As Integer = 135
-Const DOLLAR_CHAR            As Integer = 36
-Const LF_CHAR                As Integer = 10
-Const PIPE_CHAR              As Integer = 124
-Const QUESTION_CHAR          As Integer = 63
+Const CR_CHAR              As Integer = 13
+Const DBL_DAGGER_CHAR      As Integer = 135
+Const DOLLAR_CHAR          As Integer = 36
+Const LF_CHAR              As Integer = 10
+Const PIPE_CHAR            As Integer = 124
+Const QUESTION_CHAR        As Integer = 63
+Const NCR                  As Integer = -1
 
-Dim BLANK_TAG_FLAG           As String*1
-Dim CR_SPACE_AFTER           As String*2
-Dim CR_SPACE_BEFORE          As String*2
-Dim TWO_CRs                  As String*2
-Dim TWO_SINGLE_QUOTES        As String*2
+Dim BLANK_TAG_FLAG         As String*1
+Dim CR_SPACE_AFTER         As String*2
+Dim CR_SPACE_BEFORE        As String*2
+Dim TWO_CRs                As String*2
+Dim TWO_SINGLE_QUOTES      As String*2
 
 Dim AddFieldFailure%
 Dim ArrayDimension%
 Dim CharA%
 Dim Character$
+Dim CharCount%
 Dim CharT$
 Dim ConvertedToDash$
 Dim ConvertedToSpace$
@@ -201,7 +267,7 @@ Dim DeformattedString$
 Dim Indicator1$
 Dim Indicator2$
 Dim IndicatorString$
-Dim MsgBoxReturn%
+Dim InsertionPoint%
 Dim NextChar$
 Dim PotentialFields%
 Dim PrevChar$
@@ -226,42 +292,32 @@ Dim i As Integer, j As Integer, p As Integer
 
 BLANK_TAG_FLAG       = Chr$( 009 )
 BLANK_TAG_INDICATORS = "     "
+CLIPBOARD_ERROR      = Chr$( 021 )
 CR                   = Chr$( 013 )
 CR_SPACE_AFTER       = CR & " "
 CR_SPACE_BEFORE      = " " & CR
 DOLLAR_DELIMITER     = "$"
 DOUBLE_QUOTE         = Chr$( 034 )
-FIELD_TERMINATOR     = Chr$( 182 )
-MARC21_DELIMITER     = Chr$( 031 )
-OCLC_MARC_DELIMITER  = Chr$( 223 )
 SINGLE_QUOTE         = Chr$( 039 )
 TWO_CRs              = CR & CR
 TWO_SINGLE_QUOTES    = SINGLE_QUOTE & SINGLE_QUOTE
 TWO_SPACES           = "  "
+UNI_DELIMITER        = "&#x01C2;"
 WaltsMacros$         = "[Walt's macros] Essentials:PasteUnformattedPlus"
+
+ACUTE                = "&#x0301;"
+CARON                = "&#x030C;"
+CEDILLA              = "&#x0327;"
+CIRCUMFLEX           = "&#x0302;"
+DIAERESIS            = "&#x0308;"
+GRAVE                = "&#x0300;"
+RING_ABOVE           = "&#x030A;"
+TILDE                = "&#x0303;"
 
 BlankTag             = FALSE
 CRFound              = FALSE
 
-' First, make sure there is text on the Clipboard to paste. But not too much text!
-
-On Error Resume Next
-RawString$ = Trim$( Clipboard.GetText( ) )
-If Err > 0 Then
-    If Err = 14 Then
-        MsgBox "There is too much data on the Clipboard!", CRITICAL_MESSAGE, WaltsMacros$
-      Else
-        MsgBox "Sorry, an unexpected error occurred.", CRITICAL_MESSAGE, WaltsMacros$
-    End If
-    Exit Sub
-End If
-
-If RawString$ = "" Then
-    MsgBox "Sorry, this macro works only when there is text on the Clipboard to paste in a bibliographic record.", CRITICAL_MESSAGE, WaltsMacros$
-    Exit Sub
-End If
-
-' Then, make sure a bibliographic record is available for the copied data to be pasted
+' First, make sure a bibliographic record is available for the copied data to be pasted
 ' into.
 
 TypeOfWindow% = CS.ItemType
@@ -271,18 +327,52 @@ Select Case TypeOfWindow%
     Exit Sub
 End Select
 
-' If there is text on the Clipboard and a record to paste it into, begin by getting the
-' cursor position, and then the data from the field the cursor is in.
+' Get Unicode data from the Clipboard.
 
-Row%            = CS.CursorRow
-CursorPosition% = CS.CursorColumn
-If CS.GetField( "...", Row%, CurrentField$ ) Then
-    CurrentFieldLength% = Len( CurrentField$ )
+RawString$ = GetUnicodeString
+
+If Left$( RawString$, 1 ) = CLIPBOARD_ERROR Then
+    MsgBox( Mid$( RawString$, 2 ) ), CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
 End If
 
-' Then start the de-formatting process by removing extraneous spaces and carriage
-' return/line feeds (and any other non-printing characters, that is, characters with
-' ASCII values below 32) from the beginning and the end of the string.
+' If there is text on the Clipboard, and a record to paste it into, the next step is to
+' get the cursor position, and then the Unicode data from the field the cursor is in.
+
+Row%                = CS.CursorRow
+CursorPosition%     = CS.CursorColumn
+CS.CopyField
+CurrentField$       = GetUnicodeString
+CurrentFieldLength% = Len( CurrentField$ )
+
+' The "CopyField" command retrieves the string as Unicode, so delimiter signs and other
+' characters are represented by Numeric Character References, or NCRs. The actual
+' position of the cursor in the field, in case the copied material is to be inserted
+' there, has to be determined by counting characters in the NCRs, rather than just the
+' displayed characters.
+
+i = 6
+Do
+  CharT$ = Mid$( CurrentField$, i, 1 )
+  If CharT$ = "&" Then
+      If Mid$( CurrentField$, i, 3 ) = "&#x" Then
+          p = InStr( i + 1, CurrentField$, ";" )
+          If ( p - i ) < 10 Then
+              i = p
+              CharCount% = CharCount% + 1
+          End If
+      End If
+    Else
+      CharCount% = CharCount% + 1
+  End If
+  i = i + 1
+Loop Until CharCount% >= CursorPosition% - 6
+InsertionPoint% = i
+
+' Turn back to the copied string and start the de-formatting process. The first step is
+' to remove extraneous spaces and carriage return/line feeds (and any other non-printing
+' characters, that is, characters with ASCII values below 32) from the beginning and end
+' of the string.
 
 For i = 1 To Len( RawString$ )
   CharT$ = Mid$( RawString$, i, 1 )
@@ -302,15 +392,37 @@ For i = Len( RawString$ ) To 1 Step -1
   End If
 Next i
 
-' Go through the text on the Clipboard, substituting plain text characters for characters
-' not allowed. This is a preliminary go-through, mostly to get rid of extra white space
+' Fill the arrays used to substitute characters.
+
+FillDisplaySubArray
+FillUnicodeSubArray
+FillCombinedArray
+
+' Go through the text on the Clipboard, substituting plain text, or ASCII, characters for
+' some characters chiefly in the Unicode General Punctuation and Alphabetic Presentation
+' Forms blocks. This is a preliminary go-through, mostly to get rid of extra white space
 ' and help make a nice display in the dialog box. The string must be gone through again
-' when pasting the text in as a new field. The characters substituted in this part of the
-' macro will, except for the delimiter, paste from the Clipboard successfully.
+' when pasting the text in as a new field. If an NCR  is found, consider that string to
+' be the character.
 
 For i = 1 To Len( RawString$ )
   CharT$ = Mid$( RawString$, i, 1 )
-  CharA% = Asc( CharT$ )
+  If CharT$ = "&" Then
+      If Mid$( RawString$, i, 3 ) = "&#x" Then
+          p      = InStr( i + 1, RawString$, ";" )
+          CharT$ = Mid$( RawString$, i, p - i + 1 )
+          For j = 0 To UNI_SUB_SIZE
+            If Mid$( CharT$, 4, 4 ) = Left$( UnicodeSub( j ), 4 ) Then
+                CharT$ = Mid$( UnicodeSub( j ), 5 )
+                Exit For
+            End If
+          Next j
+          i      = p
+          CharA% = NCR
+      End If
+    Else
+      CharA% = Asc( CharT$ )
+  End If
   If i < Len( RawString$ ) Then
       NextChar$ = Mid$( RawString$, i + 1, 1 )
     Else
@@ -343,19 +455,19 @@ For i = 1 To Len( RawString$ )
       DefaultAddFieldOption% = MULTI_FIELDS
 
 ' If a potential delimiter character is found (dollar, pipe, double dagger, and question
-' mark), check if the character following is a digit or a lowercase letter that is
-' in turn followed by a space. If all those conditions are met, consider the character to
-' be a delimiter, and add it to the string as the OCLC delimiter character. If the
-' character following the delimiter is the letter "a", or if the first character copied
-' is a delimiter, the dialog box will default to showing the paste option as a new field,
-' rather than as a simple string. The question mark is included here because that's how
-' the Windows Clipboard copies the Connexion delimiter as text. If spacing in the copied
-' text is not as expected, the pasted results may not be, either.
+' mark), check if the character following is a digit or a lowercase letter that is in
+' turn followed by a space. If all those conditions are met, consider the character to be
+' a delimiter, and add it to the string as such. If the character following the delimiter
+' is the letter "a", or if the first character copied is a delimiter, the dialog box will
+' default to showing the paste option as a new field, rather than as a simple string. The
+' question mark is included here because that's how the Windows Clipboard copies the
+' Connexion delimiter as text. If spacing in the copied text is not as expected, the
+' pasted results may not be, either.
 
     Case DOLLAR_CHAR, PIPE_CHAR, DBL_DAGGER_CHAR, QUESTION_CHAR
       If NextChar$ Like "[a-z]" Then
           DelimFound = TRUE
-          Character$ = MARC21_DELIMITER
+          Character$ = UNI_DELIMITER
           If i = 1 Or NextChar$ = "a" Then
               If DefaultAddFieldOption% = 0 Then
                   DefaultAddFieldOption% = SINGLE_FIELD
@@ -365,7 +477,7 @@ For i = 1 To Len( RawString$ )
           If i + 1 < Len( RawString$ ) Then
               If Mid$( RawString$, i + 2, 1 ) Like "[!0-9]" Then
                   DelimFound = TRUE
-                  Character$ = MARC21_DELIMITER
+                  Character$ = UNI_DELIMITER
                 Else
                   DelimFound = FALSE
                   Character$ = CharT$
@@ -377,11 +489,9 @@ For i = 1 To Len( RawString$ )
           Character$ = CharT$
       End If
 
-' Most characters in the copied text are retained.
+' Most ASCII characters in the copied text are retained.
 
-    Case 32 To 35, 37 To 62, 64 To 95, 97 To 123, 125, 128, 130 To 132, 138, 140, 142, 154
-      Character$ = CharT$
-    Case 156, 158 To 159, 163, 169, 174, 176 To 179, 185, 186, 191 To 255
+    Case 32 To 35, 37, 39 To 62, 64 To 95, 97 To 123, 125
       Character$ = CharT$
 
 ' The grave accent sometimes appears as part of a left double quotation mark. If it
@@ -394,28 +504,21 @@ For i = 1 To Len( RawString$ )
           Character$ = CharT$
       End If
 
-' Typographical characters to convert to plain text ...
+' OCLC says to not use the vertical bar, and the delete character is meaningless.
 
-    Case 133
-      Character$ = "..."
-    Case 145 To 146
-      Character$ = SINGLE_QUOTE
-    Case 147 To 148
-      Character$ = DOUBLE_QUOTE
-    Case 150
-      Character$ = "-"
-    Case 151
-      Character$ = "--"
-
-' Diacritical marks, or characters that look like them, to omit (^~^~����) ...
-
-    Case 94, 126, 136, 152, 168, 175, 180, 184
+    Case 124, 127
       Character$ = ""
 
-' Everything else ...
+' NCRs, or Unicode code points, are added as is.
+
+    Case NCR
+      Character$ = CharT$
+
+' Everything else appears as a pair of brackets, somewhat resembling an empty box.
 
     Case Else
-      Character$ = ""
+      Character$ = "[]"
+
   End Select
 
   WorkString$ = WorkString$ & Character$
@@ -429,11 +532,11 @@ WorkString$ = Trim$( WorkString$ )
 
 WorkString$ = Replace( (WorkString$), CR$, TWO_CRs )
 
-' Start working on the processed string by cleaning up fields copied from the MarcEdit
-' editor. These fields are identified in part by the characteristic equals sign at the
-' beginning of the line. If an equals sign is followed by three digits and then two
-' spaces, consider that sufficient evidence that the copied text is from MarcEdit. Delete
-' the equals sign and the two spaces following the potential tag.
+' Clean up fields copied from the MarcEdit editor. These fields are identified in part by
+' the characteristic equals sign at the beginning of the line. If an equals sign is
+' followed by three digits and then two spaces, consider that sufficient evidence that
+' the copied text is from MarcEdit. Delete the equals sign and the two spaces following
+' the potential tag.
 
 If Left$( WorkString$, 1 ) = "=" Then
     WorkString$ = CR & WorkString$
@@ -464,13 +567,12 @@ End If
 ' Strings copied from a Voyager MARC display sometimes use carriage returns to separate
 ' tag and indicators. If a string seems to be a MARC field, eliminate interior carriage
 ' returns, so the only ones that remain are line breaks, or field separators. The clue
-' the macro follows is that a carriage return should only be followed by a string of
-' three digits. Start this part of the processing by adding a carriage return to the
-' beginning and end of the field, simply to aid in the manipulation. Then examine the
-' three characters that follow the carriage return. If they seem to form a tag, then
-' delete every subsequent carriage return that is not followed by three digits, assuming
-' that they are artifacts of the display. If no tag is found, then carriage returns are
-' kept.
+' the macro looks for is a carriage return that is followed by a string of three digits.
+' Start this part of the processing by adding a carriage return to the beginning and end
+' of the field, simply to aid in the manipulation. Then examine the three characters that
+' follow the carriage return. If they seem to form a tag, then delete every subsequent
+' carriage return that is not followed by three digits, assuming that they are artifacts
+' of the display. If no tag is found, then carriage returns are kept.
 
 If InStr( WorkString$, CR ) > 0 Then
     WorkString$ = CR & WorkString$ & CR
@@ -519,7 +621,7 @@ End If
 
 ' Count the number of potential fields in the string to determine the default paste
 ' operation to offer in the dialog box. Any copied text can be added as a string to an
-' existing field, or as a new field. Multiple copied lines can be added as a string or a
+' existing field, or as a new field. Multiple copied lines can be added as a string, a
 ' single new field (converting the line breaks into spaces or dashes, as instructed), or
 ' as several new fields.
 
@@ -539,7 +641,7 @@ End Select
 
 Start% = 1
 Do
-  p = InStr( Start%, WorkString$, MARC21_DELIMITER )
+  p = InStr( Start%, WorkString$, UNI_DELIMITER )
   Select Case p
     Case 0
       Exit Do
@@ -560,7 +662,7 @@ WorkString$ = Replace( (WorkString$), DOUBLE_QUOTE, TWO_SINGLE_QUOTES )
 
 ' Add a space after subfield codes.
 
-WorkString$ = Replace( (WorkString$), MARC21_DELIMITER, MARC21_DELIMITER )
+WorkString$ = Replace( (WorkString$), UNI_DELIMITER, UNI_DELIMITER )
 
 ' Create separate strings to accommodate the three ways to deal with carriage returns:
 '  - Change them to spaces, to add a single field to the record.
@@ -641,9 +743,6 @@ For ArrayDimension% = aSINGLE_FIELD To aMULTI_FIELDS
   For i = 0 To UBound( FieldStore, 2 )
     TempString$ = FieldStore( ArrayDimension%, i )
     If TempString$ <> "" Then
-        If ArrayDimension% = aMULTI_FIELDS Then
-            TempString$ = TempString$ & FIELD_TERMINATOR
-        End If
         TagTest$ = Left$( TempString$, 3 )
         If TagTest$ Like "[0-9][0-9][0-9]" Then
             TaggedFields% = TaggedFields% + 1
@@ -657,7 +756,7 @@ For ArrayDimension% = aSINGLE_FIELD To aMULTI_FIELDS
 ' present at the beginning of the field (if subfield $a is the first subfield), the macro
 ' may not be able to display the indicators and beginning of the field data correctly.
 
-            p = InStr( TempString$, MARC21_DELIMITER )
+            p = InStr( TempString$, UNI_DELIMITER )
             If p > 0 Then
                 IndicatorString$ = Trim$( Mid$( TempString$, 4, p - 4 ) )
                 If IndicatorString$ = "" Then
@@ -678,7 +777,6 @@ For ArrayDimension% = aSINGLE_FIELD To aMULTI_FIELDS
                 If IndicatorString$ <> "" Then
                     TempString$ = Left$( TempString$, 3 ) & IndicatorString$ & Mid$( TempString$, p )
                 End If
-'                FieldStore( ArrayDimension%, i ) = TempString$
 
 ' If there is no delimiter, check the two characters following the potential tag. If the
 ' first is a space and the second is not a digit, assume the second indicator was a blank
@@ -690,8 +788,6 @@ For ArrayDimension% = aSINGLE_FIELD To aMULTI_FIELDS
                     TempString$ = Left$( TempString$, 4 ) & " " & Mid$( TempString$, 5 )
                 End If
             End If
-          Else
-'            FieldStore( ArrayDimension%, i ) = TempString$
         End If
     End If
     FieldStore( ArrayDimension%, i ) = TempString$
@@ -704,6 +800,11 @@ Next ArrayDimension%
 
 If TaggedFields% >= i / 2 Then
     TaggedFieldsLikely = TRUE
+    If TaggedFields% = 1 Then
+        DefaultAddFieldOption% = SINGLE_FIELD
+      Else
+        DefaultAddFieldOption% = MULTI_FIELDS
+    End If
   Else
     TaggedFieldsLikely = FALSE
 End If
@@ -743,23 +844,24 @@ If Err = DLG_STATEMENT_CANCEL Then Exit Sub
 
 Select Case Dialog1.OBGroup_PasteChoices
 
+' In all the pasting cases, the MARC delimiter--the single character at code point 31--
+' must be replaced first by the Unicode code point string.
+
   Case SIMPLE_STRING
 
 ' To paste text into an existing field, as a simple string, get the text of that field,
 ' insert the unformatted text at the cursor position, and then put it back into the
-' record with the "SetField" command. This preserves any characters converted from
-' Windows 1252 to MARC. The decision to be made here is to how to convert carriage
-' returns, if present.
+' record with the "SetField" command. The decision to be made here is to how to convert
+' carriage returns, if present.
 
     If Dialog1.OBGroup_ConvertOrAddTag = aSPACE Then
         TempField$ = FieldStore( aSINGLE_FIELD, aSPACE )
       Else
         TempField$ = FieldStore( aSINGLE_FIELD, aDASH )
     End If
-    TempField$ = Convert1252( TempField$ )
-    DeformattedString$ = ChangeDelimiter( TempField$, OCLC_MARC_DELIMITER )
-    If CursorPosition% > 5 Then
-        CurrentField$ = Left$( CurrentField$, CursorPosition% - 1 ) & DeformattedString$ & Mid$( CurrentField$, CursorPosition% )
+    DeformattedString$ = TempField$
+    If InsertionPoint% > 5 Then
+        CurrentField$ = Left$( CurrentField$, InsertionPoint% - 1 ) & DeformattedString$ & Mid$( CurrentField$, InsertionPoint% )
       Else
         CurrentField$ = CurrentField$ & DeformattedString$
     End If
@@ -793,14 +895,12 @@ Select Case Dialog1.OBGroup_PasteChoices
       Else
         TempString$ = FieldStore( aSINGLE_FIELD, aDASH )
     End If
-    If Left$( TempString$, 3 ) Like "[0-9][0-9][0-9]" And Mid$( TempString$, 6, 2 ) = MARC21_DELIMITER & "a" Then
-        TempString$ = Left$( TempString$, 5 ) & Mid$( TempString$, 8 )
-      ElseIf Left$( TempString$, 2 ) = MARC21_DELIMITER & "a" Then
-        TempString$ = Trim$( Mid$( TempString$, 3 ) )
+    If Left$( TempString$, 3 ) Like "[0-9][0-9][0-9]" And Mid$( TempString$, 6, 9 ) = UNI_DELIMITER & "a" Then
+        TempString$ = Left$( TempString$, 5 ) & Trim$( Mid$( TempString$, 15 ) )
+      ElseIf Left$( TempString$, 9 ) = UNI_DELIMITER & "a" Then
+        TempString$ = Trim$( Mid$( TempString$, 10 ) )
     End If
-    TempField$ = TempField$ & TempString$
-    TempField$ = Convert1252( TempField$ )
-    TempField$ = ChangeDelimiter( TempField$, OCLC_MARC_DELIMITER )
+    TempField$ = Trim$( TempField$ & TempString$ )
     If BlankTag Then
         DeformattedString$ = BLANK_TAG_INDICATORS & Mid$( TempField$, 2 )
         If CS.AddFieldLine( Row% + i, DeformattedString$ ) = FALSE Then
@@ -831,12 +931,10 @@ Select Case Dialog1.OBGroup_PasteChoices
       End If
       TempField$  = Tag$ & Indicator1$ & Indicator2$
       TempString$ = FieldStore( aMULTI_FIELDS, i )
-      If Mid$( TempString$, 6, 2 ) = MARC21_DELIMITER & "a" Then
-          TempString$ = Left$( TempString$, 5 ) & Trim$( Mid$( TempString$, 8 ) )
+      If Mid$( TempString$, 6, 9 ) = UNI_DELIMITER & "a" Then
+          TempString$ = Left$( TempString$, 5 ) & Trim$( Mid$( TempString$, 15 ) )
       End If
-      TempField$  = TempField$ & TempString$
-      TempField$  = Convert1252( TempField$ )
-      TempField$  = ChangeDelimiter( TempField$, OCLC_MARC_DELIMITER )
+      TempField$  = Trim$( TempField$ & TempString$ )
       If BlankTag Then
           DeformattedString$ = BLANK_TAG_INDICATORS & Mid$( TempField$, 2 )
           If CS.AddFieldLine( Row% + i, DeformattedString$ ) = FALSE Then
@@ -856,6 +954,735 @@ Select Case Dialog1.OBGroup_PasteChoices
 End Select
 
 Done:
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillCombinedArray
+
+' This array is used to turn a base + diacritic character combination into a precomposed
+' ASCII character, for display.
+
+Combined( 0  ) = "A" & GRAVE      & "À"
+Combined( 1  ) = "a" & GRAVE      & "à"
+Combined( 2  ) = "E" & GRAVE      & "È"
+Combined( 3  ) = "e" & GRAVE      & "è"
+Combined( 4  ) = "I" & GRAVE      & "Ì"
+Combined( 5  ) = "i" & GRAVE      & "ì"
+Combined( 6  ) = "O" & GRAVE      & "Ò"
+Combined( 7  ) = "o" & GRAVE      & "ò"
+Combined( 8  ) = "U" & GRAVE      & "Ù"
+Combined( 9  ) = "u" & GRAVE      & "ù"
+Combined( 10 ) = "A" & ACUTE      & "Á"
+Combined( 11 ) = "a" & ACUTE      & "á"
+Combined( 12 ) = "E" & ACUTE      & "É"
+Combined( 13 ) = "e" & ACUTE      & "é"
+Combined( 14 ) = "I" & ACUTE      & "Í"
+Combined( 15 ) = "i" & ACUTE      & "í"
+Combined( 16 ) = "O" & ACUTE      & "Ó"
+Combined( 17 ) = "o" & ACUTE      & "ó"
+Combined( 18 ) = "U" & ACUTE      & "Ú"
+Combined( 19 ) = "u" & ACUTE      & "ú"
+Combined( 20 ) = "Y" & ACUTE      & "Ý"
+Combined( 21 ) = "y" & ACUTE      & "ý"
+Combined( 22 ) = "A" & CIRCUMFLEX & "Â"
+Combined( 23 ) = "a" & CIRCUMFLEX & "â"
+Combined( 24 ) = "E" & CIRCUMFLEX & "Ê"
+Combined( 25 ) = "e" & CIRCUMFLEX & "ê"
+Combined( 26 ) = "I" & CIRCUMFLEX & "Î"
+Combined( 27 ) = "i" & CIRCUMFLEX & "î"
+Combined( 28 ) = "O" & CIRCUMFLEX & "Ô"
+Combined( 29 ) = "o" & CIRCUMFLEX & "ô"
+Combined( 30 ) = "U" & CIRCUMFLEX & "Û"
+Combined( 31 ) = "u" & CIRCUMFLEX & "û"
+Combined( 32 ) = "A" & TILDE      & "Ã"
+Combined( 33 ) = "a" & TILDE      & "ã"
+Combined( 34 ) = "N" & TILDE      & "Ñ"
+Combined( 35 ) = "n" & TILDE      & "ñ"
+Combined( 36 ) = "O" & TILDE      & "Õ"
+Combined( 37 ) = "o" & TILDE      & "õ"
+Combined( 38 ) = "A" & DIAERESIS  & "Ä"
+Combined( 39 ) = "a" & DIAERESIS  & "ä"
+Combined( 40 ) = "E" & DIAERESIS  & "Ë"
+Combined( 41 ) = "e" & DIAERESIS  & "ë"
+Combined( 42 ) = "I" & DIAERESIS  & "Ï"
+Combined( 43 ) = "i" & DIAERESIS  & "ï"
+Combined( 44 ) = "O" & DIAERESIS  & "Ö"
+Combined( 45 ) = "o" & DIAERESIS  & "ö"
+Combined( 46 ) = "U" & DIAERESIS  & "Ü"
+Combined( 47 ) = "u" & DIAERESIS  & "ü"
+Combined( 48 ) = "y" & DIAERESIS  & "ÿ"
+Combined( 49 ) = "A" & RING_ABOVE & "Å"
+Combined( 50 ) = "a" & RING_ABOVE & "å"
+Combined( 51 ) = "C" & CEDILLA    & "Ç"
+Combined( 52 ) = "c" & CEDILLA    & "ç"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillDisplaySubArray
+
+' The first four characters of each row of the array comprise the Unicode character to be
+' replaced by the character in the second part of the row. Most of the substitions are to
+' help properly display the copied strings in the dialog box, because that box can use
+' only the characters in ISO/IEC 8859-1 (0000-00FF, or ASCII). This macro finds
+' (approximate) substitutes for the characters in the Latin Extended-A (U+0100-U+017F),
+' Extended-B (U+0180-U+024F), and Extended Additional (U+1E00-U+1EFF) blocks, mostly by
+' removing diacritics. Characters for which no appropriate substitutes are available are
+' represented by a pair of empty brackets, []. For both the display and the copied
+' strings, the macro replaces some characters in the General Punctation (U+2000-U+206F)
+' and Alphabetic Presentation Forms (U+FB00-U+FB4F) blocks, mostly for spaces, dashes,
+' and quotation marks. All Unicode characters with no equivalent in ISO/IEC 8859-1 will
+' not be able to be represented in the dialog box, although they will be pasted into the
+' record.
+
+DisplaySub( 0   ) = "0100A"
+DisplaySub( 1   ) = "0101a"
+DisplaySub( 2   ) = "0102A"
+DisplaySub( 3   ) = "0103a"
+DisplaySub( 4   ) = "0104A"
+DisplaySub( 5   ) = "0105a"
+DisplaySub( 6   ) = "0106C"
+DisplaySub( 7   ) = "0107c"
+DisplaySub( 8   ) = "0108C"
+DisplaySub( 9   ) = "0109c"
+DisplaySub( 10  ) = "010AC"
+DisplaySub( 11  ) = "010Bc"
+DisplaySub( 12  ) = "010CC"
+DisplaySub( 13  ) = "010Dc"
+DisplaySub( 14  ) = "010ED"
+DisplaySub( 15  ) = "010Fd"
+DisplaySub( 16  ) = "0110D"
+DisplaySub( 17  ) = "0111d"
+DisplaySub( 18  ) = "0112E"
+DisplaySub( 19  ) = "0113e"
+DisplaySub( 20  ) = "0114E"
+DisplaySub( 21  ) = "0115e"
+DisplaySub( 22  ) = "0116E"
+DisplaySub( 23  ) = "0117e"
+DisplaySub( 24  ) = "0118E"
+DisplaySub( 25  ) = "0119e"
+DisplaySub( 26  ) = "011AE"
+DisplaySub( 27  ) = "011Be"
+DisplaySub( 28  ) = "011CG"
+DisplaySub( 29  ) = "011Dg"
+DisplaySub( 30  ) = "011EG"
+DisplaySub( 31  ) = "011Fg"
+DisplaySub( 32  ) = "0120G"
+DisplaySub( 33  ) = "0121g"
+DisplaySub( 34  ) = "0122G"
+DisplaySub( 35  ) = "0123g"
+DisplaySub( 36  ) = "0124H"
+DisplaySub( 37  ) = "0125h"
+DisplaySub( 38  ) = "0126H"
+DisplaySub( 39  ) = "0127h"
+DisplaySub( 40  ) = "0128I"
+DisplaySub( 41  ) = "0129i"
+DisplaySub( 42  ) = "012AI"
+DisplaySub( 43  ) = "012Bi"
+DisplaySub( 44  ) = "012CI"
+DisplaySub( 45  ) = "012Di"
+DisplaySub( 46  ) = "012EI"
+DisplaySub( 47  ) = "012Fi"
+DisplaySub( 48  ) = "0130I"
+DisplaySub( 49  ) = "0131i"
+DisplaySub( 50  ) = "0132IJ"
+DisplaySub( 51  ) = "0133ij"
+DisplaySub( 52  ) = "0134J"
+DisplaySub( 53  ) = "0135j"
+DisplaySub( 54  ) = "0136K"
+DisplaySub( 55  ) = "0137k"
+DisplaySub( 56  ) = "0139L"
+DisplaySub( 57  ) = "013Al"
+DisplaySub( 58  ) = "013BL"
+DisplaySub( 59  ) = "013Cl"
+DisplaySub( 60  ) = "013DL"
+DisplaySub( 61  ) = "013El"
+DisplaySub( 62  ) = "013FL"
+DisplaySub( 63  ) = "0140l"
+DisplaySub( 64  ) = "0141L"
+DisplaySub( 65  ) = "0142l"
+DisplaySub( 66  ) = "0143N"
+DisplaySub( 67  ) = "0144n"
+DisplaySub( 68  ) = "0145N"
+DisplaySub( 69  ) = "0146n"
+DisplaySub( 70  ) = "0147N"
+DisplaySub( 71  ) = "0148n"
+DisplaySub( 72  ) = "0149'n"
+DisplaySub( 73  ) = "014CO"
+DisplaySub( 74  ) = "014Do"
+DisplaySub( 75  ) = "014EO"
+DisplaySub( 76  ) = "014Fo"
+DisplaySub( 77  ) = "0150O"
+DisplaySub( 78  ) = "0151o"
+DisplaySub( 79  ) = "0152?"
+DisplaySub( 80  ) = "0153?"
+DisplaySub( 81  ) = "0154R"
+DisplaySub( 82  ) = "0155r"
+DisplaySub( 83  ) = "0156R"
+DisplaySub( 84  ) = "0157r"
+DisplaySub( 85  ) = "0158R"
+DisplaySub( 86  ) = "0159r"
+DisplaySub( 87  ) = "015AS"
+DisplaySub( 88  ) = "015Bs"
+DisplaySub( 89  ) = "015CS"
+DisplaySub( 90  ) = "015Ds"
+DisplaySub( 91  ) = "015ES"
+DisplaySub( 92  ) = "015Fs"
+DisplaySub( 93  ) = "0160S"
+DisplaySub( 94  ) = "0161s"
+DisplaySub( 95  ) = "0162T"
+DisplaySub( 96  ) = "0163t"
+DisplaySub( 97  ) = "0164T"
+DisplaySub( 98  ) = "0165t"
+DisplaySub( 99  ) = "0166T"
+DisplaySub( 100 ) = "0167t"
+DisplaySub( 101 ) = "0168U"
+DisplaySub( 102 ) = "0169u"
+DisplaySub( 103 ) = "016AU"
+DisplaySub( 104 ) = "016Bu"
+DisplaySub( 105 ) = "016CU"
+DisplaySub( 106 ) = "016Du"
+DisplaySub( 107 ) = "016EU"
+DisplaySub( 108 ) = "016Fu"
+DisplaySub( 109 ) = "0170U"
+DisplaySub( 110 ) = "0171u"
+DisplaySub( 111 ) = "0172U"
+DisplaySub( 112 ) = "0173u"
+DisplaySub( 113 ) = "0174W"
+DisplaySub( 114 ) = "0175w"
+DisplaySub( 115 ) = "0176Y"
+DisplaySub( 116 ) = "0177y"
+DisplaySub( 117 ) = "0178Y"
+DisplaySub( 118 ) = "0179Z"
+DisplaySub( 119 ) = "017Az"
+DisplaySub( 120 ) = "017BZ"
+DisplaySub( 121 ) = "017Cz"
+DisplaySub( 122 ) = "017DZ"
+DisplaySub( 123 ) = "017Ez"
+DisplaySub( 124 ) = "017Fs"
+DisplaySub( 125 ) = "0180b"
+DisplaySub( 126 ) = "0181B"
+DisplaySub( 127 ) = "0182B"
+DisplaySub( 128 ) = "0183b"
+DisplaySub( 129 ) = "0186O"
+DisplaySub( 130 ) = "0187C"
+DisplaySub( 131 ) = "0188c"
+DisplaySub( 132 ) = "018AD"
+DisplaySub( 133 ) = "018BD"
+DisplaySub( 134 ) = "018Cd"
+DisplaySub( 135 ) = "018EE"
+DisplaySub( 136 ) = "0190E"
+DisplaySub( 137 ) = "0191F"
+DisplaySub( 138 ) = "0192f"
+DisplaySub( 139 ) = "0193G"
+DisplaySub( 140 ) = "0195hv"
+DisplaySub( 141 ) = "0197I"
+DisplaySub( 142 ) = "0198K"
+DisplaySub( 143 ) = "0199k"
+DisplaySub( 144 ) = "019Al"
+DisplaySub( 145 ) = "019CM"
+DisplaySub( 146 ) = "019DN"
+DisplaySub( 147 ) = "019En"
+DisplaySub( 148 ) = "019FO"
+DisplaySub( 149 ) = "01A0O"
+DisplaySub( 150 ) = "01A1o"
+DisplaySub( 151 ) = "01A2OI"
+DisplaySub( 152 ) = "01A3oi"
+DisplaySub( 153 ) = "01A4P"
+DisplaySub( 154 ) = "01A5p"
+DisplaySub( 155 ) = "01ABt"
+DisplaySub( 156 ) = "01ACT"
+DisplaySub( 157 ) = "01ADt"
+DisplaySub( 158 ) = "01AET"
+DisplaySub( 159 ) = "01AFU"
+DisplaySub( 160 ) = "01B0u"
+DisplaySub( 161 ) = "01B2V"
+DisplaySub( 162 ) = "01B3Y"
+DisplaySub( 163 ) = "01B4y"
+DisplaySub( 164 ) = "01B5Z"
+DisplaySub( 165 ) = "01B6z"
+DisplaySub( 166 ) = "01C2$"
+DisplaySub( 167 ) = "01C4DZ"
+DisplaySub( 168 ) = "01C5Dz"
+DisplaySub( 169 ) = "01C6dz"
+DisplaySub( 170 ) = "01C7LJ"
+DisplaySub( 171 ) = "01C8Lj"
+DisplaySub( 172 ) = "01C9lj"
+DisplaySub( 173 ) = "01CANJ"
+DisplaySub( 174 ) = "01CBNj"
+DisplaySub( 175 ) = "01CCnj"
+DisplaySub( 176 ) = "01CDA"
+DisplaySub( 177 ) = "01CEa"
+DisplaySub( 178 ) = "01CFI"
+DisplaySub( 179 ) = "01D0i"
+DisplaySub( 180 ) = "01D1O"
+DisplaySub( 181 ) = "01D2o"
+DisplaySub( 182 ) = "01D3U"
+DisplaySub( 183 ) = "01D4u"
+DisplaySub( 184 ) = "01D5U"
+DisplaySub( 185 ) = "01D6u"
+DisplaySub( 186 ) = "01D7U"
+DisplaySub( 187 ) = "01D8u"
+DisplaySub( 188 ) = "01D9U"
+DisplaySub( 189 ) = "01DAu"
+DisplaySub( 190 ) = "01DBU"
+DisplaySub( 191 ) = "01DCu"
+DisplaySub( 192 ) = "01DDe"
+DisplaySub( 193 ) = "01DEA"
+DisplaySub( 194 ) = "01DFa"
+DisplaySub( 195 ) = "01E0A"
+DisplaySub( 196 ) = "01E1a"
+DisplaySub( 197 ) = "01E2Æ"
+DisplaySub( 198 ) = "01E3æ"
+DisplaySub( 199 ) = "01E4G"
+DisplaySub( 200 ) = "01E5g"
+DisplaySub( 201 ) = "01E6G"
+DisplaySub( 202 ) = "01E7g"
+DisplaySub( 203 ) = "01E8K"
+DisplaySub( 204 ) = "01E9k"
+DisplaySub( 205 ) = "01EAO"
+DisplaySub( 206 ) = "01EBo"
+DisplaySub( 207 ) = "01ECO"
+DisplaySub( 208 ) = "01EDo"
+DisplaySub( 209 ) = "01F0j"
+DisplaySub( 210 ) = "01F1DZ"
+DisplaySub( 211 ) = "01F2Dz"
+DisplaySub( 212 ) = "01F3dz"
+DisplaySub( 213 ) = "01F4G"
+DisplaySub( 214 ) = "01F5g"
+DisplaySub( 215 ) = "01F8N"
+DisplaySub( 216 ) = "01F9n"
+DisplaySub( 217 ) = "01FAA"
+DisplaySub( 218 ) = "01FBa"
+DisplaySub( 219 ) = "01FCÆ"
+DisplaySub( 220 ) = "01FDæ"
+DisplaySub( 221 ) = "01FEO"
+DisplaySub( 222 ) = "01FFo"
+DisplaySub( 223 ) = "0200A"
+DisplaySub( 224 ) = "0201a"
+DisplaySub( 225 ) = "0202A"
+DisplaySub( 226 ) = "0203a"
+DisplaySub( 227 ) = "0204E"
+DisplaySub( 228 ) = "0205e"
+DisplaySub( 229 ) = "0206E"
+DisplaySub( 230 ) = "0207e"
+DisplaySub( 231 ) = "0208I"
+DisplaySub( 232 ) = "0209i"
+DisplaySub( 233 ) = "020AI"
+DisplaySub( 234 ) = "020Bi"
+DisplaySub( 235 ) = "020CO"
+DisplaySub( 236 ) = "020Do"
+DisplaySub( 237 ) = "020EO"
+DisplaySub( 238 ) = "020Fo"
+DisplaySub( 239 ) = "0210R"
+DisplaySub( 240 ) = "0211r"
+DisplaySub( 241 ) = "0212R"
+DisplaySub( 242 ) = "0213r"
+DisplaySub( 243 ) = "0214U"
+DisplaySub( 244 ) = "0215u"
+DisplaySub( 245 ) = "0216U"
+DisplaySub( 246 ) = "0217u"
+DisplaySub( 247 ) = "0218S"
+DisplaySub( 248 ) = "0219s"
+DisplaySub( 249 ) = "021AT"
+DisplaySub( 250 ) = "021Bt"
+DisplaySub( 251 ) = "021EH"
+DisplaySub( 252 ) = "021Fh"
+DisplaySub( 253 ) = "0220N"
+DisplaySub( 254 ) = "0221d"
+DisplaySub( 255 ) = "0222OU"
+DisplaySub( 256 ) = "0223ou"
+DisplaySub( 257 ) = "0224Z"
+DisplaySub( 258 ) = "0225z"
+DisplaySub( 259 ) = "0226A"
+DisplaySub( 260 ) = "0227a"
+DisplaySub( 261 ) = "0228E"
+DisplaySub( 262 ) = "0229e"
+DisplaySub( 263 ) = "022AO"
+DisplaySub( 264 ) = "022Bo"
+DisplaySub( 265 ) = "022CO"
+DisplaySub( 266 ) = "022Do"
+DisplaySub( 267 ) = "022EO"
+DisplaySub( 268 ) = "022Fo"
+DisplaySub( 269 ) = "0230O"
+DisplaySub( 270 ) = "0231o"
+DisplaySub( 271 ) = "0232Y"
+DisplaySub( 272 ) = "0233y"
+DisplaySub( 273 ) = "0234l"
+DisplaySub( 274 ) = "0235n"
+DisplaySub( 275 ) = "0236t"
+DisplaySub( 276 ) = "0237j"
+DisplaySub( 277 ) = "023AA"
+DisplaySub( 278 ) = "023BC"
+DisplaySub( 279 ) = "023Cc"
+DisplaySub( 280 ) = "023DL"
+DisplaySub( 281 ) = "023ET"
+DisplaySub( 282 ) = "023Fs"
+DisplaySub( 283 ) = "0240z"
+DisplaySub( 284 ) = "0243B"
+DisplaySub( 285 ) = "0244U"
+DisplaySub( 286 ) = "0245V"
+DisplaySub( 287 ) = "0246E"
+DisplaySub( 288 ) = "0247e"
+DisplaySub( 289 ) = "0248J"
+DisplaySub( 290 ) = "0249j"
+DisplaySub( 291 ) = "024Aq"
+DisplaySub( 292 ) = "024BQ"
+DisplaySub( 293 ) = "024CR"
+DisplaySub( 294 ) = "024Dr"
+DisplaySub( 295 ) = "024EY"
+DisplaySub( 296 ) = "024Fy"
+DisplaySub( 297 ) = "02B9" & SINGLE_QUOTE
+DisplaySub( 298 ) = "02BA" & DOUBLE_QUOTE
+DisplaySub( 299 ) = "02BB" & SINGLE_QUOTE
+DisplaySub( 300 ) = "02BC" & SINGLE_QUOTE
+DisplaySub( 301 ) = "02BD" & SINGLE_QUOTE
+DisplaySub( 302 ) = "02BE" & SINGLE_QUOTE
+DisplaySub( 303 ) = "02BF" & SINGLE_QUOTE
+DisplaySub( 304 ) = "1E00A"
+DisplaySub( 305 ) = "1E01a"
+DisplaySub( 306 ) = "1E02B"
+DisplaySub( 307 ) = "1E03b"
+DisplaySub( 308 ) = "1E04B"
+DisplaySub( 309 ) = "1E05b"
+DisplaySub( 310 ) = "1E06B"
+DisplaySub( 311 ) = "1E07b"
+DisplaySub( 312 ) = "1E08C"
+DisplaySub( 313 ) = "1E09c"
+DisplaySub( 314 ) = "1E0AD"
+DisplaySub( 315 ) = "1E0Bd"
+DisplaySub( 316 ) = "1E0CD"
+DisplaySub( 317 ) = "1E0Dd"
+DisplaySub( 318 ) = "1E0ED"
+DisplaySub( 319 ) = "1E0Fd"
+DisplaySub( 320 ) = "1E10D"
+DisplaySub( 321 ) = "1E11d"
+DisplaySub( 322 ) = "1E12D"
+DisplaySub( 323 ) = "1E13d"
+DisplaySub( 324 ) = "1E14E"
+DisplaySub( 325 ) = "1E15e"
+DisplaySub( 326 ) = "1E16E"
+DisplaySub( 327 ) = "1E17e"
+DisplaySub( 328 ) = "1E18E"
+DisplaySub( 329 ) = "1E19e"
+DisplaySub( 330 ) = "1E1AE"
+DisplaySub( 331 ) = "1E1Be"
+DisplaySub( 332 ) = "1E1CE"
+DisplaySub( 333 ) = "1E1De"
+DisplaySub( 334 ) = "1E1EF"
+DisplaySub( 335 ) = "1E1Ff"
+DisplaySub( 336 ) = "1E20G"
+DisplaySub( 337 ) = "1E21g"
+DisplaySub( 338 ) = "1E22H"
+DisplaySub( 339 ) = "1E23h"
+DisplaySub( 340 ) = "1E24H"
+DisplaySub( 341 ) = "1E25h"
+DisplaySub( 342 ) = "1E26H"
+DisplaySub( 343 ) = "1E27h"
+DisplaySub( 344 ) = "1E28H"
+DisplaySub( 345 ) = "1E29h"
+DisplaySub( 346 ) = "1E2AH"
+DisplaySub( 347 ) = "1E2Bh"
+DisplaySub( 348 ) = "1E2CI"
+DisplaySub( 349 ) = "1E2Di"
+DisplaySub( 350 ) = "1E2EI"
+DisplaySub( 351 ) = "1E2Fi"
+DisplaySub( 352 ) = "1E30K"
+DisplaySub( 353 ) = "1E31k"
+DisplaySub( 354 ) = "1E32K"
+DisplaySub( 355 ) = "1E33k"
+DisplaySub( 356 ) = "1E34K"
+DisplaySub( 357 ) = "1E35k"
+DisplaySub( 358 ) = "1E36L"
+DisplaySub( 359 ) = "1E37l"
+DisplaySub( 360 ) = "1E38L"
+DisplaySub( 361 ) = "1E39l"
+DisplaySub( 362 ) = "1E3AL"
+DisplaySub( 363 ) = "1E3Bl"
+DisplaySub( 364 ) = "1E3CL"
+DisplaySub( 365 ) = "1E3Dl"
+DisplaySub( 366 ) = "1E3EM"
+DisplaySub( 367 ) = "1E3Fm"
+DisplaySub( 368 ) = "1E40M"
+DisplaySub( 369 ) = "1E41m"
+DisplaySub( 370 ) = "1E42M"
+DisplaySub( 371 ) = "1E43m"
+DisplaySub( 372 ) = "1E44N"
+DisplaySub( 373 ) = "1E45n"
+DisplaySub( 374 ) = "1E46N"
+DisplaySub( 375 ) = "1E47n"
+DisplaySub( 376 ) = "1E48N"
+DisplaySub( 377 ) = "1E49n"
+DisplaySub( 378 ) = "1E4AN"
+DisplaySub( 379 ) = "1E4Bn"
+DisplaySub( 380 ) = "1E4CO"
+DisplaySub( 381 ) = "1E4Do"
+DisplaySub( 382 ) = "1E4EO"
+DisplaySub( 383 ) = "1E4Fo"
+DisplaySub( 384 ) = "1E50O"
+DisplaySub( 385 ) = "1E51o"
+DisplaySub( 386 ) = "1E52O"
+DisplaySub( 387 ) = "1E53o"
+DisplaySub( 388 ) = "1E54P"
+DisplaySub( 389 ) = "1E55p"
+DisplaySub( 390 ) = "1E56P"
+DisplaySub( 391 ) = "1E57p"
+DisplaySub( 392 ) = "1E58R"
+DisplaySub( 393 ) = "1E59r"
+DisplaySub( 394 ) = "1E5AR"
+DisplaySub( 395 ) = "1E5Br"
+DisplaySub( 396 ) = "1E5CR"
+DisplaySub( 397 ) = "1E5Dr"
+DisplaySub( 398 ) = "1E5ER"
+DisplaySub( 399 ) = "1E5Fr"
+DisplaySub( 400 ) = "1E60S"
+DisplaySub( 401 ) = "1E61s"
+DisplaySub( 402 ) = "1E62S"
+DisplaySub( 403 ) = "1E63s"
+DisplaySub( 404 ) = "1E64S"
+DisplaySub( 405 ) = "1E65s"
+DisplaySub( 406 ) = "1E66S"
+DisplaySub( 407 ) = "1E67s"
+DisplaySub( 408 ) = "1E68S"
+DisplaySub( 409 ) = "1E69s"
+DisplaySub( 410 ) = "1E6AT"
+DisplaySub( 411 ) = "1E6Bt"
+DisplaySub( 412 ) = "1E6CT"
+DisplaySub( 413 ) = "1E6Dt"
+DisplaySub( 414 ) = "1E6ET"
+DisplaySub( 415 ) = "1E6Ft"
+DisplaySub( 416 ) = "1E70T"
+DisplaySub( 417 ) = "1E71t"
+DisplaySub( 418 ) = "1E72U"
+DisplaySub( 419 ) = "1E73u"
+DisplaySub( 420 ) = "1E74U"
+DisplaySub( 421 ) = "1E75u"
+DisplaySub( 422 ) = "1E76U"
+DisplaySub( 423 ) = "1E77u"
+DisplaySub( 424 ) = "1E78U"
+DisplaySub( 425 ) = "1E79u"
+DisplaySub( 426 ) = "1E7AU"
+DisplaySub( 427 ) = "1E7Bu"
+DisplaySub( 428 ) = "1E7CV"
+DisplaySub( 429 ) = "1E7Dv"
+DisplaySub( 430 ) = "1E7EV"
+DisplaySub( 431 ) = "1E7Fv"
+DisplaySub( 432 ) = "1E80W"
+DisplaySub( 433 ) = "1E81w"
+DisplaySub( 434 ) = "1E82W"
+DisplaySub( 435 ) = "1E83w"
+DisplaySub( 436 ) = "1E84W"
+DisplaySub( 437 ) = "1E85w"
+DisplaySub( 438 ) = "1E86W"
+DisplaySub( 439 ) = "1E87w"
+DisplaySub( 440 ) = "1E88W"
+DisplaySub( 441 ) = "1E89w"
+DisplaySub( 442 ) = "1E8AX"
+DisplaySub( 443 ) = "1E8Bx"
+DisplaySub( 444 ) = "1E8CX"
+DisplaySub( 445 ) = "1E8Dx"
+DisplaySub( 446 ) = "1E8EY"
+DisplaySub( 447 ) = "1E8Fy"
+DisplaySub( 448 ) = "1E90Z"
+DisplaySub( 449 ) = "1E91z"
+DisplaySub( 450 ) = "1E92Z"
+DisplaySub( 451 ) = "1E93z"
+DisplaySub( 452 ) = "1E94Z"
+DisplaySub( 453 ) = "1E95z"
+DisplaySub( 454 ) = "1E96h"
+DisplaySub( 455 ) = "1E97t"
+DisplaySub( 456 ) = "1E98w"
+DisplaySub( 457 ) = "1E99y"
+DisplaySub( 458 ) = "1E9Aa"
+DisplaySub( 459 ) = "1E9Bs"
+DisplaySub( 460 ) = "1E9Cs"
+DisplaySub( 461 ) = "1E9Ds"
+DisplaySub( 462 ) = "1E9ESS"
+DisplaySub( 463 ) = "1EA0A"
+DisplaySub( 464 ) = "1EA1a"
+DisplaySub( 465 ) = "1EA2A"
+DisplaySub( 466 ) = "1EA3a"
+DisplaySub( 467 ) = "1EA4A"
+DisplaySub( 468 ) = "1EA5a"
+DisplaySub( 469 ) = "1EA6A"
+DisplaySub( 470 ) = "1EA7a"
+DisplaySub( 471 ) = "1EA8A"
+DisplaySub( 472 ) = "1EA9a"
+DisplaySub( 473 ) = "1EAAA"
+DisplaySub( 474 ) = "1EABa"
+DisplaySub( 475 ) = "1EACA"
+DisplaySub( 476 ) = "1EADa"
+DisplaySub( 477 ) = "1EAEA"
+DisplaySub( 478 ) = "1EAFa"
+DisplaySub( 479 ) = "1EB0A"
+DisplaySub( 480 ) = "1EB1a"
+DisplaySub( 481 ) = "1EB2A"
+DisplaySub( 482 ) = "1EB3a"
+DisplaySub( 483 ) = "1EB4A"
+DisplaySub( 484 ) = "1EB5a"
+DisplaySub( 485 ) = "1EB6A"
+DisplaySub( 486 ) = "1EB7a"
+DisplaySub( 487 ) = "1EB8E"
+DisplaySub( 488 ) = "1EB9e"
+DisplaySub( 489 ) = "1EBAE"
+DisplaySub( 490 ) = "1EBBe"
+DisplaySub( 491 ) = "1EBCE"
+DisplaySub( 492 ) = "1EBDe"
+DisplaySub( 493 ) = "1EBEE"
+DisplaySub( 494 ) = "1EBFe"
+DisplaySub( 495 ) = "1EC0E"
+DisplaySub( 496 ) = "1EC1e"
+DisplaySub( 497 ) = "1EC2E"
+DisplaySub( 498 ) = "1EC3e"
+DisplaySub( 499 ) = "1EC4E"
+DisplaySub( 500 ) = "1EC5e"
+DisplaySub( 501 ) = "1EC6E"
+DisplaySub( 502 ) = "1EC7e"
+DisplaySub( 503 ) = "1EC8I"
+DisplaySub( 504 ) = "1EC9i"
+DisplaySub( 505 ) = "1ECAI"
+DisplaySub( 506 ) = "1ECBi"
+DisplaySub( 507 ) = "1ECCO"
+DisplaySub( 508 ) = "1ECDo"
+DisplaySub( 509 ) = "1ECEO"
+DisplaySub( 510 ) = "1ECFo"
+DisplaySub( 511 ) = "1ED0O"
+DisplaySub( 512 ) = "1ED1o"
+DisplaySub( 513 ) = "1ED2O"
+DisplaySub( 514 ) = "1ED3o"
+DisplaySub( 515 ) = "1ED4O"
+DisplaySub( 516 ) = "1ED5o"
+DisplaySub( 517 ) = "1ED6O"
+DisplaySub( 518 ) = "1ED7o"
+DisplaySub( 519 ) = "1ED8O"
+DisplaySub( 520 ) = "1ED9o"
+DisplaySub( 521 ) = "1EDAO"
+DisplaySub( 522 ) = "1EDBo"
+DisplaySub( 523 ) = "1EDCO"
+DisplaySub( 524 ) = "1EDDo"
+DisplaySub( 525 ) = "1EDEO"
+DisplaySub( 526 ) = "1EDFo"
+DisplaySub( 527 ) = "1EE0O"
+DisplaySub( 528 ) = "1EE1o"
+DisplaySub( 529 ) = "1EE2O"
+DisplaySub( 530 ) = "1EE3o"
+DisplaySub( 531 ) = "1EE4U"
+DisplaySub( 532 ) = "1EE5u"
+DisplaySub( 533 ) = "1EE6U"
+DisplaySub( 534 ) = "1EE7u"
+DisplaySub( 535 ) = "1EE8U"
+DisplaySub( 536 ) = "1EE9u"
+DisplaySub( 537 ) = "1EEAU"
+DisplaySub( 538 ) = "1EEBu"
+DisplaySub( 539 ) = "1EECU"
+DisplaySub( 540 ) = "1EEDu"
+DisplaySub( 541 ) = "1EEEU"
+DisplaySub( 542 ) = "1EEFu"
+DisplaySub( 543 ) = "1EF0U"
+DisplaySub( 544 ) = "1EF1u"
+DisplaySub( 545 ) = "1EF2Y"
+DisplaySub( 546 ) = "1EF3y"
+DisplaySub( 547 ) = "1EF4Y"
+DisplaySub( 548 ) = "1EF5y"
+DisplaySub( 549 ) = "1EF6Y"
+DisplaySub( 550 ) = "1EF7y"
+DisplaySub( 551 ) = "1EF8Y"
+DisplaySub( 552 ) = "1EF9y"
+DisplaySub( 553 ) = "1EFALL"
+DisplaySub( 554 ) = "1EFBll"
+DisplaySub( 555 ) = "1EFEY"
+DisplaySub( 556 ) = "1EFFy"
+DisplaySub( 557 ) = "2018" & SINGLE_QUOTE
+DisplaySub( 558 ) = "2019" & SINGLE_QUOTE
+DisplaySub( 559 ) = "201A" & SINGLE_QUOTE
+DisplaySub( 560 ) = "201B" & SINGLE_QUOTE
+DisplaySub( 561 ) = "201C" & DOUBLE_QUOTE
+DisplaySub( 562 ) = "201D" & DOUBLE_QUOTE
+DisplaySub( 563 ) = "201E" & DOUBLE_QUOTE
+DisplaySub( 564 ) = "201F" & DOUBLE_QUOTE
+DisplaySub( 565 ) = "2032" & SINGLE_QUOTE
+DisplaySub( 566 ) = "2033" & DOUBLE_QUOTE
+DisplaySub( 567 ) = "2035" & SINGLE_QUOTE
+DisplaySub( 568 ) = "2036" & DOUBLE_QUOTE
+DisplaySub( 569 ) = "2039<"
+DisplaySub( 570 ) = "203A>"
+
+End Sub
+
+'****************************************************************************************
+
+Sub FillUnicodeSubArray
+
+' This array finds substitutes for pasting into a record some characters in the General
+' Punctuation (U+2000-U+206F) and Alphabetic Presentation Forms (U+FB00-U+FB4F) blocks,
+' as well as making sure the last four characters from the Specials (U+FFF0-U+FFFF) block
+' don't get added.
+
+UnicodeSub(  0 ) = "2000 " 'General Punctuation
+UnicodeSub(  1 ) = "2001 "
+UnicodeSub(  2 ) = "2002 "
+UnicodeSub(  3 ) = "2003 "
+UnicodeSub(  4 ) = "2004 "
+UnicodeSub(  5 ) = "2005 "
+UnicodeSub(  6 ) = "2006 "
+UnicodeSub(  7 ) = "2008 "
+UnicodeSub(  8 ) = "2009 "
+UnicodeSub(  9 ) = "200A "
+UnicodeSub( 10 ) = "200B"
+UnicodeSub( 11 ) = "200E"
+UnicodeSub( 12 ) = "2010-"
+UnicodeSub( 13 ) = "2011-"
+UnicodeSub( 14 ) = "2012-"
+UnicodeSub( 15 ) = "2013-"
+UnicodeSub( 16 ) = "2014--"
+UnicodeSub( 17 ) = "2015--"
+UnicodeSub( 18 ) = "2018" & SINGLE_QUOTE
+UnicodeSub( 19 ) = "2019" & SINGLE_QUOTE
+UnicodeSub( 20 ) = "201A" & SINGLE_QUOTE
+UnicodeSub( 21 ) = "201B" & SINGLE_QUOTE
+UnicodeSub( 22 ) = "201C" & DOUBLE_QUOTE
+UnicodeSub( 23 ) = "201D" & DOUBLE_QUOTE
+UnicodeSub( 24 ) = "201E" & DOUBLE_QUOTE
+UnicodeSub( 25 ) = "201F" & DOUBLE_QUOTE
+UnicodeSub( 26 ) = "2024."
+UnicodeSub( 27 ) = "2025.."
+UnicodeSub( 28 ) = "2026..."
+UnicodeSub( 29 ) = "2028"
+UnicodeSub( 30 ) = "2029"
+UnicodeSub( 31 ) = "202A"
+UnicodeSub( 32 ) = "202B"
+UnicodeSub( 33 ) = "202C"
+UnicodeSub( 34 ) = "202D"
+UnicodeSub( 35 ) = "202E"
+UnicodeSub( 36 ) = "202F"
+UnicodeSub( 37 ) = "203C!!"
+UnicodeSub( 38 ) = "203D!?"
+UnicodeSub( 39 ) = "2043-"
+UnicodeSub( 40 ) = "2044/"
+UnicodeSub( 41 ) = "2045["
+UnicodeSub( 42 ) = "2046]"
+UnicodeSub( 43 ) = "2047??"
+UnicodeSub( 44 ) = "2048?!"
+UnicodeSub( 45 ) = "2049!?"
+UnicodeSub( 46 ) = "204E*"
+UnicodeSub( 47 ) = "2053~"
+UnicodeSub( 48 ) = "205F "
+UnicodeSub( 49 ) = "20A8RI"
+UnicodeSub( 50 ) = "FB00ff" 'Alphabetic Presentation Forms
+UnicodeSub( 51 ) = "FB01fi"
+UnicodeSub( 52 ) = "FB02fl"
+UnicodeSub( 53 ) = "FB03ffi"
+UnicodeSub( 54 ) = "FB04ffl"
+UnicodeSub( 55 ) = "FB05st"
+UnicodeSub( 56 ) = "FB06st"
+UnicodeSub( 57 ) = "FEFF"
+UnicodeSub( 58 ) = "FFFC"
+UnicodeSub( 59 ) = "FFFD"
+UnicodeSub( 60 ) = "FFFE"
+UnicodeSub( 61 ) = "FFFF"
 
 End Sub
 
@@ -907,9 +1734,9 @@ Select Case DefaultAddFieldOption%
     End If
 
     If SpaceOrDash% = aSPACE Then
-        PreviewString$ = FieldStore( aSINGLE_FIELD, aSPACE )
+        PreviewString$ = MakeDisplayable( FieldStore( aSINGLE_FIELD, aSPACE ) )
       Else
-        PreviewString$ = FieldStore( aSINGLE_FIELD, aDASH )
+        PreviewString$ = MakeDisplayable( FieldStore( aSINGLE_FIELD, aDASH ) )
     End If
 
     If DefaultAddFieldOption% = SIMPLE_STRING Then
@@ -951,274 +1778,13 @@ Select Case DefaultAddFieldOption%
 
     PreviewString$ = ""
     For i = 0 To UBound( FieldStore, 2 )
-      TempString$    = FieldStore( aMULTI_FIELDS, i )
+      TempString$    = MakeDisplayable( FieldStore( aMULTI_FIELDS, i ) )
       PreviewString$ = PreviewString$ & TempString$ & CR
     Next i
 
 End Select
 
 End Sub
-
-'****************************************************************************************
-
-Function ChangeDelimiter( InString$, WhichDelimiter$ ) As String
-
-Dim TempString$
-
-Dim p As Integer
-
-TempString$ = InString$
-
-Do
-  p = InStr( TempString$, MARC21_DELIMITER )
-  If p > 0 Then
-      If WhichDelimiter$ = DOLLAR_DELIMITER Then
-          Mid$( TempString$, p, 1 ) = DOLLAR_DELIMITER
-        Else
-          Mid$( TempString$, p, 1 ) = OCLC_MARC_DELIMITER
-      End If
-  End If
-Loop Until p = 0
-
-ChangeDelimiter = TempString$
-
-End Function
-
-'****************************************************************************************
-
-Function Convert1252( InputString$ ) As String
-
-' Since Connexion mangles characters when it adds a new field, this function attempts to
-' fix that mangling by translating Windows-1252 to MARC21.
-
-Dim CharA%
-Dim Character$
-Dim CharT$
-Dim FixString$
-
-Dim ACUTE        As String*1 : ACUTE        = Chr$( 226 )
-Dim BREVE        As String*1 : BREVE        = Chr$( 230 )
-Dim CEDILLA      As String*1 : CEDILLA      = Chr$( 240 )
-Dim CIRCLE_ABOVE As String*1 : CIRCLE_ABOVE = Chr$( 234 )
-Dim CIRCUMFLEX   As String*1 : CIRCUMFLEX   = Chr$( 227 )
-Dim FILL_CHAR    As String*1 : FILL_CHAR    = Chr$( 252 )
-Dim GRAVE        As String*1 : GRAVE        = Chr$( 225 )
-Dim HACEK        As String*1 : HACEK        = Chr$( 233 )
-Dim MACRON       As String*1 : MACRON       = Chr$( 229 )
-Dim TILDE        As String*1 : TILDE        = Chr$( 228 )
-Dim UMLAUT       As String*1 : UMLAUT       = Chr$( 232 )
-
-Dim i As Integer
-
-For i = 1 To Len( InputString$ )
-  CharT$ = Mid$( InputString$, i, 1 )
-  CharA% = Asc( CharT$ )
-
-  Select Case CharA%
-
-    Case 31
-      Character$ = OCLC_MARC_DELIMITER
-    Case 0 To 30, 32 To 127
-      Character$ = CharT$
-    Case 128
-      Character$ = Chr$( 160 )
-    Case 130, 139, 145, 146
-      Character$ = SINGLE_QUOTE
-    Case 131
-      Character$ = "f"
-    Case 132, 147, 148, 171, 187
-      Character$ = DOUBLE_QUOTE
-    Case 133
-      Character$ = "..."
-    Case 138
-      Character$ = "S" & HACEK
-    Case 140
-      Character$ = Chr$( 166 )
-    Case 142
-      Character$ = "Z" & HACEK
-    Case 150
-      Character$ = "-"
-    Case 151
-      Character$ = "--"
-    Case 154
-      Character$ = "s" & HACEK
-    Case 156
-      Character$ = FIELD_TERMINATOR
-    Case 158
-      Character$ = "z" & HACEK
-    Case 159
-      Character$ = "Y" & UMLAUT
-    Case 161
-      Character$ = Chr$( 201 )
-    Case 163
-      Character$ = Chr$( 185 )
-    Case 169
-      Character$ = Chr$( 202 )
-    Case 170
-      Character$ = "a."
-    Case 174
-      Character$ = Chr$( 170 )
-    Case 176
-      Character$ = Chr$( 158 )
-    Case 177
-      Character$ = Chr$( 171 )
-    Case 178
-      Character$ = Chr$( 130 )
-    Case 179
-      Character$ = Chr$( 131 )
-    Case 185
-      Character$ = Chr$( 129 )
-    Case 186
-      Character$ = "o."
-    Case 188
-      Character$ = "1/4"
-    Case 189
-      Character$ = "1/2"
-    Case 190
-      Character$ = "3/4"
-    Case 191
-      Character$ = Chr$( 200 )
-    Case 192
-      Character$ = "A" & GRAVE
-    Case 193
-      Character$ = "A" & ACUTE
-    Case 194
-      Character$ = "A" & CIRCUMFLEX
-    Case 195
-      Character$ = "A" & TILDE
-    Case 196
-      Character$ = "A" & UMLAUT
-    Case 197
-      Character$ = "A" & CIRCLE_ABOVE
-    Case 198
-      Character$ = Chr$( 165 )
-    Case 199
-      Character$ = "C" & CEDILLA
-    Case 200
-      Character$ = "E" & GRAVE
-    Case 201
-      Character$ = "E" & ACUTE
-    Case 202
-      Character$ = "E" & CIRCUMFLEX
-    Case 203
-      Character$ = "E" & UMLAUT
-    Case 204
-      Character$ = "I" & GRAVE
-    Case 205
-      Character$ = "I" & ACUTE
-    Case 206
-      Character$ = "I" & CIRCUMFLEX
-    Case 207
-      Character$ = "I" & UMLAUT
-    Case 208
-      Character$ = Chr$( 163 )
-    Case 209
-      Character$ = "N" & TILDE
-    Case 210
-      Character$ = "O" & GRAVE
-    Case 211
-      Character$ = "O" & ACUTE
-    Case 212
-      Character$ = "O" & CIRCUMFLEX
-    Case 213
-      Character$ = "O" & TILDE
-    Case 214
-      Character$ = "O" & UMLAUT
-    Case 215
-      Character$ = "x"
-    Case 216
-      Character$ = Chr$( 162 )
-    Case 217
-      Character$ = "U" & GRAVE
-    Case 218
-      Character$ = "U" & ACUTE
-    Case 219
-      Character$ = "U" & CIRCUMFLEX
-    Case 220
-      Character$ = "U" & UMLAUT
-    Case 221
-      Character$ = "Y" & ACUTE
-    Case 222
-      Character$ = Chr$( 164 )
-    Case 223
-      Character$ = CharT$
-    Case 224
-      Character$ = "a" & GRAVE
-    Case 225
-      Character$ = "a" & ACUTE
-    Case 226
-      Character$ = "a" & CIRCUMFLEX
-    Case 227
-      Character$ = "a" & TILDE
-    Case 228
-      Character$ = "a" & UMLAUT
-    Case 229
-      Character$ = "a" & CIRCLE_ABOVE
-    Case 230
-      Character$ = Chr$( 181 )
-    Case 231
-      Character$ = "c" & CEDILLA
-    Case 232
-      Character$ = "e" & GRAVE
-    Case 233
-      Character$ = "e" & ACUTE
-    Case 234
-      Character$ = "e" & CIRCUMFLEX
-    Case 235
-      Character$ = "e" & UMLAUT
-    Case 236
-      Character$ = "i" & GRAVE
-    Case 237
-      Character$ = "i" & ACUTE
-    Case 238
-      Character$ = "i" & CIRCUMFLEX
-    Case 239
-      Character$ = "i" & UMLAUT
-    Case 240
-      Character$ = Chr$( 186 )
-    Case 241
-      Character$ = "n" & TILDE
-    Case 242
-      Character$ = "o" & GRAVE
-    Case 243
-      Character$ = "o" & ACUTE
-    Case 244
-      Character$ = "o" & CIRCUMFLEX
-    Case 245
-      Character$ = "o" & TILDE
-    Case 246
-      Character$ = "o" & UMLAUT
-    Case 247
-      Character$ = FILL_CHAR
-    Case 248
-      Character$ = Chr$( 178 )
-    Case 249
-      Character$ = "u" & GRAVE
-    Case 250
-      Character$ = "u" & ACUTE
-    Case 251
-      Character$ = "u" & CIRCUMFLEX
-    Case 252
-      Character$ = "u" & UMLAUT
-    Case 253
-      Character$ = "y" & ACUTE
-    Case 254
-      Character$ = Chr$( 181 )
-    Case 255
-      Character$ = "y" & UMLAUT
-    Case Else
-      Character$ = ""
-
-  End Select
-
-  FixString$ = FixString$ & Character$
-
-Next i
-
-FixString$  = Trim$( FixString$ )
-Convert1252 = FixString$
-
-End Function
 
 '****************************************************************************************
 
@@ -1247,6 +1813,192 @@ End Function
 
 '****************************************************************************************
 
+Function GetUnicodeString() As String
+
+Const INTEGER_RANGE       As Long = 65536 '-32,768 to 32,767
+
+Dim ActiveWindowHandle    As Long
+Dim CharToAdd$
+Dim ClipboardCharsDim%
+Dim ClipboardDataHandle   As Long
+Dim ClipboardDataLocation As Long
+Dim CodePoint%
+Dim LengthOfField%
+Dim UniCodePoint$
+Dim TempString$
+
+Dim ClipboardClose
+
+Dim i As Integer
+
+Dim ClipboardChars() As Integer
+
+ActiveWindowHandle = GetActiveWindow()
+If OpenClipboard( ActiveWindowHandle ) = FALSE Then
+    GetUnicodeString = CLIPBOARD_ERROR & "Sorry, the contents of the Clipboard could not be accessed."
+    ClipboardClose   = CloseClipboard()
+    Exit Function
+End If
+
+ClipboardDataHandle = GetClipboardData( UNI_CHAR_TEXT )
+If ClipboardDataHandle = 0& Then
+    GetUnicodeString = CLIPBOARD_ERROR & "Sorry, the macro failed to get Clipboard data."
+    ClipboardClose   = CloseClipboard()
+    Exit Function
+End If
+ClipboardDataLocation = GlobalLock( ClipboardDataHandle )
+
+' Copy the Clipboard contents to a prepared array.
+
+On Error Resume Next
+LengthOfField% = GetStringLength( ClipboardDataLocation )
+If Err > 0 Then
+    If Err = 6 Then
+        GetUnicodeString = CLIPBOARD_ERROR & "There is too much data on the Clipboard!"
+      Else
+        GetUnicodeString = CLIPBOARD_ERROR & "Sorry, an unexpected error occurred."
+    End If
+    ClipboardClose = CloseClipboard()
+    Exit Function
+End If
+If LengthOfField% > 0 Then
+    ClipboardCharsDim% = ( LengthOfField% - 1 ) * 2
+    ReDim ClipboardChars( ClipboardCharsDim% )
+    CopyMemory ClipboardChars( 0 ), ByVal ClipboardDataLocation, ClipboardCharsDim% + 2
+  Else
+    GetUnicodeString = CLIPBOARD_ERROR & "Sorry, this macro works only when there is text on the Clipboard to paste in a bibliographic record."
+    Exit Function
+End If
+
+GlobalUnlock( ClipboardDataHandle )
+ClipboardClose = CloseClipboard()
+
+' Build a string of characters from the numbers in the array. As type "integer", they
+' range from -32,768 to 32,767. Numbers 0 to 127 encode plain ASCII characters, which are
+' added to the string as themselves. All other numbers are converted to hexadecimal by
+' means of the BASIC "Hex" function. Decimal numbers from 128 to 32,767 are directly
+' converted to hexadecimal 0080 to 7FFF. Negative decimal numbers are made positive by
+' adding them to 65,536, so the range -32,768 to -1 becomes the range 32,768 to 65,535.
+' The "Hex" function converts those numbers to the hexadecimal range 8000 to FFFF.
+' Finally, the hexadecimal numbers are transformed into Numeric Character References,
+' with strings of two or three digits padded with leading zeros to make each string four
+' characters in length; then that NCR is added to the character string.
+
+For i = 0 To ClipboardCharsDim%
+  CodePoint% = ClipboardChars( i )
+  If CodePoint% = 0 Then
+      Exit For
+    ElseIf CodePoint% > 0 And CodePoint% < 128 Then
+      CharToAdd$ = Chr$( CodePoint% )
+    ElseIf CodePoint% = 450 Then
+      CharToAdd$ = UNI_DELIMITER
+    ElseIf CodePoint% <> 0 Then
+      If CodePoint% > 127 Then
+          UniCodePoint$ = Hex( ClipboardChars( i ) )
+          If Len( UniCodePoint$ ) < 4 Then
+             UniCodePoint$ = String$( 4 - Len( UniCodePoint$ ), "0" ) & UniCodePoint$
+          End If
+        Else
+          UniCodePoint$ = Hex( INTEGER_RANGE + CodePoint% )
+      End If
+      CharToAdd$ = "&#x" & UniCodePoint$ & ";"
+  End If
+  TempString$ = TempString$ & CharToAdd$
+  CharToAdd$  = ""
+Next i
+
+GetUnicodeString = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function MakeDisplayable( InString$ ) As String
+
+Dim Candidate$
+Dim CharT$
+Dim Compare%
+Dim High%
+Dim Low%
+Dim Match%
+Dim Middle%
+Dim Target$
+Dim TempString$
+Dim DecVal%
+
+Dim i As Integer, j As Integer, p As Integer
+
+i = 1
+Do
+  CharT$ = Mid$( InString$, i, 1 )
+  If CharT$ = "&" Then
+      If Mid$( InString$, i, 3 ) = "&#x" Then
+          p = InStr( i + 1, InString$, ";" )
+          If ( p - i ) < 10 Then
+              CharT$  = Mid$( InString$, i, p - i + 1 )
+              Target$ = Mid$( CharT$, 4, 4 )
+              DecVal% = Val( "&H" & Target$ )
+              If Target$ = "02BF" Then           'OCLC doesn't like the
+                  CharT$ = "&#x02BB;"            ' Unicode alef and ayn
+                ElseIf Target$ = "02BE" Then     ' characters and wants to use
+                  CharT$ = "&#x02BC;"            ' modifier letters instead.
+                ElseIf Target$ = "01C2" Then
+                  CharT$ = DOLLAR_DELIMITER
+                ElseIf DecVal% > 159 And DecVal% < 256 Then
+                  CharT$ = Chr$( DecVal% )
+                Else
+                  Low%  = 0
+                  High% = DISPLAY_SUB_SIZE
+                  Do While Low% <= High%
+                    Middle%    = Int( ( High% + Low% ) / 2 )
+                    Candidate$ = Left$( DisplaySub( Middle% ), 4 )
+                    Compare%   = StrComp( Candidate$, Target$ )
+                    Select Case Compare%
+                      Case -1
+                        Low%   = Middle% + 1
+                      Case 0
+                        Match% = Middle%
+                        Exit Do
+                      Case 1
+                        High%  = Middle% - 1
+                    End Select
+                  Loop
+                  If Candidate$ = Target$ Then
+                      CharT$ = Mid$( DisplaySub( Match% ), 5 )
+                    Else
+                      If DecVal% = 768 Or _                     'The dialog box character set can't show most
+                         DecVal% > 771 And DecVal% < 776 Or _   ' combining characters, such as the macron,
+                         DecVal% = 777 Or DecVal% = 779 Or _    ' breve, candrabindu, etc., so these are
+                         DecVal% > 780 And DecVal% < 807 Or _   ' simply omitted from the display string.
+                         DecVal% > 807 And DecVal% < 880 Then
+                          CharT$ = ""
+                        Else
+                          CharT$ = "|"
+                      End If
+                  End If
+              End If
+              i = p
+          End If
+      End If
+    ElseIf CharT$ Like "[AaCcEeIiNnoOUuYy]" Then
+      For j = 0 To 52
+        If Mid$( InString$, i, 9 ) = Left$( Combined ( j ), 9 ) Then
+            CharT$ = Mid$( Combined( j ), 10 )
+            i = i + 8
+            Exit For
+        End If
+      Next j
+  End If
+  TempString$ = TempString$ & CharT$
+  i = i + 1
+Loop Until i > Len( InString$ )
+
+MakeDisplayable = TempString$
+
+End Function
+
+'****************************************************************************************
+
 Function Replace( InputString$, Replacement$, Remove$ ) As String
 
 ' This function replaces "Remove$" in "InputString" with "Replacement$," except in the
@@ -1259,11 +2011,11 @@ Dim p As Integer
 
 Start% = 1
 
-If Remove$ = MARC21_DELIMITER Then
+If Remove$ = UNI_DELIMITER Then
     Do
       p = InStr( Start%, InputString$, Remove$ )
       If p <> 0 Then
-          InputString$ = Left$( InputString$, p + 1 ) & " " & Mid$( InputString$, p + 2 )
+          InputString$ = Left$( InputString$, p + 8 ) & " " & Mid$( InputString$, p + 9 )
       End If
       Start% = p + 2
     Loop Until p = 0
@@ -1381,7 +2133,7 @@ Select Case Action%
                 If Right$( MultipleFieldsString$, 1 ) = CR Then
                     MultipleFieldsString$ = Left$( MultipleFieldsString$, Len( MultipleFieldsString$ ) - 1 )
                 End If
-                PreviewString$ = MultipleFieldsString$
+                PreviewString$ = MakeDisplayable( MultipleFieldsString$ )
             End If
           Else
             BlankTag    = FALSE
@@ -1419,6 +2171,8 @@ Select Case Action%
         PreviewString$ = Tag$ & Indicator1$ & Indicator2$ & FieldStore( aSINGLE_FIELD, SpaceOrDash% )
 
     End Select
+
+    PreviewString$ = MakeDisplayable( PreviewString$ )
 
     If Tag$ = "" Then LastValidTag$ = ""
 
@@ -1486,7 +2240,7 @@ Select Case Action%
                     If CurrVal$ <> "" Then
                         TempField$ = CurrVal$ & GetIndicator( "TB2_Indicator1" ) & GetIndicator( "TB3_Indicator2" ) & TempField$
                     End If
-                    PreviewString$ = TempField$
+                    PreviewString$ = MakeDisplayable( TempField$ )
                   Else
                     If CurrVal$ = "" Then
                         For i = 0 To UBound( FieldStore, 2 )
@@ -1502,7 +2256,7 @@ Select Case Action%
                     If Right$( MultipleFieldsString$, 1 ) = CR Then
                         MultipleFieldsString$ = Left$( MultipleFieldsString$, Len( MultipleFieldsString$ ) - 1 )
                     End If
-                    PreviewString$ = MultipleFieldsString$
+                    PreviewString$ = MakeDisplayable( MultipleFieldsString$ )
                 End If
             End If
           Else
@@ -1575,7 +2329,7 @@ Select Case Action%
                     SpaceOrDash% = aDASH
                 End If
                 TempField$     = Tag$ & Indicators$ & FieldStore( aSINGLE_FIELD, SpaceOrDash% )
-                PreviewString$ = TempField$
+                PreviewString$ = MakeDisplayable( TempField$ )
               Else
                 PreviewString$ = PrevPreviewString$
             End If
@@ -1588,7 +2342,7 @@ Select Case Action%
                If Right$( MultipleFieldsString$, 1 ) = CR Then
                    MultipleFieldsString$ = Left$( MultipleFieldsString$, Len( MultipleFieldsString$ ) - 1 )
                End If
-               PreviewString$ = MultipleFieldsString$
+               PreviewString$ = MakeDisplayable( MultipleFieldsString$ )
              Else
                PreviewString$ = PrevPreviewString$
             End If
@@ -1596,7 +2350,6 @@ Select Case Action%
 
     End Select
 
-    PreviewString$ = ChangeDelimiter( PreviewString$, "$" )
     If PreviewString$ <> PrevPreviewString$ Then
         DlgText    "PreviewTextArea",           PreviewString$
         PrevPreviewString$ = PreviewString$
@@ -1607,4 +2360,4 @@ Select Case Action%
 End Select
 
 End Function
-'161160480
+'236488575

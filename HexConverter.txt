@@ -1,0 +1,339 @@
+' MacroName:HexConverter.2025.02
+' MacroDescription:Converts hexadecimal to decimal numbers, and vice versa, and shows the
+' binary and UTF-8 equivalents of both.
+'
+' This macro was written by Walter F. Nickeson and last updated 13 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro (you do not need to be logged on) and enter a hexadecimal
+' number to view its decimal equivalent, or enter a decimal number to view its
+' hexadecimal equivalent. Both numbers must be positive. The macro also displays the
+' 16-bit binary representation of each number as well as its UTF-8 encoding.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function BinToHex( InString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global WaltsMacros$
+
+'****************************************************************************************
+
+Sub Main
+
+Const DLG_STATEMENT_CANCEL As Integer = 102
+
+WaltsMacros$ = "[Walt's macros] MacroTools:HexConverter"
+
+Begin Dialog Dialog1Definition  294, 114, WaltsMacros$, .Dialog1ControlFunction
+  OKButton      172,  90,  52,  14
+  CancelButton  232,  90,  52,  14
+  PushButton     10,  90,  52,  14, "&Clear",                    .Clear
+  Text           16,  18,  76,   8, "Enter hex number:"
+  Text          156,  18,  76,   8, "Enter decimal number:"
+  TextBox        92,  16,  42,  12,                              .EntryBoxHex
+  TextBox       234,  16,  42,  12,                              .EntryBoxDec
+  Text           16,  30,  76,   8, "Raw decimal integer:"
+  Text          156,  30,  76,   8, "Hexadecimal number:"
+  Text           98,  30,  36,   8, "",                          .RawOut
+  Text           98,  42,  36,   8, "",                          .PosOut
+  Text          236,  30,  36,   8, "",                          .HexOut
+  Text           16,  42,  76,   8, "Positive decimal integer:"
+  Text           16,  68,  48,   8, "16-bit binary:"
+  Text           60,  68,  96,   8, "",                          .BinOut
+  Text          180,  68,  24,   8, "UTF-8:"
+  Text          206,  68,  48,   8, "",                          .UTFOut
+  GroupBox       10,   6, 132,  52, ""
+  GroupBox      150,   6, 134,  52, ""
+  GroupBox       10,  60, 274,  22, ""
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CONTROL_CHANGE  As Integer = 2
+Const FOCUS_CHANGE    As Integer = 4
+Const IDLE_STATE      As Integer = 5
+Const INITIALIZE      As Integer = 1
+Const KEEP_DLG_OPEN   As Integer = -1
+Const WARNING_MESSAGE As Integer = 48
+
+Const INTEGER_RANGE   As Long    = 65536 '-32,768 to 32,767
+Const TYPE_LONG       As Integer = 3
+
+Static CurrInput$
+Static HexValOutput&
+Static PrevControl&
+Static PrevInput$
+Static ValidInput
+
+Dim BinaryOutput$
+Dim BinarySource&
+Dim BitString$
+Dim BitStringA$
+Dim Byte1$
+Dim Byte2$
+Dim Byte3$
+Dim HexString$
+Dim HexValRawInput&
+Dim Remainder%
+Dim Target&
+Dim UTFString$
+
+Dim DecValue As Variant
+Dim Positive
+
+Dim i As Integer
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    CurrInput$ = ""
+    DlgFocus "EntryBoxHex"
+
+
+  Case CONTROL_CHANGE
+
+    If Id$ = "Clear" Then
+        DlgText  "EntryBoxDec", ""
+        DlgText  "EntryBoxHex", ""
+        DlgText  "HexOut",      ""
+        DlgText  "PosOut",      ""
+        DlgText  "RawOut",      ""
+        DlgText  "UTFOut",      ""
+        Select Case PrevControl&
+          Case DlgControlID( "EntryBoxHex" )
+            DlgFocus "EntryBoxHex"
+          Case DlgControlID( "EntryBoxDec" )
+            DlgFocus "EntryBoxDec"
+        End Select
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+    End If
+
+
+  Case FOCUS_CHANGE
+
+    Select Case Id$
+
+      Case "Clear"
+
+        PrevControl& = SValue&
+
+      Case "EntryBoxHex"
+
+        DlgText  "EntryBoxDec", ""
+        DlgText  "HexOut",      ""
+
+      Case "EntryBoxDec"
+
+        DlgText  "EntryBoxHex", ""
+        DlgText  "PosOut",      ""
+        DlgText  "RawOut",      ""
+
+    End Select
+
+
+  Case IDLE_STATE
+
+    Select Case DlgFocus()
+
+      Case "EntryBoxHex"
+
+        CurrInput$ = Trim$( UCase$( DlgText( "EntryBoxHex" ) ) )
+        If CurrInput$ = "" Then
+            ValidInput = FALSE
+          Else
+            For i = 1 To Len( CurrInput$ )
+              If Mid$( CurrInput$, i, 1 ) Like "[0-9A-F]" Then
+                  ValidInput = TRUE
+                Else
+                  ValidInput = FALSE
+                  MsgBox "Please enter only hexadecimal digits (0-9 and A-F) in this input box!", WARNING_MESSAGE, WaltsMacros$
+                  DlgText  "EntryBoxHex", PrevInput$
+                  Exit For
+              End If
+            Next i
+        End If
+        If ValidInput Then
+            If CurrInput$ <> PrevInput$ Then
+                If Left$( CurrInput$, 1 ) Like "[89A-F]" And Len( CurrInput$ ) = 4 Then
+                    Positive = FALSE
+                  Else
+                    Positive = TRUE
+                End If
+                HexValRawInput& = Val( "&H" & CurrInput$ )
+                If Positive Then
+                    HexValOutput& = HexValRawInput&
+                  Else
+                    HexValOutput& = INTEGER_RANGE + HexValRawInput&
+                End If
+                DlgText  "RawOut",      Trim$( Str$( HexValRawInput& ) )
+                DlgText  "PosOut",      Trim$( Str$( HexValOutput& ) )
+            End If
+            HexString$ = CurrInput$
+            DecValue   = HexValOutput&
+        End If
+
+      Case "EntryBoxDec"
+
+        CurrInput$ = Trim$( DlgText( "EntryBoxDec" ) )
+        If CurrInput$ = "" Then
+            ValidInput = FALSE
+          Else
+            For i = 1 To Len( CurrInput$ )
+              If Mid$( CurrInput$, i, 1 ) Like "[0-9]" Then
+                  ValidInput = TRUE
+                Else
+                  ValidInput = FALSE
+                  MsgBox "Please enter only decimal digits in this input box!", WARNING_MESSAGE, WaltsMacros$
+                  DlgText  "EntryBoxDec", PrevInput$
+                  Exit For
+              End If
+            Next i
+        End If
+        If ValidInput Then
+            If CurrInput$ <> PrevInput$ Then
+                Target&    = Val( CurrInput$ )
+                HexString$ = Hex( Target& )
+                If Len( HexString$ ) < 5 Then
+                    HexString$ = String$( 4 - Len( HexString$ ), "0" ) & HexString$
+                End If
+                DlgText  "HexOut",      HexString$
+                DecValue   = Target&
+            End If
+        End If
+
+    End Select
+
+' Calculate the binary representation.
+
+    If ValidInput Then
+        If VarType( DecValue ) = TYPE_LONG Then
+            If DecValue >= INTEGER_RANGE Then
+                MsgBox "This number is too large to show its binary and UTF-8 representations.", WARNING_MESSAGE, WaltsMacros$
+                If DlgFocus() = "EntryBoxHex" Then
+                    DlgText "EntryBoxHex", PrevInput$
+                  Else
+                    DlgText "EntryBoxDec", PrevInput$
+                End If
+              Else
+                BinarySource& = DecValue
+                Do
+                  Remainder%    = BinarySource MOD 2
+                  BinarySource  = Int( BinarySource / 2 )
+                  BinaryOutput$ = Trim$( Str$( Remainder% ) ) & BinaryOutput$
+                Loop Until BinarySource = 0
+                BitStringA$   = BinaryOutput$
+                BinaryOutput$ = String$( 16 - Len( BinaryOutput$ ), "0" ) & BinaryOutput$
+                For i = 1 To 13 Step 4
+                  BitString$ = BitString$ & Mid$( BinaryOutput$, i, 4 ) & " "
+                Next i
+            End If
+        End If
+      Else
+        DlgText  "BinOut",      ""
+        DlgText  "RawOut",      ""
+        DlgText  "PosOut",      ""
+    End If
+
+' Calculate the UTF-8 representation.
+
+    If ValidInput Then
+
+        Select Case DecValue
+
+          Case Is < 128
+            UTFString$  = Hex( DecValue )
+
+          Case Is < 2048
+            BitStringA$ = String$( 11 - Len( BitStringA$ ), "0" ) & BitStringA$
+            Byte1$      = "110" & Left$( BitStringA$, 5 )
+            Byte2$      = "10" & Mid$( BitStringA$, 6 )
+            UTFString$  = BinToHex( Byte1$ ) & " " & BinToHex( Byte2$ )
+
+          Case Is < 65536
+            BitStringA$ = String$( 16 - Len( BitStringA$ ), "0" ) & BitStringA$
+            Byte1$      = "1110" & Left$( BitStringA$, 4 )
+            Byte2$      = "10" & Mid$( BitStringA$, 5, 6 )
+            Byte3$      = "10" & Right$( BitStringA$, 6 )
+            UTFString$  = BinToHex( Byte1$ ) & " " & BinToHex( Byte2$ ) & " " & BinToHex( Byte3$ )
+
+        End Select
+
+      Else
+        UTFString$ = ""
+    End If
+
+    If CurrInput$ <> PrevInput$ Then
+        DlgText  "BinOut",      Trim$( BitString$ )
+        DlgText  "UTFOut",      UTFString$
+    End If
+
+    PrevInput$ = CurrInput$
+
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+
+'****************************************************************************************
+
+Function BinToHex( InString$ ) As String
+
+' Given a string of bits, this function returns its hexadecimal representation as a
+' string.
+
+Dim CharBit%
+Dim LenInput%
+Dim StringVal%
+
+Dim i As Integer
+
+LenInput% = Len( InString$ )
+
+For i = 1 To LenInput%
+  CharBit% = Val( Mid$( InString$, i, 1 ) )
+  If CharBit% = 1 Then
+      StringVal% = StringVal% + (2 ^ ( LenInput% - i ) )
+  End If
+Next i
+
+BinToHex = Hex( StringVal% )
+
+End Function
+'34011356

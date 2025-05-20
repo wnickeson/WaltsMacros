@@ -1,29 +1,42 @@
-'MacroName:DeleteAllSuchPlus.2024.03
-'MacroDescription:Deletes all fields sharing characteristics of the field in which the
+' MacroName:DeleteAllSuchPlus.2025.05
+' MacroDescription:Deletes all fields sharing characteristics of the field in which the
 ' cursor is placed. Those characteristics are the tag, subject thesaurus or term source,
-' or subfield $5.
+' or subfield $5, and for 856 fields, optional domain name matching.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 6 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
 '
-'****************************************************************************************
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'***************************************************************************************#
 ' How it works: Run the macro to delete all fields in a bibliographic record that are
 ' like the field in which the cursor is placed. The three criteria for deleting are
 ' explained below.
 '
-' CAUTION: Whatever is deleted is done with NO WARNING and NO FEEDBACK! There is no
-' confirmation message or count of fields deleted! This macro offers no choice for finer
-' or coarser discrimination in deletion!
+' CAUTION: With one exception, whatever is deleted is done with NO WARNING and NO
+' FEEDBACK! There is no confirmation message or count of fields deleted! This macro
+' offers no choice for finer or coarser discrimination in deletion! The exception is
+' field 856, for which the macro offers partial or complete removal of fields.
 '
 ' The macro deletes fields that have these characteristics, evaluating them in this
 ' order:
@@ -35,7 +48,8 @@
 '      710 2   Pforzheimer Bruce Rogers Collection (Library of Congress) $5 DLC
 '    If the cursor is placed in any of these fields, the macro will delete all three
 '    fields at once. Any other field that contains a subfield $5 with a different
-'    institution code will be ignored.
+'    institution code will be ignored. All other fields with the same tags are also
+'    ignored.
 '
 '  + All subject headings with the same source of the selected heading or term,
 '    regardless of the tag. The macro's action is based on the value of the second
@@ -49,41 +63,76 @@
 '
 '  + All fields with the same tag as the selected field. The cursor does not need to be
 '    in a specific occurrence of the field; it may be placed in the first, last, fifth,
-'    or fifteenth 029 field, for example, and will still delete them all. If the selected
-'    field contains a source code in subfield $2, the macro will delete only those fields
-'    with the same tag that also contain that same code in subfield $2 (and qualified in
-'    the same way in subfield $0, as described above).
+'    or fifteenth 029 field, for example, and it will still delete them all. If the
+'    selected field contains a source code in subfield $2, the macro will delete only
+'    those fields with the same tag that also contain that same code in subfield $2 (and
+'    qualified in the same way in subfield $0, as described above).
+'
+'  + All or selected 856 fields. The macro automatically deletes all 856 fields
+'    containing URIs that restrict access, which is determined by the absence of ALL of
+'    these strings: "archive.org," "hathitrust.org," "books.google.com," "newsbank.com,"
+'    and "loc.gov". These domains typically don't restrict access to their resources and
+'    so are generally valid in a generic record. If 856 fields containing those domains
+'    remain after all others have been deleted, the macro asks whether to continue and
+'    delete them also. This list of domain names to keep, or NOT DELETE, on the first
+'    pass, is a comma-delimited string in the global string variable
+'    "AccessibleDomainsString$," defined in line 108 below. Edit that string, if desired,
+'    to add or subtract domains to always delete or always keep--or, to be more precise,
+'    to never automatically delete. If the string is empty (that is, if it is nothing but
+'    a pair of double quotation marks ""), all 856 fields in the record will be
+'    immedidately deleted, without warning or feedback.
+'
+' The macro uses the command "GetFieldUnicode" rather than "GetField" only in order to
+' get the tags in the fields, in case the field contains non-Latin script characters,
+' which bamboozle the latter command.
 '****************************************************************************************
 
 Option Explicit
+Option Compare Text
 
-Declare Sub DeleteFields( SubfieldCode$, CodeToMatch$ )
+Declare Sub DeleteFields( SubfieldCode$, StringToMatch$ )
 
-Declare Function GetCode( InString$, SubfieldCode$ ) As String
+Declare Function GetSubfieldContents( InString$, SubfieldCode$ ) As String
 
 Global CS As Object
+
+Global AccessibleDomainsString$
 
 '****************************************************************************************
 
 Sub Main
+
+'########################################################################################
+' Domain names are separated by commas, and case is disregarded in comparison.
+'
+AccessibleDomainsString$ = "archive.org,hathitrust.org,books.google.com,newsbank.com,loc.gov"
+'
+'########################################################################################
 
 On Error Resume Next
 Set CS = GetObject( , "Connex.Client" )
 On Error GoTo 0
 If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
 
-Const CRITICAL_MESSAGE As Integer = 16
+Const CRITICAL_MESSAGE          As Integer = 16
 
 Dim INSTITUTION_SUBFIELD_CODE_5 As String*1 : INSTITUTION_SUBFIELD_CODE_5 = "5"
-Dim LCSH As String*1                        : LCSH                        = "0"
-Dim SOURCE_IN_SUBFIELD_2 As String*1        : SOURCE_IN_SUBFIELD_2        = "7"
-Dim SOURCE_SUBFIELD_CODE_2 As String*1      : SOURCE_SUBFIELD_CODE_2      = "2"
+Dim LCSH                        As String*1 : LCSH                        = "0"
+Dim SOURCE_IN_SUBFIELD_2        As String*1 : SOURCE_IN_SUBFIELD_2        = "7"
+Dim SOURCE_SUBFIELD_CODE_2      As String*1 : SOURCE_SUBFIELD_CODE_2      = "2"
 
+Dim AccessibleDomain$
 Dim CandidateFieldData$
 Dim CandidateFieldTag$
 Dim CandidateTermSource$
 Dim Col%
+Dim Count856%
+Dim Delete856Msg$
+Dim DomainName$
+Dim FieldCountPhrase$
+Dim Instance%
 Dim Institution$
+Dim Keep856Count%
 Dim LineCount%
 Dim Row%
 Dim SecondIndicator$
@@ -92,13 +141,16 @@ Dim SelectedFieldTag$
 Dim SelectedFieldTagVal%
 Dim SelectedTermSource$
 Dim SourceTerm$
+Dim TempString$
 Dim TypeOfWindow%
 Dim WaltsMacros$                            : WaltsMacros$                = "[Walt's macros] Essentials:DeleteAllSuchPlus"
 
+Dim DomainIsAccessible
+Dim Found856
 Dim FoundField                              : FoundField                  = TRUE
-Dim Success                                 : Success                     = TRUE
+Dim SuccessfulDelete                        : SuccessfulDelete            = TRUE
 
-Dim p As Integer, q As Integer
+Dim i As Integer, p As Integer, q As Integer
 
 Row% = CS.CursorRow
 Col% = CS.CursorColumn
@@ -113,11 +165,11 @@ Select Case TypeOfWindow%
 End Select
 
 If Col% > 0 Then             '0 = Fixed field
-    If CS.GetField( "...", Row%, SelectedFieldData$ ) = TRUE Then
+    If CS.GetFieldUnicode( "...", Row%, SelectedFieldData$ ) = TRUE Then
 
 ' Then check for the presence of subfield $5 in the selected field.
 
-        Institution$ = GetCode( SelectedFieldData$, INSTITUTION_SUBFIELD_CODE_5 )
+        Institution$ = GetSubfieldContents( SelectedFieldData$, INSTITUTION_SUBFIELD_CODE_5 )
         If Institution$ <> "-" Then
 
 ' Get the content of subfield $5 and delete every field that contains that same code in a
@@ -133,20 +185,88 @@ If Col% > 0 Then             '0 = Fixed field
         SelectedFieldTag$    = Left$( SelectedFieldData$, 3 )
         SelectedFieldTagVal% = Val( SelectedFieldTag$ )
 
-' If the selected field is not a subject heading, delete all such fields with the same
-' tag, by repeatedly using the "DeleteField" command until no more matching fields are
-' found. If the selected field contains a source code in subfield $2, delete only those
-' other fields that contain the same source code.
-
         If SelectedFieldTagVal% < 600 Or SelectedFieldTagVal% > 699 Then
-            SourceTerm$ = GetCode( SelectedFieldData$, SOURCE_SUBFIELD_CODE_2 )
-            If SourceTerm$ = "-" Then
+
+' If the selected field is not a subject heading, the 856 field gets special treatment.
+' Begin by finding the domain name (following "://"); that will appear in the dialog box
+' as the default matching string.
+
+            If SelectedFieldTag$ = "856" Then
+                Instance% = 1
                 Do
-                  Success = CS.DeleteField( SelectedFieldTag$, 1 )
-                Loop Until Success = FALSE
+                  Found856 = CS.GetField( "856", Instance%, SelectedFieldData$ )
+                  If AccessibleDomainsString$ = "" Then
+                      DomainIsAccessible = FALSE
+                    Else
+                      p = InStr( SelectedFieldData$, "://" )
+                      If p > 0 Then
+                          DomainName$ = Mid$( SelectedFieldData$, p + 3 )
+                      End If
+                      p = InStr( DomainName$, "/" )
+                      If p > 1 Then
+                          DomainName$ = Left$( DomainName$, p - 1 )
+                      End If
+                      i = 1
+                      Do
+                        AccessibleDomain$ = GetField( AccessibleDomainsString$, i, "," )
+                        If AccessibleDomain$ <> "" Then
+                            If InStr( DomainName$, AccessibleDomain$ ) > 0 Then
+                                DomainIsAccessible = TRUE
+                                Exit Do
+                              Else
+                                DomainIsAccessible = FALSE
+                            End If
+                            i = i + 1
+                        End If
+                      Loop Until AccessibleDomain$ = ""
+                  End If
+                  If DomainIsAccessible Then
+                      Keep856Count% = Keep856Count% + 1
+                      Instance%     = Instance% + 1
+                    Else
+                      If CS.DeleteField( "856", Instance% ) Then
+                          SuccessfulDelete = TRUE
+                          Count856% = Count856% + 1
+                      End If
+                  End If
+                Loop Until Found856 = FALSE
+                If Count856% > 0 Then
+                    If Keep856Count% > 0 Then
+                        Select Case Keep856Count%
+                          Case 1
+                            FieldCountPhrase$ = "one remaining 856 field"
+                          Case Is > 1
+                            FieldCountPhrase$ = Trim$( Str$( Keep856Count% ) ) & " remaining 856 fields"
+                        End Select
+                        Delete856Msg$ = "All 856 fields with restricted access have been deleted. Do you want to also delete"
+                        Delete856Msg$ = Delete856Msg$ & " the " & FieldCountPhrase$ & " that may not restrict access?"
+                        If MsgBox( Delete856Msg$, 35, WaltsMacros$ ) = 6 Then
+                            Do
+                              SuccessfulDelete = CS.DeleteField( "856", 1 )
+                            Loop Until SuccessfulDelete = FALSE
+                        End If
+                    End If
+                  Else
+                    Do
+                      SuccessfulDelete = CS.DeleteField( "856", 1 )
+                    Loop Until SuccessfulDelete = FALSE
+                End If
+
+' For all other non-subject heading fields, delete all such fields with the same tag, by
+' repeatedly using the "DeleteField" command until no more matching fields are found. If
+' the selected field contains a source code in subfield $2, delete only those other
+' fields that contain the same source code.
+
               Else
-                Call DeleteFields( SOURCE_SUBFIELD_CODE_2, SourceTerm$ )
-                Exit Sub
+                SourceTerm$ = GetSubfieldContents( SelectedFieldData$, SOURCE_SUBFIELD_CODE_2 )
+                If SourceTerm$ = "-" Then
+                    Do
+                      SuccessfulDelete = CS.DeleteField( SelectedFieldTag$, 1 )
+                    Loop Until SuccessfulDelete = FALSE
+                  Else
+                    Call DeleteFields( SOURCE_SUBFIELD_CODE_2, SourceTerm$ )
+                    Exit Sub
+                End If
             End If
           Else
             Select Case SelectedFieldTag$
@@ -156,8 +276,8 @@ If Col% > 0 Then             '0 = Fixed field
 
               Case "653"
                 Do
-                  Success = CS.DeleteField( SelectedFieldTag$, 1 )
-                Loop Until Success = FALSE
+                  SuccessfulDelete = CS.DeleteField( SelectedFieldTag$, 1 )
+                Loop Until SuccessfulDelete = FALSE
 
 ' But any other subject heading is to be deleted according to the source of the heading
 ' or term, rather than strictly by tag. These other headings identify their thesauri by
@@ -167,7 +287,7 @@ If Col% > 0 Then             '0 = Fixed field
               Case Else
                 SecondIndicator$ = Mid$( SelectedFieldData$, 5, 1 )
                 If SecondIndicator$ = SOURCE_IN_SUBFIELD_2 Then
-                    SelectedTermSource$ = GetCode( SelectedFieldData$, SOURCE_SUBFIELD_CODE_2 )
+                    SelectedTermSource$ = GetSubfieldContents( SelectedFieldData$, SOURCE_SUBFIELD_CODE_2 )
                 End If
 
 ' Although we want to delete only subject headings, to get to them we have to go through
@@ -177,7 +297,7 @@ If Col% > 0 Then             '0 = Fixed field
 
                 LineCount% = 1
                 Do
-                  FoundField = CS.GetField( "...", LineCount%, CandidateFieldData$ )
+                  FoundField = CS.GetFieldUnicode( "...", LineCount%, CandidateFieldData$ )
                   If FoundField Then
                       CandidateFieldTag$ = Left$( CandidateFieldData$, 3 )
                       If Val( CandidateFieldTag$ ) > 599 And Val( CandidateFieldTag$ ) < 700 Then
@@ -193,9 +313,9 @@ If Col% > 0 Then             '0 = Fixed field
 ' source of the target field. The tag is not relevant.
 
                                   If SecondIndicator$ = SOURCE_IN_SUBFIELD_2  Then
-                                      CandidateTermSource$ = GetCode( CandidateFieldData$, SOURCE_SUBFIELD_CODE_2 )
+                                      CandidateTermSource$ = GetSubfieldContents( CandidateFieldData$, SOURCE_SUBFIELD_CODE_2 )
                                       If SelectedTermSource$ = CandidateTermSource$ Then
-                                          Success = CS.DeleteFieldLine( LineCount% )
+                                          SuccessfulDelete = CS.DeleteFieldLine( LineCount% )
                                       End If
 
 ' For LC headings, distinguish between genre headings in 655 and subject headings in
@@ -203,20 +323,20 @@ If Col% > 0 Then             '0 = Fixed field
                                     ElseIf SecondIndicator$ = LCSH Then
                                       If ( Val( CandidateFieldTag$ ) < 655 and Val ( SelectedFieldTag$ ) < 655 ) Or _
                                          ( CandidateFieldTag$ = "655" and SelectedFieldTag$ = "655" ) Then
-                                          Success = CS.DeleteFieldLine( LineCount% )
+                                          SuccessfulDelete = CS.DeleteFieldLine( LineCount% )
                                       End If
                                     Else
-                                      Success = CS.DeleteFieldLine( LineCount% )
+                                      SuccessfulDelete = CS.DeleteFieldLine( LineCount% )
                                   End If
                               End If
                           End Select
+                          If SuccessfulDelete Then
+                              LineCount%       = LineCount% - 1
+                              SuccessfulDelete = FALSE
+                          End If
 
 ' As above, decrement the line count before the loop increments it.
 
-                          If Success Then
-                              LineCount% = LineCount% - 1
-                              Success    = FALSE
-                          End If
                       End If
                       LineCount% = LineCount% + 1
                   End If
@@ -230,29 +350,31 @@ End Sub
 
 '****************************************************************************************
 
-Sub DeleteFields( SubfieldCode$, CodeToMatch$ )
+Sub DeleteFields( SubfieldCode$, StringToMatch$ )
 
-' This sub deletes fields with the same content in the specified subfield. It starts at
-' the beginning of the record and examines every successive line. Since deleting a field
-' makes the record one line shorter, the sub must decrement the line count before the
-' loop increments it. That means the next time through the loop, although the line number
-' will be the same, the sub will identify what was the next field on this go through.
+' This sub deletes fields that contain the specified content in the specified subfield.
+' It starts at the beginning of the record and examines every successive line, testing
+' for the presence of the "StringToMatch" in the subfield named in the first parameter.
+' A match means the field is deleted. Since that makes the record one line shorter, the
+' sub must decrement the line count before the loop increments it. That means the next
+' time through the loop, although the line number will be the same, the sub will actually
+' delete the next field.
 
 Dim LineCount%
 Dim SelectedFieldData$
 Dim Test$
 
-Dim FoundField
-Dim Success
+Dim FoundField               : FoundField       = TRUE
+Dim SuccessfulDelete         : SuccessfulDelete = TRUE
 
 LineCount% = 1
 Do
-  FoundField = CS.GetField( "...", LineCount%, SelectedFieldData$ )
+  FoundField = CS.GetFieldUnicode( "...", LineCount%, SelectedFieldData$ )
   If FoundField Then
-      Test$ = GetCode( SelectedFieldData$, SubfieldCode$ )
-      If Test$ = CodeToMatch$ Then
-          Success    = CS.DeleteFieldLine( LineCount% )
-          LineCount% = LineCount% - 1
+      Test$ = GetSubfieldContents( SelectedFieldData$, SubfieldCode$ )
+      If InStr( Test$, StringToMatch$ ) > 0 Then
+          SuccessfulDelete = CS.DeleteFieldLine( LineCount% )
+          LineCount%       = LineCount% - 1
       End If
       LineCount% = LineCount% + 1
   End If
@@ -262,9 +384,9 @@ End Sub
 
 '****************************************************************************************
 
-Function GetCode( InString$, SubfieldCode$ ) As String
+Function GetSubfieldContents( InString$, SubfieldCode$ ) As String
 
-' This function returns the code in the specified subfield. If the subfield is not
+' This function returns the contents of the specified subfield. If the subfield is not
 ' present in the field, the output of the function is a hyphen.
 
 Dim DELIMITER As String*1    : DELIMITER = Chr$( 223 )
@@ -275,13 +397,13 @@ p = InStr( InString$, DELIMITER & SubfieldCode$ )
 If p > 0 Then
     q = InStr( p + 1, InString$, DELIMITER )
     If q = 0 Then
-        GetCode = Trim$( Mid$( InString$, p + 3 ) )
+        GetSubfieldContents = Trim$( Mid$( InString$, p + 3 ) )
       Else
-        GetCode = Trim$( Mid$( InString$, p + 2, q - p - 2 ) )
+        GetSubfieldContents = Trim$( Mid$( InString$, p + 2, q - p - 2 ) )
     End If
   Else
-    GetCode = "-"
+    GetSubfieldContents = "-"
 End If
 
 End Function
-'28812354
+'41019170

@@ -1,12 +1,13 @@
-'MacroName:MacroBookInspector.2024.01
-'MacroDescription:Lists the macros in a macro book, along with their descriptions and
+' MacroName:MacroBookInspector.2025.01
+' MacroDescription:Lists the macros in a macro book, along with their descriptions and
 ' other information, and allows saving the list, or the text of an individual macro, to a
 ' text file.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 4 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
 ' Thanks to Joel Hahn for pointing out the file structure of macro books, and for
 ' instruction afforded by the macros he's shared, and to Harvey Hahn for some inspiration
@@ -15,17 +16,24 @@
 ' which helped uncover and overcome a limitation of this macro on the size of macros it
 ' can deal with.
 '
-' Microsoft's specification for its Compound File Binary File Format, version 20210625,
-' was retrieved from <https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-cfb/53989ce4-7b05-4f8d-829b-d08d6148375b>
-' on the date below.
+' Copyright 2025 Walter F. Nickeson.
 '
-' Last updated: 12 February 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '***************************************************************************************#
 ' How it works: Run the macro to view the macro books in the Connexion "Macros"
@@ -37,7 +45,7 @@
 ' source code can be displayed separately. The list of macro books and the list of macros
 ' in the selected macro book can be saved as tab-delimited text files. The text of the
 ' selected macro may also be saved as a text file. The default save location can be set
-' below on line 310. The simple list of macros is placed on the Windows clipboard.
+' below on line 320. The simple list of macros is placed on the Windows clipboard.
 '
 ' Some simple error checking is done as this macro gathers information: If the length of
 ' a macro book file is not a multiple of 512, a warning pops up; if the selected macro is
@@ -93,13 +101,15 @@
 ' successful it extracts the keystrokes for display. Otherwise, it attempts the same
 ' thing with the "Options.xml" file to get the user tool assignment.
 '
-' Connexion macro books are instances of the Windows Compound File Binary File Format.
-' Files in this format contain data in a number of virtual streams. In the case of macro
-' book files, each macro appears to be stored in three streams (with the actual data
-' being dispersed throughout the file): the source, which is the text entered in the
-' editor; the macro description, as entered in the macro manager (but which is taken from
-' the editor if first created there); and binary data, which is (I think) the compiled
-' code.
+' Connexion macro books are instances of the Windows Compound File Binary File Format,
+' documentation for which is at <https://learn.microsoft.com/en-us/openspecs/windows_protocols/
+' ms-cfb/53989ce4-7b05-4f8d-829b-d08d6148375b>. The "Protocol Revision" is 12.0, dated
+' 4/23/2024. Files in this format contain data in a number of virtual streams. In the
+' case of macro book files, each macro appears to be stored in three streams (with the
+' actual data being dispersed throughout the file): the source, which is the text entered
+' in the editor; the macro description, as entered in the macro manager (but which is
+' taken from the editor if first created there); and binary data, which is (I think) the
+' compiled code.
 '
 ' The file allocates storage space for all its contents in sectors of 512 bytes, with the
 ' first sector, the Header, containing data about locations within the file and other
@@ -307,7 +317,7 @@ Sub Main
 ' to be saved, and the Save dialog will use it (but the path can be edited to save files
 ' anywhere).
 
-DefaultSavePath$ = "C:\Users\wnickeson\Documents"
+DefaultSavePath$ = "C:\Users\[user name]\Documents\"
 '========================================================================================
 
 Const CRITICAL_MESSAGE As Integer = 16
@@ -1662,9 +1672,9 @@ Sub StoreWithTerminator( WhichArray% )
 Const LINE_FEED As Integer = 10
 
 Dim CurrString$
-Dim CurrStringLen%
+Dim CurrStringLen&
 Dim PrevString$
-Dim PrevStringLen%
+Dim PrevStringLen&
 Dim TempString$
 Dim TestChar%
 Dim TwoStrings&
@@ -1691,11 +1701,11 @@ n = 0
 
 Do
   CurrString$    = TempStorage( i )
-  CurrStringLen% = Len( CurrString$ )
-  PrevStringLen% = Len( PrevString$ )
-  TwoStrings&    = CurrStringLen% + PrevStringLen%
+  CurrStringLen& = Len( CurrString$ )
+  PrevStringLen& = Len( PrevString$ )
+  TwoStrings&    = CurrStringLen& + PrevStringLen&
   If TwoStrings& >= MAX_STRING_LENGTH Then
-      z = MAX_STRING_LENGTH - PrevStringLen%
+      z = MAX_STRING_LENGTH - PrevStringLen&
       For j = z To 1 Step -1
         TestChar% = Asc( Mid$( CurrString$, j, 1 ) )
         If TestChar% = LINE_FEED Then
@@ -2611,4 +2621,4 @@ Select Case Action%
 End Select
 
 End Function
-'2615109167
+'2625110002

@@ -1,19 +1,31 @@
-'MacroName:BrowseAuthority.2024.77
-'MacroDescription:Browses the Authority File using an existing heading or selected text
+' MacroName:BrowseAuthority.2025.04
+' MacroDescription:Browses the Authority File using an existing heading or selected text
 ' within a field, and retrieves authority records for headings in authority 5XX fields.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 9 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' Last updated: 13 June 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Copyright 2025 Walter F. Nickeson.
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************
 ' How it works: This macro and my "GetAuthority" macro work together to efficiently add
@@ -37,7 +49,10 @@
 ' as OCLC-MARC, the macro's browse will probably fail.
 '
 ' The maximum length of a browse string is 60 characters. The macro truncates any string
-' longer than that limit.
+' longer than that limit, and shows that in the dialog box by putting the characters "<!"
+' after the truncated string. Using this macro to browse long names, such as a corporate
+' body with several levels in a hierarchy, might not return proper results; it might be
+' better to employ a keyword search, such as used by my "SearchAuthority" macro.
 '
 ' In a bibliographic record, heading fields are 1XX, 490, 600 to 653, 655, 700 to 730,
 ' and 800 to 830. The cursor must be placed within one of these fields to browse its
@@ -266,8 +281,6 @@ Sub Main
 ReDim Display5XX_1( 0 )
 ReDim Display5XX_2( 0 )
 ReDim Display5XX_3( 0 )
-Erase StoreRefs()
-Erase Store5XX()
 
 On Error Resume Next
 Set CS = GetObject( , "Connex.Client" )
@@ -324,6 +337,7 @@ Dim Filing%
 Dim FirstDelimiter%
 Dim FunctionReturn$
 Dim Indicators$
+Dim LenSearchString%
 Dim ListRecordsFound%
 Dim MaxPages!
 Dim NextDelimiter%
@@ -348,6 +362,7 @@ Dim SubjHeadingSystem$
 Dim Tag$
 Dim TempString$
 Dim TypeOfHeading%
+Dim WhatFailed$
 Dim WindowType%
 Dim XBooleanTerm$
 
@@ -357,6 +372,7 @@ Dim ChangedFFView            : ChangedFFView   = FALSE
 Dim LCSubject                : LCSubject       = TRUE
 Dim NotHeadingField          : NotHeadingField = FALSE
 Dim SubjectHeading           : SubjectHeading  = FALSE
+Dim TruncateString           : TruncateString  = FALSE
 
 Dim i As Integer, j As Integer, p As Integer, q As Integer
 
@@ -724,6 +740,7 @@ Select Case Tag$
 
         FunctionReturn$ = BrowseFromAuthorityRecord
         If FunctionReturn$ = FAILURE Then
+            WhatFailed$ = "browse"
             GoTo Failure:
           ElseIf FunctionReturn$ = QUIT Then
             GoTo Done:
@@ -834,6 +851,7 @@ Select Case Tag$
                           Advance    = CS.GetNext100Records
                           PageCount% = PageCount% + 1
                         Else
+                          WhatFailed$ = "search"
                           GoTo Failure:
                       End If
                     Else
@@ -847,6 +865,7 @@ Select Case Tag$
                 End If
                 GoTo Done:
               Else
+                WhatFailed$ = "search"
                 GoTo Failure:
             End If
         End If
@@ -965,6 +984,7 @@ End If
 NormalizedString$ = Normalize( RawString$, TRUE )
 
 If NormalizedString$ = FAILURE Then
+    WhatFailed$ = "browse"
     GoTo Failure:
   ElseIf NormalizedString$ = QUIT Then
     GoTo Done:
@@ -995,6 +1015,7 @@ End If
 If TextSelection Then
     FunctionReturn$ = BrowseFromSelectedText
     If FunctionReturn$ = FAILURE Then
+        WhatFailed$ = "browse"
         GoTo Failure:
       ElseIf FunctionReturn$ = QUIT Then
         GoTo Done:
@@ -1024,6 +1045,7 @@ If Left$( NormalizedString$, 1 ) <> DELIMITER Then NormalizedString$ = DELIMITER
 ' stored in a simple string variable.
 
 Start% = 1
+
 Do
   FirstDelimiter% = InStr( Start%, NormalizedString$, DELIMITER )
   If FirstDelimiter% <> 0 Then
@@ -1034,6 +1056,16 @@ Do
         Else
           Subfield$ = Trim$( Mid$( NormalizedString$, FirstDelimiter% + 2 ) )
       End If
+      If Len( NameString$ ) = 0 Then
+          LenSearchString% = Len( TitleString$ )
+        Else
+          LenSearchString% = Len( NameString$ )
+      End If
+      If LenSearchString% + Len( Subfield$ ) > MAX_LEN_SEARCH_STRING Then
+          Subfield$      = Trim$( Left$( Subfield$, 59 - LenSearchString% ) ) & " <!"
+          TruncateString = TRUE
+      End If
+
       Select Case SubfieldCode$
 
         Case "A"
@@ -1073,6 +1105,7 @@ Do
             Else
               NameString$  = Subfield$
           End If
+          If TruncateString Then Exit Do
 
 ' Continue adding to the array with each subsequent subfield $b found in an X10 field.
 ' Copy the first element of the array to the second row (bumping up every row that
@@ -1083,27 +1116,29 @@ Do
 
         Case "B"
           If TypeOfHeading% = CORPORATE_NAME Then
+              NameString$ = NameString$ & " " & Subfield$
               ReDim Preserve Names( CountOfNames% )
               For i = CountOfNames% To 1 Step -1
                 Names( i ) = Names( i - 1 )
               Next i
               CountOfNames% = CountOfNames% + 1
               Names( 0 )    = Names( 1 ) & ". " & Subfield$
-              NameString$   = NameString$ & " " & Subfield$
             ElseIf TypeOfHeading% = PERSONAL_NAME Then
               NameString$   = NameString$ & " " & Subfield$
           End If
+          If TruncateString Then Exit Do
 
 ' Subfields associated with either a name or a title heading: Add these subfields to the
 ' name heading string being constructed, but to the title heading string only if that
 ' string has already been established.
 
-        Case "C", "D", "G", "Q"
+        Case "C", "D", "G", "N", "Q"
           If TypeOfHeading% = CORPORATE_NAME Or TypeOfHeading% = CONFERENCE_NAME Then
               Names( 0 ) = Names( 0 ) & " " & Subfield$
           End If
-          NameString$ = NameString$  & " " & Subfield$
+          NameString$ = NameString$ & " " & Subfield$
           If TitleString$ <> "" Then TitleString$ = TitleString$ & " " & Subfield$
+          If TruncateString Then Exit Do
 
 ' Subfields marking a title field:
 
@@ -1112,11 +1147,13 @@ Do
               NameTitleType% = HEADING_NAME_TITLE
           End If
           TitleString$ = TitleString$ & " " & Subfield$
+          If TruncateString Then Exit Do
 
 ' Subfields associated with a title heading:
 
-        Case "F", "L", "M", "N", "O", "P", "R", "S"
+        Case "F", "L", "M", "O", "P", "R", "S"
           TitleString$ = TitleString$ & " " & Subfield$
+          If TruncateString Then Exit Do
 
 ' Subject subdivisions are kept in the Subdivisions array. Each time a subdivision is
 ' encountered, it is put in the first element of the array at the end of the subject
@@ -1138,6 +1175,7 @@ Do
                   If SubjectHeading Then SubjectString$ = NameString$
               End If
               CountOfSubdivisions% = CountOfSubdivisions% + 1
+              If TruncateString Then Exit Do
             Else
 
 ' A subfield $v in a non-subject heading marks the end of the input string.
@@ -1211,6 +1249,7 @@ If TypeOfHeading% = UNCONTROLLED_NAME Then
     NormalizedString$ = NameString$
     FunctionReturn$   = BrowseFromSelectedText
     If FunctionReturn$ = FAILURE Then
+        WhatFailed$ = "browse"
         GoTo Failure:
       ElseIf FunctionReturn$ = QUIT Then
         GoTo Done:
@@ -1255,7 +1294,10 @@ NameTitleBrowse:
         SearchString$ = SearchTerm2$
         SearchString$ = FlatSharpFix( SearchString$, MUSIC_WORD_TO_SIGN )
         If Len( SearchString$) > MAX_LEN_SEARCH_STRING Then SearchString$ = Left$( SearchString$, MAX_LEN_SEARCH_STRING )
-        If CS.Browse( AUTHORITY_FILE, "ti", SearchString$ ) = FALSE Then GoTo Failure:
+        If CS.Browse( AUTHORITY_FILE, "ti", SearchString$ ) = FALSE Then
+            WhatFailed$ = "browse"
+            GoTo Failure:
+        End If
 
 ' Search the name portion with the title added for an expanded browse. Distinguish
 ' between a personal name and a corporate/conference name.
@@ -1270,7 +1312,10 @@ NameTitleBrowse:
         End If
         If Len( SearchTerm1$) > MAX_LEN_SEARCH_STRING Then SearchTerm1$ = Left$( SearchTerm1$, MAX_LEN_SEARCH_STRING )
         If Len( SearchTerm2$) > MAX_LEN_SEARCH_STRING Then SearchTerm2$ = Left$( SearchTerm2$, MAX_LEN_SEARCH_STRING )
-        If CS.BrowseAuthorityExpanded( REC_OFFSET, AFIndex$, SearchTerm1$, SearchTerm2$ ) = FALSE Then GoTo Failure:
+        If CS.BrowseAuthorityExpanded( REC_OFFSET, AFIndex$, SearchTerm1$, SearchTerm2$ ) = FALSE Then
+            WhatFailed$ = "browse"
+            GoTo Failure:
+        End If
 
     End Select
 
@@ -1334,20 +1379,29 @@ NameTitleBrowse:
             GoTo SimpleBrowse:
         End If
         If Len( SearchTerm1$) > MAX_LEN_SEARCH_STRING Then SearchTerm1$ = Left$( SearchTerm1$, MAX_LEN_SEARCH_STRING )
-        If CS.Browse( AUTHORITY_FILE, "ti", SearchTerm1$ ) = FALSE Then GoTo Failure:
+        If CS.Browse( AUTHORITY_FILE, "ti", SearchTerm1$ ) = FALSE Then
+            WhatFailed$ = "browse"
+            GoTo Failure:
+        End If
 
 ' Browse on subdivision(s) only:
 
       Case 1
         If Len( SearchTerm2$) > MAX_LEN_SEARCH_STRING Then SearchTerm2$ = Left$( SearchTerm2$, MAX_LEN_SEARCH_STRING )
-        If CS.Browse( AUTHORITY_FILE, "sb", SearchTerm2$ ) = FALSE Then GoTo Failure:
+        If CS.Browse( AUTHORITY_FILE, "sb", SearchTerm2$ ) = FALSE Then
+            WhatFailed$ = "browse"
+            GoTo Failure:
+        End If
 
 ' Browse on main heading but send expanded term to refine the browse:
 
       Case 2
         If Len( SearchTerm1$) > MAX_LEN_SEARCH_STRING Then SearchTerm1$ = Left$( SearchTerm1$, MAX_LEN_SEARCH_STRING )
         If Len( SearchTerm2$) > MAX_LEN_SEARCH_STRING Then SearchTerm2$ = Left$( SearchTerm2$, MAX_LEN_SEARCH_STRING )
-        If CS.BrowseAuthorityExpanded( REC_OFFSET, "su", SearchTerm1$, SearchTerm2$ ) = FALSE Then GoTo Failure:
+        If CS.BrowseAuthorityExpanded( REC_OFFSET, "su", SearchTerm1$, SearchTerm2$ ) = FALSE Then
+            WhatFailed$ = "browse"
+            GoTo Failure:
+        End If
 
     End Select
 
@@ -1364,7 +1418,10 @@ NameTitleBrowse:
 
           Case 0
             If Len( SearchTerm1$) > MAX_LEN_SEARCH_STRING Then SearchTerm1$ = Left$( SearchTerm1$, MAX_LEN_SEARCH_STRING )
-            If CS.Browse( AUTHORITY_FILE, "co", SearchTerm1$ ) = FALSE Then GoTo Failure:
+            If CS.Browse( AUTHORITY_FILE, "co", SearchTerm1$ ) = FALSE Then
+                WhatFailed$ = "browse"
+                GoTo Failure:
+        End If
 
         End Select
       Else
@@ -1376,7 +1433,10 @@ NameTitleBrowse:
 
   ElseIf TypeOfHeading% = UNIFORM_TITLE Then
     If Len( TitleString$) > MAX_LEN_SEARCH_STRING Then TitleString$ = Left$( TitleString$, MAX_LEN_SEARCH_STRING )
-    If CS.Browse( AUTHORITY_FILE, "ti", TitleString$ ) = FALSE Then GoTo Failure:
+    If CS.Browse( AUTHORITY_FILE, "ti", TitleString$ ) = FALSE Then
+        WhatFailed$ = "browse"
+        GoTo Failure:
+    End If
 
 ' Anything else is just a simple name.
 
@@ -1431,12 +1491,13 @@ End Select
 If CS.Browse( AUTHORITY_FILE, AFIndex$, SearchString$ ) Then
     GoTo Done:
   Else
+    WhatFailed$ = "browse"
     GoTo Failure:
 End If
 
 Failure:
 
-MsgBox "Sorry, the browse failed.", CRITICAL_MESSAGE, WaltsMacros$
+MsgBox "Sorry, the " & WhatFailed$ & " failed.", CRITICAL_MESSAGE, WaltsMacros$
 
 Done:
 
@@ -2647,10 +2708,10 @@ SearchOption3$ = OptionParam3$
 
 If SearchOption3$ <> "" Then SearchOption3$ = "Expanded browse " & SearchOption3$
 
-Begin Dialog Dialog2Definition  352, 156, WaltsMacros$, .Dialog2ControlFunction
+Begin Dialog Dialog2Definition  320, 156, WaltsMacros$, .Dialog2ControlFunction
   ButtonGroup                                           .Choice
-   PushButton     94, 134, 104,  14, "",                .CommitButton
-  CancelButton   206, 134,  52,  14
+   PushButton     76, 134, 104,  14, "",                .CommitButton
+   CancelButton  190, 134,  52,  14
   Text            16,  22, 128,  10, "",                .AlternateBT1
   OptionGroup                                           .BrowseType
    OptionButton   16,  21, 128,  12, "",                .OptionButton1
@@ -2660,15 +2721,15 @@ Begin Dialog Dialog2Definition  352, 156, WaltsMacros$, .Dialog2ControlFunction
    OptionButton   56,  21,  64,  12, "Name, &Inverted", .OptionButton5
    OptionButton  126,  21,  38,  12, "&Subject",        .OptionButton6
    OptionButton  170,  21,  38,  12, "&Title",          .OptionButton7
-  TextBox         16,  34, 320,  12,                    .TextBox1
-  TextBox         16,  78, 320,  12,                    .TextBox2
-  DropComboBox    16,  34, 320,  64, Names(),           .DropComboBox1
-  DropComboBox    16,  78, 320,  96, Subdivisions(),    .DropComboBox2
-  GroupBox         8,  14, 336,  40, ""
-  GroupBox         8,  58, 336,  40, "",                .GroupBox2
-  GroupBox         8, 102, 336,  23, "",                .GroupBox3
-  Text           235,  23, 100,   8, "",                .Attention1
-  Text           243,  67,  88,   8, "",                .Attention2
+  TextBox         16,  34, 288,  12,                    .TextBox1
+  TextBox         16,  78, 288,  12,                    .TextBox2
+  DropComboBox    16,  34, 288,  64, Names(),           .DropComboBox1
+  DropComboBox    16,  78, 288,  96, Subdivisions(),    .DropComboBox2
+  GroupBox         8,  14, 304,  40, ""
+  GroupBox         8,  58, 304,  40, "",                .GroupBox2
+  GroupBox         8, 102, 304,  23, "",                .GroupBox3
+  Text           203,  23, 100,   8, "",                .Attention1
+  Text           201,  67,  88,   8, "",                .Attention2
   Text             8,   6, 104,   8, "Select/edit what to browse on:"
 End Dialog
 
@@ -4044,4 +4105,4 @@ Select Case Action%
 End Select
 
 End Function
-'4048159834
+'4109162441

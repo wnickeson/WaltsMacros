@@ -1,0 +1,550 @@
+' MacroName:SearchAuthority.2025.21
+' MacroDescription:Searches the authority file from selected text or with the contents of
+' the field in which the cursor is placed.
+'
+' This macro was written by Walter F. Nickeson and last updated 2 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Select text in a field in a record and run the macro to search the
+' authority file for all the words in the selection. Or, with the cursor in a variable
+' field, run the macro to search the authority file for all the words in the field. The
+' selected text, or the content of the field, is displayed in a dialog box for review
+' before executing the search, to offer the opportunity to weed out words that may
+' interfere with getting the desired results. It ignores quotation marks that indicate
+' phrases, as well as the Boolean operators "and", "or", and "not". However, it respects
+' the truncation symbol "*" and wildcard symbols "#" and "?". Use the truncation symbol
+' at the end of a word to retrieve variant endings; use the wildcard symbols to replace
+' multiple unknown characters in a word. Parentheses are ignored.
+'
+' The macro searches the LC authority file for names (general, and personal, corporate,
+' and conference), titles, subjects (topicals, geographic names, subject subdivisions,
+' and children's), and numbers (ISBN, ISSN, LCCN, LCSH, and OCLC ARN). All searches are
+' word searches only, not browses or derived searches. A possible bug in the macro
+' language makes macros unable to search for geographic names, so those names will be
+' searched as subjects.
+'
+' If the selection is of a name and title in a contents field, such as "505  Moon river /
+' Henry Mancini" (with or without enhanced subfield coding, but with the slash surrounded
+' by spaces as it should be in ISBD), the default option is to execute a combined
+' personal name and title search. In this example, that selected text should retrieve the
+' authority record for "Mancini, Henry. $t Breakfast at Tiffany's. $p Moon river."
+'
+' The search string is placed on the Windows Clipboard, so you can check an unsuccessful
+' search to see if a modification might help.
+'
+' The macro works only with text in Latin script, and may not be able to properly handle
+' some special characters.
+'
+' The default search label offered by the macro depends on the tag of the field in which
+' the cursor is positioned. If no selection is made, and the cursor is in a heading
+' field, the default search is for that type of heading. Otherwise, a search label must
+' be selected from the drop-down list. If text has been selected in a non-heading field,
+' a selection of two or three words in makes the default search label "personal name." If
+' text has been selected in a name field, the macro defaults to offering a title search,
+' and if the selection is in a title field, the default option is a name search.
+'
+' Browsing the authority file, with my "BrowseAuthority" macro, is usually the preferred
+' choice to find authority records, but this macro is designed for those instances in
+' which searching might be the better strategy.
+'****************************************************************************************
+
+Option Explicit
+Option Compare Text
+
+Declare Function Normalize( InString$ )      As String
+Declare Function QuoteOperators( InString$ ) As String
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global Const NONE      As Integer = 0
+Global Const PERS_NAME As Integer = 10
+
+Global LabelIndex%
+Global NameTitleSplit%
+Global SelectionData$
+Global WordCount%
+
+Global TextSelection
+
+Global Indexes     ( 15 ) As String
+Global SearchLabels( 15 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Dim CS As Object
+On Error Resume Next
+Set CS = GetObject( , "Connex.Client" )
+On Error GoTo 0
+If CS Is Nothing Then Set CS = CreateObject( "Connex.Client" )
+
+Const CRITICAL_MESSAGE     As Integer = 16
+Const DLG_STATEMENT_CANCEL As Integer = 102
+Const FIXED_FIELD          As Integer = 0
+Const INFORMATION_MESSAGE  As Integer = 64
+
+Const CONF_NAME            As Integer = 2
+Const CORP_NAME            As Integer = 3
+Const NAME_TITLE           As Integer = 11
+Const SUBDIV               As Integer = 12
+Const SUBJECT              As Integer = 13
+Const TITLE                As Integer = 14
+
+Dim Col%
+Dim FieldData$
+Dim NamePortion$
+Dim NumberOfRecordsFound&
+Dim Row%
+Dim SearchLabel$
+Dim SearchString$
+Dim SubfieldCode$
+Dim Tag$
+Dim TitlePortion$
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] Extras1:SearchAuthority"
+Dim Window%
+
+Dim i As Integer, p As Integer
+
+Indexes( 0  )      = ">> Please select an index:"
+Indexes( 1  )      = "Children's subject headings"
+Indexes( 2  )      = "Conference name headings"
+Indexes( 3  )      = "Corporate name headings"
+Indexes( 4  )      = "Geographic name headings"
+Indexes( 5  )      = "ISBN"
+Indexes( 6  )      = "ISSN"
+Indexes( 7  )      = "LC control number"
+Indexes( 8  )      = "LC name headings"
+Indexes( 9  )      = "OCLC control number"
+Indexes( 10 )      = "Personal name headings"
+Indexes( 11 )      = "Personal name/title"
+Indexes( 12 )      = "Subdivision headings"
+Indexes( 13 )      = "Subject headings"
+Indexes( 14 )      = "Title headings"
+Indexes( 15 )      = "Topical headings"
+
+SearchLabels( 0  ) = ""
+SearchLabels( 1  ) = "sj:"
+SearchLabels( 2  ) = "cn:"
+SearchLabels( 3  ) = "co:"
+SearchLabels( 4  ) = "su:" 'Macros can only search geographic names as subjects.
+SearchLabels( 5  ) = "bn:"
+SearchLabels( 6  ) = "in:"
+SearchLabels( 7  ) = "ln:"
+SearchLabels( 8  ) = "nw:"
+SearchLabels( 9  ) = "an:"
+SearchLabels( 10 ) = "pn:"
+SearchLabels( 11 ) = ""
+SearchLabels( 12 ) = "sb:"
+SearchLabels( 13 ) = "su:"
+SearchLabels( 14 ) = "ti:"
+SearchLabels( 15 ) = "to:"
+
+LabelIndex% = NONE
+
+' First, make sure a record is displayed, as opposed to a list.
+
+Window% = CS.ItemType
+Select Case Window%
+  Case -1, 5 To 11, 13, 15 To 16, 21 To 25
+    MsgBox "Sorry, this macro works only in a bibliographic or authority record!", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End Select
+
+Row% = CS.CursorRow
+Col% = CS.CursorColumn
+
+' There is nothing for the macro to convert if the cursor is in the fixed field.
+
+If Col% = FIXED_FIELD Then
+    MsgBox "Please place the cursor in a variable field.", CRITICAL_MESSAGE, WaltsMacros$
+    Exit Sub
+End If
+If CS.GetSelectedText( SelectionData$ ) Then
+    TextSelection = TRUE
+    If SelectionData$ = "Data contains non-latin script" Then
+        MsgBox "Sorry, this macro works only with text in Latin script.", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+      ElseIf Col% < 6 Then
+        MsgBox "Please select text within a data cell!", CRITICAL_MESSAGE, WaltsMacros$
+        Exit Sub
+    End If
+  Else
+    TextSelection = FALSE
+End If
+
+SelectionData$ = Trim$( SelectionData$ )
+
+' Get the tag of the field in which the cursor is positioned, as that helps determine the
+' default search type.
+
+If CS.GetFieldUnicode( "...", Row%, FieldData$ ) Then
+    Tag$ = Left$( FieldData$, 3 )
+    If SelectionData$ <> "" Then
+        If Col% > 5 Then
+            For i = Col% To 6 Step -1
+            If Mid$( SelectionData$, i, 1 ) = Chr$( 223 ) Then
+                SubfieldCode$ = Mid$( SelectionData$, i + 1, 1 )
+                Exit For
+            End If
+            Next i
+        End If
+      Else
+        SelectionData$ = Mid$( FieldData$, 6 )
+    End If
+End If
+
+' "Normalize" the data by converting text to all caps and removing or converting special
+' characters and diacritical marks.
+
+SelectionData$ = Normalize( SelectionData$ )
+
+' Set the appropriate search label by the tag of the selection or field.
+
+Select Case Tag$
+
+  Case "100", "600", "700", "800"
+    If TextSelection Then
+        LabelIndex% = TITLE
+      Else
+        LabelIndex% = PERS_NAME
+    End If
+
+  Case "110", "610", "710", "810"
+    If TextSelection Then
+        LabelIndex% = TITLE
+      Else
+        LabelIndex% = CORP_NAME
+    End If
+
+  Case "111", "611", "711", "811"
+    If TextSelection Then
+        LabelIndex% = TITLE
+      Else
+        LabelIndex% = CONF_NAME
+    End If
+
+  Case "130", "240", "245", "246", "440", "490", "630", "730", "740", "830"
+    If TextSelection Then
+        LabelIndex% = PERS_NAME
+      Else
+        LabelIndex% = TITLE
+    End If
+
+  Case "505"
+    If NameTitleSplit% = 0 Then
+        LabelIndex% = NONE
+      Else
+        LabelIndex% = NAME_TITLE
+    End If
+
+' Macros can't search names as geographic terms, only as subjects.
+
+  Case "650", "651"
+    If SubfieldCode$ Like "[vwyz]" Then
+        LabelIndex% = SUBDIV
+      Else
+        LabelIndex% = SUBJECT
+    End If
+
+  Case Else
+
+End Select
+
+Begin Dialog Dialog1Definition  246, 72, WaltsMacros$, .Dialog1ControlFunction
+  OkButton      124,  48,  52,  14
+  CancelButton  184,  48,  52,  14
+  TextBox        60,   8, 176,  12,                         .TextBox
+  DropListBox    60,  26, 128, 136, Indexes(),              .DropListBox
+  Text           10,  23,  46,  16, "Choose search index:"
+  Text           10,  10,  48,   8, "Search words:"
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+If Err = DLG_STATEMENT_CANCEL Then Exit Sub
+
+SearchString$ = Trim$( Dialog1.TextBox )
+
+' Check the text entered in the dialog box for the presence of an ISBD slash. If one is
+' found, and the cursor happens to be in a contents field, isolate the title and name
+' portions, and construct search strings based on them.
+
+p = InStr( SearchString$, " / " )
+If p > 0 And Tag$ = "505" And Dialog1.DropListBox = NAME_TITLE Then
+    TitlePortion$ = Trim$( Left$( SearchString$, p ) )
+    NamePortion$  = Trim$( Mid$( SearchString$, p + 2 ) )
+    TitlePortion$ = QuoteOperators( TitlePortion$ )
+    NamePortion$  = QuoteOperators( NamePortion$ )
+    SearchString$ = "ti:" & TitlePortion$ & " AND " & "pn:" & NamePortion$
+  Else
+    SearchString$ = QuoteOperators( SearchString$ )
+    SearchLabel$  = SearchLabels( Dialog1.DropListBox )
+    SearchString$ = SearchLabel$ & SearchString$
+End If
+
+Clipboard.Clear
+Clipboard.SetText SearchString$
+
+NumberOfRecordsFound& = CS.Search( "AF", SearchString$ )
+If NumberOfRecordsFound& = 0 Then
+    MsgBox "Sorry, the search retrieved no authority records.", INFORMATION_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function Normalize( InString$ ) As String
+
+' This function uses NACO normalization rules to convert the MARC-21 string into a string
+' suitable for browsing the Authority File, omitting and converting some characters.
+
+Const ASCII_DIFF_CASE        As Integer = 32  'The difference between ASCII values of upper and lower case of a letter.
+Const ASCII_DIFF_SUBSCRIPT   As Integer = 96  'The difference between ASCII values of subscript and normal numbers.
+Const ASCII_DIFF_SUPERSCRIPT As Integer = 80  'The difference between ASCII values of superscript and normal numbers.
+
+Dim CharA%
+Dim CharT$
+Dim Index%
+Dim InStringLength%
+Dim TempString$
+Dim SubfieldCode$
+
+Dim AddSubfield              : AddSubfield = TRUE
+Dim DelimiterFound           : DelimiterFound = FALSE
+
+Dim p As Integer
+
+InStringLength% = Len( InString$ )
+Index%          = 1
+
+Do While Index% <= InStringLength%
+  CharT$ = Mid$( InString$, Index%, 1 )
+  CharA% = Asc( CharT$ )
+  If CharA% = 223 Then
+
+' Delimiter: If the following subfield is to be searched, omit the delimiter symbol,
+' along with its accompanying subfield code. Otherwise, stop adding characters until the
+' next delimiter symbol is reached, or the field ends.
+
+      If Index% < InStringLength% Then
+          SubfieldCode$ = Mid$( InString$, Index% + 1, 1 )
+          If SubfieldCode$ Like "[0-9eu]" Then
+              AddSubfield = FALSE
+            Else
+              If Right$( TempString$, 1 ) = " " Then
+                  TempString$ = Trim$( TempString$ )
+              End If
+              Index%       = Index% + 1
+              AddSubfield = TRUE
+          End If
+      End If
+  End If
+
+  If AddSubfield Then
+
+      Select Case CharA%
+
+' Numbers and text characters: Include; convert lowercase to uppercase.
+
+        Case 48 to 57, 65 To 90
+          TempString$ = TempString$ & CharT$
+
+        Case 97 to 122
+          If DelimiterFound Then
+              TempString$    = TempString$ & CharT$
+              DelimiterFound = FALSE
+            Else
+              TempString$    = TempString$ & Chr$( CharA% - ASCII_DIFF_CASE )
+          End If
+
+' Special characters to include:
+
+        Case 35 To 36, 38, 43, 64, 169, 185, 204
+          TempString$ = TempString$ & CharT$
+
+' Characters converted to space:
+
+        Case 32 To 34, 37, 40 To 42, 44 To 46, 58 To 63, 92, 94 To 96, 123 To 126, _
+             138 To 141, 154 To 158, 167 To 168, 170 To 171, 174, 183, 200 To 203
+          TempString$ = TempString$ & " "
+          WordCount% = WordCount% + 1
+
+' Forward slash: In the middle of a selection, surrounded by spaces, assume it is ISBD
+' punctuation that separates a title and a statement of responsibility. Use it to define
+' those two distinct strings, and then omit it. Otherwise, convert it to a space.
+
+        Case 47
+      If TextSelection Then
+          If Index% < InStringLength% Then
+              If Mid$( TempString$, Index% - 1, 1 ) = " " And Mid$( InString$, Index% + 1, 1 ) = " " Then
+                  TempString$     = TempString$ & "/"
+                  NameTitleSplit% = Index%
+                Else
+                  TempString$     = TempString$ & " "
+              End If
+          End If
+        Else
+          TempString$ = TempString$ & " "
+      End If
+
+' Superscript, subscript numbers: Convert to normal.
+
+        Case 128 to 137
+          CharT$      = Chr$( CharA% - ASCII_DIFF_SUPERSCRIPT )
+          TempString$ = TempString$ & CharT$
+
+        Case 144 to 153
+          CharT$      = Chr$( CharA% - ASCII_DIFF_SUBSCRIPT )
+          TempString$ = TempString$ & CharT$
+
+' Special characters: Substitute.
+
+        Case 159
+          TempString$ = TempString$ & "SS"
+        Case 161, 177, 190
+          TempString$ = TempString$ & "L"
+        Case 162, 172, 178, 188
+          TempString$ = TempString$ & "O"
+        Case 163, 179, 186
+          TempString$ = TempString$ & "D"
+        Case 164, 180
+          TempString$ = TempString$ & "TH"
+        Case 165, 181
+          TempString$ = TempString$ & "AE"
+        Case 166, 182
+          TempString$ = TempString$ & "OE"
+        Case 173, 189
+          TempString$ = TempString$ & "U"
+        Case 184
+          TempString$ = TempString$ & "I"
+
+        Case Else
+
+      End Select
+  End If
+  Index% = Index% + 1
+Loop
+
+' Remove any introduced double spaces.
+
+Do
+  p = InStr( TempString$, "  " )
+  If p > 0 Then
+      TempString$ = Trim$( Left$( TempString$, p ) ) & " " & Trim$( Mid$( TempString$, p + 1 ) )
+  End If
+Loop Until p = 0
+
+Normalize = Trim$( TempString$ )
+
+End Function
+
+'****************************************************************************************
+
+Function QuoteOperators( InString$ ) As String
+
+' Words ordinarily considered by Connexion to be proximity operators must be put in pairs
+' of single quotation marks to be considered search terms.
+
+Dim SINGLE_QUOTE As String*1 : SINGLE_QUOTE = Chr$( 039 )
+
+Dim Operator$
+Dim Start%
+Dim TempString$
+
+Dim i As Integer, p As Integer
+
+TempString$ = InString$
+
+For i = 1 To 3
+  Select Case i
+    Case 1
+      Operator$ = " AND "
+    Case 2
+      Operator$ = " OR "
+    Case 3
+      Operator$ = " NOT "
+  End Select
+  Start% = 1
+  Do
+    p = InStr( Start%, TempString$, Operator$ )
+    If p > 0 Then
+        TempString$ = Left$( TempString$, p ) & SINGLE_QUOTE & Trim$( Operator$ ) & SINGLE_QUOTE & Mid$( TempString$, p + Len( Operator$ ) - 1 )
+    End If
+    Start% = p + 1
+  Loop Until p = 0
+Next i
+
+QuoteOperators = TempString$
+
+End Function
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const DISABLED      As Integer = 0
+Const ENABLED       As Integer = 1
+Const IDLE_STATE    As Integer = 5
+Const INITIALIZE    As Integer = 1
+Const KEEP_DLG_OPEN As Integer = -1
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgText   "TextBox",     SelectionData$
+    If LabelIndex% = NONE Then
+        If WordCount% > 0 And WordCount% < 3 Then '2 or 3 words, no index selected: default to name
+            DlgValue  "DropListBox", PERS_NAME
+        End If
+      Else
+        DlgValue  "DropListBox", LabelIndex%
+    End If
+    If Trim$( DlgText( "TextBox" ) ) <> "" Then
+        DlgFocus  "DropListBox"
+    End If
+
+
+  Case IDLE_STATE
+
+    If DlgValue( "DropListBox" ) = 0 Or Trim$( DlgText( "TextBox" ) ) = "" Then
+        If DlgEnable( "OK" ) Then
+            DlgEnable "OK",          DISABLED
+        End If
+      ElseIf DlgValue( "DropListBox" ) > 0 And Trim$( DlgText( "TextBox" ) ) <> "" Then
+        If DlgEnable( "OK" ) = DISABLED Then
+            DlgEnable "OK",          ENABLED
+        End If
+    End If
+    Dialog1ControlFunction = KEEP_DLG_OPEN
+
+End Select
+
+End Function
+'55118996

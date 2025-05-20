@@ -1,24 +1,37 @@
-'MacroName:DeriveBookFromAnyFormat.2024.03
-'MacroDescription:Derives a new record in books format from a bibliographic record of any
-' format, or changes the format of a bibliographic record to "books." Fields not
+' MacroName:DeriveBookFromAnyFormat.2025.01
+' MacroDescription:Derives a new record in books format from a bibliographic record of
+' any format, or changes the format of a bibliographic record to "books." Fields not
 ' appropriate in books format are deleted, and default books format workform values are
 ' supplied where information is lacking.
 '
-' This macro was written by Walter F. Nickeson,
-' University of Rochester, Rochester, NY
-' wnickeson@library.rochester.edu
-' https://orcid.org/0000-0003-0484-6938
+' This macro was written by Walter F. Nickeson and last updated 3 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
 '
 ' Thanks to Christine Riggle and her colleagues at Harvard Business School for helpful
 ' suggestions and comments.
 '
-' Last updated: 12 June 2024.
-' Check for the latest versions of this and my other macros at
-' https://github.com/wnickeson/WaltsMacros
-' Please e-mail me with bug reports or to suggest improvements.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
 '
-' This macro works for me with Connexion client 3.1 and Windows 11 Enterprise & 64-bit
-' Windows 10 Pro, but no guarantees are promised or implied.
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 '
 '****************************************************************************************#
 ' How it works: Run the macro in a bibliographic record for something other than a book--
@@ -47,7 +60,7 @@
 ' removed, leaving the base subject heading intact. The macro discards all 7XX linking
 ' fields except 776. Any field containing a subfield $5, denoting information applicable
 ' to a specific institution, is deleted. All series fields are removed. The complete list
-' of fields to be retained is found below starting on line 361.
+' of fields to be retained is found below starting on line 374.
 
 ' Subfield $e "rda" is added to the 040 field, as well as subfield $b "eng". In a record
 ' that is to be edited, any other codes for description conventions are retained.

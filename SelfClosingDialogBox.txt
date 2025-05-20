@@ -1,0 +1,100 @@
+' MacroName:SelfClosingDialogBox.2025.01
+' MacroDescription:Demonstrates a self-closing dialog box.
+'
+' This macro was written by Walter F. Nickeson and last updated 4 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro to view a dialog box that closes itself after four seconds.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+'****************************************************************************************
+
+Sub Main
+
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] SelfClosingDialogBox"
+
+Begin Dialog Dialog1Definition  192,  46, WaltsMacros$, .Dialog1ControlFunction
+  OkButton       40,  24,  52,  14
+  CancelButton  100,  24,  52,  14
+  Text            8,   8, 112,   8, "", .Countdown
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+On Error Resume Next
+Dialog Dialog1
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const IDLE_STATE As Integer = 5
+Const INITIALIZE As Integer = 1
+
+Const COUNTDOWN  As Integer = 4  'The number of seconds the dialog box is to remain open.
+
+Dim ElapsedSeconds%
+Dim SecondsRemaining%
+Dim SecondsWord$
+
+Static PreviousSecondsRemaining%
+Static StartTimer&
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    StartTimer& = Timer
+
+
+  Case IDLE_STATE
+
+    ElapsedSeconds%   = Timer - StartTimer&
+    SecondsRemaining% = COUNTDOWN - ElapsedSeconds%
+    If SecondsRemaining% <= 0 Then
+        DlgEnd 0
+      Else
+        If SecondsRemaining% <> PreviousSecondsRemaining% Then
+            If SecondsRemaining% = 1 Then
+                SecondsWord$ = " second."
+              Else
+                SecondsWord$ = " seconds."
+            End If
+            DlgText "Countdown", "This box will close in " & Trim$( Str$( SecondsRemaining% ) ) & SecondsWord$
+        End If
+    End If
+    PreviousSecondsRemaining% = SecondsRemaining%
+    Dialog1ControlFunction    = 1
+
+End Select
+
+End Function
+'1013567

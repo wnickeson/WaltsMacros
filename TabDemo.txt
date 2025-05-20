@@ -1,0 +1,305 @@
+' MacroName:TabDemo.2025.01
+' MacroDescription:Demonstrates the action of folder-like tabs in a dialog box.
+'
+' This macro was written by Walter F. Nickeson and last updated 16 May 2025.
+' It was developed in Connexion client 3.1 running in Windows 11 Enterprise and 64-bit
+' Windows 10 Pro.
+' Walt's macros for the Connexion client: https://github.com/wnickeson/WaltsMacros
+' wfnickeson@zohomail.com
+'
+' Copyright 2025 Walter F. Nickeson.
+'
+' Permission is hereby granted, free of charge, to any person obtaining a copy of this
+' software and associated documentation files (the "Software"), to deal in the Software
+' without restriction, including without limitation the rights to use, copy, modify,
+' merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+' permit persons to whom the Software is furnished to do so, subject to the following
+' conditions:
+'
+' The above copyright notice and this permission notice shall be included in all copies
+' or substantial portions of the Software.
+'
+' THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+' INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+' PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+' HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+' CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+' THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+'
+'****************************************************************************************
+' How it works: Run the macro to view a very simple demonstration of creating folder-like
+' tabs in a dialog box. Using tabs in a dialog box is a great way to save space by
+' showing only the controls relevant for a certain state or action without changing the
+' size of the dialog box, which the macro language can't do. The macro uses buttons and
+' group boxes to outline the content, and blank text areas to hide and show the outlines
+' that simulate the tabs.
+'****************************************************************************************
+
+Option Explicit
+
+Declare Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Global TabChoice%
+
+Global ShowDigits( 4 ) As String
+
+'****************************************************************************************
+
+Sub Main
+
+Const DLG_FUNCTION_CANCEL As Integer = 0
+Const INFORMATION_MESSAGE As Integer = 64
+
+Dim WaltsMacros$             : WaltsMacros$ = "[Walt's macros] TabDemo"
+
+ShowDigits( 0 ) = "none"
+ShowDigits( 1 ) = "8"
+ShowDigits( 2 ) = "40"
+ShowDigits( 3 ) = "160"
+ShowDigits( 4 ) = "480"
+
+Begin Dialog Dialog1Definition  218, 176, WaltsMacros$, .Dialog1ControlFunction
+  OkButton       106, 155,  50,  14
+  CancelButton   161, 155,  50,  14
+  PushButton      10,   7,  64,  24, "&Lorem ipsum",          .Tab1        'Buttons must be placed first
+  PushButton      76,   7,  64,  24, "&Shakespeare",          .Tab2
+  PushButton     142,   7,  64,  24, "&pi",                   .Tab3
+  OptionGroup                                                 .Language
+   OptionButton   40,  32,  44,  12, "English",               .Language1
+   OptionButton   86,  32,  44,  12, "French",                .Language2
+   OptionButton  132,  32,  44,  12, "Esperanto",             .Language3
+  DropListBox     77,  31,  40,  56, ShowDigits(),            .PiLength
+  Text            12,  33,  61,   8, "Digits of pi to show:", .PiLegend
+  Text            12,  32, 192, 112, "",                      .Message1
+  Text            12,  48, 192,  96, "",                      .Message2
+  GroupBox        32,  26, 154,  20, "",                      .LanguageBox
+  Text            10,  27, 199,   4, ""                                    'Long strip to hide bottoms of buttons
+  GroupBox         7,  23, 204, 128, ""                                    'Provides top line to emphasize tabs
+  Text            11,  24,  60,   4, "",                      .Hide1       'Short strip to hide GroupBox line
+  Text            77,  24,  60,   4, "",                      .Hide2       ' to show that tab is active
+  Text           143,  24,  60,   4, "",                      .Hide3
+End Dialog
+
+Dim Dialog1 As Dialog1Definition
+If Dialog( Dialog1 ) = DLG_FUNCTION_CANCEL Then
+    Exit Sub
+  Else
+    MsgBox "Tab " & TabChoice% & " was displayed!", INFORMATION_MESSAGE, WaltsMacros$
+End If
+
+End Sub
+
+'****************************************************************************************
+
+Function Dialog1ControlFunction( Id$, Action%, SValue& )
+
+Const CONTROL_CHANGE As Integer = 2
+Const FOCUS_CHANGE   As Integer = 4
+Const INITIALIZE     As Integer = 1
+Const INVISIBLE      As Integer = 0
+Const KEEP_DLG_OPEN  As Integer = -1
+Const VISIBLE        As Integer = 1
+
+Dim LF As String : LF = Chr$( 010 )
+
+Dim HamletE$
+Dim HamletF$
+Dim HamletS$
+Dim LengthChoice%
+Dim LoremIpsum$
+Dim Pi$
+Dim PiShow$
+Dim Temp$
+
+Dim i As Integer
+
+LoremIpsum$ = Chr$( 009 ) & "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed"
+LoremIpsum$ = LoremIpsum$ & " dictum nisl ut justo convallis condimentum. Vestibulum vest"
+LoremIpsum$ = LoremIpsum$ & "ibulum dignissim justo at facilisis. Fusce vitae enim dolor,"
+LoremIpsum$ = LoremIpsum$ & " eu sodales nisl. Donec metus quam, euismod ut tincidunt dig"
+LoremIpsum$ = LoremIpsum$ & "nissim, egestas eu risus. Nullam in vestibulum eros. Pellent"
+LoremIpsum$ = LoremIpsum$ & "esque velit sem, mollis eget aliquam eu, vehicula et arcu. Q"
+LoremIpsum$ = LoremIpsum$ & "uisque vitae libero nec magna consectetur ullamcorper sit am"
+LoremIpsum$ = LoremIpsum$ & "et quis dolor. Integer sagittis massa id magna varius eu tin"
+LoremIpsum$ = LoremIpsum$ & "cidunt nulla sodales. Etiam scelerisque gravida mi, sed scel"
+LoremIpsum$ = LoremIpsum$ & "erisque ipsum posuere non. Nulla dignissim leo metus." & LF
+LoremIpsum$ = LoremIpsum$ & Chr$( 009 ) & "Mauris ipsum sem, porta ut auctor id, ullamcor"
+LoremIpsum$ = LoremIpsum$ & "per sit amet mi. Sed sem turpis, aliquam quis varius nec, so"
+LoremIpsum$ = LoremIpsum$ & "dales vel enim. Aenean tincidunt pulvinar purus ut ultricies"
+LoremIpsum$ = LoremIpsum$ & ". Vivamus commodo purus vitae diam placerat non hendrerit ar"
+LoremIpsum$ = LoremIpsum$ & "cu dictum. Etiam sed hendrerit urna. Vestibulum ante ipsum p"
+
+HamletE$ = "To be, or not to be--that is the question:" & LF
+HamletE$ = HamletE$ & "Whether 'tis nobler in the mind to suffer" & LF
+HamletE$ = HamletE$ & "The slings and arrows of outrageous fortune" & LF
+HamletE$ = HamletE$ & "Or to take arms against a sea of troubles" & LF
+HamletE$ = HamletE$ & "And by opposing end them. To die, to sleep--" & LF
+HamletE$ = HamletE$ & "No more--and by a sleep to say we end" & LF
+HamletE$ = HamletE$ & "The heartache, and the thousand natural shocks" & LF
+HamletE$ = HamletE$ & "That flesh is heir to. 'Tis a consummation" & LF
+HamletE$ = HamletE$ & "Devoutly to be wished. To die, to sleep--" & LF
+HamletE$ = HamletE$ & "To sleep--perchance to dream: ay, there's the rub," & LF
+HamletE$ = HamletE$ & "For in that sleep of death what dreams may come" & LF
+HamletE$ = HamletE$ & "When we have shuffled off this mortal coil,"
+
+HamletF$ = "Voici la question: être ou bien ne pas être?" & LF
+HamletF$ = HamletF$ & "Dans l'âme serait-il noble de se soumettre" & LF
+HamletF$ = HamletF$ & "A la fronde et les dards d'un destin altier" & LF
+HamletF$ = HamletF$ & "Ou contre tout un flot de misères s'armer" & LF
+HamletF$ = HamletF$ & "Dans une insurrection, afin de les détruire?" & LF
+HamletF$ = HamletF$ & "Mourir et donc dormir ... rien davantage, et dire" & LF
+HamletF$ = HamletF$ & "Que ce sommeil met terme aux angoisses du coeur," & LF
+HamletF$ = HamletF$ & "Et ce legs corporel d'un terrestre douleur ..." & LF
+HamletF$ = HamletF$ & "Telle terminaison tenterait l’âme avide:" & LF
+HamletF$ = HamletF$ & "Dormir ... et puis rêver. Mais le rêve intimide." & LF
+HamletF$ = HamletF$ & "Car le rêve qui vienne en ce sommeil des morts" & LF
+HamletF$ = HamletF$ & "Aux esprits dépouillés de la coque du corps"
+
+HamletS$ = HamletS$ & "Cu esti au ne esti,--tiel staras" & LF
+HamletS$ = HamletS$ & "Nun la demando : cu pli noble estas" & LF
+HamletS$ = HamletS$ & "Elporti ciujn batojn, ciujn sagojn" & LF
+HamletS$ = HamletS$ & "De la kolera sorto, au sin armi" & LF
+HamletS$ = HamletS$ & "Kontrau la tuta maro da mizeroj" & LF
+HamletS$ = HamletS$ & "Kaj per la kontraustaro ilin fini ?" & LF
+HamletS$ = HamletS$ & "Formorti-dormi, kaj nenio plu!" & LF
+HamletS$ = HamletS$ & "Kaj scii, ke la dormo tute finis" & LF
+HamletS$ = HamletS$ & "Doloron de la koro, la mil batojn," & LF
+HamletS$ = HamletS$ & "Heredon de la korpo,-- tio estas" & LF
+HamletS$ = HamletS$ & "Tre dezirinda celo. Morti-- dormi--" & LF
+HamletS$ = HamletS$ & "Trankvile dormi! Jes sed ankau songi!"
+
+Pi$ = "3.1415926535897932384626433832795028841971693993751058209749445923078164062862089"
+Pi$ = Pi$ & "986280348253421170679821480865132823066470938446095505822317253594081284811"
+Pi$ = Pi$ & "174502841027019385211055596446229489549303819644288109756659334461284756482"
+Pi$ = Pi$ & "337867831652712019091456485669234603486104543266482133936072602491412737245"
+Pi$ = Pi$ & "870066063155881748815209209628292540917153643678925903600113305305488204665"
+Pi$ = Pi$ & "213841469519415116094330572703657595919530921861173819326117931051185480744"
+Pi$ = Pi$ & "623799627495673518857527"
+
+Select Case Action%
+
+  Case INITIALIZE
+
+    DlgVisible "Hide1",       VISIBLE
+    DlgVisible "Hide2",       INVISIBLE
+    DlgVisible "Hide3",       INVISIBLE
+    DlgVisible "Language",    INVISIBLE
+    DlgVisible "LanguageBox", INVISIBLE
+    DlgVisible "Message1",    VISIBLE
+    DlgText    "Message1",    LoremIpsum$
+    DlgVisible "Message2",    INVISIBLE
+    DlgVisible "PiLegend",    INVISIBLE
+    DlgVisible "PiLength",    INVISIBLE
+    TabChoice% = 1
+
+
+  Case CONTROL_CHANGE
+
+    Select Case Id$
+
+      Case "Tab1"
+        DlgVisible "Hide1",       VISIBLE
+        DlgVisible "Hide2",       INVISIBLE
+        DlgVisible "Hide3",       INVISIBLE
+        DlgVisible "Language",    INVISIBLE
+        DlgVisible "LanguageBox", INVISIBLE
+        DlgVisible "Message1",    VISIBLE
+        DlgVisible "Message2",    INVISIBLE
+        DlgText    "Message1",    LoremIpsum$
+        DlgVisible "PiLegend",    INVISIBLE
+        DlgVisible "PiLength",    INVISIBLE
+        TabChoice% = 1
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Tab2"
+        DlgVisible "Hide1",       INVISIBLE
+        DlgVisible "Hide2",       VISIBLE
+        DlgVisible "Hide3",       INVISIBLE
+        DlgVisible "Language",    VISIBLE
+        DlgVisible "LanguageBox", VISIBLE
+        DlgVisible "Message1",    INVISIBLE
+        DlgVisible "Message2",    VISIBLE
+        DlgText    "Message2",    HamletE$
+        DlgVisible "PiLegend",    INVISIBLE
+        DlgVisible "PiLength",    INVISIBLE
+        TabChoice% = 2
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Tab3"
+        DlgVisible "Hide1",       INVISIBLE
+        DlgVisible "Hide2",       INVISIBLE
+        DlgVisible "Hide3",       VISIBLE
+        DlgVisible "Language",    INVISIBLE
+        DlgVisible "LanguageBox", INVISIBLE
+        DlgVisible "Message1",    INVISIBLE
+        DlgVisible "Message2",    INVISIBLE
+        DlgVisible "PiLegend",    VISIBLE
+        DlgVisible "PiLength",    VISIBLE
+        DlgValue   "PiLength",    0
+        DlgFocus   "PiLength"
+        TabChoice% = 3
+        Dialog1ControlFunction = KEEP_DLG_OPEN
+
+      Case "Language1"
+        DlgText    "Message2", HamletE$
+        DlgVisible "Hide2",    VISIBLE
+
+      Case "Language2"
+        DlgText    "Message2", HamletF$
+        DlgVisible "Hide2",    VISIBLE
+
+      Case "Language3"
+        DlgText    "Message2", HamletS$
+        DlgVisible "Hide2",    VISIBLE
+
+      Case "PiLength"
+        DlgVisible "Hide3",    VISIBLE
+        LengthChoice% = DlgValue( "PiLength" )
+        Select Case LengthChoice%
+          Case 0
+            PiShow$ = ""
+          Case 1
+            PiShow$ = Left$( Pi$, 8 )
+          Case 2
+            PiShow$ = Left$( Pi$, 40 )
+          Case 3
+            For i = 0 To 3
+              Temp$   = Mid$( Pi$, i * 40 + 1, 40 ) & LF
+              PiShow$ = PiShow$ & Temp
+            Next i
+          Case 4
+            For i = 0 To 11
+              Temp$   = Mid$( Pi$, i * 40 + 1, 40 ) & LF
+              PiShow$ = PiShow$ & Temp
+            Next i
+        End Select
+        Temp$ = ""
+        DlgVisible "Message2", VISIBLE
+        DlgText    "Message2", PiShow$
+
+    End Select
+
+
+  Case FOCUS_CHANGE
+
+    Select Case Id$
+
+      Case "Tab1"
+        DlgVisible "Hide1",       VISIBLE
+        DlgVisible "Hide2",       INVISIBLE
+        DlgVisible "Hide3",       INVISIBLE
+      Case "Tab2"
+        DlgVisible "Hide1",       INVISIBLE
+        DlgVisible "Hide2",       VISIBLE
+        DlgVisible "Hide3",       INVISIBLE
+      Case "Tab3"
+        DlgVisible "Hide2",       INVISIBLE
+        DlgVisible "Hide1",       INVISIBLE
+        DlgVisible "Hide3",       VISIBLE
+
+    End Select
+
+End Select
+
+End Function
+'30613400
